@@ -1385,6 +1385,29 @@ class _Reader:
         cache[key] = out
         return out
 
+    def _untangled(self, holes):
+        """The holes but those whose faces meet many other faces (a bore crossed by a ring of
+        slots: no whole rim to close it by, and OpenCASCADE's defeaturing of such a "hole" took
+        3 to 4 minutes on a 200-face part and cannot be interrupted): those are left in the
+        base, said in the notes and listed as not recognized."""
+        out = []
+        for h in holes:
+            if not self._tangled(h):
+                out.append(h)
+                continue
+            self.notes.append(
+                "%s %s meets many other faces (slots or pockets cross it): it is left in the "
+                "base shape and not in the plan (OpenCASCADE's defeaturing of such a hole can "
+                "take minutes, so it is not tried)." % (h["kind"].capitalize(), h["id"])
+            )
+            self.unrecognized.append(
+                {
+                    "faces": self.face_refs(h["_faces"]),
+                    "why": "a %s crossed by other features, left in the base" % h["kind"],
+                }
+            )
+        return out
+
     def _tangled(self, group, most=16):
         """The feature's faces meet more than `most` other faces (a bore crossed by a ring
         of slots): OpenCASCADE's defeaturing of such a "hole" took 3 to 4 minutes on a
@@ -1565,21 +1588,10 @@ class _Reader:
         or with OpenCASCADE's defeaturing), then chamfers and fillets (defeaturing: all at
         once, else by halves). The ones that cannot be taken off stay in the base and are
         listed as such. Returns {"base": shape, "ok": {feature ids}, "accepted": [features]}."""
+        holes = self._untangled(holes)  # (one crossed by many faces is not taken off)
+
         start, holes_ok, left = self._drop_holes(holes)
-        tangled = [h for h in left if self._tangled(h)]
-        for h in tangled:
-            self.notes.append(
-                "%s %s meets many other faces (slots or pockets cross it): it is left in the "
-                "base shape and not in the plan (OpenCASCADE's defeaturing of such a hole can "
-                "take minutes, so it is not tried)." % (h["kind"].capitalize(), h["id"])
-            )
-            self.unrecognized.append(
-                {
-                    "faces": self.face_refs(h["_faces"]),
-                    "why": "a %s crossed by other features, left in the base" % h["kind"],
-                }
-            )
-        groups = [h for h in left if h not in tangled] + chamfers + blends
+        groups = left + chamfers + blends
         ok, rejected = self._accept(groups, shape=start)
         base = self._defeature(ok, start) if ok else start
         if base is None:  # (cannot happen: it was tried)
