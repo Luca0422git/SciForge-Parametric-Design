@@ -23,7 +23,7 @@ T = vp.AL  # aluminium thickness (the web's top face is at z = T)
 PITCH = vp.PITCH
 
 
-# -- the parts ---------------------------------------------------------------------------------------
+# -- the parts -------------------------------------------------------------------------------------
 def folder():
     return vp.default_folder()
 
@@ -86,7 +86,7 @@ def hole_centre(i, j=0, top=True, origin=None):
     return origin.multVec(p) if origin is not None else p
 
 
-# -- the view and the mouse ---------------------------------------------------------------------------
+# -- the view and the mouse ------------------------------------------------------------------------
 def fit():
     h.fit()
     wait(150)
@@ -220,7 +220,7 @@ def drawn(hover_obj):
         return -1
 
 
-# -- dialogs -------------------------------------------------------------------------------------------
+# -- dialogs ---------------------------------------------------------------------------------------
 def panel():
     from sciforge import taskui
 

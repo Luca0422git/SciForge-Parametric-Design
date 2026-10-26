@@ -60,7 +60,7 @@ def underside_point(r=2.75):
     return vx.toward_viewer(SCREW_AT, r)
 
 
-# -- setup -------------------------------------------------------------------------------------------
+# -- setup -----------------------------------------------------------------------------------------
 def setup():
     Gui.activateWorkbench("SciForgeWorkbench")
     App.newDocument("VexJoint")
@@ -75,7 +75,7 @@ def setup():
 setup.wait_ms = 1500
 
 
-# -- A: the hover -----------------------------------------------------------------------------------
+# -- A: the hover ----------------------------------------------------------------------------------
 def a_press_j():
     h.click_empty()
     vx.fit()
@@ -198,7 +198,7 @@ def b_closed():
     h.check("no joint", not vx.joints_list(), vx.joints_list())
 
 
-# -- C: refusal -----------------------------------------------------------------------------------------
+# -- C: refusal ------------------------------------------------------------------------------------
 def c_press_j():
     h.click_empty()
     vx.fit()
@@ -225,7 +225,7 @@ def c_refused():
     h.check("no joint", not vx.joints_list())
 
 
-# -- D: Esc after two picks -------------------------------------------------------------------------
+# -- D: Esc after two picks ------------------------------------------------------------------------
 def d_hole():
     vx.look_at(vx.hole_centre(3, 1), 40.0)
     vx.hover(web_point(3, 1))
@@ -257,7 +257,7 @@ def d_back():
     h.check("no joint", not vx.joints_list())
 
 
-# -- E: the joint ----------------------------------------------------------------------------------------
+# -- E: the joint ----------------------------------------------------------------------------------
 def e_press_j():
     h.click_empty()
     vx.fit()
@@ -373,7 +373,7 @@ def f_still_in_hole():
 f_still_in_hole.wait_ms = 1000
 
 
-# -- G: save, reopen ------------------------------------------------------------------------------------
+# -- G: save, reopen -------------------------------------------------------------------------------
 def g_save():
     S["path"] = vx.save_as("vex_joint_hole")
     h.check("saved", os.path.isfile(S["path"]), S["path"])
