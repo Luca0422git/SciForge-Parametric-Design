@@ -546,6 +546,7 @@ MENUS = {
     "body": [
         "Activate Body",
         "Create Components from Bodies",
+        "Rebuild with Timeline (AI)...",  # (beta 3, at-tools: rebuild_ui)
         "-",
         "Ground",
         "-",
@@ -646,6 +647,7 @@ MENUS = {
     "mesh_body": [
         "Convert Mesh",
         "Repair",
+        "Rebuild with Timeline (AI)...",  # (beta 3, at-tools: rebuild_ui)
         "Edit Feature",
         "-",
         "Show/Hide",

@@ -2,7 +2,7 @@
 
 <!-- Generated from the tool catalogue (src/Mod/SciForge/sciforge/ai/catalog) by tools/sciforge/make_ai_docs.py: do not edit by hand. The unit test test_ai_docs_contract.py fails when this file and the catalogue differ. -->
 
-SciForge offers 117 tools to AI apps (through MCP, the built-in chat panel and the command line), listed here in the order tools/list gives them. All lengths are in millimetres (mm) and all angles in degrees. Every tool that changes the design is one undo step named "AI: ..."; errors come back as plain sentences. Each tool has a reference page (reference/<tool>.md: every argument, the answer, the errors and a complete example with its real answer); the resource sciforge://tools has every schema as JSON.
+SciForge offers 121 tools to AI apps (through MCP, the built-in chat panel and the command line), listed here in the order tools/list gives them. All lengths are in millimetres (mm) and all angles in degrees. Every tool that changes the design is one undo step named "AI: ..."; errors come back as plain sentences. Each tool has a reference page (reference/<tool>.md: every argument, the answer, the errors and a complete example with its real answer); the resource sciforge://tools has every schema as JSON.
 
 ## All tools
 
@@ -125,6 +125,10 @@ SciForge offers 117 tools to AI apps (through MCP, the built-in chat panel and t
 | [`docs_search`](sciforge://docs/reference/docs_search.md) | Search the documentation | Help | (Fusion's help search, for SciForge) | read-only | nothing |
 | [`docs_read`](sciforge://docs/reference/docs_read.md) | Read documentation | Help | (Fusion's help page, for SciForge) | read-only | nothing |
 | [`examples_search`](sciforge://docs/reference/examples_search.md) | Search examples | Help | (Fusion's sample designs, for SciForge) | read-only | nothing |
+| [`start_rebuild`](sciforge://docs/reference/start_rebuild.md) | Start rebuild | Rebuild with a timeline | Browser: right-click a body > Rebuild with Timeline (AI)... (beyond Fusion) | changes the design (one undo step) | an open design |
+| [`describe_reference`](sciforge://docs/reference/describe_reference.md) | Describe reference | Rebuild with a timeline | Browser: right-click a body > Rebuild with Timeline (AI)... (beyond Fusion) | read-only | an open design, a rebuild going on (start_rebuild) |
+| [`compare_to_reference`](sciforge://docs/reference/compare_to_reference.md) | Compare to reference | Rebuild with a timeline | Rebuild > Compare with Reference (beyond Fusion) | read-only | an open design, a rebuild going on (start_rebuild) |
+| [`finish_rebuild`](sciforge://docs/reference/finish_rebuild.md) | Finish rebuild | Rebuild with a timeline | Rebuild > Finish Rebuild (beyond Fusion) | changes the design (one undo step), destructive | an open design, a rebuild going on (start_rebuild) |
 
 ## Help
 
@@ -284,6 +288,13 @@ SciForge offers 117 tools to AI apps (through MCP, the built-in chat panel and t
 - [`named_view`](sciforge://docs/reference/named_view.md): Named views kept in the design (Fusion's Named Views): action save (the current camera under name), go (turn the view to it), delete, list.
 - [`show_hide`](sciforge://docs/reference/show_hide.md): Show or hide bodies, components, sketches, construction geometry or drawings in the 3D view (they stay in the design).
 - [`render`](sciforge://docs/reference/render.md): Take a picture of the design and get the image itself (PNG), to look at what was built.
+
+## Rebuild with a timeline
+
+- [`start_rebuild`](sciforge://docs/reference/start_rebuild.md): Start rebuilding a part that has no timeline as real, editable timeline steps (Auto Timeline): an imported STEP body, any solid body, or a mesh body (made into a solid first; an open or broken mesh is refused).
+- [`describe_reference`](sciforge://docs/reference/describe_reference.md): What the reference of a rebuild is made of, read by SciForge from its faces: summary (volume, area, size, counts, the kinds of faces), base (the base shape: an extrude with its plane, profile and distance, a revolve, a box...), features (holes, counterbores, pockets, bosses, slots, fillets, chamfers, patterns, each with its numbers and the faces it explains), plan (tool calls in Fusion's order: base shape, cuts and bosses, holes, patterns, chamfers, fillets last; each step's args pass the tool's own check, so send them as they are, adjusting ids the answers give), unrecognized (faces it could not read, with selectors and why), confidence (0..1) and notes.
+- [`compare_to_reference`](sciforge://docs/reference/compare_to_reference.md): How far the rebuilt body is from the reference, to call after every feature: match (common volume / union volume; 1 is identical), volume (reference, rebuilt, common, missing, extra in mm3), missing (material of the original the rebuild lacks) and extra (material the rebuild has and the original does not: a hole not cut yet is extra material shaped like a cylinder), each region with its volume, centre, box, kind, what it looks like ('a round hole about 6 mm across, 10 deep', 'a rounded edge, radius about 2', 'a block 10 x 5 x 3') and, when SciForge is sure, fix: the tool call that makes it (a Single Hole, a fillet of exactly those edges); groups (equal regions together, with one fix for all of them); faces (how many of the original's faces the rebuild matches by geometry, and the unmatched ones of each side with a description and a selector); deviation (how far the surfaces are apart, max and mean, mm); size_notes; done (match >= 0.999, every face of the original matched and none of the rebuild left over); and verdict: what to do next, in words.
+- [`finish_rebuild`](sciforge://docs/reference/finish_rebuild.md): Finish a rebuild: the rebuilt body takes the original's name, component and place, with its timeline; the original (the featureless body or the mesh body) is deleted, or kept hidden as '<name> (original)' with keep_original: true; the reference is removed (keep_reference: true keeps it, hidden).
 
 ## Shared rules
 

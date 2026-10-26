@@ -946,6 +946,27 @@ UTIL_AI = group(
         item("Add an AI App", "SciForge_AddAI", "ai", note="Claude Desktop, Gemini CLI, others"),
         item("AI Chat", "SciForge_AIChat", "ai"),
         item("AI Activity", "SciForge_AIActivity", "ai"),
+        # owner: at-tools (beta 3, Auto Timeline: rebuild_ui)
+        SEP,
+        item(
+            "Rebuild with Timeline (AI)...",
+            "SciForge_RebuildWithTimeline",
+            "rebuild_ai",
+            note="An AI rebuilds the selected body (an imported STEP, a mesh) as timeline "
+            "steps, checked against the original",
+        ),
+        item(
+            "Compare with Reference",
+            "SciForge_CompareReference",
+            "rebuild_compare",
+            note="How far the rebuild is: missing material red, extra green",
+        ),
+        item(
+            "Finish Rebuild",
+            "SciForge_FinishRebuild",
+            "rebuild_finish",
+            note="The rebuild takes the original's name and place",
+        ),
     ],
 )
 UTIL_FREECAD = group(

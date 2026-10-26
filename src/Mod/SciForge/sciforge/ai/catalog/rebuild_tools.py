@@ -83,13 +83,16 @@ define(
     "holes, patterns, chamfers, fillets last; each step's args pass the tool's own check, so "
     "send them as they are, adjusting ids the answers give), unrecognized (faces it could "
     "not read, with selectors and why), confidence (0..1) and notes. Coordinates are the "
-    "rebuilt body's (the design's for a part at the origin). detail: summary (default) or "
-    "full (every face of every feature).",
+    "rebuilt body's (the design's for a part at the origin). detail: plan (default: the "
+    "features and the plan), summary (the part's numbers only, quick) or full (also every "
+    "face of every feature, as selectors).",
     schema(
         {
             "reference": REFERENCE_ARG,
             "detail": enum(
-                ("summary", "full"), "full: every face of every feature", default="summary"
+                ("plan", "summary", "full"),
+                "plan: features and plan; summary: numbers only; full: also every face",
+                default="plan",
             ),
             "max_features": integer("at most this many features", minimum=1, maximum=500),
         }
@@ -99,6 +102,7 @@ define(
     examples=[
         example({}, "the features and the plan of the rebuild going on"),
         example({"detail": "full"}, "every face of every feature too"),
+        example({"detail": "summary"}, "only the part's size, volume and kinds of faces"),
     ],
 )
 

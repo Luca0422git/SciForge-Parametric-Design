@@ -545,7 +545,7 @@ def _pieces(a, b):
         try:
             result, _map = a.generalFuse([b], fuzzy) if fuzzy else a.generalFuse([b])
         except Exception as exc:
-            log("rebuild: general fuse failed (%s)" % exc)
+            log("rebuild: the general fuse gave nothing (%s)" % exc)
             continue
         common, missing, extra = [], [], []
         ok = True

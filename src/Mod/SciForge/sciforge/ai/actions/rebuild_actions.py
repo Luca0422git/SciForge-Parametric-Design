@@ -104,15 +104,21 @@ def describe_reference(ctx, args):
 
     rebuild = _rebuild()
     ref = reference(ctx, args)
-    options = {"detail": args.get("detail", "summary")}
+    detail = args.get("detail", "plan")
+    doc = ctx.need_doc()
+    options = {"detail": "summary" if detail == "summary" else "full"}
     if args.get("max_features"):
         options["max_features"] = args["max_features"]
     if getattr(ref, "SourceKind", "") == "mesh":
         options["source"] = "mesh"
+    # the plan's ids are the ones SciForge will give (Sketch1 when no Sketch1 is taken yet)
+    options["taken_ids"] = sorted({o.Name for o in doc.Objects} | {o.Label for o in doc.Objects})
     try:
         data = rebuild.describe(ref, options)
     except (rebuild.RebuildError, recognize.RecognizeError) as exc:
         raise UserError(str(exc))
+    if detail == "plan":
+        data = _without_face_lists(data)
     target = rebuild.target_of(ref)
     head = {
         "reference": ref.Name,
@@ -126,6 +132,8 @@ def describe_reference(ctx, args):
         ),
     }
     head.update(data)
+    head.pop("timing", None)  # (in the log: an answer is the same every time it is asked)
+    head.pop("timing_detail", None)
     plan = data.get("plan") or []
     words = "%s, read from its %d faces: %d feature%s, a plan of %d step%s" % (
         ref.SourceLabel,
@@ -147,6 +155,21 @@ def describe_reference(ctx, args):
     return json_result(head, text=words, compact=True)
 
 
+def _without_face_lists(data):
+    """The answer without each feature's list of face selectors (detail full has them): the
+    count stays, the plan is whole."""
+    out = dict(data)
+    features = []
+    for feature in data.get("features") or []:
+        row = dict(feature)
+        faces = row.pop("faces", None)
+        if isinstance(faces, list):
+            row["face_count"] = len(faces)
+        features.append(row)
+    out["features"] = features
+    return out
+
+
 LIMITS = {"summary": (6, 8), "full": (100, 200)}
 
 
@@ -161,6 +184,7 @@ def compare_to_reference(ctx, args):
         data = rebuild.compare(ref, target, options)
     except rebuild.RebuildError as exc:
         raise UserError(str(exc))
+    data.pop("seconds", None)  # (in the log: an answer is the same every time it is asked)
     return json_result(data, text=data["verdict"], compact=True)
 
 

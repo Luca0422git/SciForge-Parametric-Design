@@ -27,6 +27,9 @@ CANCEL_SLOT = 6  # 9 o'clock: Cancel while a command is open (Fusion)
 
 _filters = []
 _last_menu = {"widget": None}
+# Entries for what is under the mouse, added under the list by other areas: fn(global QPoint)
+# -> [ribbon_config items] (rebuild_ui: a body's "Rebuild with Timeline (AI)...", beta 3)
+CONTEXT_ITEMS = []
 
 
 class MarkingMenu(QtWidgets.QWidget):
@@ -50,7 +53,13 @@ class MarkingMenu(QtWidgets.QWidget):
             angle = math.radians(90 - 45 * i)  # N first, clockwise
             pos = mid + QtCore.QPoint(int(RADIUS * math.cos(angle)), int(-RADIUS * math.sin(angle)))
             self.slots.append(self._slot(entry, pos, available))
-        listing = build_menu(self, cfg.MARKING_LIST, available)
+        entries = list(cfg.MARKING_LIST)
+        for extra in list(CONTEXT_ITEMS):
+            try:
+                entries += extra(center) or []
+            except Exception as exc:
+                warn("marking menu: %s" % exc)
+        listing = build_menu(self, entries, available)
         self.list = QtWidgets.QListWidget(self)
         self.list.setObjectName("SciForgeMarkingList")
         self.list.setFixedWidth(200)

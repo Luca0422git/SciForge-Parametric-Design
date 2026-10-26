@@ -1569,6 +1569,9 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             "Show All Sketches": lambda: self._show_all("sketch", True),
             "Hide All Sketches": lambda: self._show_all("sketch", False),
             "Convert Mesh": lambda: self._run_with(obj, "SciForge_ConvertMesh"),
+            "Rebuild with Timeline (AI)...": lambda: self._run_with(
+                obj, "SciForge_RebuildWithTimeline"
+            ),
             "Repair": lambda: self._run_with(obj, "SciForge_MeshRepair"),
             "Edit Canvas": lambda: _edit_object(obj),
             "Edit Decal": lambda: _edit_object(obj),
