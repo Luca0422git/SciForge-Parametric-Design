@@ -71,25 +71,29 @@ def studies_with_results(doc):
     return [s for s in simulation.studies(doc) if results_data.has_results(s)]
 
 
-def active_study(doc):
-    """The study whose results show for `doc`: the one shown last, else sim-ui's active study,
-    else the newest study with results."""
-    if doc is None:
-        return None
-    session = SESSIONS.get(doc.Name)
-    if session is not None and session.study is not None:
-        return session.study
+def _ui_active_study(doc):
+    """sim-ui's active study of `doc` (the one the SETUP commands work on), or None."""
     try:
         from . import simulation_ui
 
-        for name in ("active_study", "current_study"):
-            fn = getattr(simulation_ui, name, None)
-            if fn is not None:
-                study = fn(doc)
-                if study is not None and results_data.has_results(study):
-                    return study
+        fn = getattr(simulation_ui, "active_study", None)
+        return fn(doc) if fn is not None else None
     except Exception:
-        pass
+        return None
+
+
+def active_study(doc):
+    """The study whose results the RESULTS tab shows for `doc`: sim-ui's active study (Fusion's
+    RESULTS tab belongs to the active study), else the one shown last, else the newest study
+    with results."""
+    if doc is None:
+        return None
+    study = _ui_active_study(doc)
+    if study is not None:
+        return study
+    session = SESSIONS.get(doc.Name)
+    if session is not None and session.study is not None:
+        return session.study
     found = studies_with_results(doc)
     return found[-1] if found else None
 
@@ -106,6 +110,13 @@ def show(study):
             commands.tell(core.NO_RESULTS)
             return False
         doc = study.Document
+        if _ui_active_study(doc) is not study:
+            try:
+                from . import simulation_ui
+
+                simulation_ui.set_active_study(study)
+            except Exception:
+                pass
         session = SESSIONS.get(doc.Name)
         if session is not None and session.study_name != study.Name:
             session.deactivate()
@@ -164,6 +175,18 @@ def finish():
         warn("Finish Results: %s" % exc)
 
 
+def hide():
+    """Take the results off the screen (sim-ui calls it when the workspace is left): the
+    bodies show again."""
+    try:
+        session = ACTIVE["session"]
+        if session is not None:
+            session.deactivate()
+        ACTIVE["session"] = None
+    except Exception as exc:
+        warn("results: %s" % exc)
+
+
 def hide_all():
     """Take every result display away (SciForge switched off, tests)."""
     for session in list(SESSIONS.values()):
@@ -176,24 +199,25 @@ def hide_all():
 
 def wanted():
     """The Session that should be on the screen now (or None): the SIMULATION workspace is on,
-    its RESULTS tab is the one selected, and the design in front has a study with results."""
+    its RESULTS tab is the one selected, and the active study of the design in front has
+    results."""
     ribbon = _ribbon()
     if ribbon is None or not _sim_on() or _current_tab(ribbon) != RESULTS_TAB:
         return None
     doc = App.ActiveDocument
     if doc is None:
         return None
+    study = active_study(doc)
     session = SESSIONS.get(doc.Name)
     if session is not None and (
-        session.study is None or not results_data.has_results(session.study)
+        study is None or session.study is not study or not results_data.has_results(session.study)
     ):
         session.deactivate()
         SESSIONS.pop(doc.Name, None)
         session = None
+    if study is None or not results_data.has_results(study):
+        return None
     if session is None:
-        study = active_study(doc)
-        if study is None:
-            return None
         session = Session(study)
         SESSIONS[doc.Name] = session
     return session
@@ -233,7 +257,8 @@ def refresh_tab():
     try:
         sim_mode = _sim_on() and bool(getattr(ribbon, "_sim_mode", True))
         drawing = bool(getattr(ribbon, "_drawing_mode", False))
-        has = bool(studies_with_results(App.ActiveDocument))
+        study = active_study(App.ActiveDocument)
+        has = study is not None and results_data.has_results(study)
         visible = sim_mode and not drawing and has
         button = ribbon.tab_buttons[RESULTS_TAB]
         if button.isVisible() != visible:
@@ -387,6 +412,7 @@ class Session:
         self._ticks = 0
         self._timer = None
         self._anim_timer = None
+        self._glyphs_before = None
         self.panels = []
 
     # -- the study
@@ -481,6 +507,7 @@ class Session:
         if self.display is not None:
             self.display.detach()
         self._show_design()
+        self._restore_glyphs()
         was = self.active
         self.active = False
         self.gl = None
@@ -974,30 +1001,42 @@ class Session:
 
     # -- glyphs (sim-ui's loads and constraints on the model)
     def _glyphs(self):
-        try:
-            from . import simulation_glyphs
-        except Exception:
+        """Fusion's results show without the setup's glyphs unless asked (Loads and
+        Constraints): sim-ui's simulation_glyphs.set_visible."""
+        module = _glyph_module()
+        if module is None:
             return
-        for name in ("show_on_results", "set_results_visible"):
-            fn = getattr(simulation_glyphs, name, None)
-            if fn is not None:
-                try:
-                    fn(self.study, bool(self.loads))
-                except Exception as exc:
-                    warn("results: loads and constraints: %s" % exc)
-                return
+        try:
+            if self._glyphs_before is None:
+                self._glyphs_before = bool(module.visible())
+            module.set_visible(bool(self.loads))
+        except Exception as exc:
+            warn("results: loads and constraints: %s" % exc)
+
+    def _restore_glyphs(self):
+        module = _glyph_module()
+        before, self._glyphs_before = self._glyphs_before, None
+        if module is None or before is None:
+            return
+        try:
+            module.set_visible(before)
+        except Exception as exc:
+            warn("results: loads and constraints: %s" % exc)
 
 
-def glyphs_available():
+def _glyph_module():
     try:
         from . import simulation_glyphs
 
-        return any(
-            getattr(simulation_glyphs, n, None) is not None
-            for n in ("show_on_results", "set_results_visible")
-        )
+        if hasattr(simulation_glyphs, "set_visible") and hasattr(simulation_glyphs, "visible"):
+            return simulation_glyphs
     except Exception:
-        return False
+        pass
+    return None
+
+
+def glyphs_available():
+    return _glyph_module() is not None
 
 
 def _positions(np, values, lo, hi, reverse):
