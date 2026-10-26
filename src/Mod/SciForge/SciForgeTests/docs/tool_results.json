@@ -7078,7 +7078,7 @@
   },
   "note": "a finer mesh and gravity on",
   "answer": {
-   "text": "Done: Study 1 - Static Stress's settings changed.\n{\n \"study\": \"Study 1 - Static Stress\",\n \"id\": \"SimStudy\",\n \"mesh_size\": 5.0,\n \"mesh_size_mm\": 0.0,\n \"element_order\": \"parabolic\",\n \"curved_elements\": true,\n \"gravity\": true,\n \"gravity_direction\": [\n  0.0,\n  0.0,\n  -1.0\n ],\n \"remove_rigid_body_modes\": false,\n \"contact_tolerance\": 0.1,\n \"safety_basis\": \"yield\",\n \"keep_results\": true,\n \"local_mesh_controls\": []\n}",
+   "text": "Done: Study 1 - Static Stress's settings changed.\n{\n \"study\": \"Study 1 - Static Stress\",\n \"id\": \"SimStudy\",\n \"mesh_size\": 5.0,\n \"mesh_size_mm\": 0.0,\n \"element_order\": \"parabolic\",\n \"curved_elements\": true,\n \"gravity\": true,\n \"gravity_direction\": [\n  0.0,\n  0.0,\n  -1.0\n ],\n \"remove_rigid_body_modes\": false,\n \"contact_tolerance\": 0.1,\n \"safety_basis\": \"yield\",\n \"keep_results\": true,\n \"adaptive_refinement\": \"none\",\n \"local_mesh_controls\": []\n}",
    "is_error": false
   }
  },

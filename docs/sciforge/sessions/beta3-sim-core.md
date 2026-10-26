@@ -46,8 +46,20 @@ sections Engine and Benchmarks.
   element edge (mm), worst_aspect, over_limit, mesher (gmsh / netgen), size, order, made,
   stale. A solve replaces SimMeshRun.
 - **Summary** (`summary(study)`) adds `reactions` {constraint label: {x, y, z, total}} (N, the
-  force each constraint takes), `notes`, and mesh `smallest / largest / worst_aspect /
-  over_limit / mesher`.
+  force each constraint takes), `notes`, `results_kept`, `adaptive` ({result, passes: [{nodes,
+  elements, value}]} when adaptive refinement ran: Fusion's convergence plot data) and mesh
+  `smallest / largest / worst_aspect / over_limit / mesher`.
+- **Held enough**: `not_held(study)` -> `[(bodies, [free movement in words])]` (the pre-check
+  uses it: "Body1 is not held enough: it could still turn about an axis along Y through (10,
+  5, 5)"); `simulation_core.free_modes(rows, centre, size)` for a DOF View.
+- **Keep results in the file**: `apply_keep_results(study)` (set_settings calls it when
+  keep_results changes); `results_dropped(study)`: solved, but the coloured results were not
+  saved (reopened with keep_results off): `results(study)` is None then, `summary()` keeps
+  the numbers; solve again to see them.
+- **Contacts**: `simulation_core.CONTACT_TYPES` (key, Fusion's name, available) and
+  `CONTACT_NOT_AVAILABLE` (the sentence for the greyed types).
+- **No VTK pipeline** is made with the results any more (`Pipeline_SimResults` is gone): draw
+  from `results(study)` / the result object.
 
 ## Log
 

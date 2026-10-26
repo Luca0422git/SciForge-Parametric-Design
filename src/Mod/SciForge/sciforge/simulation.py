@@ -460,6 +460,14 @@ def _signature(element):
     return out
 
 
+def _local_shape(obj):
+    """The object's shape in its own coordinates (its placement and its component's left
+    out), so a pick's remembered shape does not change when the body or its component moves."""
+    shape = obj.Shape.copy(False)  # (FreeCAD's own is read-only; this copy shares geometry)
+    shape.Placement = App.Placement()
+    return shape
+
+
 def _signatures(refs):
     """[[object name, element name, signature]] of picks, in the order of the picks (FreeCAD
     may rename a pick it lost, "?Face1" for what was Face8, but keeps their order)."""
@@ -469,18 +477,18 @@ def _signatures(refs):
         sig = None
         if name:
             try:
-                sig = _signature(bodies.global_shape(obj, copy=False).getElement(name))
+                sig = _signature(_local_shape(obj).getElement(name))
             except Exception:
                 sig = None
         out.append([obj.Name, name, sig])
     return out
 
 
-def _signature_of(sigs, index, obj, name):
+def _signature_of(sigs, index, obj, name, positional=True):
     """The remembered shape of the index-th pick (by its place in the list when the list
     still matches the picks, else by its name)."""
     if isinstance(sigs, list):
-        if index < len(sigs) and sigs[index][0] == obj.Name:
+        if positional and index < len(sigs) and sigs[index][0] == obj.Name:
             return sigs[index][2]
         for owner, element, sig in sigs:
             if owner == obj.Name and element == name.lstrip("?"):
@@ -602,8 +610,9 @@ def resolve_picks(item):
     data = item_data(item)
     sigs = data.get("sigs")
     picks = _picks(item.References)
-    if isinstance(sigs, list) and len(sigs) != len(picks):
-        sigs = [row for row in sigs if row[1]]  # (whole-body picks: no shape to remember)
+    # (the remembered shapes follow the picks' order, unless the picks were changed without
+    # update_item: then they are matched by name)
+    positional = isinstance(sigs, list) and len(sigs) == len(picks)
     out = []
     for index, (obj, sub) in enumerate(picks):
         if not bodies.alive(obj):
@@ -613,9 +622,9 @@ def resolve_picks(item):
             out.append((obj, [""] if bodies.has_solid(obj) else [], False))
             continue
         name = sub.split(".")[-1]
-        sig = _signature_of(sigs, index, obj, name)
+        sig = _signature_of(sigs, index, obj, name, positional)
         try:
-            shape = bodies.global_shape(obj, copy=False)
+            shape = _local_shape(obj)
         except Exception:
             out.append((obj, [], False))
             continue
@@ -637,6 +646,20 @@ def resolve_picks(item):
         found = _refind(shape, sig, tol)
         out.append((obj, found, bool(found)))
     return out
+
+
+def refresh_signatures(study):
+    """Remember every resolved pick's shape as it is now (so the next edit is followed from
+    here); items whose picks are lost are left as they are."""
+    for item in items(study):
+        resolved = resolve_picks(item)
+        if not resolved or any(not names for _obj, names, _moved in resolved):
+            continue
+        data = item_data(item)
+        fresh = _signatures(_picks(item.References))
+        if fresh != data.get("sigs"):
+            data["sigs"] = fresh
+            _save(item, ITEM_PROP, data)
 
 
 def _shape_size(shape):
@@ -1514,22 +1537,33 @@ class _MeshData:
 
 def _mesh_groups(mesh):
     """{"Face" / "Edge" / "Solid": {index: (element ids, node ids)}} of the groups Gmsh named
-    after the model's faces, edges and solids ("Face12"); {} without groups."""
-    out = {"Face": {}, "Edge": {}, "Solid": {}}
+    after the model's faces, edges and solids ("Face12"; the mesh reader adds a suffix such
+    as "Face12_Faces" or "Face12_Nodes" when a group has nodes too); {} without groups."""
+    import re
+
+    pattern = re.compile(r"^(Edge|Face|Solid)(\d+)(?:_\w+)?$")
+    found = {"Face": {}, "Edge": {}, "Solid": {}}
     try:
         for group in mesh.Groups:
-            name = mesh.getGroupName(group)
-            for kind in ("Face", "Edge", "Solid"):
-                if name.startswith(kind) and name[len(kind) :].isdigit():
-                    elements = list(mesh.getGroupElements(group))
-                    nodes = set()
-                    for element in elements:
-                        nodes.update(mesh.getElementNodes(element))
-                    out[kind][int(name[len(kind) :])] = (elements, sorted(nodes))
-                    break
-    except Exception:
+            match = pattern.match(mesh.getGroupName(group))
+            if not match:
+                continue
+            kind, number = match.group(1), int(match.group(2))
+            elements, nodes = found[kind].setdefault(number, ([], set()))
+            ids = list(mesh.getGroupElements(group))
+            if mesh.getGroupElementType(group) == "Node":
+                nodes.update(ids)
+            else:
+                elements.extend(ids)
+                for element in ids:
+                    nodes.update(mesh.getElementNodes(element))
+    except Exception as exc:
+        log("simulation: the mesh's groups could not be read (%s): searching by geometry" % exc)
         return {}
-    return out
+    return {
+        kind: {n: (elements, sorted(nodes)) for n, (elements, nodes) in table.items()}
+        for kind, table in found.items()
+    }
 
 
 def _face_normal_at(face, point):
@@ -1782,7 +1816,7 @@ def _rigid_rows(study, model, mesh, held_nodes):
     for members in groups.values():
         nodes = set()
         for i in members:
-            nodes.update(mesh.femmesh.getNodesBySolid(solids[i]))
+            nodes.update(mesh.nodes_of(model, "Solid%d" % (i + 1)))
         if nodes & held_nodes:
             continue
         rows += core.three_two_one([(n, mesh.point(n)) for n in sorted(nodes)])
@@ -2248,6 +2282,10 @@ class Job:
                 "The design changed, so SciForge found again the faces of %s by their shape."
                 % ", ".join(repaired)
             )
+        try:
+            refresh_signatures(self.study)
+        except Exception as exc:
+            warn("simulation: remembering picks: %s" % exc)
         checks = precheck(self.study)
         if self.mesh_only:
             errors = [
@@ -2415,8 +2453,8 @@ class Job:
             self.summary = dict(self.mesh_info)
             self._analysis = None  # (kept)
             return self._stop("done", "Done")
+        # (the input is written on the next turn: the window gets a moment between the two)
         self.stage, self.message = "input", "Writing the solver input"
-        self._stage_input()
 
     def _stage_input(self):
         t = time.time()
@@ -2435,7 +2473,7 @@ class Job:
             # the nodes of the model's faces / solids from Gmsh's groups (FreeCAD's search by
             # geometry takes minutes on a big mesh)
             obj, names = ref
-            if obj is model and groups:
+            if groups and getattr(obj, "Name", None) == model.Name:
                 found = []
                 for name in names:
                     kind = next((k for k in ("Face", "Edge", "Solid") if name.startswith(k)), None)
@@ -2452,9 +2490,21 @@ class Job:
                 self._analysis, solver, self._mesh, membertools.AnalysisMember(self._analysis)
             )
             getter.get_mesh_sets()
-            w = writer.FemInputWriterCcx(
-                self._analysis, solver, self._mesh, getter.member, self.work, getter.mat_geo_sets
-            )
+            # the writer makes a second getter of its own "for compatibility" that CalculiX's
+            # writer never reads (4 s of tables on a big mesh): it gets this one
+            getter_class = meshsetsgetter.MeshSetsGetter
+            meshsetsgetter.MeshSetsGetter = lambda *args, **kwargs: getter
+            try:
+                w = writer.FemInputWriterCcx(
+                    self._analysis,
+                    solver,
+                    self._mesh,
+                    getter.member,
+                    self.work,
+                    getter.mat_geo_sets,
+                )
+            finally:
+                meshsetsgetter.MeshSetsGetter = getter_class
             path = w.write_solver_input()
         finally:
             meshtools.get_femnodes_by_refshape = real_search
@@ -2504,13 +2554,21 @@ class Job:
         if data is not None:  # (parsed in the background already)
             importCcxFrdResults.read_frd_result = lambda _path: data
         # no VTK results pipeline: SciForge draws the results itself (it doubled the time and
-        # the size of the results in the file)
+        # the size of the results in the file); von Mises and the principal stresses for every
+        # node at once with numpy (FreeCAD's loop over the nodes took 9 s for 140 000 nodes)
+        from femresult import resulttools
+
+        real_vm, real_principal = resulttools.add_von_mises, resulttools.add_principal_stress_std
         importCcxFrdResults.setupPipeline = lambda *args, **kwargs: None
+        resulttools.add_von_mises = _fast_von_mises
+        resulttools.add_principal_stress_std = _fast_principal_stresses
         try:
             importCcxFrdResults.importFrd(frd, self._analysis, "Sim")
         finally:
             importCcxFrdResults.read_frd_result = real_read
             importCcxFrdResults.setupPipeline = real_pipeline
+            resulttools.add_von_mises = real_vm
+            resulttools.add_principal_stress_std = real_principal
             self._frd_data = None
         made = [o for o in self.doc.Objects if o.Name not in before]
         result = next((o for o in made if o.isDerivedFrom("Fem::FemResultObject")), None)
@@ -2675,6 +2733,59 @@ MESH_ADVICE = (
 )
 
 
+def _stress_arrays(res_obj):
+    import numpy as np
+
+    return np.array(
+        [
+            res_obj.NodeStressXX,
+            res_obj.NodeStressYY,
+            res_obj.NodeStressZZ,
+            res_obj.NodeStressXY,
+            res_obj.NodeStressXZ,
+            res_obj.NodeStressYZ,
+        ],
+        dtype=float,
+    )
+
+
+def _fast_von_mises(res_obj):
+    """FreeCAD's resulttools.add_von_mises, for every node at once (the same formula)."""
+    import numpy as np
+
+    s = _stress_arrays(res_obj)
+    normal, shear = s[:3], s[3:]
+    pressure = normal.mean(axis=0)
+    vm = np.sqrt(1.5 * ((normal - pressure) ** 2).sum(axis=0) + 3.0 * (shear**2).sum(axis=0))
+    res_obj.vonMises = vm.tolist()
+    return res_obj
+
+
+def _fast_principal_stresses(res_obj):
+    """FreeCAD's resulttools.add_principal_stress_std, for every node at once (a node with a
+    NaN stress gets NaN, as there; the nonlinear material part does not apply here)."""
+    import numpy as np
+
+    s = _stress_arrays(res_obj)
+    n = s.shape[1]
+    bad = np.isnan(s).any(axis=0)
+    s = np.where(bad, 0.0, s)
+    sigma = np.empty((n, 3, 3))
+    sigma[:, 0, 0], sigma[:, 1, 1], sigma[:, 2, 2] = s[0], s[1], s[2]
+    sigma[:, 0, 1] = sigma[:, 1, 0] = s[3]
+    sigma[:, 0, 2] = sigma[:, 2, 0] = s[4]
+    sigma[:, 1, 2] = sigma[:, 2, 1] = s[5]
+    eig = np.linalg.eigvalsh(sigma) if n else np.zeros((0, 3))  # ascending
+    big, mid, small = eig[:, 2].copy(), eig[:, 1].copy(), eig[:, 0].copy()
+    for values in (big, mid, small):
+        values[bad] = np.nan
+    res_obj.PrincipalMax = big.tolist()
+    res_obj.PrincipalMed = mid.tolist()
+    res_obj.PrincipalMin = small.tolist()
+    res_obj.MaxShear = ((big - small) / 2.0).tolist()
+    return res_obj
+
+
 class _Quiet:
     """Stands in for FreeCAD's Console in a background thread (it must not print there)."""
 
@@ -2755,10 +2866,7 @@ def mesh_signature(study):
     h.update(json.dumps(settings(study)["mesh"], sort_keys=True).encode())
     h.update(json.dumps(settings(study)["contact_tolerance"]).encode())
     for item in items(study, "mesh"):
-        refs = [(o.Name, s) for o, s in _picks(item.References)]
-        h.update(
-            json.dumps([item_data(item), refs, bool(item.Suppressed)], sort_keys=True).encode()
-        )
+        h.update(json.dumps(_item_key(item), sort_keys=True).encode())
     return h.hexdigest()
 
 
@@ -2926,11 +3034,16 @@ def signature(study):
         h.update(json.dumps([name, props], sort_keys=True, default=str).encode())
     h.update(json.dumps(study_data(study), sort_keys=True).encode())
     for item in items(study):
-        refs = [(o.Name, s) for o, s in _picks(item.References)]
-        h.update(
-            json.dumps([item_data(item), refs, bool(item.Suppressed)], sort_keys=True).encode()
-        )
+        h.update(json.dumps(_item_key(item), sort_keys=True).encode())
     return h.hexdigest()
+
+
+def _item_key(item):
+    """What of an item a solve depends on (its kind, options, picks; not the shapes its picks
+    remember, which are refreshed at every solve)."""
+    data = {k: v for k, v in item_data(item).items() if k != "sigs"}
+    refs = [(o.Name, s) for o, s in _picks(item.References)]
+    return [data, refs, bool(item.Suppressed)]
 
 
 def out_of_date(study):
@@ -2971,6 +3084,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
                 if s is not None and (strengths[i] is None or s < strengths[i]):
                     strengths[i] = s
     vm = list(result.vonMises)
+    lengths = list(result.DisplacementLengths)  # (read once: each read copies every value)
     # Fusion: yield strength / von Mises, or ultimate tensile strength / 1st principal stress
     divided = vm if basis == "yield" else list(result.PrincipalMax)
     safety = []
@@ -3001,7 +3115,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
         bodies_out[label] = {
             "material": entry["material"],
             "von_mises_max": max(vm[i] for i in idx),
-            "displacement_max": max(result.DisplacementLengths[i] for i in idx),
+            "displacement_max": max(lengths[i] for i in idx),
             "safety_min": min(sf) if sf else None,
         }
     out = {
