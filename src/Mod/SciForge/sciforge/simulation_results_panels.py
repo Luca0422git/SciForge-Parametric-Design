@@ -1555,8 +1555,8 @@ class CompareDialog(QtWidgets.QDialog):
         self.listing.itemChanged.connect(lambda *_a: self._count())
         layout.addWidget(self.listing)
         note = QtWidgets.QLabel(
-            "The studies show side by side on one colour scale: the same colour is the same "
-            "value in every study."
+            "The 3D view splits in panes, one study in each, turning together, on one colour "
+            "scale: the same colour is the same value in every study."
         )
         note.setWordWrap(True)
         layout.addWidget(note)

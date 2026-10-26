@@ -1672,7 +1672,7 @@ def compare_on():
 
 
 def start_compare(studies):
-    """Compare: the studies' results side by side in the 3D view, on one colour scale (2 to 4
+    """Compare: the studies' results in split views (one pane each), on one colour scale (2 to 4
     studies of the design in front, each with results)."""
     try:
         studies = [s for s in studies if results_data.has_results(s)][: core.COMPARE_MOST]
@@ -2282,7 +2282,7 @@ class RangeCommand(_ResultsCommand):
 
 class CompareCommand(_ResultsCommand):
     menu = "Compare"
-    tip = "Two to four studies of this design side by side, on one colour scale (again to finish)"
+    tip = "Two to four studies of this design in split views, on one colour scale (again to finish)"
     icon = "simr_compare"
     in_compare = True
 

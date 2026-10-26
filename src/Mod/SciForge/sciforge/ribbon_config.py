@@ -1521,7 +1521,7 @@ SIMR_TOOLS = group(
             "SciForge_SimResultsCompare",
             "simr_compare",
             toggle="simulation_results_ui:comparing",
-            note="Two to four studies side by side on one colour scale",
+            note="Two to four studies in split views on one colour scale",
         ),  # owner: sim-results
         item("Report", "SciForge_SimResultsReport", "simr_report"),  # owner: sim-results
     ],
