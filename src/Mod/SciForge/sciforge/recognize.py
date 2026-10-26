@@ -1412,7 +1412,7 @@ class _Reader:
         """The feature's faces meet more than `most` other faces (a bore crossed by a ring
         of slots): OpenCASCADE's defeaturing of such a "hole" took 3 to 4 minutes on a
         200-face part and cannot be interrupted."""
-        own = set(group["_faces"])
+        own = set(_wall(group))  # (a hole's modelled thread is its own: beta 3 QA)
         around = set()
         for i in own:
             around.update(j for j in self.topo.neighbours(i) if j not in own)
@@ -2528,6 +2528,18 @@ class _Reader:
             return parts[0]
         spec = {"any_of": parts, "count": len(parts)}
         return spec if picks(spec) else None
+
+
+def _box_copy(box):
+    """A copy of a FreeCAD BoundBox (add() changes it in place)."""
+    import FreeCAD as App
+
+    return App.BoundBox(box)
+
+
+def _wall(h):
+    """A hole's faces with its thread's (beta 3 QA)."""
+    return list(h["_faces"]) + list(h.get("_thread") or [])
 
 
 def _hole_void(reader, h):
