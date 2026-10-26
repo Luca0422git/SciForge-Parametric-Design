@@ -13,9 +13,15 @@ B  Slice Plane: the result is cut across X at the middle and the cut face is col
    Slice alone shows the cut face inside the whole result drawn see-through; OK keeps it.
 C  Slice Plane again, Cancel: the slice stays as it was; again, Remove Slice: the result is whole.
 D  A click on empty space with Surface Probes open adds nothing.
+E  Slice Plane, a click on the beam's top face: the cut is parallel to it (across Z) half way
+   down, the half under it kept, so the cut face looks at whoever clicked; OK; Remove Slice.
+F  A wedge (a sloped face, solved): Slice Plane, a click on the sloped face: the cut is
+   parallel to that face ("Parallel to the face clicked"), the cut face lies on the plane and
+   the drag arrow points along the face's normal; OK.
 """
 
 import FreeCAD as App
+import FreeCADGui as Gui
 from PySide import QtWidgets
 
 from SciForgeTests.gui import dialog_input as ui
@@ -327,6 +333,145 @@ def d_empty_check():
     h.task_button("Close")
 
 
+def e_slice():
+    s.big("Slice Plane")
+
+
+def e_click_top():
+    sess = s.session()
+    h.click(V(*sess.point_place({"at": (60.0, 5.0, 10.0)})))
+
+
+def e_click_top_check():
+    sess = s.session()
+    h.check(
+        "parallel to the top face: across Z, half way down",
+        sess.slice is not None
+        and sess.slice["axis"] == "z"
+        and abs(sess.slice["offset"] - 5.0) < 1e-6,
+        sess.slice,
+    )
+    h.check("the half under it kept (Flip)", sess.slice is not None and sess.slice["flip"])
+    zs = sess.display.cap_points[:, 2] if len(sess.display.cap_points) else None
+    h.check(
+        "the cut face on z = 5",
+        zs is not None and abs(zs.min() - 5.0) < 1e-6 and abs(zs.max() - 5.0) < 1e-6,
+    )
+    box = s.panel_field("SciForgeSimSliceAxis", QtWidgets.QComboBox)
+    flip = s.panel_field("SciForgeSimSliceFlip", QtWidgets.QCheckBox)
+    h.check(
+        "the dialog says so",
+        box.currentText() == "Across Z (XY plane)" and flip.isChecked(),
+        box.currentText(),
+    )
+    h.task_button("OK")
+
+
+def e_remove():
+    s.big("Slice Plane")
+    s.click_widget(s.panel_field("SciForgeSimSliceRemove", QtWidgets.QPushButton))
+
+
+def e_remove_check():
+    h.check("no slice", s.session().slice is None)
+
+
+def f_wedge():
+    """A wedge 100 long, 10 deep and 10 high whose side towards the camera slopes (from x = 60
+    to x = 100 across its depth); fixed at x = 0, pushed down (-Z) on the sloped face."""
+    from sciforge import simulation
+
+    doc = App.newDocument("SimResWedge")
+    h.fit()
+    look = Gui.ActiveDocument.ActiveView.getViewDirection()
+    toward_minus_y = look.y > 0  # the camera sees the -Y side
+    body = doc.addObject("PartDesign::Body", "Body")
+    body.Label = "Wedge"
+    wedge = body.newObject("PartDesign::AdditiveWedge", "Wedge")
+    wedge.Ymin, wedge.Ymax, wedge.Zmin, wedge.Zmax = 0.0, 10.0, 0.0, 10.0
+    wedge.Z2min, wedge.Z2max, wedge.Xmin, wedge.X2min = 0.0, 10.0, 0.0, 0.0
+    # the base (y = 0) and the top (y = 10) rectangles: the shorter one makes the slope
+    wedge.Xmax, wedge.X2max = (60.0, 100.0) if toward_minus_y else (100.0, 60.0)
+    body.Tip = wedge
+    doc.recompute()
+    sloped = None
+    for i, face in enumerate(body.Shape.Faces, 1):
+        n = face.normalAt(0, 0)
+        if abs(n.x) > 0.1 and abs(n.y) > 0.1:
+            sloped = "Face%d" % i
+            state["slope_normal"] = (n.x, n.y, n.z)
+    h.check("the wedge has a sloped face", sloped is not None)
+    study = simulation.create_study(doc)
+    simulation.add_item(study, "constraint", "fixed", [(body, s.face_at_x(body, 0.0))])
+    simulation.add_item(
+        study,
+        "load",
+        "force",
+        [(body, sloped)],
+        {"magnitude": 100.0, "direction": "vector", "vector": [0.0, 0.0, -1.0]},
+    )
+    s.solve(study)
+    h.fit()
+
+
+def f_enter():
+    s.workspace("Simulation")
+
+
+def f_results():
+    s.close_new_study_dialog()
+    s.click_tab("sim_results")
+
+
+def f_slice():
+    h.check("the wedge's results shown", s.session() is not None)
+    s.big("Slice Plane")
+
+
+def f_click_slope():
+    sess = s.session()
+    # the middle of the sloped face (x 80, y 5, z 5), where it is drawn
+    h.click(V(*sess.point_place({"at": (80.0, 5.0, 5.0)})))
+
+
+def f_click_slope_check():
+    import numpy as np
+
+    sess = s.session()
+    spec = sess.slice or {}
+    h.check("parallel to the face clicked", spec.get("axis") == "face", spec)
+    if spec.get("axis") != "face":
+        return
+    outward = np.asarray(state["slope_normal"])
+    keep = np.asarray(spec["normal"])
+    h.check(
+        "its normal is the sloped face's (pointing into the part)",
+        np.allclose(keep, -outward / np.linalg.norm(outward), atol=1e-6),
+        (keep, outward),
+    )
+    pts = sess.display.cap_points
+    along = pts @ keep if len(pts) else None
+    h.check(
+        "the cut face lies on the plane",
+        along is not None and float(np.abs(along - spec["offset"]).max()) < 1e-6,
+    )
+    box = s.panel_field("SciForgeSimSliceAxis", QtWidgets.QComboBox)
+    h.check("the dialog says so", box.currentText() == "Parallel to the face clicked")
+    arrow = getattr(s.task_panel(), "arrow", None)
+    h.check(
+        "the drag arrow along the face's normal",
+        arrow is not None
+        and np.allclose((arrow.direction.x, arrow.direction.y, arrow.direction.z), keep, atol=1e-6),
+    )
+    h.task_button("OK")
+
+
+def f_ok_check():
+    sess = s.session()
+    h.check("OK keeps it", sess.slice is not None and sess.slice["axis"] == "face")
+    h.check("dialog closed", s.task_panel() is None)
+
+
 h.run(
     "simres_probes_slice",
     [
@@ -371,5 +516,17 @@ h.run(
         c_remove_check,
         d_empty,
         d_empty_check,
+        e_slice,
+        e_click_top,
+        e_click_top_check,
+        e_remove,
+        e_remove_check,
+        f_wedge,
+        f_enter,
+        f_results,
+        f_slice,
+        f_click_slope,
+        f_click_slope_check,
+        f_ok_check,
     ],
 )

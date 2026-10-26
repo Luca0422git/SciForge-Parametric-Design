@@ -1336,19 +1336,39 @@ def _positions(np, values, lo, hi, reverse):
     return [None if v != v else float(p) for v, p in zip(values.tolist(), t.tolist())]
 
 
-AXES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
+AXES = core.SLICE_AXES
 
 
 def slice_plane(session):
     """(origin, normal) of a session's slice (the normal points to the half kept)."""
-    spec = session.slice or {}
-    axis = spec.get("axis", "x")
-    normal = AXES.get(axis, AXES["x"])
-    if spec.get("flip"):
-        normal = tuple(-c for c in normal)
-    origin = [0.0, 0.0, 0.0]
-    origin["xyz".index(axis)] = float(spec.get("offset", 0.0))
-    return tuple(origin), normal
+    return core.slice_plane(session.slice)
+
+
+def face_at(session, x, y):
+    """The outward normal (on the unloaded part) of the result's face under the Coin pixel
+    (x, y), or None (Slice Plane: parallel to a face clicked)."""
+    display = session.display
+    if display is None or session.view is None:
+        return None
+    np = view_mod._np()
+    origin, direction = view_mod.ray_coin(session.view, x, y)
+    pts = display.surface_points()
+    tris = display.triangles
+    if display.clipped() and session.slice is not None:
+        origin_p, normal = slice_plane(session)
+        keep = (pts[tris].mean(axis=1) - np.asarray(origin_p)) @ np.asarray(normal) >= -1e-6
+        tris = tris[keep]
+    hit = core.ray_hit(origin, direction, pts, tris)
+    if hit is None:
+        return None
+    corners = session.data.points[display.nodes[tris[hit[1]]]]
+    normal = np.cross(corners[1] - corners[0], corners[2] - corners[0])
+    length = float(np.linalg.norm(normal))
+    if length < 1e-12:
+        return None
+    normal = normal / length
+    normal[np.abs(normal) < 1e-9] = 0.0
+    return tuple(float(c) for c in normal)
 
 
 # -- what the commands open ----------------------------------------------------------------------

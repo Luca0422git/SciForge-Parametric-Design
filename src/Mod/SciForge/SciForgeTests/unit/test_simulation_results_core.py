@@ -382,6 +382,41 @@ class MeshTests(unittest.TestCase):
         self.assertAlmostEqual(self._area(tris), 0.5)
         self.assertTrue(np.allclose(tris[:, :, 2], 1.0))
 
+    def test_slice_planes(self):
+        import numpy as np
+
+        origin, normal = core.slice_plane({"axis": "y", "offset": 4.0})
+        self.assertEqual((origin, normal), ((0.0, 4.0, 0.0), (0.0, 1.0, 0.0)))
+        origin, normal = core.slice_plane({"axis": "x", "offset": 2.0, "flip": True})
+        self.assertEqual((origin, normal), ((2.0, 0.0, 0.0), (-1.0, -0.0, -0.0)))
+        spec = {"axis": "face", "normal": (0.0, 3.0, 4.0), "offset": 10.0}
+        origin, normal = core.slice_plane(spec)
+        self.assertTrue(np.allclose(normal, (0.0, 0.6, 0.8)))
+        self.assertAlmostEqual(float(np.dot(origin, normal)), 10.0)
+        pts, _tets = _cube()
+        self.assertEqual(core.slice_range({"axis": "z"}, pts), (0.0, 1.0))
+        lo, hi = core.slice_range({"axis": "face", "normal": (1, 1, 0)}, pts)
+        self.assertAlmostEqual(hi - lo, math.sqrt(2.0))
+
+    def test_face_slice(self):
+        pts = [(0, 0, 0), (100, 0, 0), (100, 10, 10), (0, 10, 10)]
+        # the top face (outward +Z): across Z at half height, the lower half kept (its cut face
+        # looks up, at whoever clicked the top)
+        spec = core.face_slice((0, 0, 1), pts)
+        self.assertEqual(spec, {"axis": "z", "flip": True, "style": "clip", "offset": 5.0})
+        origin, normal = core.slice_plane(spec)
+        self.assertEqual(normal[2], -1.0)
+        # the end face at x = 0 (outward -X): across X, the far side kept
+        spec = core.face_slice((-1, 0, 0), pts, "slice")
+        self.assertEqual((spec["axis"], spec["flip"], spec["offset"]), ("x", False, 50.0))
+        self.assertEqual(spec["style"], "slice")
+        # a sloped face: its own direction
+        spec = core.face_slice((0, -1, 1), pts)
+        self.assertEqual(spec["axis"], "face")
+        self.assertAlmostEqual(spec["normal"][1], math.sqrt(0.5))
+        self.assertAlmostEqual(spec["normal"][2], -math.sqrt(0.5))
+        self.assertIsNone(core.face_slice((0, 0, 0), pts))
+
     def test_locate(self):
         import numpy as np
 

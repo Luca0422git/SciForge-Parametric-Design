@@ -192,10 +192,10 @@ def probes(session):
 
 # -- Slice Plane -----------------------------------------------------------------------------------
 class SlicePanel:
-    """Slice Plane: a plane across X, Y or Z cuts the result; the cut face is coloured with the
-    result inside the part. Style: cut the result away on one side, or show the slice alone
-    (the whole result see-through around it). OK keeps it, Cancel / Esc puts back what was
-    there, Remove Slice takes it away."""
+    """Slice Plane: a plane across X, Y or Z, or parallel to a face clicked on the result, cuts
+    the result; the cut face is coloured with the result inside the part. Style: cut the
+    result away on one side, or show the slice alone (the whole result see-through around it).
+    OK keeps it, Cancel / Esc puts back what was there, Remove Slice takes it away."""
 
     title = "Slice Plane"
 
@@ -203,7 +203,9 @@ class SlicePanel:
         self.session = session
         self._closed = False
         self.before = dict(session.slice) if session.slice else None
+        self._press = None
         data = session.data
+        self.points = data.points
         self.low = data.points.min(axis=0) if len(data.points) else [0.0, 0.0, 0.0]
         self.high = data.points.max(axis=0) if len(data.points) else [1.0, 1.0, 1.0]
         spec = dict(session.slice) if session.slice else None
@@ -211,11 +213,18 @@ class SlicePanel:
             centre = [(float(a) + float(b)) / 2.0 for a, b in zip(self.low, self.high)]
             spec = {"axis": "x", "offset": centre[0], "flip": False, "style": "clip"}
         self.spec = spec
+        self.face_normal = spec.get("normal") if spec.get("axis") == "face" else None
         self.form = QtWidgets.QWidget()
         self.form.setObjectName("SciForgeSimSlice")
         self.form.setWindowTitle(self.title)
         self.form.setWindowIcon(ui_icon("simr_slice"))
         layout = QtWidgets.QFormLayout(self.form)
+        hint = QtWidgets.QLabel(
+            "Pick a direction, or click a flat face of the result to cut parallel to it. Drag "
+            "the arrow or type the position to move the cut."
+        )
+        hint.setWordWrap(True)
+        layout.addRow(hint)
         self.axis_box = QtWidgets.QComboBox()
         self.axis_box.setObjectName("SciForgeSimSliceAxis")
         for key, name in (
@@ -224,6 +233,8 @@ class SlicePanel:
             ("z", "Across Z (XY plane)"),
         ):
             self.axis_box.addItem(name, key)
+        if self.face_normal is not None:
+            self.axis_box.addItem(self.FACE_ITEM, "face")
         self.axis_box.setCurrentIndex(max(0, self.axis_box.findData(spec["axis"])))
         self.axis_box.currentIndexChanged.connect(self._axis_changed)
         layout.addRow("Plane", self.axis_box)
@@ -265,9 +276,80 @@ class SlicePanel:
             self._guards = [preview.EscapeCancels(self)]
         except Exception as exc:
             warn("Slice Plane: keys unavailable: %s" % exc)
+        self.callbacks = []
+        try:
+            self.callbacks.append(
+                (
+                    "SoMouseButtonEvent",
+                    session.view.addEventCallback("SoMouseButtonEvent", self._mouse),
+                )
+            )
+        except Exception as exc:
+            warn("Slice Plane: clicks unavailable: %s" % exc)
         session.panels.append(self)
         taskui.set_current(self)
         self.arrow = None
+        self._changed()
+        self._make_arrow()
+
+    FACE_ITEM = "Parallel to the face clicked"
+
+    # a click on a face of the result: the plane parallel to it
+    def _mouse(self, info):
+        try:
+            if self._closed or info.get("Button") != "BUTTON1":
+                return
+            x, y = info.get("Position", (0, 0))
+            if info.get("State") == "DOWN":
+                self._press = (x, y)
+                return
+            if info.get("State") != "UP" or self._press is None:
+                return
+            px, py = self._press
+            self._press = None
+            if abs(px - x) > 4 or abs(py - y) > 4:
+                return  # a drag (orbit, pan, the arrow): not a pick
+            QtCore.QTimer.singleShot(0, lambda: self._face_clicked(x, y))
+        except Exception as exc:
+            warn("Slice Plane: %s" % exc)
+
+    def _face_clicked(self, x, y):
+        try:
+            if self._closed:
+                return
+            from . import simulation_results_ui as results_ui
+
+            outward = results_ui.face_at(self.session, x, y)
+            if outward is None:
+                return
+            spec = core.face_slice(outward, self.points, self.style_box.currentData())
+            if spec is None:
+                return
+            self.use(spec)
+            log("results: slice plane parallel to the face clicked")
+        except Exception as exc:
+            warn("Slice Plane: %s" % exc)
+
+    def use(self, spec):
+        """Show a slice spec in the fields (and apply it)."""
+        if spec.get("axis") == "face":
+            self.face_normal = tuple(spec["normal"])
+            if self.axis_box.findData("face") < 0:
+                self.axis_box.blockSignals(True)
+                self.axis_box.addItem(self.FACE_ITEM, "face")
+                self.axis_box.blockSignals(False)
+        self.spec = dict(spec)
+        for widget in (self.axis_box, self.flip, self.offset):
+            widget.blockSignals(True)
+        try:
+            self.axis_box.setCurrentIndex(max(0, self.axis_box.findData(spec["axis"])))
+            self.flip.setChecked(bool(spec.get("flip")))
+            self._set_range()
+            self.offset.setValue(float(spec["offset"]))
+        finally:
+            for widget in (self.axis_box, self.flip, self.offset):
+                widget.blockSignals(False)
+        self._sync_slider()
         self._changed()
         self._make_arrow()
 
@@ -275,16 +357,14 @@ class SlicePanel:
     def _make_arrow(self):
         self._drop_arrow()
         try:
-            axis = self.spec["axis"]
-            i = "xyz".index(axis)
             lo, _hi = self._range()
+            n = core.slice_normal(self.spec)
             centre = [(float(a) + float(b)) / 2.0 for a, b in zip(self.low, self.high)]
-            centre[i] = lo
-            direction = [0.0, 0.0, 0.0]
-            direction[i] = 1.0
+            along = sum(c * k for c, k in zip(centre, n))
+            base = [c + (lo - along) * k for c, k in zip(centre, n)]
             self.arrow = taskui.ArrowDragger(
-                App.Vector(*centre),
-                App.Vector(*direction),
+                App.Vector(*base),
+                App.Vector(*n),
                 float(self.offset.value()) - lo,
                 on_drag=self._dragged,
                 on_release=self._dragged,
@@ -323,8 +403,7 @@ class SlicePanel:
             pass
 
     def _range(self):
-        i = "xyz".index(self.spec["axis"])
-        return float(self.low[i]), float(self.high[i])
+        return core.slice_range(self.spec, self.points)
 
     def _set_range(self):
         lo, hi = self._range()
@@ -343,6 +422,8 @@ class SlicePanel:
 
     def _axis_changed(self, _index):
         self.spec["axis"] = self.axis_box.currentData()
+        if self.spec["axis"] == "face":
+            self.spec["normal"] = self.face_normal
         self._set_range()
         lo, hi = self._range()
         self.offset.blockSignals(True)
@@ -373,6 +454,8 @@ class SlicePanel:
                 "flip": bool(self.flip.isChecked()),
                 "style": self.style_box.currentData(),
             }
+            if self.spec["axis"] == "face":
+                self.spec["normal"] = tuple(self.face_normal)
             self.session.set_slice(self.spec)
             self._follow_arrow()
         except Exception as exc:
@@ -421,6 +504,12 @@ class SlicePanel:
             return True
         self._closed = True
         self._drop_arrow()
+        for kind, callback in getattr(self, "callbacks", []):
+            try:
+                self.session.view.removeEventCallback(kind, callback)
+            except Exception:
+                pass
+        self.callbacks = []
         for guard in self._guards:
             try:
                 guard.remove()

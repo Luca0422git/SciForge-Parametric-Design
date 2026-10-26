@@ -745,6 +745,70 @@ def straight_tets(tets):
     return np.concatenate([tets[:, list(piece)] for piece in SPLIT10])
 
 
+# -- the slice plane's place ----------------------------------------------------------------------
+SLICE_AXES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
+
+
+def slice_normal(spec):
+    """The unit normal of a slice before Flip: its axis's, or the face's it was made from
+    ({"axis": "face", "normal": (x, y, z)})."""
+    spec = spec or {}
+    axis = spec.get("axis", "x")
+    if axis == "face":
+        n = [float(c) for c in (spec.get("normal") or SLICE_AXES["x"])]
+        length = math.sqrt(sum(c * c for c in n))
+        if length > 1e-12:
+            return tuple(c / length for c in n)
+        return SLICE_AXES["x"]
+    return SLICE_AXES.get(axis, SLICE_AXES["x"])
+
+
+def slice_plane(spec):
+    """(origin, normal) of a slice spec: the plane is where a point's distance along the
+    normal (before Flip) is the spec's offset; the normal points to the half kept."""
+    spec = spec or {}
+    normal = slice_normal(spec)
+    offset = float(spec.get("offset", 0.0))
+    origin = tuple(c * offset for c in normal)
+    if spec.get("flip"):
+        normal = tuple(-c for c in normal)
+    return origin, normal
+
+
+def slice_range(spec, points):
+    """(lowest, highest) distance of the points along the slice's normal (before Flip): where
+    its offset can go."""
+    np = _np()
+    points = np.asarray(points, dtype=float).reshape((-1, 3))
+    if not len(points):
+        return 0.0, 1.0
+    along = points @ np.asarray(slice_normal(spec), dtype=float)
+    return float(along.min()), float(along.max())
+
+
+def face_slice(outward, points, style="clip"):
+    """The slice made by a click on a flat face whose outward normal is `outward`: parallel to
+    the face, half way across the part, keeping the half away from the face (its cut face looks
+    at whoever clicked). An axis-aligned face gives an X / Y / Z slice."""
+    np = _np()
+    n = np.asarray(outward, dtype=float)
+    length = float(np.linalg.norm(n))
+    if length < 1e-12:
+        return None
+    keep = -n / length
+    for axis, e in SLICE_AXES.items():
+        dot = float(keep @ np.asarray(e))
+        if abs(abs(dot) - 1.0) < 1e-6:
+            spec = {"axis": axis, "flip": dot < 0, "style": style}
+            break
+    else:
+        spec = {"axis": "face", "normal": tuple(float(c) for c in keep), "flip": False}
+        spec["style"] = style
+    lo, hi = slice_range(spec, points)
+    spec["offset"] = (lo + hi) / 2.0
+    return spec
+
+
 def level_set(points, field, values, tets, carry=None):
     """Where `field` (one number per point) crosses zero inside a mesh of straight tetrahedra
     (straight_tets): (triangles (k, 3, 3), their values (k, 3), carried (k, 3, c) or None).
