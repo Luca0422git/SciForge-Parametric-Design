@@ -47,8 +47,9 @@ person) builds it with the normal tools, so the result is an ordinary editable t
 | Chamfers | narrow flat faces between two faces, their normal between the two faces' normals; one or two distances measured from the sharp edge; a narrow cone between a cylinder and a flat face square to its axis (the chamfered end of a shaft, the top of a round boss) | one `chamfer` step per size; two distances written the way SciForge's Chamfer measures them (distance 1 on the edge's first face) |
 | Defeaturing | holes closed by rebuilding the faces around their rims (milliseconds), then chamfers and fillets taken off with OpenCASCADE's defeaturing (`shape.defeaturing`, all at once, else by halves); a feature that cannot be taken off, or whose removal changes the volume far more than such a feature holds (a slanted face of a groove taken for a chamfer), stays in the base and is said so; raised or engraved text and logos (faces with free-form ones among them that meet the part only along inner loops of one flat face) are closed over the same way as holes (beta 3 QA); parts with other free-form faces left are not defeatured (their base cannot be read) | the base is read from the solid without its features: sharp corners and simple lines |
 | Base, extrude | along X, Y or Z: every flat face square to the axis (levels) or along it, every round face along it; the section of each level; the biggest level's region extruded over the levels whose outline it covers; what is extra are bosses, what is missing pockets / cuts (each one a band of equal sections); each boss or cut is read along the axis its open side faces (the holes in a channel's flanges along Y, those in its web along Z); a cut through everything, or one that could go through without taking more (the same hole in both flanges), is `through_all`; walls on a draft give a `taper` (a drafted pocket or boss, a drafted block, a drafted hole in a straight block, a drafted block with a cavity: a molded box); a cut that opens onto a round face (a keyway, a flat on a shaft) goes from its floor out of the part, a boss standing on one (a port on a pipe) from its top into the part, from the origin plane or a round value when the part is solid there; when no axis fits every face, an axis is tried with up to a quarter of the area in such features. Of the readings, the one with the fewest steps wins, then the one whose steps add or take the least volume (a round boss on a block is a boss along Z, not the block's side outline with its corners cut off) | `create_sketch` on the origin plane at the right offset (geometry: `rect`, `circle`, `slot`, `polyline` or `segments` of lines and arcs that close exactly) + `extrude` (`flip`, `symmetric` or `two_sides` when the part straddles the plane); bosses / cuts on one level with the same height in one sketch (regions that touch go in sketches of their own: one sketch would merge them); copies of one boss, pocket or opening on a grid or circle as one extrude and a pattern (a VEX plate's square holes: one cut and a 5 x 10 pattern) |
-| Base, revolve | every face a surface of revolution about an origin axis (flat faces square to it with round edges about it, coaxial cylinders, cones, tori, spheres): the half profile cut by a half plane | `create_sketch` on XZ (axis Z) or XY (axis X / Y) + `revolve` a full turn |
+| Base, revolve | every face a surface of revolution about an origin axis, or about a line parallel to one (a turned part away from the origin: a torus, a dome on a spot of a block): flat faces square to it with round edges about it, coaxial cylinders, cones, tori, spheres; the half profile cut by a half plane | `create_sketch` on XZ (axis Z) or XY (axis X / Y), offset to the axis line when it is away from the origin, + `revolve` a full turn (about the origin axis, or about a construction line drawn on the sketch: `axis: {"sketch": ..., "construction": [[x1, y1], [x2, y2]]}`) |
 | Base with features along another axis | when no axis fits every face, an axis is tried with up to a quarter of the area in features along the others; the base extrude may then stop inside such a feature, at a level or at its middle (a rod or a tube that ends in an eye: the rod, then the eye as a boss along its own axis, in FreeCAD's example assembly placed at angles) | the base extrude, then each boss or cut along its own axis |
+| Turned bosses and cuts | a boss or cut piece of an extruded part that is itself turned about a line along X, Y or Z (a dome on a block, a torus groove in its top): its round faces are passed over by the extrude reading and the piece is read as a revolve | `create_sketch` of its half profile (offset to its axis line) + `revolve` with `operation` join or cut, about the origin axis or a construction line |
 | What is not taken off | pieces of one round wall cut in pieces that together go half way round or more are no fillet (taking such a "fillet" off ran out of memory and crashed FreeCAD); a hole crossed by many other faces (a bore with a ring of slots) is left in the base without trying (one such defeaturing took 3 minutes) | said in the notes; the hole is listed in `unrecognized` |
 | Parts turned away from the origin | most of the area faces no origin axis: the part is read in its own frame (the closest one to the origin's) | the plan builds it lined up with the origin planes, then one `move_copy` (free: X, then Y, then Z angles about the origin) turns it into place |
 | No base read | the faces fit no extrude or revolve | a note names the axis most of the part fits ("Along Y, 87 % of the part's area ... fits an extrude") and `unrecognized` lists the faces that do not; the holes, fillets and chamfers are still planned |
@@ -97,77 +98,79 @@ interrupted: a 434-face connector with 26 chamfers and fillets spends about 40 s
 
 ### Benchmark
 
-`SciForgeTests/headless/recognize_bench.py` (`run_tests.sh --only recognize`), the final run on this sandbox (times are wall-clock on 4 CPUs shared with five other builders). 67 parts: 67 pass, 0 fail. Each part: built, exported to STEP, imported as a body without a timeline, described, rebuilt from the plan through the headless AI executor, compared (volume within 0.1 %, every face matched; for the real files, every face or else every surface: they split faces the rebuild keeps whole).
+`SciForgeTests/headless/recognize_bench.py` (`run_tests.sh --only recognize`), the final run on this sandbox (times are wall-clock on 4 CPUs shared with five other builders). 69 parts: 69 pass, 0 fail. Each part: built, exported to STEP, imported as a body without a timeline, described, rebuilt from the plan through the headless AI executor, compared (volume within 0.1 %, every face matched; for the real files, every face or else every surface: they split faces the rebuild keeps whole).
 
 | Part | Faces | Found | Plan steps | Volume | Faces matched | describe (s) | Total (s) | Result |
 |---|---|---|---|---|---|---|---|---|
-| box_basic | 6 | extrude | 2 | +0.0000 % | 6 / 6 | 0.087 | 0.381 | PASS |
-| cylinder_extrude | 3 | extrude | 2 | +0.0000 % | 3 / 3 | 0.044 | 0.104 | PASS |
-| hex_prism | 8 | extrude | 2 | -0.0000 % | 8 / 8 | 0.238 | 0.32 | PASS |
-| l_bracket_profile | 8 | extrude | 2 | +0.0000 % | 8 / 8 | 0.169 | 0.236 | PASS |
-| slot_extrude | 6 | extrude | 2 | +0.0000 % | 6 / 6 | 0.062 | 0.123 | PASS |
-| bracket_inner_fillet | 9 | extrude, fillet r3 | 3 | +0.0000 % | 9 / 9 | 0.195 | 0.33 | PASS |
-| fillet_top_edges | 10 | extrude, fillet r2 | 3 | +0.0000 % | 10 / 10 | 0.152 | 0.361 | PASS |
-| fillet_one_vertical_edge | 7 | extrude, fillet r5 | 3 | +0.0000 % | 7 / 7 | 0.114 | 0.222 | PASS |
-| fillet_all_edges | 26 | extrude, fillet r2 | 3 | +0.0000 % | 26 / 26 | 0.151 | 0.76 | PASS |
-| chamfer_top_edges | 10 | extrude, chamfer 2 | 3 | +0.0000 % | 10 / 10 | 0.113 | 0.258 | PASS |
-| chamfer_one_edge | 7 | extrude, chamfer 3 | 3 | +0.0000 % | 7 / 7 | 0.138 | 0.262 | PASS |
-| blend_chamfer_top_face | 10 | extrude, chamfer 2 | 3 | +0.0000 % | 10 / 10 | 0.117 | 0.31 | PASS |
-| plate_through_hole_cut | 7 | extrude, 1 hole | 4 | +0.0000 % | 7 / 7 | 0.094 | 0.225 | PASS |
-| pattern_rect_hole_grid_fusion | 12 | extrude, 6 holes, 1 pattern | 5 | +0.0000 % | 12 / 12 | 0.151 | 0.392 | PASS |
-| flange_polar_holes | 9 | extrude, 6 holes, 1 pattern | 5 | +0.0000 % | 9 / 9 | 0.064 | 0.261 | PASS |
-| hole_blind | 8 | extrude, 1 hole | 4 | +0.0000 % | 8 / 8 | 0.085 | 0.189 | PASS |
-| hole_counterbore | 9 | extrude, 1 hole | 4 | +0.0000 % | 9 / 9 | 0.096 | 0.243 | PASS |
-| hole_countersink | 8 | extrude, 1 hole | 4 | +0.0000 % | 8 / 8 | 0.09 | 0.236 | PASS |
-| hole_single_angled | 8 | extrude, 1 hole | 4 | -0.0000 % | 8 / 8 | 0.095 | 0.212 | PASS |
-| pocket_depth | 11 | extrude | 4 | +0.0000 % | 11 / 11 | 0.314 | 0.444 | PASS |
-| symmetric_cut_slot | 10 | extrude | 2 | +0.0000 % | 10 / 10 | 0.249 | 0.355 | PASS |
-| sf_cylinder_boss | 8 | extrude | 4 | -0.0000 % | 8 / 8 | 0.07 | 0.174 | PASS |
-| mirror_boss | 10 | extrude, 1 pattern | 5 | +0.0000 % | 10 / 10 | 0.11 | 0.269 | PASS |
-| pattern_rect_symmetric_bosses | 36 | extrude, 1 pattern | 5 | +0.0000 % | 36 / 36 | 0.346 | 0.666 | PASS |
-| shell_open_box | 11 | extrude | 3 | +0.0000 % | 11 / 11 | 0.269 | 0.384 | PASS |
-| shell_filleted_box | 19 | extrude | 3 | -0.0000 % | 19 / 19 | 0.389 | 0.655 | PASS |
-| revolve_washer | 4 | extrude, 1 hole | 4 | +0.0000 % | 4 / 4 | 0.034 | 0.114 | PASS |
-| groove_ring | 7 | extrude | 4 | +0.0000 % | 7 / 7 | 0.093 | 0.19 | PASS |
-| sf_revolve_cone | 2 | revolve | 2 | +0.0000 % | 2 / 2 | 0.021 | 0.12 | PASS |
-| bench_stepped_shaft | 7 | revolve | 2 | -0.0000 % | 7 / 7 | 0.079 | 0.172 | PASS |
-| bench_knob | 6 | revolve, 1 hole | 4 | +0.0000 % | 6 / 6 | 0.076 | 0.189 | PASS |
-| bench_bracket_holes | 12 | extrude, 3 holes, 1 pattern, fillet r3 | 8 | +0.0000 % | 12 / 12 | 0.308 | 0.712 | PASS |
-| bench_mount_plate | 18 | extrude, 4 holes, 1 pattern, fillet r6 | 6 | +0.0000 % | 18 / 18 | 0.76 | 1.359 | PASS |
-| extrude_taper_cut | 11 | extrude | 4 | +0.0000 % | 11 / 11 | 0.406 | 0.624 | PASS |
-| extrude_taper_join_all | 11 | extrude | 4 | +0.0000 % | 11 / 11 | 0.388 | 0.785 | PASS |
-| sf_draft_four_sides | 6 | extrude | 2 | -0.0000 % | 6 / 6 | 0.064 | 0.174 | PASS |
-| bench_turned_bracket | 12 | extrude, 3 holes, 1 pattern, fillet r3 | 9 | -0.0000 % | 12 / 12 | 0.295 | 0.726 | PASS |
-| bench_shaft_cross_hole | 4 | extrude, 1 hole | 4 | -0.0001 % | 4 / 4 | 0.064 | 0.347 | PASS |
-| bench_vex_channel | 70 | extrude, 2 patterns | 8 | -0.0000 % | 70 / 70 | 2.622 | 3.7 | PASS |
-| bench_side_boss | 9 | extrude | 4 | +0.0000 % | 9 / 9 | 0.103 | 0.235 | PASS |
-| bench_keyed_shaft | 10 | extrude | 6 | -0.0000 % | 10 / 10 | 0.644 | 1.018 | PASS |
-| bench_pipe_port | 7 | extrude, 2 holes | 8 | +0.0005 % | 7 / 7 | 0.861 | 1.51 | PASS |
-| bench_clevis | 11 | extrude, 1 hole | 4 | +0.0000 % | 11 / 11 | 0.228 | 0.391 | PASS |
-| bench_opposed_holes | 10 | extrude, 2 holes | 6 | +0.0000 % | 10 / 10 | 0.108 | 0.328 | PASS |
-| bench_vex_plate | 206 | extrude, 1 pattern | 5 | +0.0000 % | 206 / 206 | 3.916 | 34.092 | PASS |
-| bench_vex_angle | 50 | extrude, 2 patterns | 8 | -0.0000 % | 50 / 50 | 1.067 | 1.906 | PASS |
-| bench_shaft_collar | 5 | extrude, 2 holes | 6 | +0.0002 % | 5 / 5 | 0.182 | 0.698 | PASS |
-| bench_chamfered_boss | 9 | extrude, chamfer 1 | 5 | +0.0000 % | 9 / 9 | 0.096 | 0.275 | PASS |
-| bench_chamfered_shaft | 5 | extrude, chamfer 1.5 | 3 | +0.0000 % | 5 / 5 | 0.053 | 0.119 | PASS |
-| bench_offset_flange | 9 | extrude, 6 holes, 1 pattern | 7 | +0.0000 % | 9 / 9 | 0.066 | 0.368 | PASS |
-| bench_link_rod | 8 | extrude, 1 hole | 6 | -0.0002 % | 8 / 8 | 2.069 | 2.777 | PASS |
-| bench_part_300 | 300 | extrude, 294 holes, 1 pattern | 5 | +0.0000 % | 300 / 300 | 1.604 | 13.448 | PASS |
-| contract and odd shapes |  | None |  |  |  |  | 6.226 | PASS |
-| pi5_case.step #0 | 62 | extrude, 4 holes, 1 pattern | 19 | -0.0000 % | 62 / 62 (surfaces all) | 2.099 | 5.666 | PASS |
-| pi5_case.step #1 | 56 | extrude, fillet r1 | 7 | -0.0000 % | 56 / 56 (surfaces all) | 1.574 | 2.649 | PASS |
-| as1-ac-214.stp #0 | 18 | extrude, 6 holes | 4 | +0.0000 % | 6 / 18 (surfaces all) | 0.132 | 0.498 | PASS |
-| EPL22_6_16.stp #0 | 36 | extrude, 1 pattern, fillet r1, chamfer 0.443784/1 | 8 | -0.0000 % | 36 / 36 (surfaces all) | 1.521 | 2.674 | PASS |
-| AssemblyExample.FCStd Shape016 | 6 | extrude, 1 hole | 7 | -0.0001 % | 6 / 6 | 0.963 | 1.532 | PASS |
-| AssemblyExample.FCStd Shape020 | 8 | extrude, 1 hole | 7 | -0.0001 % | 8 / 8 | 1.851 | 2.088 | PASS |
-| AssemblyExample.FCStd Shape022 | 10 | extrude, 1 hole | 7 | +0.0000 % | 10 / 10 | 1.974 | 2.274 | PASS |
-| holesInFace2.brep #0 | 39 | extrude | 6 | +0.0000 % | 33 / 39 (surfaces all) | 1.957 | 2.217 | PASS |
-| shelf.brep #0 | 70 | extrude, 2 patterns | 8 | +0.0000 % | 50 / 70 (surfaces all) | 3.506 | 3.944 | PASS |
-| plate_through_hole_cut (mesh) | 7 | extrude, 1 hole | 4 | +0.0000 % | 7 / 7 | 0.341 | 0.446 | PASS |
-| flange_polar_holes (mesh) | 9 | extrude, 6 holes, 1 pattern | 5 | +0.0000 % | 9 / 9 | 3.267 | 3.486 | PASS |
-| l_bracket_profile (mesh) | 8 | extrude | 2 | +0.0000 % | 8 / 8 | 0.171 | 0.224 | PASS |
-| bench_knob (mesh) | 6 | revolve, 1 hole | 4 | +0.0000 % | 6 / 6 | 2.45 | 2.589 | PASS |
-| bench_mount_plate (mesh) | 18 | extrude, 4 holes, 1 pattern, fillet r6 | 6 | +0.0000 % | 18 / 18 | 2.713 | 3.323 | PASS |
+| box_basic | 6 | extrude | 2 | +0.0000 % | 6 / 6 | 0.082 | 0.363 | PASS |
+| cylinder_extrude | 3 | extrude | 2 | +0.0000 % | 3 / 3 | 0.025 | 0.066 | PASS |
+| hex_prism | 8 | extrude | 2 | -0.0000 % | 8 / 8 | 0.229 | 0.29 | PASS |
+| l_bracket_profile | 8 | extrude | 2 | +0.0000 % | 8 / 8 | 0.177 | 0.238 | PASS |
+| slot_extrude | 6 | extrude | 2 | +0.0000 % | 6 / 6 | 0.124 | 0.196 | PASS |
+| bracket_inner_fillet | 9 | extrude, fillet r3 | 3 | +0.0000 % | 9 / 9 | 0.274 | 0.443 | PASS |
+| fillet_top_edges | 10 | extrude, fillet r2 | 3 | +0.0000 % | 10 / 10 | 0.125 | 0.326 | PASS |
+| fillet_one_vertical_edge | 7 | extrude, fillet r5 | 3 | +0.0000 % | 7 / 7 | 0.116 | 0.235 | PASS |
+| fillet_all_edges | 26 | extrude, fillet r2 | 3 | +0.0000 % | 26 / 26 | 0.183 | 0.709 | PASS |
+| chamfer_top_edges | 10 | extrude, chamfer 2 | 3 | +0.0000 % | 10 / 10 | 0.117 | 0.286 | PASS |
+| chamfer_one_edge | 7 | extrude, chamfer 3 | 3 | +0.0000 % | 7 / 7 | 0.109 | 0.223 | PASS |
+| blend_chamfer_top_face | 10 | extrude, chamfer 2 | 3 | +0.0000 % | 10 / 10 | 0.118 | 0.297 | PASS |
+| plate_through_hole_cut | 7 | extrude, 1 hole | 4 | +0.0000 % | 7 / 7 | 0.081 | 0.187 | PASS |
+| pattern_rect_hole_grid_fusion | 12 | extrude, 6 holes, 1 pattern | 5 | +0.0000 % | 12 / 12 | 0.095 | 0.333 | PASS |
+| flange_polar_holes | 9 | extrude, 6 holes, 1 pattern | 5 | +0.0000 % | 9 / 9 | 0.055 | 0.257 | PASS |
+| hole_blind | 8 | extrude, 1 hole | 4 | +0.0000 % | 8 / 8 | 0.08 | 0.182 | PASS |
+| hole_counterbore | 9 | extrude, 1 hole | 4 | +0.0000 % | 9 / 9 | 0.085 | 0.202 | PASS |
+| hole_countersink | 8 | extrude, 1 hole | 4 | +0.0000 % | 8 / 8 | 0.122 | 0.309 | PASS |
+| hole_single_angled | 8 | extrude, 1 hole | 4 | -0.0000 % | 8 / 8 | 0.105 | 0.218 | PASS |
+| pocket_depth | 11 | extrude | 4 | +0.0000 % | 11 / 11 | 0.237 | 0.345 | PASS |
+| symmetric_cut_slot | 10 | extrude | 2 | +0.0000 % | 10 / 10 | 0.223 | 0.312 | PASS |
+| sf_cylinder_boss | 8 | extrude | 4 | -0.0000 % | 8 / 8 | 0.075 | 0.19 | PASS |
+| mirror_boss | 10 | extrude, 1 pattern | 5 | +0.0000 % | 10 / 10 | 0.128 | 0.279 | PASS |
+| pattern_rect_symmetric_bosses | 36 | extrude, 1 pattern | 5 | +0.0000 % | 36 / 36 | 0.354 | 0.723 | PASS |
+| shell_open_box | 11 | extrude | 3 | +0.0000 % | 11 / 11 | 0.294 | 0.407 | PASS |
+| shell_filleted_box | 19 | extrude | 3 | -0.0000 % | 19 / 19 | 0.33 | 0.593 | PASS |
+| revolve_washer | 4 | extrude, 1 hole | 4 | +0.0000 % | 4 / 4 | 0.039 | 0.116 | PASS |
+| groove_ring | 7 | extrude | 4 | +0.0000 % | 7 / 7 | 0.09 | 0.207 | PASS |
+| sf_revolve_cone | 2 | revolve | 2 | +0.0000 % | 2 / 2 | 0.019 | 0.11 | PASS |
+| sf_torus_new_body | 1 | revolve | 2 | -0.0000 % | 1 / 1 | 0.015 | 0.071 | PASS |
+| sf_sphere_intersect | 2 | revolve | 2 | +0.0000 % | 2 / 2 | 0.03 | 0.101 | PASS |
+| bench_stepped_shaft | 7 | revolve | 2 | -0.0000 % | 7 / 7 | 0.089 | 0.204 | PASS |
+| bench_knob | 6 | revolve, 1 hole | 4 | +0.0000 % | 6 / 6 | 0.076 | 0.214 | PASS |
+| bench_bracket_holes | 12 | extrude, 3 holes, 1 pattern, fillet r3 | 8 | +0.0000 % | 12 / 12 | 0.25 | 0.661 | PASS |
+| bench_mount_plate | 18 | extrude, 4 holes, 1 pattern, fillet r6 | 6 | +0.0000 % | 18 / 18 | 0.781 | 1.364 | PASS |
+| extrude_taper_cut | 11 | extrude | 4 | +0.0000 % | 11 / 11 | 0.493 | 0.699 | PASS |
+| extrude_taper_join_all | 11 | extrude | 4 | +0.0000 % | 11 / 11 | 0.435 | 0.778 | PASS |
+| sf_draft_four_sides | 6 | extrude | 2 | -0.0000 % | 6 / 6 | 0.055 | 0.152 | PASS |
+| bench_turned_bracket | 12 | extrude, 3 holes, 1 pattern, fillet r3 | 9 | -0.0000 % | 12 / 12 | 0.333 | 0.779 | PASS |
+| bench_shaft_cross_hole | 4 | extrude, 1 hole | 4 | -0.0001 % | 4 / 4 | 0.061 | 0.359 | PASS |
+| bench_vex_channel | 70 | extrude, 2 patterns | 8 | -0.0000 % | 70 / 70 | 2.683 | 3.703 | PASS |
+| bench_side_boss | 9 | extrude | 4 | +0.0000 % | 9 / 9 | 0.165 | 0.35 | PASS |
+| bench_keyed_shaft | 10 | extrude | 6 | -0.0000 % | 10 / 10 | 0.712 | 1.078 | PASS |
+| bench_pipe_port | 7 | extrude, 2 holes | 8 | +0.0005 % | 7 / 7 | 0.887 | 1.588 | PASS |
+| bench_clevis | 11 | extrude, 1 hole | 4 | +0.0000 % | 11 / 11 | 0.242 | 0.406 | PASS |
+| bench_opposed_holes | 10 | extrude, 2 holes | 6 | +0.0000 % | 10 / 10 | 0.117 | 0.285 | PASS |
+| bench_vex_plate | 206 | extrude, 1 pattern | 5 | +0.0000 % | 206 / 206 | 3.804 | 32.029 | PASS |
+| bench_vex_angle | 50 | extrude, 2 patterns | 8 | -0.0000 % | 50 / 50 | 1.077 | 1.927 | PASS |
+| bench_shaft_collar | 5 | extrude, 2 holes | 6 | +0.0002 % | 5 / 5 | 0.198 | 0.679 | PASS |
+| bench_chamfered_boss | 9 | extrude, chamfer 1 | 5 | +0.0000 % | 9 / 9 | 0.093 | 0.253 | PASS |
+| bench_chamfered_shaft | 5 | extrude, chamfer 1.5 | 3 | +0.0000 % | 5 / 5 | 0.079 | 0.15 | PASS |
+| bench_offset_flange | 9 | extrude, 6 holes, 1 pattern | 7 | +0.0000 % | 9 / 9 | 0.077 | 0.362 | PASS |
+| bench_link_rod | 8 | extrude, 1 hole | 6 | -0.0002 % | 8 / 8 | 1.994 | 2.72 | PASS |
+| bench_part_300 | 300 | extrude, 294 holes, 1 pattern | 5 | +0.0000 % | 300 / 300 | 1.623 | 14.105 | PASS |
+| contract and odd shapes |  | None |  |  |  |  | 6.2 | PASS |
+| pi5_case.step #0 | 62 | extrude, 4 holes, 1 pattern | 19 | -0.0000 % | 62 / 62 (surfaces all) | 2.182 | 5.721 | PASS |
+| pi5_case.step #1 | 56 | extrude, fillet r1 | 7 | -0.0000 % | 56 / 56 (surfaces all) | 1.758 | 2.909 | PASS |
+| as1-ac-214.stp #0 | 18 | extrude, 6 holes | 4 | +0.0000 % | 6 / 18 (surfaces all) | 0.13 | 0.494 | PASS |
+| EPL22_6_16.stp #0 | 36 | extrude, 1 pattern, fillet r1, chamfer 0.443784/1 | 8 | -0.0000 % | 36 / 36 (surfaces all) | 1.675 | 2.724 | PASS |
+| AssemblyExample.FCStd Shape016 | 6 | extrude, 1 hole | 7 | -0.0001 % | 6 / 6 | 0.946 | 1.403 | PASS |
+| AssemblyExample.FCStd Shape020 | 8 | extrude, 1 hole | 7 | -0.0001 % | 8 / 8 | 1.835 | 2.148 | PASS |
+| AssemblyExample.FCStd Shape022 | 10 | extrude, 1 hole | 7 | +0.0000 % | 10 / 10 | 2.232 | 2.585 | PASS |
+| holesInFace2.brep #0 | 39 | extrude | 6 | +0.0000 % | 33 / 39 (surfaces all) | 2.079 | 2.341 | PASS |
+| shelf.brep #0 | 70 | extrude, 2 patterns | 8 | +0.0000 % | 50 / 70 (surfaces all) | 3.343 | 3.818 | PASS |
+| plate_through_hole_cut (mesh) | 7 | extrude, 1 hole | 4 | +0.0000 % | 7 / 7 | 0.412 | 0.579 | PASS |
+| flange_polar_holes (mesh) | 9 | extrude, 6 holes, 1 pattern | 5 | +0.0000 % | 9 / 9 | 3.256 | 3.57 | PASS |
+| l_bracket_profile (mesh) | 8 | extrude | 2 | +0.0000 % | 8 / 8 | 0.208 | 0.269 | PASS |
+| bench_knob (mesh) | 6 | revolve, 1 hole | 4 | +0.0000 % | 6 / 6 | 3.033 | 3.227 | PASS |
+| bench_mount_plate (mesh) | 18 | extrude, 4 holes, 1 pattern, fillet r6 | 6 | +0.0000 % | 18 / 18 | 3.155 | 3.837 | PASS |
 
 ### Real files from other programs
 
@@ -208,6 +211,7 @@ of memory); all fixed (see the session log).
 | Fillets between leaning (drafted) walls | SciForge's tapered walls are flat B-spline faces: the round between them is a B-spline, not a cylinder or a torus | the round stays in the shape; the base is then not read |
 | Sheet metal bent in two directions with closed corners | the bends stay in the base (OpenCASCADE's fillet builder crashed on such corners); some trays read as a floor and walls along X and Y, others not | the rest is listed |
 | Oblique holes starting on a curved face, bosses / pockets on sloped faces | the Hole tool's Single Hole needs a flat face; a sloped boss is along no origin axis | listed |
+| A turned cut or bump that is cut by the part's own faces (a sphere cut out of a block's corner) | the piece has flat faces along several axes: it is neither an extrude nor a revolve on its own (a dome on a face or a torus groove is read) | listed; the base is `none` |
 | Several solids in one shape | the contract reads one solid | the largest is read, the note says how many others there are (describe them one by one) |
 | Countersunk at both ends | the Hole tool makes one end | the plan makes the first end, a note asks for the other |
 | A face split in two in the original (a split face, a face cut for a sketch region) | the plan rebuilds it as one face | volume exact; the bench's face check fails on those golden models (`direct_split_face_*`) |
@@ -294,7 +298,7 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
   arguments checked by the catalogue, frames and Euler angles, circle / cylinder fits, arcs
   fitted on mesh sections, round values beyond a value, where a base extrude may end inside a
   feature along another axis); `SciForgeTests/headless/recognize_bench.py`
-  (real FreeCAD 1.1.4: 52 parts built, sent through STEP and back as bodies without a
+  (real FreeCAD 1.1.4: 54 parts built, sent through STEP and back as bodies without a
   timeline, described, rebuilt from the plan by the headless AI executor, compared: volume
   within 0.1 % and every face of the original matched; 4 solids of STEP files made by other
   programs, 3 parts of FreeCAD's example assembly placed at angles and 2 BREP parts of its
@@ -303,8 +307,8 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
   answered in under 30 s; describe() on a 300-face part under 5 s), run by
   `tools/sciforge/run_tests.sh --only recognize` and at the end of `--only headless` / `--only
   base`. Scratch sweeps (not in the suite) found the bugs listed in the session log: the 27
-  BREP solids above, every golden model that builds one solid (505 described, 406 rebuilt
-  exactly, 420 with a base read, no crash and no regression between runs;
+  BREP solids above, every golden model that builds one solid (505 described, 408 rebuilt
+  exactly, 422 with a base read, no crash and no regression between runs;
   the rest are free-form, sheet metal bent both ways or split faces) and the 71 real solids
   above.
 

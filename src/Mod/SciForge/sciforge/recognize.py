@@ -67,8 +67,10 @@ How it reads a solid (each stage can fail on its own without stopping the others
      features; a feature that cannot be taken off stays in the base and is said so (skipped
      when free-form faces are left: no extrude or revolve makes them, so the base is "none");
   5. the base: prismatic along an origin axis (levels, a section per level: the base extrude
-     and the bosses / cuts on it, each read along the axis it opens on) or turned about an
-     origin axis (the half profile and a revolve);
+     and the bosses / cuts on it, each read along the axis it opens on, or revolved when it
+     is itself turned: a dome, a torus groove) or turned about an axis line along X, Y or Z
+     (the half profile and a revolve, about a construction line when the line is away from
+     the origin);
   6. patterns of equal holes (grid, circle, row), the plan in Fusion's order, the fillet and
      chamfer edges as selectors on the part as it will be when the step runs.
 Past DESCRIBE_BUDGET seconds (an OpenCASCADE call cannot be stopped, so this is a soft limit)
@@ -2003,24 +2005,50 @@ class _Reader:
             return
         steps = []
         if public["kind"] == "revolve":
+            line = public.get("axis_line")  # (a line parallel to an origin axis)
+            where = (
+                " through (%s)" % ", ".join(core.fmt(c) for c in public["axis_at"]) if line else ""
+            )
             sketch = plan.add(
                 "create_sketch",
                 core.sketch_args(
-                    public["plane"], 0.0, core.name_items(public.pop("geometry"), "profile")
+                    public["plane"],
+                    public.get("offset", 0.0),
+                    core.name_items(public.pop("geometry"), "profile"),
                 ),
-                "The half profile of the turned part (%s), on the %s plane, on one side of the "
-                "%s axis." % (public["profile_words"], public["plane"], public["axis"]),
+                "The half profile of the turned part (%s), on the %s plane%s, on one side of "
+                "the %s axis%s."
+                % (
+                    public["profile_words"],
+                    public["plane"],
+                    " at %s mm" % core.fmt(public["offset"]) if line else "",
+                    public["axis"],
+                    where,
+                ),
             )
+            uses = {"profile": plan.step_of(sketch)}
+            axis = public["axis"]
+            if line:
+                axis = {"sketch": sketch, "construction": line}
+                uses["axis.sketch"] = plan.step_of(sketch)
             rev = plan.add(
                 "revolve",
-                {"profile": sketch, "axis": public["axis"]},
-                "Revolve it a full turn about the %s axis: the base shape." % public["axis"],
-                uses={"profile": plan.step_of(sketch)},
+                {"profile": sketch, "axis": axis},
+                "Revolve it a full turn about the %s axis%s: the base shape%s."
+                % (
+                    public["axis"],
+                    " line" + where if line else "",
+                    " (a construction line drawn on the sketch)" if line else "",
+                ),
+                uses=uses,
             )
             public["steps"] = [plan.step_of(sketch), plan.step_of(rev)]
             return
         first = True
         for op in _group_ops(base["ops"], self._pattern_args):
+            if op.get("revolve") and not first:
+                steps += self._plan_revolve_piece(op, plan, features)
+                continue
             plane, offset = op["plane"], op["offset"]
             kind = op["kind"]
             if op.get("shell") and not first:
@@ -2132,6 +2160,60 @@ class _Reader:
                         f["steps"] = made
             first = False
         public["steps"] = steps
+
+    def _plan_revolve_piece(self, op, plan, features):
+        """A boss or cut that is itself turned (a dome, a torus groove): its half profile
+        and a revolve about its axis line, joined to the part or cut from it."""
+        rev = op["revolve"]
+        line = rev.get("axis_line")
+        cut = op["kind"] == "cut"
+        where = " through (%s)" % ", ".join(core.fmt(c) for c in rev["axis_at"]) if line else ""
+        sketch = plan.add(
+            "create_sketch",
+            core.sketch_args(
+                rev["plane"],
+                rev.get("offset", 0.0),
+                core.name_items(op["geometry"], "groove" if cut else "boss"),
+            ),
+            "The half profile of the turned %s (%s), on the %s plane, on one side of the %s "
+            "axis%s." % ("cut" if cut else "boss", op["words"], rev["plane"], rev["axis"], where),
+        )
+        uses = {"profile": plan.step_of(sketch)}
+        axis = rev["axis"]
+        if line:
+            axis = {"sketch": sketch, "construction": line}
+            uses["axis.sketch"] = plan.step_of(sketch)
+        fid = self.new_id()
+        step = plan.add(
+            "revolve",
+            {"profile": sketch, "axis": axis, "operation": "cut" if cut else "join"},
+            "Revolve it a full turn about the %s axis%s, %s."
+            % (
+                rev["axis"],
+                " line" + where if line else "",
+                "cut from the part" if cut else "joined to the part",
+            ),
+            [fid],
+            uses=uses,
+        )
+        made = [plan.step_of(sketch), plan.step_of(step)]
+        features.append(
+            {
+                "id": fid,
+                "kind": "pocket" if cut else "boss",
+                "revolved": True,
+                "plane": rev["plane"],
+                "axis": rev["axis"],
+                "profile": op["loops_public"],
+                "profile_words": op["words"],
+                "steps": made,
+                "faces": [],
+                "_faces": [],
+            }
+        )
+        if line:
+            features[-1]["axis_at"] = rev["axis_at"]
+        return made
 
     def _plan_shell(self, op, base, plan, features):
         """The shell tool for a cut marked as a shell: the open face(s) of the base picked
@@ -3213,6 +3295,13 @@ def _walls(solid, axis_name, allow_taper=False, lenient=False, ranges=None):
                 continue
         except Exception:
             pass
+        if lenient and kind in ("torus", "sphere"):  # (a turned boss or groove: a piece)
+            span = _range_along(face, d)
+            heights += span
+            skipped += face.Area
+            if ranges is not None and span:
+                ranges.append(span)
+            continue
         return None
     if skipped > 0.25 * solid.Area:
         return None
@@ -3584,6 +3673,8 @@ def _base_pieces(solid, prism, plane, hs, base_lo, cache):
                     )
                 if got is not None:
                     break
+            if got is None:  # (a dome on a block, a torus groove in its top)
+                got = _revolve_piece(piece, operation)
             if got is None:
                 return None
             ops += got
@@ -3627,6 +3718,8 @@ def _through_cuts(ops, solid):
     part's outer side: equal through cuts then go in one sketch (deduplicated)."""
     for op in ops[1:]:
         if op["kind"] != "cut" or op["extrude"].get("through_all") or op.get("taper"):
+            continue
+        if op.get("revolve"):
             continue
         lo, hi = _span(solid, op["plane"])
         if op["lo"] <= lo + 1e-6 and op["hi"] >= hi - 1e-6:
@@ -3679,6 +3772,8 @@ def _mark_shell(ops, solid):
     side (or both) and t thick at the other, is Fusion's Shell: mark the cut so the plan
     makes it with the shell tool (the face(s) taken away, the thickness)."""
     if len(ops) != 2 or ops[1]["kind"] != "cut" or ops[1].get("taper") or ops[0].get("taper"):
+        return
+    if ops[1].get("revolve"):
         return
     base, cut = ops
     lo, hi = base["lo"], base["hi"]
@@ -4165,6 +4260,36 @@ def _open_piece_op(piece, solid, region, plane, operation, part_lo, part_hi, cac
     return [op]
 
 
+def _revolve_piece(piece, operation):
+    """A boss or cut piece that is itself turned about a line along X, Y or Z (a dome on a
+    block, a torus groove in its top): [op] revolving its half profile, or None."""
+    try:
+        found = _revolved(piece)
+    except Exception:
+        return None
+    if found is None:
+        return None
+    rev = found["public"]
+    return [
+        {
+            "kind": operation,
+            "plane": rev["plane"],
+            "offset": rev.get("offset", 0.0),
+            "geometry": rev["geometry"],
+            "loops_public": rev["profile"],
+            "words": rev["profile_words"],
+            # (the grouping key: one revolve per axis line)
+            "extrude": {"revolve": rev["axis"], "line": repr(rev.get("axis_line"))},
+            "revolve": rev,
+            "solid": found["solid_check"],
+            "height": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "faces": [],
+        }
+    ]
+
+
 def _same_region(a, b):
     """Two lists of flat faces (parallel planes) cover the same region seen along the
     normal."""
@@ -4194,6 +4319,9 @@ def _group_ops(ops, pattern_args=None):
         buckets.setdefault(key, []).append(op)
     out = [ops[0]]
     for members in buckets.values():
+        if members[0].get("revolve"):
+            out += members  # (each revolve on its own: no pattern, no shared sketch)
+            continue
         unique = []  # (the same cut through all twice: a hole in each flange of a channel)
         for op in members:
             if not any(core.same_items(op["geometry"], u["geometry"], 1e-6) for u in unique):
@@ -4310,7 +4438,10 @@ def _build_ops(chosen):
 
 
 def _revolved(solid):
-    """The solid as a profile turned about an origin axis, or None."""
+    """The solid as a profile turned about an axis line along X, Y or Z: an origin axis, or a
+    line parallel to one (a turned part placed away from the origin: the sketch is then
+    offset to the line and the revolve turns about a construction line drawn on it), or
+    None."""
     import Part
 
     from .ai.ops import selectors
@@ -4319,6 +4450,14 @@ def _revolved(solid):
         d = core.AXES[axis_name]
         ok = True
         round_faces = 0
+        line = []  # the axis line's point square to d, from the first round face
+
+        def on_line(point):
+            q = core.sub(point, core.mul(d, core.dot(point, d)))
+            if not line:
+                line.append(q)
+            return core.norm(core.sub(q, line[0])) < 1e-6
+
         for face in solid.Faces:
             kind = _face_kind(face)
             if kind not in ("plane", "cylinder", "cone", "torus", "sphere"):
@@ -4333,17 +4472,17 @@ def _revolved(solid):
                     for e in face.Edges:  # its edges: circles about the axis
                         if _curve_name(e) != "Circle":
                             ok = False
-                        elif not _on_axis(_t(e.Curve.Center), d) or not core.parallel(
+                        elif not on_line(_t(e.Curve.Center)) or not core.parallel(
                             _t(e.Curve.Axis), d, 1e-7
                         ):
                             ok = False
             elif kind in ("cylinder", "cone", "torus"):
                 anchor = _t(s.Center if kind != "cone" else s.Apex)
-                if not core.parallel(_t(s.Axis), d, 1e-7) or not _on_axis(anchor, d):
+                if not core.parallel(_t(s.Axis), d, 1e-7) or not on_line(anchor):
                     ok = False
                 round_faces += 1
             elif kind == "sphere":
-                if not _on_axis(_t(s.Center), d):
+                if not on_line(_t(s.Center)):
                     ok = False
                 round_faces += 1
             else:
@@ -4352,7 +4491,8 @@ def _revolved(solid):
                 break
         if not ok or round_faces == 0:
             continue
-        # the half profile: the solid cut by the half plane that holds the axis
+        p0 = line[0] if line and core.norm(line[0]) > 1e-6 else (0.0, 0.0, 0.0)
+        # the half profile: the solid cut by the half plane that holds the axis line
         plane = {"Z": "XZ", "X": "XY", "Y": "XY"}[axis_name]
         frame = core.PLANES[plane]
         radial = frame["y"] if axis_name == "X" else frame["x"]
@@ -4361,12 +4501,12 @@ def _revolved(solid):
         corners = [(box.XMin, box.YMin, box.ZMin), (box.XMax, box.YMax, box.ZMax)]
         lo = min(core.dot(c, d) for c in corners) - 5.0
         hi = max(core.dot(c, d) for c in corners) + 5.0
-        # a rectangle from the axis outward (radial) and along it (d)
+        # a rectangle from the axis line outward (radial) and along it (d)
         pts = [
-            core.mul(d, lo),
-            core.add(core.mul(d, lo), core.mul(radial, reach)),
-            core.add(core.mul(d, hi), core.mul(radial, reach)),
-            core.mul(d, hi),
+            core.add(p0, core.mul(d, lo)),
+            core.add(p0, core.add(core.mul(d, lo), core.mul(radial, reach))),
+            core.add(p0, core.add(core.mul(d, hi), core.mul(radial, reach))),
+            core.add(p0, core.mul(d, hi)),
         ]
         half = Part.Face(Part.makePolygon([_vec(p) for p in pts + pts[:1]]))
         faces = [f for f in solid.common(half).Faces if f.Area > 1e-9]
@@ -4377,25 +4517,31 @@ def _revolved(solid):
         if geometry is None:
             continue
         try:
-            check = Part.makeCompound(faces).revolve(_vec((0, 0, 0)), _vec(d), 360)
+            check = Part.makeCompound(faces).revolve(_vec(p0), _vec(d), 360)
             if not check.Solids:
                 check = Part.makeSolid(check)
         except Exception:
             check = solid
-        return {
-            "public": {
-                "kind": "revolve",
-                "plane": plane,
-                "axis": axis_name,
-                "angle": 360,
-                "profile": public,
-                "profile_words": words,
-                "geometry": geometry,
-            },
-            "ops": [],
-            "slabs": 0,
-            "solid_check": check,
+        out = {
+            "kind": "revolve",
+            "plane": plane,
+            "axis": axis_name,
+            "angle": 360,
+            "profile": public,
+            "profile_words": words,
+            "geometry": geometry,
         }
+        if core.norm(p0) > 1e-6:
+            # the sketch lies on the axis line; the line in sketch coordinates (two points)
+            out["offset"] = core.snap(core.dot(p0, frame["n"]))
+            a = (core.dot(p0, frame["x"]), core.dot(p0, frame["y"]))
+            u = (core.dot(d, frame["x"]), core.dot(d, frame["y"]))
+            out["axis_line"] = [
+                [core.snap(a[0]), core.snap(a[1])],
+                [core.snap(a[0] + 10.0 * u[0]), core.snap(a[1] + 10.0 * u[1])],
+            ]
+            out["axis_at"] = [core.snap(c) for c in p0]
+        return {"public": out, "ops": [], "slabs": 0, "solid_check": check}
     return None
 
 
