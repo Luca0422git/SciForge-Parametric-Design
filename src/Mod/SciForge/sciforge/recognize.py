@@ -1114,7 +1114,8 @@ class _Reader:
             pts = list(by_point)
             offset = core.to_plane(plane, h0["_start_point"])[2]
             centres2d = [core.to_plane(plane, c)[:2] for c in round_centres.get(axis_name, [])]
-            pattern = core.find_pattern(pts, 1e-4, centres2d) if len(pts) >= 2 else None
+            tol = 0.02 if self.mesh else 1e-4
+            pattern = core.find_pattern(pts, tol, centres2d) if len(pts) >= 2 else None
             pattern_step = self._pattern_args(pattern, plane) if pattern else None
             ordered = core.pattern_order(pts, pattern) if pattern_step else sorted(pts)
             drawn = ordered[:1] if pattern_step else ordered

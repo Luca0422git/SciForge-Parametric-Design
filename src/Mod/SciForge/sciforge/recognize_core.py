@@ -808,3 +808,154 @@ def round_measured(value, relative=0.01, absolute=0.05):
     measured). 5.98 -> 6.0; within max(relative * value, absolute)."""
     tol = max(abs(value) * relative, absolute)
     return nice(value, tol), round(float(value), 4)
+
+
+def fit_arcs(points, circles=(), tol=1e-3, max_step=50.0):
+    """A closed polygon (points in order: a mesh's section) as a loop of lines and arcs: runs
+    of at least 3 points that lie on one of `circles` ((cx, cy, r): the round faces fitted
+    on the mesh), each step turning at most max_step degrees about it, become one arc (a
+    whole ring of points: a circle). Other runs stay lines."""
+    pts = [tuple(p) for p in points]
+    n = len(pts)
+    if n < 3:
+        return []
+    on = []
+    for p in pts:
+        hit = None
+        for k, (cx, cy, r) in enumerate(circles):
+            if abs(math.hypot(p[0] - cx, p[1] - cy) - r) <= tol:
+                hit = k
+                break
+        on.append(hit)
+
+    def step_ok(i, k):
+        cx, cy, _r = circles[k]
+        a = math.atan2(pts[i][1] - cy, pts[i][0] - cx)
+        b = math.atan2(pts[(i + 1) % n][1] - cy, pts[(i + 1) % n][0] - cx)
+        turn = abs((b - a + math.pi) % (2 * math.pi) - math.pi)
+        return math.degrees(turn) <= max_step
+
+    # links: i -> i+1 runs on circle k when both points are on it and the step is short
+    link = []
+    for i in range(n):
+        k = on[i]
+        link.append(k if k is not None and on[(i + 1) % n] == k and step_ok(i, k) else None)
+    if all(k is not None and k == link[0] for k in link):  # a whole circle
+        cx, cy, r = circles[link[0]]
+        return [{"kind": "circle", "c": (cx, cy), "r": r}]
+    # start at a point where the link kind changes, so no run wraps around the end
+    start = 0
+    for i in range(n):
+        if link[i - 1] != link[i]:
+            start = i
+            break
+    order = [(start + i) % n for i in range(n)]
+    segs = []
+    i = 0
+    while i < n:
+        idx = order[i]
+        k = link[idx]
+        j = i
+        while j + 1 < n and link[order[j + 1]] == k and k is not None:
+            j += 1
+        a = pts[idx]
+        b = pts[(order[j] + 1) % n]
+        if k is None:
+            for m in range(i, j + 1):
+                p = pts[order[m]]
+                q = pts[(order[m] + 1) % n]
+                segs.append({"kind": "line", "a": p, "b": q})
+        elif j - i + 1 >= 2:  # at least 3 points on the circle
+            cx, cy, r = circles[k]
+            mid = pts[order[(i + j + 1) // 2]] if j > i else pts[(idx + 1) % n]
+            ta = math.atan2(a[1] - cy, a[0] - cx)
+            tm = (math.atan2(mid[1] - cy, mid[0] - cx) - ta) % (2 * math.pi)
+            tb = (math.atan2(b[1] - cy, b[0] - cx) - ta) % (2 * math.pi)
+            segs.append({"kind": "arc", "c": (cx, cy), "r": r, "a": a, "b": b, "ccw": tm < tb})
+        else:
+            segs.append({"kind": "line", "a": a, "b": b})
+        i = j + 1
+    return segs
+
+
+def snap_loop(loop, nice_tol):
+    """A loop whose numbers came from a mesh, rounded the way a person reads them: circle
+    centres and radii and line ends to the roundest value within nice_tol; an arc's ends
+    are put back on its rounded circle (so the loop stays closed and tangent)."""
+    out = []
+    for s in loop:
+        t = dict(s)
+        if "c" in t:
+            t["c"] = (nice(t["c"][0], nice_tol), nice(t["c"][1], nice_tol))
+            t["r"] = nice(t["r"], nice_tol)
+        for key in ("a", "b"):
+            if key in t:
+                t[key] = (nice(t[key][0], nice_tol), nice(t[key][1], nice_tol))
+        out.append(t)
+    for t in out:  # arc ends back on the rounded circle
+        if t["kind"] == "arc":
+            for key in ("a", "b"):
+                ang = math.atan2(t[key][1] - t["c"][1], t[key][0] - t["c"][0])
+                t[key] = (t["c"][0] + t["r"] * math.cos(ang), t["c"][1] + t["r"] * math.sin(ang))
+    n = len(out)
+    for i in range(n):  # lines meet the arcs where the arcs now end
+        s = out[i]
+        if s["kind"] == "arc":
+            prev, nxt = out[i - 1], out[(i + 1) % n]
+            if prev["kind"] == "line":
+                prev["b"] = s["a"]
+            if nxt["kind"] == "line":
+                nxt["a"] = s["b"]
+    return out
+
+
+def ideal_points(points, pattern, tol):
+    """The points of a pattern found on measured values (a mesh), put where the pattern says
+    with its numbers rounded (centre, radius, start angle, spacing): one ideal point per
+    input point, in the same order."""
+    if pattern is None:
+        return [tuple(p) for p in points]
+    n = len(points)
+    if pattern["kind"] == "circular":
+        cx, cy = (nice(c, tol) for c in pattern["center"])
+        r = nice(pattern["radius"], tol)
+        start = nice(pattern["start"], 0.05)
+        step = 360.0 / n if pattern["full"] else nice(pattern["step"], 0.05)
+        ideal = [
+            (
+                cx + r * math.cos(math.radians(start + k * step)),
+                cy + r * math.sin(math.radians(start + k * step)),
+            )
+            for k in range(n)
+        ]
+    elif pattern["kind"] == "rectangular":
+        ox, oy = (nice(c, tol) for c in pattern["origin"])
+        s1 = nice(pattern["spacing"], tol)
+        s2 = nice(pattern["spacing2"], tol)
+        if pattern.get("axis", "x") == "x":
+            ideal = [
+                (ox + i * s1, oy + j * s2)
+                for j in range(pattern["count2"])
+                for i in range(pattern["count"])
+            ]
+        else:
+            ideal = [(ox, oy + i * s1) for i in range(pattern["count"])]
+    else:
+        ox, oy = (nice(c, tol) for c in pattern["origin"])
+        ang = nice(math.degrees(math.atan2(pattern["direction"][1], pattern["direction"][0])), 0.05)
+        u = (math.cos(math.radians(ang)), math.sin(math.radians(ang)))
+        s = nice(pattern["spacing"], tol)
+        ideal = [(ox + k * s * u[0], oy + k * s * u[1]) for k in range(n)]
+    out = []
+    free = list(ideal)
+    for p in points:
+        if not free:
+            out.append(tuple(p))
+            continue
+        q = min(free, key=lambda c: math.hypot(c[0] - p[0], c[1] - p[1]))
+        if math.hypot(q[0] - p[0], q[1] - p[1]) > 10 * tol:
+            out.append(tuple(p))
+            continue
+        free.remove(q)
+        out.append(q)
+    return out
