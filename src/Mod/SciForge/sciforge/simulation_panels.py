@@ -112,6 +112,21 @@ def body_pick(obj, short):
     return None
 
 
+def _pick_normal(picks):
+    """The outward normal (x, y, z) at the middle of the first picked face, or None."""
+    for obj, sub in picks:
+        if not sub or not sub.startswith("Face"):
+            continue
+        try:
+            face = bodies.global_shape(obj, copy=False).getElement(sub)
+            u0, u1, v0, v1 = face.ParameterRange
+            n = face.normalAt((u0 + u1) / 2.0, (v0 + v1) / 2.0)
+            return [n.x, n.y, n.z]
+        except Exception:
+            continue
+    return None
+
+
 def _number_field(name, value, family, tip=""):
     field = QtWidgets.QLineEdit(score.format_quantity(value, family))
     field.setObjectName("SciForgeSim_" + name)
@@ -420,6 +435,7 @@ class ItemPanel(pickpanel.PickPanel):
                 widget.setParent(None)
                 widget.deleteLater()
         self.fields = {}
+        self.rows = {}
 
     def _build_options(self):
         self._clear_options()
@@ -488,36 +504,34 @@ class ItemPanel(pickpanel.PickPanel):
                 box.currentIndexChanged.connect(self._direction_changed)
                 form.addRow("Direction Type", box)
                 self.fields["direction"] = box
-            vector_force = kind == "force" and opts.get("direction") == "vector"
-            if vector_force:
+            self.rows = {}  # field key -> its row (shown or hidden with the direction type)
+            if "magnitude" in opts:
+                field = _number_field(
+                    "magnitude", opts.get("magnitude", 0.0), unit_family, "The size of the load"
+                )
+                field.editingFinished.connect(self._value_typed)
+                self._row(form, "magnitude", "Magnitude", field)
+            if kind == "force" and "direction" in opts:
+                # Fusion's Vector direction for a force: its X, Y and Z parts (N)
                 parts = score.components_of(opts.get("magnitude", 100.0), opts.get("vector"))
                 for axis, value in zip(("fx", "fy", "fz"), parts):
                     field = _number_field(
                         axis, value, "force", "The force along %s" % axis[1].upper()
                     )
                     field.editingFinished.connect(self._value_typed)
-                    form.addRow("F%s" % axis[1], field)
-                    self.fields[axis] = field
-            elif "magnitude" in opts:
-                field = _number_field(
-                    "magnitude", opts.get("magnitude", 0.0), unit_family, "The size of the load"
-                )
-                field.editingFinished.connect(self._value_typed)
-                form.addRow("Magnitude", field)
-                self.fields["magnitude"] = field
-            if (
-                "vector" in opts
-                and not vector_force
-                and opts.get("direction", "vector") != "normal"
-            ):
+                    self._row(form, axis, "F%s" % axis[1], field)
+            elif "vector" in opts:
                 vector = opts.get("vector") or [0.0, 0.0, -1.0]
                 for axis, value in zip(("x", "y", "z"), vector):
                     field = _number_field("v" + axis, value, "number")
                     field.editingFinished.connect(self._value_typed)
-                    form.addRow(
-                        ("Axis %s" if kind == "moment" else "Direction %s") % axis.upper(), field
+                    self._row(
+                        form,
+                        "v" + axis,
+                        ("Axis %s" if kind == "moment" else "Direction %s") % axis.upper(),
+                        field,
                     )
-                    self.fields["v" + axis] = field
+            self._show_direction_rows()
             if "point" in opts:
                 for axis, value in zip(("x", "y", "z"), opts.get("point") or [0, 0, 0]):
                     field = _number_field("p" + axis, value, "length")
@@ -559,14 +573,66 @@ class ItemPanel(pickpanel.PickPanel):
         except Exception as exc:
             warn("%s: %s" % (self.title, exc))
 
+    def _row(self, form, key, text, field):
+        """A row of a label and a field that can be hidden as a whole."""
+        holder = QtWidgets.QWidget()
+        row = QtWidgets.QHBoxLayout(holder)
+        row.setContentsMargins(0, 0, 0, 0)
+        label = QtWidgets.QLabel(text)
+        label.setMinimumWidth(70)
+        row.addWidget(label)
+        row.addWidget(field, 1)
+        form.addRow(holder)
+        self.fields[key] = field
+        self.rows[key] = holder
+
+    def _vector_mode(self):
+        box = self.fields.get("direction")
+        if box is None:
+            return "vector" if "vector" in self.opts else None
+        return box.currentData()
+
+    def _show_direction_rows(self):
+        mode = self._vector_mode()
+        components = all(k in self.rows for k in ("fx", "fy", "fz"))
+        for key, holder in getattr(self, "rows", {}).items():
+            if key == "magnitude":
+                holder.setVisible(not (components and mode == "vector"))
+            elif key in ("fx", "fy", "fz"):
+                holder.setVisible(mode == "vector")
+            elif key in ("vx", "vy", "vz"):
+                holder.setVisible(mode != "normal")
+
     def _direction_changed(self, *_a):
+        """Normal / Vector: the rows of the other one show, the values carried over (a force
+        typed as a size becomes its X, Y, Z parts along the direction, and back)."""
         try:
-            opts, _problem = self.read_options(lenient=True)
-            box = self.fields.get("direction")
-            opts["direction"] = box.currentData() if box is not None else "normal"
-            self.opts = core.options(self.category, self.kind, opts)
-            self._build_options()
+            mode = self._vector_mode()
+            if all(k in self.fields for k in ("fx", "fy", "fz", "magnitude")):
+                if mode == "vector":
+                    size = score.parse_quantity(self.fields["magnitude"].text(), "force")
+                    vector = self.opts.get("vector") or [0.0, 0.0, -1.0]
+                    if self.picks and self.opts.get("direction") == "normal":
+                        normal = _pick_normal(self.picks)
+                        if normal is not None:
+                            vector = [-c for c in normal]
+                    for key, value in zip(("fx", "fy", "fz"), score.components_of(size, vector)):
+                        self.fields[key].setText(score.format_quantity(round(value, 6), "force"))
+                else:
+                    parts = [
+                        score.parse_quantity(self.fields[k].text(), "force")
+                        for k in ("fx", "fy", "fz")
+                    ]
+                    try:
+                        size, _unit = score.force_from_components(*parts)
+                        self.fields["magnitude"].setText(score.format_quantity(size, "force"))
+                    except core.SimulationError:
+                        pass
+            self.opts["direction"] = mode
+            self._show_direction_rows()
             self.schedule()
+        except core.SimulationError as exc:
+            self.say(str(exc), error=True)
         except Exception as exc:
             warn("%s: %s" % (self.title, exc))
 
@@ -591,7 +657,8 @@ class ItemPanel(pickpanel.PickPanel):
             box = self.fields.get("direction")
             if box is not None:
                 opts["direction"] = box.currentData()
-            if all(k in self.fields for k in ("fx", "fy", "fz")):
+            components = all(k in self.fields for k in ("fx", "fy", "fz"))
+            if components and opts.get("direction") == "vector":
                 parts = [
                     score.parse_quantity(self.fields[k].text(), "force") for k in ("fx", "fy", "fz")
                 ]
@@ -599,7 +666,7 @@ class ItemPanel(pickpanel.PickPanel):
             elif "magnitude" in self.fields:
                 family = self.fields["magnitude"].property("family") or "force"
                 opts["magnitude"] = score.parse_quantity(self.fields["magnitude"].text(), family)
-            if all(("v" + a) in self.fields for a in "xyz"):
+            if all(("v" + a) in self.fields for a in "xyz") and opts.get("direction") != "normal":
                 opts["vector"] = [
                     score.parse_quantity(self.fields["v" + a].text(), "number") for a in "xyz"
                 ]
@@ -680,6 +747,7 @@ class ItemPanel(pickpanel.PickPanel):
                 self.made = sim.add_item(
                     self.study, self.category, self.kind, list(self.picks), opts
                 )
+            _keep_whole_bodies(self.made, self.picks)
         except core.SimulationError as exc:
             self.say(str(exc), error=True)
             return False
@@ -704,6 +772,18 @@ class ItemPanel(pickpanel.PickPanel):
         except Exception:
             pass
         super().cleanup()
+
+
+def _keep_whole_bodies(item, picks):
+    """A whole-body pick (Local Mesh Control's Body Selection) is kept as (body, ""): the
+    engine's list of links dropped a body with no element (simulation._link_list), so the
+    control lost what it was on. (Reported to sim-core; harmless once it keeps them.)"""
+    if not any(not sub for _obj, sub in picks):
+        return
+    stored = [(o, s) for o, s in _sim()._picks(item.References)]
+    if sorted((o.Name, s) for o, s in stored) == sorted((o.Name, s) for o, s in picks):
+        return
+    item.References = [(o, s) for o, s in picks]
 
 
 def _initial_picks(doc):
