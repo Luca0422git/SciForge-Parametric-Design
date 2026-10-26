@@ -1462,6 +1462,7 @@ SIM_SOLVE = group(
         item("Pre-check", "SciForge_SimPrecheck", "sim_precheck"),  # owner: sim-ui
         item("Solve", "SciForge_SimSolve", "sim_solve"),  # owner: sim-ui
         item("Generate Mesh", "SciForge_SimGenerateMesh", "sim_mesh"),  # owner: sim-ui
+        item("Job Status", "SciForge_SimJobStatus", "sim_job_status"),  # owner: sim-ui
     ],
 )
 # The right-click marking menu in the SIMULATION workspace (Fusion's offers the setup's

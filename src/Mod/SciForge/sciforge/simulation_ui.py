@@ -606,6 +606,34 @@ def show_results(study):
         warn("results: %s" % exc)
 
 
+def open_results(study):
+    """A person asked to see a study's results (its row in Job Status double-clicked): its
+    design comes to the front in SIMULATION and the results show. (The end of a solve does not
+    take a person away from their work: show_results.) Returns True when they show."""
+    try:
+        from . import bodies
+
+        if study is None or not bodies.alive(study):
+            return False
+        doc = study.Document
+        if App.ActiveDocument is not doc:
+            from . import drawing_ui
+
+            drawing_ui.show_design(doc)
+        if App.ActiveDocument is not doc:
+            show_results(study)  # (says where they are)
+            return False
+        if not (STATE["on"] and in_workspace(doc)):
+            set_active_study(study)
+            if not enter_workspace("sim_results"):
+                return False
+        show_results(study)
+        return True
+    except Exception as exc:
+        warn("results: %s" % exc)
+        return False
+
+
 # -- commands ------------------------------------------------------------------------------------
 def _run(fn, *args):
     try:
@@ -843,6 +871,20 @@ class GenerateMeshCommand(_SetupCommand):
             simulation_solve_dialog.generate_mesh(study)
 
 
+class JobStatusCommand(_SetupCommand):
+    TEXT = "Job Status"
+    TIP = (
+        "The solve running now with its stages and Cancel, and this session's earlier solves "
+        "and meshes (double-click a solved one to see its results)"
+    )
+    ICON = "sim_job_status"
+
+    def run(self):
+        from . import simulation_solve_dialog
+
+        simulation_solve_dialog.show_status()
+
+
 class ShowMeshCommand(_SetupCommand):
     TEXT = "Show Mesh"
     TIP = "Show or hide the mesh made by Generate Mesh on the model"
@@ -869,5 +911,6 @@ COMMANDS = {
     "SciForge_SimPrecheck": PrecheckCommand,
     "SciForge_SimSolve": SolveCommand,
     "SciForge_SimGenerateMesh": GenerateMeshCommand,
+    "SciForge_SimJobStatus": JobStatusCommand,
     "SciForge_SimShowMesh": ShowMeshCommand,
 }

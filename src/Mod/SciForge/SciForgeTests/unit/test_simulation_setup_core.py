@@ -74,6 +74,26 @@ class Stages(unittest.TestCase):
         self.assertEqual(s.solve_button_text(3), "Solve 3 Studies")
         self.assertEqual(s.solve_button_text(0), "Solve")
 
+    def test_repair_goes_to_the_first_thing_to_fix(self):
+        base = {"held": 1, "remove_rigid": False}
+        what, name, text = s.repair_step(dict(base, lost=["Force 1"], held=0))
+        self.assertEqual((what, name), ("edit", "Force 1"))
+        self.assertIn("pick it again", text)
+        self.assertEqual(s.repair_step(dict(base, held=0))[0], "constraints")
+        # nothing holds it, but its loads balance: not a constraint to add
+        self.assertEqual(s.repair_step(dict(base, held=0, remove_rigid=True))[0], "precheck")
+        what, name, text = s.repair_step(dict(base, loose=["Top"]))
+        self.assertEqual((what, name), ("dof", "Top"))
+        self.assertIn("Top is not held", text)
+        self.assertIn("are not held", s.repair_step(dict(base, loose=["A", "B"]))[2])
+        self.assertEqual(s.repair_step(dict(base, materials=["Plate"]))[:2], ("materials", "Plate"))
+        what, name, text = s.repair_step(dict(base, outside=[("Force 1", "Top")]))
+        self.assertEqual((what, name), ("materials", "Top"))
+        self.assertIn("tick Top In Study", text)
+        self.assertEqual(s.repair_step(base)[0], "precheck")
+        # no body left: nothing can be picked, so not an item's dialog
+        self.assertEqual(s.repair_step(dict(base, bodies=0, lost=["Fixed 1"]))[0], "precheck")
+
 
 class Forces(unittest.TestCase):
     def test_components_round_trip(self):
@@ -86,6 +106,26 @@ class Forces(unittest.TestCase):
     def test_zero_force_refused(self):
         with self.assertRaises(core.SimulationError):
             s.force_from_components(0, 0, 0)
+
+    def test_angle_direction_turns_about_x_then_y_then_z(self):
+        # no turn: the face's normal itself
+        self.assertEqual(s.turned([0, 0, -1], [0, 0, 0]), [0.0, 0.0, -1.0])
+        # 90 degrees about X takes -Z to +Y (right hand)
+        v = s.turned([0, 0, -1], [90, 0, 0])
+        self.assertEqual([round(c, 9) for c in v], [0.0, 1.0, 0.0])
+        # 90 degrees about Y takes -Z to -X
+        v = s.turned([0, 0, -1], [0, 90, 0])
+        self.assertEqual([round(c, 9) for c in v], [-1.0, 0.0, 0.0])
+        # 30 degrees about X, then 90 about Z: X first, Z last
+        v = s.turned([0, 0, -1], [30, 0, 90])
+        self.assertAlmostEqual(v[0], -0.5)
+        self.assertAlmostEqual(v[1], 0.0)
+        self.assertAlmostEqual(v[2], -math.sqrt(3) / 2)
+        # a unit vector stays one
+        v = s.turned([0.6, 0.0, -0.8], [17, -42, 123])
+        self.assertAlmostEqual(math.sqrt(sum(c * c for c in v)), 1.0)
+        # rounding noise is 0
+        self.assertEqual(s.turned([0, 0, -1], [180, 0, 0])[1], 0.0)
 
 
 class Quantities(unittest.TestCase):

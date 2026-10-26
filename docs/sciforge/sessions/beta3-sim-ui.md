@@ -3,7 +3,7 @@
 Builder sim-ui of beta 3 (2026-10-26/27). Brief: `docs/sciforge/dev/briefs/beta3-sim-ui.md`.
 Spec: `docs/sciforge/parity/simulation.md` section "Setup" (behaviour table S1-S25 with sources,
 scenarios, Known gaps). Engine: sim-core's `simulation.py` / `simulation_core.py`, merged into
-this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
+this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30a6).
 
 ## What was built
 
@@ -25,15 +25,27 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 - **Pick dialogs** (`simulation_panels.py`, on `pickpanel.PickPanel`): Structural Constraints,
   Structural Loads and Local Mesh Control (one item dialog, category constraint / load / mesh),
   Edit Gravity. Every kind's options; values with units; the live glyph preview; Fusion's types
-  SciForge does not build listed greyed with a sentence.
+  SciForge does not build listed greyed with a sentence. Force and Moment have Fusion's three
+  Direction Types: Normal, **Angle** (About X, Y, Z in degrees, turned from the first picked
+  face's normal: `simulation_setup_core.turned`; the engine gets the vector, the turns are kept
+  beside it in the item's `SimDirectionAngles` with that vector, so Edit, Load Case Attributes
+  and Clone Study show Angle again, and an item whose vector changed another way shows Vector)
+  and Vector.
 - **Solve** (`simulation_solve_dialog.py`): the Solve dialog, the progress window (stages,
   elapsed time, Cancel; only Close once it ended), studies one after another, the hand-over to
   RESULTS, Generate Mesh with the engine's mesh-only job, Show Mesh, the "not held enough" guard.
+  A study that cannot solve has Fusion's **Repair** button: it closes the dialog and goes to the
+  first thing to fix, with a sentence (`simulation_setup_core.repair_step`: a lost item's Edit
+  dialog, Structural Constraints, DOF View, Study Materials, else the Pre-check list: a study
+  whose body was deleted has nothing to pick); a red Pre-check list has the same Repair.
+  A design closed (or a study deleted) while it solves: the solver is stopped and the progress
+  window says the study is gone (`simulation_solve_dialog._gone`).
 - **Glyphs** (`simulation_glyphs.py`), **browser** (`simulation_browser.py` + hooks in
   `browser_ui.py`), **ribbon** (the SETUP entries in `ribbon_config.py`, DISPLAY > Show Mesh,
-  a big button in every group), **icons** (`tools/sciforge/icons_simulation.py`, 43 icons, also
-  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 35), twelve GUI
-  scenarios `sim_setup_*.py`.
+  a big button in every group; SOLVE > Job Status opens the progress window any time), **icons**
+  (`tools/sciforge/icons_simulation.py`, 44 icons, also for the greyed commands; written one by
+  one so the other builders' icons are untouched), unit tests (`test_simulation_setup_core.py`,
+  37), fourteen GUI scenarios `sim_setup_*.py`.
 - **The design's units** (Fusion's Simulation follows the document's units, research 6): the
   value fields, the browser's texts, Load Case Attributes, Study Materials' properties and the
   mesh / contact lengths show N, MPa, N mm, mm in a metric design and lbf, psi, lbf in, in in an
@@ -44,7 +56,9 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
   still move (three slides and three turns when nothing holds it; the turn about a held edge
   for a model held by one edge, from the engine's not-held analysis), the bodies selected and
   named; the arrows follow the setup until it is switched off. **Job Status** also lists this
-  session's earlier solves and meshes (a solved one's row shows its results on a double-click). **OK right after a click** keeps that pick (pickpanel
+  session's earlier solves and meshes (a solved one's row shows its results on a double-click,
+  its design brought to the front in SIMULATION: `simulation_ui.open_results`; the rows name
+  each study from its own design, whichever is in front). **OK right after a click** keeps that pick (pickpanel
   handles a click 30 ms later; my dialogs take the queued click first: a busy machine once lost
   it in `sim_setup_dialogs`).
 - **The 3D view in SIMULATION**: the right-click marking menu offers the setup's commands
@@ -67,18 +81,20 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 
 | Scenario | Checks | Result |
 |---|---|---|
-| `sim_setup_bracket` | 74 | PASS |
+| `sim_setup_bracket` | 80 | PASS |
 | `sim_setup_dialogs` | 85 | PASS |
 | `sim_setup_browser` | 61 | PASS |
-| `sim_setup_documents` | 49 | PASS |
+| `sim_setup_documents` | 71 | PASS |
 | `sim_setup_kinds` | 70 | PASS |
-| `sim_setup_workspace` | 54 | PASS |
+| `sim_setup_workspace` | 70 | PASS |
 | `sim_setup_components` | 42 | PASS |
 | `sim_setup_glyphs` | 20 | PASS |
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
-| `sim_setup_more` | 39 | PASS |
-| `sim_setup_lost` | 20 | PASS |
+| `sim_setup_more` | 63 | PASS |
+| `sim_setup_lost` | 48 | PASS |
+| `sim_setup_two` | 40 | PASS |
+| `sim_setup_mesh` | 42 | PASS |
 
 Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser`,
 `drawing_new`, `browser_opacity_hover`, `ribbon_sweep` and `hole_qa_more` (the marking menu) pass; unit tests 2534 OK.
@@ -90,6 +106,9 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
   only when the study's design is in front in SIMULATION: show() enters the workspace when it
   is not on, which took a person who went on in DESIGN (a sketch open) out of their work when a
   solve ended; now they stay and are told where the results are (`simulation_ui.show_results`).
+- A person's own request to see results (a Job Status row double-clicked) brings the study's
+  design to the front in SIMULATION first (`simulation_ui.open_results`), then the same
+  `show_results(study)`.
 - sim-results calls `simulation_ui.active()`, `active_study(doc)`, `set_active_study(study)`,
   `enter_workspace("sim_results")`, and `simulation_glyphs.set_visible(on)` / `visible()`.
 - A study without results made active while RESULTS is in front shows SETUP
@@ -100,15 +119,17 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
 1. Fixed by sim-core: `simulation._link_list` dropped a whole-body pick (`(body, [])` is stored
    as nothing in a PropertyLinkSubListGlobal; it now writes `(body, [""])`). The UI's
    `simulation_panels._keep_whole_bodies` stays as a harmless check.
-2. Open: the result summary keys bodies by **label** (`summary["bodies"][body.Label]`): two
-   components' first bodies are both "Body1" in Fusion's numbering and share one entry.
+2. Fixed by sim-core (merged at 42dd30a6): the result summary keyed bodies by **label**: two
+   components' first bodies are both "Body1" in Fusion's numbering and shared one entry; the
+   key is now unique (`simulation.body_key`). The UI does not read per-body entries.
 3. Fixed by sim-core: a model held by one straight edge solved "done" with 1.4e10 mm of
    displacement (CalculiX found a mechanism); the pre-check and the job now say "not held
    enough". The UI still refuses to hand over results that moved more than half the model's
    size (`simulation_solve_dialog.loose_result`).
-4. Open: `_finish` takes `signature(study)` when the solve ends: a design change made while it
-   ran looks up to date. The UI stores the fingerprint from the start
-   (`simulation_solve_dialog._keep_out_of_date`); the engine could take it in `_stage_model`.
+4. Fixed by sim-core (merged at 42dd30a6): `_finish` took `signature(study)` when the solve
+   ended, so a design change made while it ran looked up to date; the engine now keeps the
+   fingerprint from the start (`Job._fingerprints`). The UI's
+   `simulation_solve_dialog._keep_out_of_date` (the same idea) stays as a harmless check.
 5. Open (cosmetic): `simulation_core.describe_free_mode` prints the rounding noise of the axis
    point ("turn about an axis along X through (5, 8.882e-16, 8.882e-16)"), which reaches the
    pre-check's sentences. DOF View cleans it (`simulation_dialogs.describe_motion`); the engine
@@ -121,6 +142,11 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
    The UI turns a default that runs along the picked hole's axis across it and refuses a
    direction along the axis (`simulation_panels.ItemPanel._bearing_across`); the pre-check
    could say it too.
+8. Fixed by sim-core (merged at 42dd30a6): `signature()` counted the `keep_results` setting,
+   so unticking "Keep the results in the design file" made up-to-date results look out of
+   date (found by `sim_setup_documents` part H). Also: with it off, the saved design keeps an
+   emptied result object, so the browser's Results row asks `results_dropped(study)` rather
+   than whether a result object exists.
 
 ## FreeCAD / Qt facts and traps
 
@@ -150,5 +176,6 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
 ## Gaps
 
 See the parity doc's Known gaps (Simplify, several load cases, per-body safety basis, manual
-contacts / connectors / global loads / point mass, force Angle and Limit Target, Repair and the
-Job Status history, the glyph look is SciForge's own).
+contacts / connectors / global loads / point mass, Limit Target, the Job Status history of this
+session only, the glyph look is SciForge's own; an Angle direction is worked out when OK is
+pressed; what Fusion's Repair opens is not known, SciForge's goes to the first thing to fix).

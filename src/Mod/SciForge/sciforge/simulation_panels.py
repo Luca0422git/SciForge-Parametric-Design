@@ -307,6 +307,7 @@ class ItemPanel(pickpanel.PickPanel):
         self.made = None
         table = _table(category)
         self.whole = False  # Local Mesh Control's Body Selection: a click picks the body
+        self.angles = None  # Direction Type Angle: the turns about X, Y, Z (degrees)
         if item is not None:
             data = sim.item_data(item)
             self.kind = data["kind"]
@@ -314,6 +315,9 @@ class ItemPanel(pickpanel.PickPanel):
             self.picks = [(o, s) for o, s in sim._picks(item.References)]
             self.whole = any(not sub for _o, sub in self.picks)
             self._picks_as_now(item)
+            self.angles = stored_angles(item, self.opts)
+            if self.angles is not None:
+                self.opts["direction"] = "angle"
         else:
             built = [k for k, info in table.items() if info.get("built")]
             self.kind = kind if kind in table and table[kind].get("built") else built[0]
@@ -590,8 +594,15 @@ class ItemPanel(pickpanel.PickPanel):
                 box = QtWidgets.QComboBox()
                 box.setObjectName("SciForgeSim_direction")
                 box.addItem("Normal", "normal")
+                box.addItem("Angle", "angle")
                 box.addItem("Vector", "vector")
-                box.setCurrentIndex(0 if opts.get("direction") == "normal" else 1)
+                box.setItemData(
+                    1,
+                    "Start square to the first picked face and turn about the design's X, Y "
+                    "and Z axes",
+                    QtCore.Qt.ToolTipRole,
+                )
+                box.setCurrentIndex(max(0, box.findData(opts.get("direction"))))
                 box.currentIndexChanged.connect(self._direction_changed)
                 form.addRow("Direction Type", box)
                 self.fields["direction"] = box
@@ -606,6 +617,17 @@ class ItemPanel(pickpanel.PickPanel):
                 )
                 field.editingFinished.connect(self._value_typed)
                 self._row(form, "magnitude", "Magnitude", field)
+            if "direction" in opts:
+                # Fusion's Angle direction type: the face's normal turned about X, then Y, Z
+                for axis, value in zip("xyz", self.angles or (0.0, 0.0, 0.0)):
+                    field = _number_field(
+                        "a" + axis,
+                        value,
+                        "angle",
+                        "Turn the direction about the design's %s axis" % axis.upper(),
+                    )
+                    field.editingFinished.connect(self._value_typed)
+                    self._row(form, "a" + axis, "About %s" % axis.upper(), field)
             if kind == "force" and "direction" in opts:
                 # Fusion's Vector direction for a force: its X, Y and Z parts (N)
                 parts = score.components_of(opts.get("magnitude", 100.0), opts.get("vector"))
@@ -702,30 +724,68 @@ class ItemPanel(pickpanel.PickPanel):
             elif key in ("fx", "fy", "fz"):
                 holder.setVisible(mode == "vector")
             elif key in ("vx", "vy", "vz"):
-                holder.setVisible(mode != "normal")
+                holder.setVisible(mode not in ("normal", "angle"))
+            elif key in ("ax", "ay", "az"):
+                holder.setVisible(mode == "angle")
+
+    def _angle_base(self):
+        """Where the Angle direction starts: square to the first picked face (into it for a
+        force, as Normal pushes; out of it for a moment's axis), or None without a face."""
+        normal = _pick_normal(self.picks)
+        if normal is None:
+            return None
+        return [-c for c in normal] if self.kind == "force" else list(normal)
+
+    def _angles(self):
+        """The turns about X, Y, Z typed for the Angle direction (degrees)."""
+        return [_value(self.fields["a" + a]) for a in "xyz"]
+
+    def _direction_of(self, mode):
+        """The unit direction the fields give in `mode` (None when they give none: Normal or
+        Angle without a picked face, a force of 0)."""
+        try:
+            if mode == "normal":
+                return self._angle_base()
+            if mode == "angle":
+                base = self._angle_base()
+                return None if base is None else score.turned(base, self._angles())
+            if all(k in self.fields for k in ("fx", "fy", "fz")):
+                parts = [_value(self.fields[k]) for k in ("fx", "fy", "fz")]
+                return score.force_from_components(*parts)[1]
+            if all(("v" + a) in self.fields for a in "xyz"):
+                return core.unit_vector([_value(self.fields["v" + a]) for a in "xyz"])
+        except core.SimulationError:
+            pass
+        return None
 
     def _direction_changed(self, *_a):
-        """Normal / Vector: the rows of the other one show, the values carried over (a force
-        typed as a size becomes its X, Y, Z parts along the direction, and back)."""
+        """Normal / Angle / Vector: the rows of the chosen one show, the direction carried over
+        (a force typed as a size becomes its X, Y, Z parts along the direction, and back);
+        Angle starts square to the first picked face (its turns at 0)."""
         try:
             mode = self._vector_mode()
-            if all(k in self.fields for k in ("fx", "fy", "fz", "magnitude")):
-                if mode == "vector":
+            before = self.opts.get("direction")
+            direction = self._direction_of(before)
+            force = all(k in self.fields for k in ("fx", "fy", "fz", "magnitude"))
+            if mode == "vector":
+                vector = direction or self.opts.get("vector") or [0.0, 0.0, -1.0]
+                if force:
                     size = _value(self.fields["magnitude"])
-                    vector = self.opts.get("vector") or [0.0, 0.0, -1.0]
-                    if self.picks and self.opts.get("direction") == "normal":
-                        normal = _pick_normal(self.picks)
-                        if normal is not None:
-                            vector = [-c for c in normal]
                     for key, value in zip(("fx", "fy", "fz"), score.components_of(size, vector)):
                         _put(self.fields[key], value)
-                else:
-                    parts = [_value(self.fields[k]) for k in ("fx", "fy", "fz")]
-                    try:
-                        size, _unit = score.force_from_components(*parts)
-                        _put(self.fields["magnitude"], size)
-                    except core.SimulationError:
-                        pass
+                elif all(("v" + a) in self.fields for a in "xyz"):
+                    for axis, value in zip("xyz", vector):
+                        _put(self.fields["v" + axis], value)
+            elif force and before == "vector":
+                parts = [_value(self.fields[k]) for k in ("fx", "fy", "fz")]
+                try:
+                    size, _unit = score.force_from_components(*parts)
+                    _put(self.fields["magnitude"], size)
+                except core.SimulationError:
+                    pass
+            if mode == "angle" and before != "angle":
+                for axis in "xyz":
+                    _put(self.fields["a" + axis], 0.0)
             self.opts["direction"] = mode
             self._show_direction_rows()
             self.schedule()
@@ -739,7 +799,8 @@ class ItemPanel(pickpanel.PickPanel):
         self.schedule()
 
     def read_options(self, lenient=False):
-        """(options, sentence or None) from the fields."""
+        """(options, sentence or None) from the fields. Direction Type Angle reaches the
+        engine as the vector it gives (the angles are kept beside it: keep_angles)."""
         opts = dict(self.opts)
         try:
             for key in ("x", "y", "z", "radial", "axial", "tangential"):
@@ -759,8 +820,20 @@ class ItemPanel(pickpanel.PickPanel):
                 opts["magnitude"], opts["vector"] = score.force_from_components(*parts)
             elif "magnitude" in self.fields:
                 opts["magnitude"] = _value(self.fields["magnitude"])
-            if all(("v" + a) in self.fields for a in "xyz") and opts.get("direction") != "normal":
+            if all(("v" + a) in self.fields for a in "xyz") and opts.get("direction") not in (
+                "normal",
+                "angle",
+            ):
                 opts["vector"] = [_value(self.fields["v" + a]) for a in "xyz"]
+            if opts.get("direction") == "angle":
+                opts["direction"] = "vector"
+                base = self._angle_base()
+                if base is None:
+                    raise core.SimulationError(
+                        "Angle turns the direction from the first picked face: pick a face "
+                        "(or choose Normal or Vector)."
+                    )
+                opts["vector"] = score.turned(base, self._angles())
             if all(("p" + a) in self.fields for a in "xyz"):
                 opts["point"] = [_value(self.fields["p" + a]) for a in "xyz"]
             if "flip" in self.fields:
@@ -770,8 +843,8 @@ class ItemPanel(pickpanel.PickPanel):
             if "size" in self.fields:
                 opts["size"] = _value(self.fields["size"])
         except core.SimulationError as exc:
-            if lenient:
-                return opts, str(exc)
+            if opts.get("direction") == "angle":
+                opts["direction"] = "vector"
             return opts, str(exc)
         return core.options(self.category, self.kind, opts), None
 
@@ -906,6 +979,8 @@ class ItemPanel(pickpanel.PickPanel):
                     self.study, self.category, self.kind, list(self.picks), opts
                 )
             _keep_whole_bodies(self.made, self.picks)
+            if "direction" in opts:
+                keep_angles(self.made, self._angles() if self._vector_mode() == "angle" else None)
         except core.SimulationError as exc:
             self.say(str(exc), error=True)
             return False
@@ -942,6 +1017,41 @@ def _flush_picks(panel):
             panel._process_selection()
     except Exception as exc:
         warn("%s: %s" % (panel.title, exc))
+
+
+# Direction Type Angle: the engine keeps the direction it gives (a vector); the turns typed
+# are kept beside it, with that vector, so that Edit shows Angle again (and does not when the
+# vector was changed another way since: Undo, a script, the AI).
+ANGLES_PROP = "SimDirectionAngles"
+
+
+def keep_angles(item, angles):
+    """Remember the Angle direction's turns of `item` (None: it has no Angle direction)."""
+    if angles is None:
+        if getattr(item, ANGLES_PROP, None):
+            bodies.save_meta(item, ANGLES_PROP, {})
+        return
+    vector = _sim().item_data(item)["options"].get("vector")
+    bodies.save_meta(item, ANGLES_PROP, {"angles": list(angles), "vector": vector})
+
+
+def stored_angles(item, opts):
+    """The turns (degrees) of an item made with Direction Type Angle, or None."""
+    meta = bodies.load_meta(item, ANGLES_PROP)
+    angles, vector = meta.get("angles"), meta.get("vector")
+    if opts.get("direction") != "vector" or not angles or not vector:
+        return None
+    now = opts.get("vector") or []
+    if len(now) != 3 or any(abs(float(a) - float(b)) > 1e-9 for a, b in zip(vector, now)):
+        return None
+    return [float(a) for a in angles]
+
+
+def copy_angles(source, target):
+    """Clone Study: the copies keep their Angle directions."""
+    meta = bodies.load_meta(source, ANGLES_PROP)
+    if meta:
+        bodies.save_meta(target, ANGLES_PROP, meta)
 
 
 def _keep_whole_bodies(item, picks):

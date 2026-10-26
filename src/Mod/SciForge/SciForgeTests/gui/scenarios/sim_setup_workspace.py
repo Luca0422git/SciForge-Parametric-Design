@@ -8,7 +8,8 @@ B  Structural Loads open, Workspace > Design: the dialog ends (nothing made: OK 
    possible), DESIGN shows. Back to Simulation.
 C  Esc with nothing open: still in SIMULATION, nothing changed.
 D  STUDY > New Simulation Study, Create Study: "Study 2 - Static Stress", now the active one;
-   the browser lists both. Right-click Study 1 > Activate.
+   the browser lists both; Undo takes it away, Redo brings it back. Right-click Study 1 >
+   Activate.
 E  A Fixed and a Force on Study 1. Solve: both studies listed, ticking Study 2 too says
    "Solve 2 Studies"; Study 2 holds nothing, so it is refused with its sentence; Study 2
    unticked: "Solve 1 Study" solves Study 1 alone.
@@ -20,11 +21,12 @@ H  Solve Study 1 again (a finer mesh, so it takes a few seconds) and at once Wor
    Design: the solve goes on; when it ends, DESIGN stays in front (a person working on the
    design is not taken away) and a message says where the results are; Workspace > Simulation:
    the results are up to date.
+I  Solve again, and the design (the only one open) closed while it solves: the solver stops,
+   the progress window says the study is gone (Cancelled), no error; a new design opens in
+   DESIGN.
 """
 
 import FreeCAD as App
-from PySide import QtCore, QtWidgets
-from PySide6 import QtTest
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import plane_input as pl
@@ -108,6 +110,19 @@ def d_check():
     )
     rows = s.browser_labels()
     h.check("both in the browser", all(x in rows for x in labels), rows)
+    s.undo()
+
+
+def d_undone():
+    labels = [x.Label for x in s.studies()]
+    h.check("Undo: Study 2 gone", labels == ["Study 1 - Static Stress"], labels)
+    h.check("not in the browser", "Study 2 - Static Stress" not in s.browser_labels())
+    s.redo()
+
+
+def d_redone():
+    labels = [x.Label for x in s.studies()]
+    h.check("Redo: Study 2 back", "Study 2 - Static Stress" in labels, labels)
     s.right_click_row("Study 1 - Static Stress", "Activate")
 
 
@@ -148,16 +163,7 @@ def e_both():
     if not h.check("Solve dialog", dialog is not None):
         return
     h.check("both studies listed", dialog.table.rowCount() == 2, dialog.table.rowCount())
-    item = dialog.table.item(1, 0)
-    rect = dialog.table.visualItemRect(item)
-    # the tick box at the start of the row, clicked like a person
-    QtTest.QTest.mouseClick(
-        dialog.table.viewport(),
-        QtCore.Qt.LeftButton,
-        QtCore.Qt.NoModifier,
-        QtCore.QPoint(rect.left() + 10, rect.center().y()),
-    )
-    QtWidgets.QApplication.processEvents()
+    s.tick_row(dialog.table, 1)  # the tick box at the start of the row, clicked like a person
     h.check("Solve 2 Studies", dialog.go.text() == "Solve 2 Studies", dialog.go.text())
     s.click_widget(dialog.go)
     text = dialog.message.text()
@@ -165,13 +171,7 @@ def e_both():
         "Study 2 refused with its sentence", "Study 2" in text and "Nothing holds" in text, text
     )
     h.check("nothing started", not s.solving())
-    QtTest.QTest.mouseClick(
-        dialog.table.viewport(),
-        QtCore.Qt.LeftButton,
-        QtCore.Qt.NoModifier,
-        QtCore.QPoint(rect.left() + 10, rect.center().y()),
-    )
-    QtWidgets.QApplication.processEvents()
+    s.tick_row(dialog.table, 1)
     h.check("Solve 1 Study", dialog.go.text() == "Solve 1 Study", dialog.go.text())
     s.click_widget(dialog.go)
 
@@ -263,6 +263,43 @@ def h_back():
     study = s.active_study()
     h.check("Study 1 has results", bool(s.sim().summary(study)))
     h.check("up to date", not s.sim().out_of_date(study))
+    h.ribbon("Solve")
+
+
+# -- I ------------------------------------------------------------------------------------------
+def i_go():
+    dialog = s.solve_dialog()
+    if h.check("Solve dialog (again)", dialog is not None):
+        s.click_widget(dialog.go)
+
+
+def i_close():
+    h.check("solving again", s.solving())
+    state["closed"] = App.ActiveDocument.Name
+    App.closeDocument(state["closed"])  # (a person: the tab's close button, Don't Save)
+
+
+def i_check():
+    from sciforge import simulation_solve_dialog as sd
+
+    h.check("the design closed", state["closed"] not in App.listDocuments())
+    h.check("the solve stopped", not s.solving() and sd.RUN["job"] is None)
+    status = s.status_dialog()
+    if h.check("the progress window is there", status is not None):
+        title = status.title.text()
+        h.check("it says Cancelled", title == "Study 1 - Static Stress: Cancelled", title)
+        text = status.message.text()
+        h.check("it says the study is gone", "is gone" in text, text)
+        rows = [status.studies.item(i).text() for i in range(status.studies.count())]
+        h.check("its row", "Study 1 - Static Stress: Cancelled" in rows, rows)
+        h.check("no Cancel left", not status.cancel_button.isVisible())
+    s.close_popup("SciForgeSimJobStatus")
+    App.newDocument("SimAfterClose")
+
+
+def i_new():
+    h.check("a new design opens in DESIGN", s.tab_visible("solid"), s.current_tab())
+    h.check("not in SIMULATION", not s.tab_visible("sim_setup"))
 
 
 h.run(
@@ -281,6 +318,8 @@ h.run(
         d_new,
         d_create,
         d_check,
+        d_undone,
+        d_redone,
         d_activated,
         e_fixed,
         e_fixed_pick,
@@ -303,5 +342,10 @@ h.run(
         s.wait_solved("wait_solved_in_design"),
         h_check,
         h_back,
+        i_go,
+        i_close,
+        s.wait_solved("wait_stopped", 60),
+        i_check,
+        i_new,
     ],
 )

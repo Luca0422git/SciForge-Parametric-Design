@@ -16,6 +16,12 @@ F  A second design in DESIGN: its tab shows SOLID and the timeline; back to the 
 G  The first design saved and closed: the second one shows DESIGN; reopened: it opens in
    DESIGN; Workspace > Simulation: no New Study (the study is in the file), its constraint,
    load and results are back.
+H  Settings > General: "Keep the results in the design file" unticked; saved, closed and
+   reopened: the summary is there, the coloured results are not, and the Results row says
+   only the summary is kept.
+I  Solve again (a finer mesh) and at once the other design's tab: when it ends, the other
+   design stays in front, the progress window names the study (from the design behind); a
+   double-click on its row brings that design to the front in SIMULATION, RESULTS tab.
 """
 
 import os
@@ -26,6 +32,7 @@ import FreeCADGui as Gui
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import simsetup_steps as s
+from SciForgeTests.gui import widget_input as w
 
 state = {}
 
@@ -234,7 +241,20 @@ def g_after_close():
 
 
 def g_reopened():
+    from SciForgeTests.gui import dialog_input as ui
+
     h.check("reopened in DESIGN", s.tab_visible("solid") and not s.tab_visible("sim_setup"))
+    labels = s.browser_labels()
+    leaked = [
+        x
+        for x in labels
+        if x.startswith(("Study 1", "Fixed 1", "Force 1", "SimRun", "SimModel", "SimMesh"))
+        or x in ("Simulation Model", "Load Case 1", "Study Materials")
+    ]
+    h.check("reopened: no study, item or run in the design browser", not leaked, leaked)
+    titles = ui.timeline_titles()
+    leaked = [x for x in titles if "Sim" in x or "Study" in x or "Fixed" in x or "Force" in x]
+    h.check("reopened: none in the timeline", not leaked, titles)
     s.workspace("Simulation")
 
 
@@ -246,6 +266,99 @@ def g_check():
     h.check("its constraint and load", labels == ["Fixed 1", "Force 1"], labels)
     h.check("its results", bool(s.sim().summary(study)) and s.sim().results(study) is not None)
     h.check("Results in the browser", "Results" in s.browser_labels(), s.browser_labels())
+    s.menu_item("MANAGE", "Settings")
+
+
+# -- H ------------------------------------------------------------------------------------------
+def h_keep_off():
+    from sciforge import simulation_dialogs
+
+    p = simulation_dialogs.SettingsPanel.last
+    if not h.check("Study Settings opened", p is not None and not p._closed):
+        return
+    p.tabs.setCurrentIndex(0)
+    if p.tabs.keep.isChecked():
+        s.click_widget(p.tabs.keep)
+    h.check("Keep the results in the design file unticked", not p.tabs.keep.isChecked())
+    s.ok()
+
+
+def h_save_close():
+    h.check(
+        "kept off",
+        s.sim().settings(s.active_study()).get("keep_results") is False,
+        s.sim().settings(s.active_study()),
+    )
+    App.ActiveDocument.save()
+    App.closeDocument(App.ActiveDocument.Name)
+
+
+def h_reopen():
+    App.openDocument(state["path"])
+    h.fit()
+
+
+def h_enter():
+    s.workspace("Simulation")
+
+
+def h_check():
+    study = s.active_study()
+    h.check("the summary kept", bool(s.sim().summary(study)))
+    h.check("the coloured results not kept in the file", s.sim().results(study) is None)
+    labels = s.browser_labels()
+    h.check("the results are up to date", "Results" in labels, labels)
+    h.check("not out of date", not s.sim().out_of_date(study))
+    tip = (s.row_node("Results") or {}).get("tip", "")
+    h.check("the Results row says only the summary is kept", "Only the summary" in tip, tip)
+    # (a precondition: a finer mesh, so the solve lasts long enough to switch designs)
+    doc = App.ActiveDocument
+    doc.openTransaction("finer mesh")
+    s.sim().set_settings(study, {"mesh": {"size_pct": 3.0}})
+    doc.commitTransaction()
+    h.ribbon("Solve")
+
+
+# -- I ------------------------------------------------------------------------------------------
+def i_go():
+    dialog = s.solve_dialog()
+    if h.check("Solve dialog (I)", dialog is not None):
+        s.click_widget(dialog.go)
+
+
+def i_switch():
+    h.check("solving (I)", s.solving())
+    s.click_doc_tab("SimOther")
+
+
+def i_check():
+    h.check(
+        "the other design in front",
+        App.ActiveDocument is not None and App.ActiveDocument.Label.startswith("SimOther"),
+    )
+    h.check("it shows DESIGN", s.tab_visible("solid") and not s.tab_visible("sim_setup"))
+    status = s.status_dialog()
+    if not h.check("the progress window", status is not None):
+        return
+    rows = [status.studies.item(i).text() for i in range(status.studies.count())]
+    name = "Study 1 - Static Stress: Done"
+    if not h.check("it names the study of the other design", name in rows, rows):
+        return
+    item = status.studies.item(rows.index(name))
+    h.check("its row shows results on a double-click", "Double-click" in item.toolTip())
+    w.double_click(status.studies.viewport(), status.studies.visualItemRect(item).center())
+
+
+def i_shown():
+    doc = App.ActiveDocument
+    h.check(
+        "the solved design in front",
+        doc is not None and os.path.samefile(doc.FileName or os.devnull, state["path"]),
+        doc.Label if doc is not None else None,
+    )
+    h.check("in SIMULATION, RESULTS tab", s.current_tab() == "sim_results", s.current_tab())
+    h.check("not told they are gone", "gone" not in s.told(), s.told())
+    s.close_popup("SciForgeSimJobStatus")
 
 
 h.run(
@@ -279,5 +392,15 @@ h.run(
         g_after_close,
         g_reopened,
         g_check,
+        h_keep_off,
+        h_save_close,
+        h_reopen,
+        h_enter,
+        h_check,
+        i_go,
+        i_switch,
+        s.wait_solved("wait_solved_other", 240),
+        i_check,
+        i_shown,
     ],
 )
