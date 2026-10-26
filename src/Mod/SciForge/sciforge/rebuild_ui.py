@@ -963,9 +963,14 @@ def marking_entries(global_pos):
     if going and getattr(ref, "TargetName", "") == body.Name:
         return [
             cfg.SEP,
-            cfg.item("Compare with Reference", "SciForge_CompareReference", "rebuild_compare"),
-            cfg.item("Finish Rebuild", "SciForge_FinishRebuild", "rebuild_finish"),
-            cfg.item("Stop Rebuild...", "SciForge_StopRebuildUnderMouse", "cancel"),  # (QA)
+            # (the body under the mouse's rebuild: beta 3 QA)
+            cfg.item(
+                "Compare with Reference",
+                "SciForge_CompareReferenceUnderMouse",
+                "rebuild_compare",
+            ),
+            cfg.item("Finish Rebuild", "SciForge_FinishRebuildUnderMouse", "rebuild_finish"),
+            cfg.item("Stop Rebuild...", "SciForge_StopRebuildUnderMouse", "cancel"),
         ]
     return [
         cfg.SEP,
@@ -1102,20 +1107,51 @@ class StopCommand:
             warn("Stop Rebuild: %s" % exc)
 
 
-class StopUnderMouseCommand(StopCommand):
-    """The 3D view's right-click entry: the rebuild of the body under the mouse (with
-    several going on, not the active body's)."""
+def _pending_reference():
+    """The rebuild going on in the body the 3D view's right-click was on (None: none, and
+    the command falls back to the active body's). (beta 3 QA: with several rebuilds going
+    on, the right-click's Compare / Finish / Stop took the active body's rebuild, not the
+    one clicked.)"""
+    doc = App.listDocuments().get(_PENDING.get("doc") or "")
+    body = doc.getObject(_PENDING.get("name") or "") if doc is not None else None
+    _PENDING.update(doc=None, name=None)
+    ref = rebuild.reference_for(body) if body is not None else None
+    if ref is None or not getattr(ref, "Shown", True):
+        return None
+    return ref
 
+
+class CompareUnderMouseCommand(CompareCommand):
     def Activated(self):
         try:
-            doc = App.listDocuments().get(_PENDING.get("doc") or "")
-            body = doc.getObject(_PENDING.get("name") or "") if doc is not None else None
-            _PENDING.update(doc=None, name=None)
-            ref = rebuild.reference_for(body) if body is not None else None
-            if ref is None or not getattr(ref, "Shown", True):
+            ref = _pending_reference()
+            if ref is None:
+                CompareCommand.Activated(self)
+            else:
+                open_compare(ref)
+        except Exception as exc:
+            warn("Compare with Reference: %s" % exc)
+
+
+class FinishUnderMouseCommand(FinishCommand):
+    def Activated(self):
+        try:
+            ref = _pending_reference()
+            if ref is None:
+                FinishCommand.Activated(self)
+            elif commands.finish_open_dialog():
+                open_finish(ref)
+        except Exception as exc:
+            warn("Finish Rebuild: %s" % exc)
+
+
+class StopUnderMouseCommand(StopCommand):
+    def Activated(self):
+        try:
+            ref = _pending_reference()
+            if ref is None:
                 StopCommand.Activated(self)
-                return
-            if commands.finish_open_dialog():
+            elif commands.finish_open_dialog():
                 open_stop(ref)
         except Exception as exc:
             warn("Stop Rebuild: %s" % exc)
@@ -1128,6 +1164,8 @@ COMMANDS = {
     "SciForge_FinishRebuild": FinishCommand,
     "SciForge_StopRebuild": StopCommand,
     "SciForge_StopRebuildUnderMouse": StopUnderMouseCommand,
+    "SciForge_CompareReferenceUnderMouse": CompareUnderMouseCommand,
+    "SciForge_FinishRebuildUnderMouse": FinishUnderMouseCommand,
 }
 
 _install_marking()

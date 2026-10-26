@@ -20,8 +20,9 @@ C  The base rebuilt next: half way (its base block built), saved (Ctrl+S), close
    steps go into it and the comparison says done; Finish keeps the joint (now on two rebuilt
    bodies) and the ground.
 D  The base rebuilt once more (its block built), and the arm too (its rebuilt body active):
-   the 3D view's right-click on the rebuilt base > Stop Rebuild... (there was no way back but
-   Undo) names the base, not the active arm's rebuild > Stop Rebuild: the base is shown
+   the 3D view's right-click on the rebuilt base: Compare with Reference and Finish Rebuild
+   are the base's (they took the active body's rebuild, the arm's); Stop Rebuild... (there
+   was no way back but Undo) names the base > Stop Rebuild: the base is shown
    again and is the active body, its rebuilt body is gone, the joint still holds it, the arm's
    rebuild goes on; one undo step; Undo brings the base's rebuild back (hidden base, ghost),
    Redo stops it again; UTILITIES > AI > Stop Rebuild... stops the arm's.
@@ -435,17 +436,70 @@ def d_two_rebuilds():
 d_two_rebuilds.wait_ms = 2000
 
 
-def d_right_click():
+def _base_point():
+    """A point on the top of the rebuilt base's block (away from its hole), or None."""
     from sciforge import bodies
 
-    doc = App.ActiveDocument
-    target = doc.getObject(s["stop_target"])
+    target = App.ActiveDocument.getObject(s["stop_target"])
     shape = bodies.global_shape(target) if target is not None else None
     if shape is None or shape.isNull():
         h.check("the base's block is built", False)
-        return
+        return None
     box = shape.BoundBox
-    menu = r.open_marking_menu(V(box.XMin + 6, box.YMin + 6, box.ZMax))
+    return V(box.XMin + 6, box.YMin + 6, box.ZMax)
+
+
+def _about_base(box):
+    base = App.ActiveDocument.getObject(s.get("base_target") or "")
+    ref = getattr(box, "ref", None) if box is not None else None
+    return base is not None and ref is not None and getattr(ref, "SourceName", "") == base.Name
+
+
+def d_compare_click():
+    point = _base_point()
+    menu = r.open_marking_menu(point) if point is not None else None
+    if menu is not None:
+        r.click_marking_row(menu, "Compare with Reference")
+
+
+d_compare_click.wait_ms = 2500
+
+
+def d_compare_shown():
+    box = r.dialog("SciForgeRebuildCompare")
+    h.check(
+        "the right-click's Compare with Reference compares the base under the mouse (it took "
+        "the active body's rebuild, the arm's)",
+        _about_base(box),
+        getattr(getattr(box, "ref", None), "SourceName", None),
+    )
+    r.close_dialogs()
+    point = _base_point()
+    menu = r.open_marking_menu(point) if point is not None else None
+    if menu is not None:
+        r.click_marking_row(menu, "Finish Rebuild")
+
+
+d_compare_shown.wait_ms = 2500
+
+
+def d_finish_shown():
+    box = r.dialog("SciForgeRebuildFinish")
+    h.check(
+        "... and its Finish Rebuild opens the base's Finish (not the arm's)",
+        _about_base(box),
+        getattr(getattr(box, "ref", None), "SourceName", None),
+    )
+    if box is not None:
+        r.click_button(box, "SciForgeRebuildFinishCancel")
+
+
+d_finish_shown.wait_ms = 1500
+
+
+def d_right_click():
+    point = _base_point()
+    menu = r.open_marking_menu(point) if point is not None else None
     if menu is None:
         return
     rows = r.marking_rows(menu)
@@ -591,6 +645,9 @@ h.run(
         c_both_rebuilt,
         d_start_again,
         d_two_rebuilds,
+        d_compare_click,
+        d_compare_shown,
+        d_finish_shown,
         d_right_click,
         d_stop_press,
         d_stopped,
