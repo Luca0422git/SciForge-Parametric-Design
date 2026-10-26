@@ -169,5 +169,33 @@ class ManyDots(unittest.TestCase):
         self.assertEqual(core.nearest_indices(pts, (0, 0, 0), 2), [1, 2])
 
 
+class ClickTakes(unittest.TestCase):
+    """The hover shows the dots of what a click selects (FreeCAD's pick priority)."""
+
+    @staticmethod
+    def hit(element, x, obj="Channel"):
+        return {"Object": obj, "Component": element, "x": x, "y": 0.0, "z": 0.0}
+
+    def test_an_edge_right_at_the_face_wins(self):
+        hits = [self.hit("Face3", 0.0), self.hit("Edge85", 0.3), self.hit("Face9", 2.0)]
+        self.assertEqual(core.choose_hit(hits)["Component"], "Edge85")
+
+    def test_an_edge_further_away_does_not(self):
+        hits = [self.hit("Face3", 0.0), self.hit("Edge85", 0.6)]
+        self.assertEqual(core.choose_hit(hits)["Component"], "Face3")
+
+    def test_only_the_first_objects_hits(self):
+        hits = [self.hit("Face3", 0.0), self.hit("Edge1", 0.1, obj="Screw")]
+        self.assertEqual(core.choose_hit(hits)["Component"], "Face3")
+
+    def test_a_corner_beats_an_edge(self):
+        hits = [self.hit("Edge4", 0.0), self.hit("Face1", 0.1), self.hit("Vertex2", 0.2)]
+        self.assertEqual(core.choose_hit(hits)["Component"], "Vertex2")
+
+    def test_nothing_hit(self):
+        self.assertIsNone(core.choose_hit([]))
+        self.assertIsNone(core.choose_hit(None))
+
+
 if __name__ == "__main__":
     unittest.main()

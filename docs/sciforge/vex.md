@@ -45,7 +45,22 @@ Origin, As-built Joint, Duplicate With Joints and Align):
 3. Select the screw and the nut, **ASSEMBLE > Duplicate With Joints**, then click the next
    holes one after the other: every click puts a joined screw and nut there. OK.
 
-## 5. Frames and speed
+## 5. Shafts and wheels: a revolute joint
+
+1. **J**: click the shaft's end (its centre dot lights up), then the dot of the square hole
+   (or of the bearing's round hole) it goes through. The shaft's end now sits on the hole.
+2. **Offset Z**: type how far it goes in (a minus number pushes it on through the hole,
+   for example `-1.5 in`).
+3. **Motion** tab > **Type: Revolute**. OK.
+4. To turn it: right-click the joint in the browser > **Drive Joints**, type an angle.
+
+## 6. Align instead of a joint
+
+**MODIFY > Align** (Objects: **Components**) puts a part onto a dot and leaves no joint: click
+the part's face (or its dot), then the hole's dot. Two flat faces end up facing each other.
+Hold **Shift** to click without the dots (a face's centre).
+
+## 7. Frames and speed
 
 - Parts that never move relative to each other (a frame): place them with joints or Align,
   then **ASSEMBLE > Rigid Group** instead of a rigid joint for each pair (Fusion's advice too).

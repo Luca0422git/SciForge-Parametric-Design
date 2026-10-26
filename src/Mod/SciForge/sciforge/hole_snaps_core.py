@@ -287,3 +287,36 @@ def nearest_indices(points, target, count):
     """The indices of the `count` points nearest to `target`, nearest first."""
     order = sorted(range(len(points)), key=lambda i: distance(points[i], target))
     return order[: max(0, int(count))]
+
+
+# -- what a click takes ----------------------------------------------------------------------------
+NEAR_HIT = 0.2  # FreeCAD's selection: an edge or a corner this near the first hit (squared, mm)
+
+
+def hit_rank(element):
+    """FreeCAD's pick priority (SoFCUnifiedSelection::getPriority): corner 3, edge 2, face 1."""
+    element = str(element or "")
+    for rank, prefix in ((3, "Vertex"), (2, "Edge"), (1, "Face")):
+        if element.startswith(prefix):
+            return rank
+    return 0
+
+
+def choose_hit(hits, owner=None):
+    """The hit FreeCAD's selection takes of the hits along the pointer's ray (nearest first:
+    dicts with x, y, z and Component, as view.getObjectsInfo gives them): of the hits on the
+    first hit's object (`owner(hit)`), an edge or a corner right at the first hit wins over
+    it (SoFCUnifiedSelection::getPickedList). None: no hit."""
+    if not hits:
+        return None
+    owner = owner or (lambda hit: hit.get("Object"))
+    best = first = hits[0]
+    rank, who = hit_rank(first.get("Component")), owner(first)
+    for hit in hits[1:]:
+        if owner(hit) != who:
+            break
+        here = hit_rank(hit.get("Component"))
+        d2 = sum((hit[k] - first[k]) ** 2 for k in ("x", "y", "z"))
+        if here > rank and d2 <= NEAR_HIT:
+            best, rank = hit, here
+    return best
