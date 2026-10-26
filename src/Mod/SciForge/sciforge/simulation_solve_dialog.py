@@ -235,12 +235,14 @@ def start(studies, kind="solve"):
     RUN["results"] = {}
     RUN["last_done"] = None
     show_status()
-    _next()
     if RUN["timer"] is None:
         timer = QtCore.QTimer()
         timer.setInterval(150)
         timer.timeout.connect(_poll)
         RUN["timer"] = timer
+    if _next() is None:  # no job could start (each study's reason is in the progress window)
+        _finish_all()
+        return False
     RUN["timer"].start()
     return True
 
@@ -287,15 +289,35 @@ def _dialog_open(doc):
         return False
 
 
+def _drain():
+    """Jobs cancelled because their study or design went: polled until their thread ends, so
+    the solver is stopped and their temporary folder removed (nothing of the design is
+    touched: the job is cancelled)."""
+    left = []
+    for job in RUN.get("draining", []):
+        try:
+            if job.poll() == "running":
+                left.append(job)
+        except Exception:
+            pass
+    RUN["draining"] = left
+    if not left and RUN["job"] is None and RUN["timer"] is not None and not RUN["queue"]:
+        RUN["timer"].stop()
+
+
 def _poll():
     try:
+        if RUN.get("draining"):
+            _drain()
         job = RUN["job"]
         if job is None:
-            _finish_all()
+            if RUN["study"] is not None or RUN["queue"]:
+                _finish_all()
             return
         study = RUN["study"]
         if study is None or not bodies.alive(study):
             job.cancel()
+            RUN.setdefault("draining", []).append(job)
             RUN["job"] = None
             _after(None, "cancelled", "The study is gone.")
             return
@@ -406,7 +428,7 @@ def _keep_out_of_date(study):
 
 def _finish_all():
     timer = RUN["timer"]
-    if timer is not None:
+    if timer is not None and not RUN.get("draining"):
         timer.stop()
     RUN["job"] = None
     RUN["study"] = None
@@ -637,7 +659,10 @@ def show_mesh(study):
         hide_mesh()
         vobj = mesh.ViewObject
         try:
-            vobj.DisplayMode = "Faces & Wireframe"
+            # the element edges over the model's own faces (mesh faces drawn at the same
+            # place as the body's would flicker through them)
+            modes = list(vobj.listDisplayModes())
+            vobj.DisplayMode = "Wireframe" if "Wireframe" in modes else modes[0]
         except Exception:
             pass
         vobj.Visibility = True
