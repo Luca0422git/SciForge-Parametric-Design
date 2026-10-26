@@ -68,12 +68,25 @@ listed as not recognized.
 
 ### Speed
 
-describe() of a 300-face plate (294 holes on a grid) takes about 1.3 s on the sandbox (4 CPUs
+describe() of a 300-face plate (294 holes on a grid) takes about 1.5 s on the sandbox (4 CPUs
 shared with five other builders); the limit was 5 s. Closing holes by their rims instead of
 defeaturing them took it from minutes (OpenCASCADE's defeaturing costs about 75 ms per hole
 face) to milliseconds.
 
+Other parts (SPEED_TABLE: filled in from the final runs).
+
+What keeps it fast: copies of one cut-out or boss are read once (a moved copy takes the first
+one's reading, moved); an axis with many more levels than a simple reading already found is not
+read; parts with free-form faces are not defeatured (their base cannot be read: the forged
+lever `Schenkel.stp`, 409 faces, went from 26 s to under 2 s); after 30 s (`DESCRIBE_BUDGET`)
+the optional work is skipped and the notes say so. One OpenCASCADE defeaturing call cannot be
+interrupted: a 434-face connector with 26 chamfers and fillets spends about 40 s in it.
+
 ### Benchmark
+
+(filled in from the final run, see Tests)
+
+### Real files from other programs
 
 (filled in from the final run, see Tests)
 
@@ -237,20 +250,36 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
 
 What the QA pass found and fixed, each with a check in
 `SciForgeTests/headless/rebuild_qa.py` (run by `rebuild_e2e.main()`, so by `run_tests.sh
---only headless / base`) that fails on the code before the fix:
+--only headless / base`; `SCIFORGE_REBUILD_FILTER=qa` runs only them) or the scenario
+`rebuild_qa_joints` that fails on the code before the fix:
 
 | Found | Fixed |
 |---|---|
-| Finish deleted every joint of a jointed part (the VEX case), its ground, the source of a pattern of bodies of it and the face a sketch of another body sat on | what used the original moves onto the rebuild first (see Finish above); what cannot keeps the original, hidden |
-| Finish left the original's imported shape in its component (a stray "Body001 (imported)" step in the timeline) | deleted with the original |
+| Finish deleted every joint of a jointed part (the VEX case), its ground, the source of a pattern of bodies of it and the face a sketch of another body sat on (that body changed shape) | what used the original moves onto the rebuild first (see Finish above); what cannot keeps the original, hidden, and the answer / window says why |
+| Finish deleted an original whose extrude also cut another body: that body lost the cut | such a follower step keeps the original (hidden) |
+| Finish left the original's imported shape in its component (a stray "Body001 (imported)" step) | deleted with the original |
+| A jointed part driven while it was rebuilt: the reference stayed where it was frozen (compare said match 0.16, the plan came out turned, the ghost stood apart) | the reference keeps the frame it was frozen in and moves with the rebuild's component (`FrozenFrame`); the ghost follows |
 | A design saved half way and opened again: the next steps went into the design's first body ("No base set" on the hole after) | the body of the rebuild going on is the active one again (window and headless) |
 | The reference deleted another way than Finish (delete_step, a script) left the original hidden for good | the rebuild is given up: the original is shown again |
-| describe_reference on a plate with a modeled thread took 210 s (OpenCASCADE's defeaturing on the thread's faces) and then read nothing | a thread round a bore is closed with its hole, never defeatured, and listed as not read (1.3 s) |
+| start_rebuild given the id import_file answers with (the component's) refused: "pick the body" | a component with one solid body stands for it |
+| describe_reference on a plate with a modeled thread: 210 s (OpenCASCADE's defeaturing on the thread's faces), then no base read | a thread round a bore is closed with its hole, never defeatured, listed as not read (1.3 s) |
+| describe_reference on a VEX plate with 125 square holes (506 faces): 56 s | the base check compares faces before any boolean, planes are bucketed by offset (and at-recognize skips axes with many more levels): 9 s |
+| The chat's ready message waited in the box with nothing saying so | a tip says to read it and press Send |
 
-Tried and found right: two rebuilds at once (each tool takes `reference`; the dialogs ask to
-select the rebuilt body), undo / redo across start, the AI's steps and finish, parts of 0.5 mm
-and 2 m, an inch STEP file (read at its size; the plan's numbers are millimetres: 12.7 for
-half an inch), a 294-face plate (describe 1.7 s, compare 1.6 to 2.2 s while holes are left,
-0.4 s when done, finish 2 s), a loft (said not read: the plan is empty and the notes say to
-build it by hand).
+Tried and found right: a body that already has a timeline, two rebuilds at once (each tool
+takes `reference`; the dialogs ask to select the rebuilt body), undo / redo across start, the
+AI's steps and finish, component instances (a pasted copy follows the rebuild), parts of
+0.5 mm and 2 m, an inch STEP file (read at its size; the plan's numbers are millimetres: 12.7
+for half an inch), a 294-face plate (describe 1.7 s, compare 1.6 to 2.2 s while holes are
+left, 0.4 s when done, finish 2 s), a loft and raised text (said not read: the notes say to
+build them by hand).
 
+Known gaps found by the QA pass (not fixed):
+
+- Raised or engraved text on a face, and any free-form face, leaves the whole base unread
+  (at-recognize's free-form rule): the plate under the text is not planned either.
+- There is no Stop Rebuild: deleting the rebuilt body leaves the ghost and the hidden original
+  until the rebuild is started again (a new rebuilt body) or undone; Undo back past the start
+  gives everything back.
+- A thread rebuilt with SciForge's thread tool on the planned hole matches every face but the
+  bore's (its seam differs): finish with even_if_different.
