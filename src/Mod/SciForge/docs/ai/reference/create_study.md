@@ -6,14 +6,14 @@ Fusion: SIMULATION > SETUP > STUDY > New Simulation Study (Static Stress). Categ
 
 ## What it does
 
-Make a Static Stress study, Fusion's linear stress simulation: where a part is held (add_constraint), what pushes on it (add_load, or gravity in study_settings), then solve_study and study_results. The study uses each body's physical material (change it for the study only with set_study_material) and the bodies as they are now; bodies that touch (or are closer than 0.1 mm) are glued. bodies: the bodies it simulates (default: every solid body shown). Answers the study's id. Linear static only: small deflections, materials that stay elastic and isotropic (3D-printed parts are not); results are a guide.
+Make a Static Stress study, Fusion's linear stress simulation: where a part is held (add_constraint), what pushes on it (add_load, or gravity in study_settings), then solve_study and study_results. The study uses each body's physical material (change it for the study only with set_study_material) and the bodies as they are now; bodies that touch (or are closer than 0.1 mm) are glued. bodies: the bodies it simulates (default: every solid body of the design, shown or hidden; not the tools a Combine used up). Answers the study's id. Linear static only: small deflections, materials that stay elastic and isotropic (3D-printed parts are not); results are a guide.
 
 ## Arguments
 
 | Argument | Type | Unit | Default | Limits | Description |
 |---|---|---|---|---|---|
 | `label` | string |  |  |  | its name (default "Study N - Static Stress") |
-| `bodies` | array of strings |  |  | at least 1 item(s) | the bodies to simulate (default: every solid body shown) |
+| `bodies` | array of strings |  |  | at least 1 item(s) | the bodies to simulate (default: every solid body, shown or hidden) |
 
 ## Answer
 

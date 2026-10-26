@@ -1971,6 +1971,39 @@ def reactions_on_planes(doc, out):
         )
 
 
+@engine_check("the bodies of a study of the whole design")
+def design_bodies_check(doc, out):
+    """A study with no bodies chosen simulates the design's bodies, shown or hidden: turning a
+    body's eye off after a solve (the RESULTS tab says to, to look inside) leaves the results
+    in date and the bodies the same (they went by the eyes: hiding the only body made the
+    results out of date and left the study with no body); a body a Combine used up is left
+    out (it is no longer part of the design)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import combine
+    from sciforge import simulation as sim
+
+    body, study = _cantilever_study(doc, label="Beam")
+    study.SimBodies = []  # (a study of the whole design)
+    sim.solve(study, timeout=900)
+    body.Visibility = False
+    names = [b.Name for b in sim.study_bodies(study)]
+    out.append(("eye off: the same bodies", names == [body.Name], names))
+    out.append(("eye off: not out of date", not sim.out_of_date(study), ""))
+    body.Visibility = True
+    block = sb.make_body(doc, Part.makeBox(10, 10, 5, App.Vector(40, 0, 10)), "Block")
+    names = [b.Name for b in sim.study_bodies(study)]
+    out.append(("a new body is in the study", names == [body.Name, block.Name], names))
+    block.Visibility = False
+    names = [b.Name for b in sim.study_bodies(study)]
+    out.append(("a new body hidden is still in it", names == [body.Name, block.Name], names))
+    combine.build({"target": body, "tools": [block], "operation": "join"})
+    doc.recompute()
+    names = [b.Name for b in sim.study_bodies(study)]
+    out.append(("a body a Combine used up is not", names == [body.Name], names))
+
+
 @engine_check("results kept in and dropped from the file")
 def kept_and_dropped(doc, out):
     """A solved study saved and reopened: the results come back with the same numbers; with

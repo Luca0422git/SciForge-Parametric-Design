@@ -9,7 +9,7 @@ design folders):
 
 - A **study** is an App::FeaturePython (SciForgeType "SimStudy", proxy StudyProxy) holding its
   type, settings and study materials as JSON (`SciForgeSimStudy`), the bodies it simulates
-  (`SimBodies`; empty = every solid body shown when it solves), and a summary of its last
+  (`SimBodies`; empty = the design's bodies, design_bodies), and a summary of its last
   solve (`SciForgeSimResult`).
 - Every **constraint** and **load** is an App::FeaturePython of its own (SciForgeType
   "SimItem", proxy ItemProxy): its picks in `References` (faces / edges / corners of the
@@ -210,7 +210,7 @@ def _all_item_labels(doc, but=None):
 
 def create_study(doc, kind="static_stress", label=None, study_bodies=None):
     """A new study of `kind` (only "static_stress" solves). Fusion names it "Study 1 - Static
-    Stress"; `study_bodies` (default: every solid body shown when it solves)."""
+    Stress"; `study_bodies` (default: the design's bodies, shown or hidden: design_bodies)."""
     if doc is None:
         raise SimulationError("Open a design first.")
     if not core.study_type_available(kind):
@@ -294,12 +294,38 @@ def _save(obj, prop, data):
 
 
 def study_bodies(study):
-    """The solid bodies the study simulates, in the design's order."""
+    """The solid bodies the study simulates, in the design's order: the ones chosen for it
+    (SimBodies), else the design's (design_bodies)."""
     doc = study.Document
     chosen = [b for b in (getattr(study, "SimBodies", None) or []) if bodies.has_solid(b)]
     if chosen:
         return sorted(chosen, key=lambda b: b.ID)
-    return bodies.solid_bodies(doc, visible_only=True)
+    return design_bodies(doc)
+
+
+def design_bodies(doc):
+    """The bodies a study of the whole design simulates (Fusion: the simulation model is the
+    design's bodies): every body with a solid, shown or hidden, but not the ones a step uses
+    up (a Combine without Keep Tools: they are no longer part of the design) nor the ones the
+    history marker has not made yet. Never by what is shown: it went by the eyes, so turning a
+    body's eye off after a solve (the RESULTS tab says to, to look inside) made the results
+    out of date, and changed the bodies the next solve took."""
+    if doc is None:
+        return []
+    for name in ("combine", "mesh", "extrude_bodies"):  # (the steps that use bodies up)
+        try:
+            __import__("sciforge." + name)
+        except Exception:
+            pass
+    try:
+        used = bodies.consumed(doc)
+    except Exception:
+        used = set()
+    return [
+        b
+        for b in bodies.solid_bodies(doc)
+        if b.Name not in used and not getattr(b, "SciForgeRolledHidden", False)
+    ]
 
 
 # -- constraints and loads -------------------------------------------------------------------------
