@@ -101,6 +101,15 @@ class ReferenceFeature:
         add(obj, "App::PropertyString", "SourceKind", "Rebuild", "body or mesh")
         add(obj, "App::PropertyString", "TargetName", "Rebuild", "The body the rebuild is in")
         add(obj, "App::PropertyFloat", "Tolerance", "Rebuild", "Faces agree within this (mm)")
+        # where the rebuilt body's coordinates stood when the solid was frozen: the reference
+        # moves with the rebuild's component (a jointed part driven while it is rebuilt)
+        if add(obj, "App::PropertyPlacement", "FrozenFrame", "Rebuild", "The frame at freezing"):
+            try:  # (a reference saved before: its frame as it stands)
+                target = target_of(obj) if getattr(obj, "TargetName", "") else None
+                if target is not None:
+                    obj.FrozenFrame = frame(body=target)
+            except Exception:
+                pass
         if add(obj, "App::PropertyBool", "Shown", "Rebuild", "Drawn faint in the 3D view"):
             obj.Shown = True
         bodies.mark(obj, REFERENCE)
@@ -135,13 +144,34 @@ def is_reference(obj):
 
 
 def reference_shape(ref):
-    """The frozen solid, in design coordinates (a copy)."""
+    """The frozen solid, in design coordinates (a copy): where it stands now, moved with the
+    rebuilt body's component since it was frozen (QA: a jointed part driven while it was
+    rebuilt left the reference behind, and compare and the plan went wrong)."""
     if not is_reference(ref) or not bodies.alive(ref):
         raise RebuildError("That is not a rebuild reference (start_rebuild makes one).")
     shape = getattr(ref, SHAPE, None)
     if shape is None or shape.isNull() or not shape.Solids:
         raise RebuildError("The reference %s holds no solid." % ref.Label)
-    return shape.copy()
+    motion = moved_by(ref)
+    if motion is None:
+        return shape.copy()
+    out = bodies.baked(shape)
+    out.transformShape(motion.toMatrix(), True)
+    return out
+
+
+def moved_by(ref):
+    """How far the rebuilt body's frame moved since the reference was frozen (a placement),
+    or None when it did not (or the rebuilt body is gone)."""
+    try:
+        start = getattr(ref, "FrozenFrame", None)
+        target = target_of(ref)
+        if start is None or target is None:
+            return None
+        motion = frame(body=target).multiply(start.inverse())
+        return None if motion.isIdentity() or motion.isSame(App.Placement(), 1e-12) else motion
+    except Exception:
+        return None
 
 
 def source_of(ref):
@@ -381,6 +411,7 @@ def start(doc, source, label=None):
             )
     solid, note = _solid_of(kind, source)
     container = components.container_of(source)
+    fresh = ref is None
     if ref is None:
         ref = doc.addObject("App::FeaturePython", REFERENCE)
         ReferenceFeature(ref)
@@ -398,6 +429,8 @@ def start(doc, source, label=None):
         except Exception:
             pass
     ref.TargetName = target.Name
+    if fresh:
+        ref.FrozenFrame = frame(body=target)
     ref.Shown = True
     _attach_view(ref)
     bodies.set_shown(source, False)
@@ -2234,6 +2267,24 @@ class _Watch:
     def slotCreatedDocument(self, doc):
         self.closing.discard(doc.Name)
 
+    def slotChangedObject(self, obj, prop):
+        """A component (or a body) moved: the references of the rebuilds in it follow on
+        the screen (reference_shape follows by itself)."""
+        if prop != "Placement":
+            return
+        try:
+            if obj.TypeId not in ("App::Part", "PartDesign::Body") or App.isRestoring():
+                return
+            doc = obj.Document
+            if doc is None or doc.Name in self.closing:
+                return
+            for ref in active_references(doc):
+                target = target_of(ref)
+                if target is not None and (target is obj or obj in _containers(target)):
+                    _notify("moved", ref, None)
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
+
     def slotUndoDocument(self, doc):
         sync(doc)
 
@@ -2275,6 +2326,19 @@ class _Watch:
 
 
 _FINISHING = set()  # references being removed by finish (their original is dealt with there)
+
+
+def _containers(obj):
+    """The components `obj` sits in, nearest first."""
+    out = []
+    try:
+        current = obj.getParentGeoFeatureGroup()
+        while current is not None and len(out) < 30:
+            out.append(current)
+            current = current.getParentGeoFeatureGroup()
+    except Exception:
+        pass
+    return out
 
 
 _WATCH = {"on": None}

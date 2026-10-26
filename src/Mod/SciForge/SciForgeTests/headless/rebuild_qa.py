@@ -16,6 +16,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * reopened: a design saved half way through a rebuild and opened again: the next plan step
   goes into the rebuilt body (it went into the design's first body).
 * deleted reference: the reference deleted with delete_step: the original is shown again.
+* driven: the jointed arm turned while it is rebuilt: the reference turns with it (compare
+  said match 0.16 and the plan came out turned).
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -73,15 +75,16 @@ BASE = [
 ]
 
 
-def rebuild_through_tools(agent, body):
+def rebuild_through_tools(agent, body, plan=None):
     """start_rebuild, describe_reference, the plan, compare (with its fixes): the compare
-    answer at the end."""
+    answer at the end. body None and a plan: a rebuild already started, its plan given."""
     from . import rebuild_e2e as e2e
 
-    agent.call("start_rebuild", {"body": body})
-    text, error = agent.call("describe_reference", {})
-    data = _json(text) or {}
-    plan = data.get("plan") or []
+    if plan is None:
+        agent.call("start_rebuild", {"body": body})
+        text, error = agent.call("describe_reference", {})
+        data = _json(text) or {}
+        plan = data.get("plan") or []
     made = {}
     for step in plan:
         args = agent._with_ids(step, made, plan)
@@ -477,7 +480,65 @@ def threaded(agent, folder):
     )
 
 
-CHECKS = (jointed, dependents, kept, reopened, deleted_reference, threaded)
+# -- a jointed part driven while it is rebuilt ---------------------------------------------------
+def driven(agent, folder):
+    import FreeCAD as App
+
+    from sciforge import rebuild
+
+    arm = _golden(agent, "QaArm2", ARM, folder)
+    base = _golden(agent, "QaBase2", BASE, folder)
+    agent.call("new_design", {"name": "QaDriven"})
+    agent.call("import_file", {"path": arm})
+    agent.call("import_file", {"path": base})
+    doc = App.ActiveDocument
+    agent.call("ground", {"component": "Component001"})
+    agent.call(
+        "joint",
+        {
+            "type": "revolute",
+            "first": {
+                "component": "Component",
+                "face": {"type": "cylinder", "count": 1, "at": {"axis": "x", "value": "min"}},
+                "snap": "circle",
+            },
+            "second": {
+                "component": "Component001",
+                "face": {"type": "cylinder", "count": 1},
+                "snap": "circle",
+            },
+        },
+    )
+    agent.call("drive_joint", {"joint": "Joint", "angle": 30})
+    agent.call("start_rebuild", {"body": "Body001"})
+    text, error = agent.call("describe_reference", {})
+    plan = (_json(text) or {}).get("plan") or []
+    first = json.dumps(plan[0]["args"], sort_keys=True) if plan else ""
+    # the person turns the arm while the AI works: the reference turns with it
+    text, error = agent.call("drive_joint", {"joint": "Joint", "angle": 75})
+    agent.check("driven: the arm turns during the rebuild", not error, text)
+    ref = rebuild.references(doc)[0]
+    target = rebuild.target_of(ref)
+    text, error = agent.call("describe_reference", {})
+    again = (_json(text) or {}).get("plan") or []
+    agent.check(
+        "driven: the plan is the same after the arm turned (it was read turned away)",
+        again and json.dumps(again[0]["args"], sort_keys=True) == first,
+        (first, again[0]["args"] if again else None),
+    )
+    result = rebuild_through_tools(agent, None, plan=again)
+    agent.check(
+        "driven: the rebuild matches although the arm turned (match was 0.16)",
+        result.get("done"),
+        result.get("verdict"),
+    )
+    from sciforge import bodies
+
+    gap = rebuild.reference_shape(ref).BoundBox.Center - bodies.global_shape(target).BoundBox.Center
+    agent.check("driven: the reference stands where the arm is now", gap.Length < 1e-6, gap)
+
+
+CHECKS = (jointed, dependents, kept, reopened, deleted_reference, threaded, driven)
 
 
 def run(agent):

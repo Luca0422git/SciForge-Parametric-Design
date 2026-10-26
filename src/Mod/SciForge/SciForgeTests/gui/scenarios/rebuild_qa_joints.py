@@ -9,7 +9,8 @@ A  Two STEP parts inserted (an arm: a bar 80 x 20 x 5 with two 5 mm holes; a bas
    40 x 40 x 10 with one), the base grounded, a revolute joint between the arm's first hole
    and the base's (the AI's joint call), the arm driven to 30 degrees. The arm's body:
    browser right-click > Rebuild with Timeline (AI)... (no AI set up: the window for AI apps,
-   closed); the AI builds the plan in the rebuilt body.
+   closed); the AI builds the plan in the rebuilt body; the arm turned to 45 degrees: the
+   ghost turns with it and the comparison still says done; back to 30.
 B  UTILITIES > AI > Finish Rebuild > Finish: the joint is still there, on the rebuilt body;
    the arm did not move; the AI's drive_joint still turns it; the rebuild's steps stand where
    Insert STEP stood, before the joint; no stray "(imported)" row; Undo puts the joint back on
@@ -162,6 +163,22 @@ def a_started():
     build_plan("arm")
     answer, data = r.tool_json("compare_to_reference")
     h.check("the arm's rebuild is done", data is not None and data.get("done"), answer["text"])
+    # the person turns the arm while it is rebuilt: the reference turns with it
+    r.tool("drive_joint", joint="Joint", angle=45)
+    view = r.view_of(s["ref"])
+    moved = view.moved() if view is not None else None
+    h.check(
+        "the ghost turns with the arm (it stayed where it was frozen)",
+        moved is not None and moved.Length > 1,
+        moved,
+    )
+    answer, data = r.tool_json("compare_to_reference")
+    h.check(
+        "... and the comparison still says done (it said match 0.16)",
+        data is not None and data.get("done"),
+        answer["text"][:300],
+    )
+    r.tool("drive_joint", joint="Joint", angle=30)
 
 
 a_started.wait_ms = 2000

@@ -132,9 +132,13 @@ class ViewProviderReference:
 
         try:
             self.ghost.removeAllChildren()
+            self.motion = None
             shape = getattr(obj, rebuild.SHAPE, None)
             if shape is not None and not shape.isNull():
-                self.ghost.addChild(
+                group = coin.SoSeparator()
+                self.motion = coin.SoTransform()  # (the rebuild's component moved: follow it)
+                group.addChild(self.motion)
+                group.addChild(
                     _mesh(
                         coin,
                         shape,
@@ -146,9 +150,35 @@ class ViewProviderReference:
                         0.55,
                     )
                 )
+                self.ghost.addChild(group)
+                self.follow(obj)
             self.ghost.whichChild = 0 if getattr(obj, "Shown", True) else -1
         except Exception as exc:
             warn("rebuild: the reference is not drawn (%s)" % exc)
+
+    def follow(self, obj):
+        """The ghost where the reference stands now (moved with the rebuilt body's
+        component since it was frozen)."""
+        from pivy import coin
+
+        motion = getattr(self, "motion", None)
+        if motion is None:
+            return
+        try:
+            place = rebuild.moved_by(obj) or App.Placement()
+            motion.translation.setValue(place.Base.x, place.Base.y, place.Base.z)
+            q = place.Rotation.Q
+            motion.rotation.setValue(coin.SbRotation(q[0], q[1], q[2], q[3]))
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
+
+    def moved(self):
+        """Where the ghost is drawn now: the placement its picture is moved by (tests)."""
+        motion = getattr(self, "motion", None)
+        if motion is None:
+            return None
+        t = motion.translation.getValue()
+        return App.Vector(t[0], t[1], t[2])
 
     def show_differences(self, missing, extra):
         """The comparison's regions: missing material red, extra green (design
@@ -237,7 +267,10 @@ def _listener(event, ref, data):
     view = view_of(ref)
     if view is None:
         return
-    if event == "compare":
+    if event == "moved":
+        view.follow(ref)
+    elif event == "compare":
+        view.follow(ref)
         view.show_differences(data.get("missing", []), data.get("extra", []))
     else:
         view.clear_differences()
