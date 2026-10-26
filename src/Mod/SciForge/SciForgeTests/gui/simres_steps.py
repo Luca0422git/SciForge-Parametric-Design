@@ -145,8 +145,12 @@ def click_tab(tab_id):
 
 
 def menu(group, label):
+    """Click a ribbon group's name, then `label` in its menu. The pointer first goes to the 3D
+    view: a menu ignores a click that comes without a mouse movement since it opened, which
+    is what clicking the same entry twice in a row would do."""
     from SciForgeTests.gui import sketch_input
 
+    h.move(QtCore.QPoint(60, 60))
     return sketch_input.menu_item(group, label)
 
 

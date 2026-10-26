@@ -174,21 +174,26 @@ Static Stress study. Files (`src/Mod/SciForge/sciforge/`):
 
 | File | What it holds |
 |---|---|
-| `simulation_results_core.py` | the rules, no FreeCAD / Qt, unit tested: Fusion's result list (type + component), units, the colour map texture and legend, the safety factor targets and their sentence, deformation and animation, the outer surface of the tetrahedral mesh (10-node faces split in 4, facing out; mesh and outline edges), a ray against it (probes), a plane through it (slice), the HTML report |
-| `simulation_results.py` | the document side, no Qt: a study's results as arrays (kept per solve), strain components, Results Details' numbers, the report's data |
+| `simulation_results_core.py` | the rules, no FreeCAD / Qt, unit tested: Fusion's result list (type + component), units, the colour map texture and legend, the safety factor targets and their sentence, deformation and animation, the outer surface of the tetrahedral mesh (10-node faces split in 4, facing out; mesh and outline edges), a ray against it (probes), a level set through it (the slice plane and the iso-surface, in numpy), a point found in it with its weights (Point Probes), Solver Data's rows, the HTML report |
+| `simulation_results.py` | the document side, no Qt: a study's results as arrays (kept per solve), strain components, values and displacement at any point inside the part, Results Details' numbers, the report's data |
 | `simulation_results_view.py` | the drawing: SciForge's own Coin nodes (never document objects), the legend, the tags and the animation bar floating over the 3D view |
-| `simulation_results_ui.py` | when the results show (the RESULTS tab watcher), `show(study)` for sim-ui's Solve dialog, `hide()`, Compare, the 19 commands |
-| `simulation_results_panels.py` | Surface Probes, Slice Plane, Results Details, Legend Min/Max, Compare, Report, Reaction Force, a solve from out-of-date results when sim-ui's Solve is missing |
+| `simulation_results_ui.py` | when the results show (the RESULTS tab watcher), `show(study)` for sim-ui's Solve dialog, `hide()`, Compare, the 22 commands |
+| `simulation_results_panels.py` | Surface Probes, Point Probes, Slice Plane, Iso-surface, Results Details, Legend Min/Max, Compare, Report, Reaction Force, Solver Data, a solve from out-of-date results when sim-ui's Solve is missing |
 
 Shared files: `ribbon_config.py` (the RESULTS tab's groups: commands, icons, ticks),
-`tools/sciforge/icons_simresults.py` (21 icons), `docs/sciforge/parity-checklist.md`
+`tools/sciforge/icons_simresults.py` (22 icons), `docs/sciforge/parity-checklist.md`
 (regenerated). No FreeCAD core change. Sources as in the research file (**A** Autodesk, **F**
 forum, **T** tutorial / exported report, **G** guess); four WebSearch excerpts this session:
 Autodesk's Results details help (three states against a Lower and an Upper target, "reducing the
 Upper Target can ... give a false positive"), an Autodesk Learn video (default targets "three
 ... lower limit and six is the upper limit"), Autodesk's legend help (result drop-down, a second
 drop-down for direction or type, units, legend options with colour bands), guided results
-("suggestions for steps you can take").
+("suggestions for steps you can take"); later: Autodesk's Point probes help (probes "can be
+relocated internally", "global coordinates", the first place "picked from any visible surface
+including slice planes and iso-surfaces", "fixed in the global coordinate system, however the
+displacement is honored in the scene") and an AU handout (moved "using the grips or x, y and z
+inputs"); no Fusion source on the iso-surface's dialog was found (Autodesk Flow Design's iso
+surface: a Value slider over the result, an opacity).
 
 ### What shows, when
 
@@ -228,7 +233,9 @@ drop-down for direction or type, units, legend options with colour bands), guide
 | INSPECT: Show Min/Max | Toggle (on by default) | A[80] A[57] |
 | INSPECT: Reaction Force | A table: the force each constraint takes (X, Y, Z, total), from the solve (sim-core's `summary["reactions"]`) | A[48] A[58] |
 | INSPECT: Slice Plane (legacy: Shaded, Mesh Lines, Vectors, Clipping; online: Section, Slice) | A plane across X, Y or Z, position (field, slider, or the plane's drag arrow), Flip; **Cut the result away** (clipping, the cut face coloured with the values inside) or **Slice alone** (the cut face inside the whole result drawn see-through); a probe on the cut face reads the value inside; OK / Cancel / Remove Slice | A[56] |
-| INSPECT: Point Probes, Iso-surface, Solver Data | Greyed with the reason (a Surface Probe on a slice reads inside) | A[55] A[57] |
+| INSPECT: Point Probes (values inside the part; first placed on any visible surface, slice planes and iso-surfaces included; moved by grips or X, Y, Z; global coordinates, drawn with the displacement) | Point Probes: a click on the result, a slice's cut face or the iso-surface puts a probe there (inside surfaces first when the result is see-through); a table P1, P2... with X, Y, Z on the unloaded part (typed to move it, a unit allowed: "0.5 in") and the value of the result in the legend; outside the part it says so; the tag (a diamond) moves with the part as drawn (Deformation, Animate); Remove, Clear All; Close keeps them; the value is interpolated in the mesh (a node's own value at a node) | A[55], web excerpts |
+| INSPECT: Iso-surface | Iso-surface: the surface inside the part where the result shown has one value, in the legend's colour of that value, the result see-through around it (cut by a clipping slice too); value field (legend unit) and slider between the result's lowest and highest (half way to start); the legend's result moves it to that result; a value nothing reaches says so; OK / Cancel (puts back what was there) / Remove Iso-surface | G (Flow Design's iso surface as the model) |
+| INSPECT: Solver Data | Solver Data: when the study was solved and how long each step took (model, mesh, solver input, CalculiX, reading the results), the safety factor's basis; the mesh: nodes, degrees of freedom (3 per node), elements, order, element size, smallest / largest element edge, worst aspect ratio, elements over the limit, mesher; the adaptive refinement's solves; the solve's messages; Copy (as text) | A[57]; contents G |
 | MANAGE | sim-ui's (shared with SETUP) | A[49] |
 | FINISH RESULTS | Finish Results | G (mem) |
 
@@ -250,7 +257,12 @@ drop-down for direction or type, units, legend options with colour bands), guide
   strains are shown.
 - **Load case selector**: one load case per study.
 - **Report**: no logo, cover picture, approvers or revision fields; one study per report.
-- **Iso-surface, Point Probes inside the part, Solver Data**: greyed.
+- **Point Probes' grips**: a probe is moved by typing its X, Y, Z, not by dragging handles in the
+  3D view.
+- **Iso-surface**: one at a time, of the result shown in the legend, in one colour (Fusion's
+  own colouring of iso-surfaces was not found); several values at once are not offered.
+- **Solver Data**: CalculiX's own output (its log) is not kept by the engine, so it is not shown;
+  the timings, mesh statistics and the engine's messages are.
 - **The legend's place** (top left of the 3D view) and the safety factor's colours (0 .. 15,
   red low) are guesses (research section 10, questions 1 and 6): a screenshot of Luca's Fusion
   would settle them.

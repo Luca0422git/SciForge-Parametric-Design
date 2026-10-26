@@ -9,7 +9,10 @@ A  A component moved 20 mm up holds two bodies glued end to end (steel 0..50, al
 B  Results Details: one row per body, each with its own material and strength.
 C  INSPECT > Reaction Force: the fixed end takes the whole 100 N.
 D  DISPLAY > Loads and Constraints shows the setup's glyphs on the results, and hides them again.
-E  INSPECT's Point Probes, Iso-surface and Solver Data are greyed with their reason.
+E  INSPECT > Point Probes in design coordinates: a click on the steel's top face puts a probe
+   at z = 30 (the component is 20 mm up); its Z typed as 5 (the body's own height) is outside
+   the part; 25 (the middle of the height, the neutral axis) is inside, where the bending
+   stress is far below the top face's. INSPECT > Solver Data lists the mesh of both bodies.
 F  Another design in front: the first one's results are put away (its bodies shown); its own
    results show on its RESULTS tab; back to the first design, its RESULTS tab shows its own.
 G  An empty design in the SIMULATION workspace: no RESULTS tab, the results commands rest.
@@ -175,22 +178,68 @@ def d_off_check():
     h.check("the glyphs hidden again", not simulation_glyphs.visible())
 
 
-def e_greyed():
-    from SciForgeTests.gui import sketch_input
+def e_points():
+    s.menu("INSPECT", "Point Probes")
 
-    group = sketch_input._group_widget("INSPECT")
-    h.check("INSPECT group shown", group is not None)
-    if group is None:
+
+def _point_table():
+    from PySide import QtWidgets
+
+    return s.panel_field("SciForgeSimPointTable", QtWidgets.QTableWidget)
+
+
+def e_click_top():
+    sess = s.session()
+    h.click(V(*sess.point_place({"at": (25.0, 5.0, 30.0)})))
+
+
+def e_click_check():
+    sess = s.session()
+    h.check("a probe on the steel's top face", len(sess.points) == 1, sess.points)
+    if not sess.points:
         return
-    for label in ("Point Probes", "Iso-surface", "Solver Data"):
-        path = sketch_input._find(group.menu, label)
-        action = path[-1][1] if path else None
-        h.check("%s greyed" % label, action is not None and not action.isEnabled())
-        h.check(
-            "%s says why" % label,
-            action is not None and "Not in SciForge yet" in action.toolTip(),
-            action.toolTip() if action is not None else None,
-        )
+    at = sess.points[0]["at"]
+    h.check("at z = 30 (design coordinates)", abs(at[2] - 30.0) < 1e-4, at)
+    state["vm_top"] = sess.point_value(sess.points[0], "von_mises")
+    s.edit_cell(_point_table(), 0, 3, "5")
+
+
+def e_outside_check():
+    sess = s.session()
+    h.check("z = 5 is outside the part", sess.point_value(sess.points[0]) is None)
+    s.edit_cell(_point_table(), 0, 3, "25")
+
+
+def e_inside_check():
+    sess = s.session()
+    mid = sess.point_value(sess.points[0], "von_mises")
+    h.check(
+        "z = 25 inside: the neutral axis, far below the top face's stress",
+        mid is not None and state.get("vm_top") and mid < 0.3 * state["vm_top"],
+        (mid, state.get("vm_top")),
+    )
+    h.task_button("Close")
+
+
+def e_solver():
+    s.menu("INSPECT", "Solver Data")
+
+
+def e_solver_check():
+    from PySide import QtWidgets
+
+    dialog = s.dialog("SciForgeSimSolverData")
+    h.check("Solver Data open", dialog is not None)
+    if dialog is None:
+        return
+    rows = s.tree_rows(dialog.findChild(QtWidgets.QTreeWidget, "SciForgeSimSolverTree"))
+    nodes = int(s.summary().get("mesh", {}).get("nodes", 0))
+    h.check(
+        "the mesh of both bodies",
+        rows.get("Mesh", {}).get("Nodes") == "{:,}".format(nodes),
+        rows.get("Mesh"),
+    )
+    dialog.close()
 
 
 def _tab_of(doc_name):
@@ -300,7 +349,13 @@ h.run(
         d_check,
         d_off,
         d_off_check,
-        e_greyed,
+        e_points,
+        e_click_top,
+        e_click_check,
+        e_outside_check,
+        e_inside_check,
+        e_solver,
+        e_solver_check,
         f_switch,
         f_switch_check,
         f_other_results,

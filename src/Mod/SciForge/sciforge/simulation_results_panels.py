@@ -618,7 +618,14 @@ class PointProbePanel:
             self.message.setText(
                 "P%d is outside the part: it shows no value there." % (r + 1) if outside else ""
             )
-            QtCore.QTimer.singleShot(0, self.refresh)  # (not while the table edits the cell)
+            QtCore.QTimer.singleShot(0, self._refresh_later)  # (not while the cell is edited)
+        except Exception as exc:
+            warn("Point Probes: %s" % exc)
+
+    def _refresh_later(self):
+        try:
+            if not self._closed:
+                self.refresh()
         except Exception as exc:
             warn("Point Probes: %s" % exc)
 
@@ -1422,12 +1429,19 @@ class SolverDataDialog(QtWidgets.QDialog):
 
 
 def _mesh_summary(study):
+    """The mesh statistics, when they are the solved mesh's (a mesh made again since, with
+    Generate Mesh, is another mesh)."""
     if study is None:
         return {}
     try:
-        return simulation.mesh_summary(study) or {}
+        stats = simulation.mesh_summary(study) or {}
+        solved = simulation.summary(study).get("mesh") or {}
     except Exception:
         return {}
+    same = stats.get("nodes") == solved.get("nodes") and stats.get("elements") == solved.get(
+        "elements"
+    )
+    return stats if same and not stats.get("stale") else {}
 
 
 def solver_data(session):
@@ -1584,12 +1598,15 @@ def write(session, path, title="", author="", pictures=True, size=(900, 600)):
 
 
 def _pictures(session, folder, size):
-    """A picture of each result in PICTURES (the view as it is, with the legend drawn in)."""
+    """A picture of each result in PICTURES (the camera as it is, the whole part: no slice or
+    iso-surface meanwhile; the legend drawn in)."""
     out = []
     keep = session.result
     playing = session.anim["playing"]
     if playing:
         session.stop_animation()
+    inside = (session.slice, session.iso_on)
+    session.slice, session.iso_on = None, False
     try:
         for key in PICTURES:
             try:
@@ -1603,6 +1620,7 @@ def _pictures(session, folder, size):
             except Exception as exc:
                 warn("report: picture of %s left out: %s" % (core.result_name(key), exc))
     finally:
+        session.slice, session.iso_on = inside
         session.set_result(keep)
         if playing:
             session.play()
