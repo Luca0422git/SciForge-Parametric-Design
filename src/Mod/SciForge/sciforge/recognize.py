@@ -67,8 +67,10 @@ How it reads a solid (each stage can fail on its own without stopping the others
      features; a feature that cannot be taken off stays in the base and is said so (skipped
      when free-form faces are left: no extrude or revolve makes them, so the base is "none");
   5. the base: prismatic along an origin axis (levels, a section per level: the base extrude
-     and the bosses / cuts on it, each read along the axis it opens on) or turned about an
-     origin axis (the half profile and a revolve);
+     and the bosses / cuts on it, each read along the axis it opens on, or revolved when it
+     is itself turned: a dome, a torus groove) or turned about an axis line along X, Y or Z
+     (the half profile and a revolve, about a construction line when the line is away from
+     the origin);
   6. patterns of equal holes (grid, circle, row), the plan in Fusion's order, the fillet and
      chamfer edges as selectors on the part as it will be when the step runs.
 Past DESCRIBE_BUDGET seconds (an OpenCASCADE call cannot be stopped, so this is a soft limit)

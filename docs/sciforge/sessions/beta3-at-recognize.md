@@ -34,7 +34,9 @@
   that stops at its eye) is no hole: it stays in the base's profile. When no base is read, a
   note names the axis most of the part fits and lists the faces that do not. Turned parts about
   a line parallel to X, Y or Z away from the origin (a torus, a dome on a spot of a block) are
-  revolved about a construction line drawn on the offset sketch.
+  revolved about a construction line drawn on the offset sketch, and a boss or cut of an
+  extruded part that is itself turned (a dome on a block, a torus groove in its top) is
+  revolved on its own (join / cut).
 - Not mine but touching my file: the QA builder (`sf/autotimeline-qa`) added modelled-thread
   handling and two speed-ups to `recognize.py` on its branch and merges mine regularly; `git
   merge-tree` of the two branches shows no conflict (checked at the end).
