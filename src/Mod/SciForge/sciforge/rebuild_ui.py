@@ -726,6 +726,7 @@ def finish(ref, keep_original=False, keep_reference=False):
     doc = ref.Document
     if not commands.finish_open_dialog():
         return None
+    name, original = ref.Name, ref.SourceLabel
     doc.openTransaction("Finish Rebuild")
     try:
         body = _busy(
@@ -748,6 +749,20 @@ def finish(ref, keep_original=False, keep_reference=False):
         components.activate_body(body)
     except Exception:
         pass
+    report = rebuild.FINISHED.get(name) or {}
+    if report.get("followed"):
+        log("Finish Rebuild: now on %s: %s" % (body.Label, ", ".join(report["followed"])))
+    if report.get("kept_because") and not keep_original:
+        users = report["kept_because"]
+        commands.tell(
+            '%s was kept, hidden, as "%s (original)" instead of deleted: %s still use%s it.'
+            % (
+                original,
+                original,
+                ", ".join(users[:3]) + (" ..." if len(users) > 3 else ""),
+                "" if len(users) > 1 else "s",
+            )
+        )
     return body
 
 
