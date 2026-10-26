@@ -110,7 +110,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
 | `sim_setup_more` | 63 | PASS |
-| `sim_setup_lost` | 54 | PASS |
+| `sim_setup_lost` | 60 | PASS |
 | `sim_setup_two` | 52 | PASS |
 | `sim_setup_mesh` | 42 | PASS |
 | `sim_setup_odd` | 71 | PASS |

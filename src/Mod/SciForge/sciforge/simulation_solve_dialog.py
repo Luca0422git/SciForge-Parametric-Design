@@ -931,6 +931,9 @@ def generate_mesh(study):
             "A solve is running: Generate Mesh waits for it to end (or cancel it in Job Status)."
         )
         return False
+    if not _sim().study_bodies(study):
+        commands.tell("%s has no solid body to mesh." % study.Label)
+        return False
     if not commands.finish_open_dialog():
         return False
     return start([study], "mesh")

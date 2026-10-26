@@ -868,6 +868,7 @@ class MaterialsPanel(_SimPanel):
             self.table.setCellWidget(row, 3, combo)
             self.combos.append(combo)
         self.table.resizeColumnsToContents()
+        self.table.horizontalHeader().setStretchLastSection(True)  # (no blank header end)
         self.table.setMinimumHeight(60 + 28 * min(len(self.bodies), 6))
         self.table.currentCellChanged.connect(lambda r, *_a: self._show_props(r))
         self.table.cellDoubleClicked.connect(lambda r, *_a: self._show_props(r))
@@ -1422,6 +1423,10 @@ def dof_view(study):
     if not on:
         ui.refresh()
         commands.tell("DOF View off.")
+        return []
+    if not _sim().study_bodies(study):
+        ui.refresh()
+        commands.tell("DOF View: %s has no solid body to show." % study.Label)
         return []
     motions = free_motions(study)
     free = [body for piece, _centre, _modes in motions for body in piece]
