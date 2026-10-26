@@ -108,6 +108,11 @@ class ReferenceFeature:
 
     def onDocumentRestored(self, obj):
         self.ensure(obj)
+        try:
+            if getattr(obj, "Shown", True):
+                _resume_later(obj.Document.Name)
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
 
     def execute(self, obj):
         return None
@@ -170,6 +175,53 @@ def reference_for(obj):
 def active_references(doc):
     """The references still being worked on (drawn; Finish with keep keeps one hidden)."""
     return [r for r in references(doc) if getattr(r, "Shown", True)]
+
+
+def working_body(doc):
+    """The body the rebuild going on is made in, when there is exactly one (a design opened
+    again carries on there: QA found the next steps going into another body), else None."""
+    try:
+        live = [r for r in active_references(doc) if target_of(r) is not None]
+    except Exception:
+        return None
+    return target_of(live[0]) if len(live) == 1 else None
+
+
+def _resume_later(name, tries=0):
+    """In the window: once a design with a rebuild going on is open, its rebuilt body is the
+    active one again (FreeCAD keeps no active body in the file, and SciForge would pick the
+    design's oldest body: the AI's or the person's next steps went there)."""
+    if not App.GuiUp:
+        return
+    from .compat import QtCore
+
+    def run():
+        try:
+            doc = App.listDocuments().get(name)
+            if doc is None:
+                return
+            if getattr(doc, "Restoring", False) or getattr(doc, "Recomputing", False):
+                if tries < 50:
+                    _resume_later(name, tries + 1)
+                return
+            import FreeCADGui as Gui
+
+            gdoc = Gui.getDocument(name)
+            if gdoc is None or gdoc.ActiveView is None:
+                if tries < 50:
+                    _resume_later(name, tries + 1)
+                return
+            body = working_body(doc)
+            if body is None or bodies.active_body(doc) is not None:
+                return
+            from . import components
+
+            components.activate_body(body)
+            log("rebuild: %s is the active body again (a rebuild goes on there)" % body.Label)
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
+
+    QtCore.QTimer.singleShot(0 if tries == 0 else 100, run)
 
 
 def find(doc, body=None):

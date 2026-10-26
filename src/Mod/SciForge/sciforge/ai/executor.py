@@ -68,7 +68,13 @@ class Host:
         body = doc.getObject(name) if name else None
         if body is not None and bodies.alive(body):
             return body
-        return bodies.find_body(doc)
+        try:  # (beta 3 QA) a design opened again with a rebuild going on carries on there
+            from .. import rebuild
+
+            working = rebuild.working_body(doc)
+        except Exception:
+            working = None
+        return working if working is not None else bodies.find_body(doc)
 
     def ensure_body(self, doc):
         from .. import bodies
@@ -124,6 +130,7 @@ class Host:
                 App.setActiveDocument(doc.Name)
                 return doc
         doc = App.openDocument(path)
+        self._active.pop(doc.Name, None)  # (a design closed before had this name)
         App.setActiveDocument(doc.Name)
         return doc
 
