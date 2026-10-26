@@ -210,10 +210,43 @@ def check_parts_list_original_deleted():
         _close(doc)
 
 
+def check_occurrence_names_after_delete():
+    """The screw file inserted three times, the first one deleted (screw:2 and screw:3 stay),
+    then the file inserted twice more: a part of its own named after the file, then an
+    occurrence of it numbered after the ones still there ("screw:4"), not a name FreeCAD
+    makes unique by itself ("screw:001", read as the first occurrence)."""
+    from sciforge import components, instances
+
+    path = _files(["screw_8_32_x_0_5"])["screw_8_32_x_0_5"]
+    doc = App.newDocument("VexQaNames")
+    try:
+        tops = [_insert(doc, path).top for _k in range(3)]
+        base = tops[0].Label
+        components.remove(doc, tops[0])
+        doc.recompute()
+        fresh = _insert(doc, path).top
+        again = _insert(doc, path).top
+        instances.sync(doc)
+        labels = sorted(c.Label for c in components.list_components(doc))
+        want = sorted([base, base + ":2", base + ":3", base + ":4"])
+        _out(
+            "occurrence_names_after_delete",
+            fresh.Label == base
+            and not instances.is_instance(fresh)
+            and instances.source_of(again) is fresh
+            and again.Label == base + ":4"
+            and labels == want,
+            "the part again %r, its occurrence %r, all %s" % (fresh.Label, again.Label, labels),
+        )
+    finally:
+        _close(doc)
+
+
 # -- the run -------------------------------------------------------------------------------------
 CHECKS = [
     check_duplicate_rigid_group,
     check_parts_list_original_deleted,
+    check_occurrence_names_after_delete,
 ]
 
 

@@ -231,8 +231,22 @@ def _mark_instance(part, source, pattern=None, index=0):
         setattr(part, INDEX, int(index))
 
 
-def _labels_in_use(source):
-    return [number(p) for p in instances_of(source)]
+def _labels_in_use(source, but=None):
+    """The occurrence numbers taken under `source`'s name (`but` left out): its occurrences',
+    and those of any other component still named "<source>:<n>" (the occurrences of an
+    original that was deleted keep their names: a new one with the same number clashed, and
+    FreeCAD made its name unique by itself, "Screw:001", read as the first occurrence)."""
+    used = [number(p) for p in instances_of(source) if p is not but]
+    try:
+        for comp in components.list_components(source.Document):
+            if comp is source or comp is but:
+                continue
+            base, n = core.split_instance_label(comp.Label)
+            if n is not None and base == source.Label:
+                used.append(n)
+    except Exception:
+        pass
+    return used
 
 
 def global_placement(obj):
@@ -332,9 +346,10 @@ def _sync_one(part):
         return False  # the original is gone: the instance keeps its last shapes
     changed = False
     base, n = core.split_instance_label(part.Label)
-    if n is None or base != source.Label:
-        used = [number(p) for p in instances_of(source) if p is not part]
-        n = n if (n is not None and n not in used) else core.next_instance_number(used)
+    if n is None or n < 2 or base != source.Label:  # (1 is the original's number)
+        used = _labels_in_use(source, but=part)
+        keep = n is not None and n >= 2 and n not in used
+        n = n if keep else core.next_instance_number(used)
         part.Label = core.instance_label(source.Label, n)
         changed = True
     pattern = pattern_of(part)
