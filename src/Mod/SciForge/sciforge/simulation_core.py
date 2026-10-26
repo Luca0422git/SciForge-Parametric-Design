@@ -586,9 +586,9 @@ def result_unit(key):
 
 def safety_factors(von_mises, strength_mpa, cap=None):
     """Safety factor at every node: strength / stress (MPa): Fusion divides the yield strength by
-    the von Mises stress, the ultimate tensile strength by the 1st principal stress (pass that
-    list here then). A node without stress (or in compression for the 1st principal) gets `cap`
-    (or infinity when cap is None)."""
+    the von Mises stress, the ultimate tensile strength by the 1st principal stress (pass
+    ultimate_stresses() here then). A node without stress gets `cap` (or infinity when cap is
+    None)."""
     out = []
     top = float("inf") if cap is None else float(cap)
     for s in von_mises:
@@ -596,6 +596,26 @@ def safety_factors(von_mises, strength_mpa, cap=None):
             out.append(top)
         else:
             out.append(min(strength_mpa / float(s), top))
+    return out
+
+
+def ultimate_stresses(principal_1, principal_3):
+    """The stress the ultimate tensile strength is divided by at every node: the largest
+    principal stress in size, max(1st, -3rd) (Rankine's maximum normal stress theory, the
+    material taken as strong in compression as in tension). Fusion's help names the 1st
+    principal stress; in a part that is pushed together that is 0 or below, and the safety
+    factor would read 15 ("very strong") however hard the part is crushed: a bar at 100 MPa
+    of compression showed 15 instead of 3.45. Brittle materials are mostly stronger in
+    compression, so this errs on the safe side; in tension it is Fusion's 1st principal. A
+    node with no stress (NaN) gets NaN."""
+    out = []
+    for p1, p3 in zip(principal_1, principal_3):
+        try:
+            p1, p3 = float(p1), float(p3)
+        except (TypeError, ValueError):
+            out.append(float("nan"))
+            continue
+        out.append(float("nan") if p1 != p1 or p3 != p3 else max(p1, -p3))
     return out
 
 

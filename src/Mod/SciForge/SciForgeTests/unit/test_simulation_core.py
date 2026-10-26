@@ -107,6 +107,17 @@ class Results(unittest.TestCase):
         self.assertEqual(core.safety_factors([1.0], 200.0, cap=8.0), [8.0])
         self.assertTrue(math.isinf(core.safety_factors([0.0], 200.0)[0]))
 
+    def test_ultimate_basis_in_compression(self):
+        # pulled: the 1st principal stress (Fusion); pushed together: the 3rd in size, not 0
+        # (a bar crushed at 100 MPa read safety factor 15 on the ultimate basis)
+        divided = core.ultimate_stresses([100.0, 0.0, 5.0, -2.0], [0.0, -100.0, -50.0, -8.0])
+        self.assertEqual(divided, [100.0, 100.0, 50.0, 8.0])
+        sf = core.safety_factors(divided, 345.0, core.SAFETY_CAP)
+        self.assertAlmostEqual(sf[1], 3.45)
+        self.assertAlmostEqual(sf[2], 6.9)
+        nan = core.ultimate_stresses([float("nan")], [-1.0])[0]
+        self.assertNotEqual(nan, nan)
+
     def test_stats(self):
         st = core.stats([3.0, float("nan"), -1.0, 7.0, None])
         self.assertEqual(

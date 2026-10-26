@@ -3665,7 +3665,11 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
     vm = list(result.vonMises)
     lengths = list(result.DisplacementLengths)  # (read once: each read copies every value)
     # Fusion: yield strength / von Mises, or ultimate tensile strength / 1st principal stress
-    divided = vm if basis == "yield" else list(result.PrincipalMax)
+    # (in compression the 3rd when it is the larger in size: simulation_core.ultimate_stresses)
+    if basis == "yield":
+        divided = vm
+    else:
+        divided = core.ultimate_stresses(list(result.PrincipalMax), list(result.PrincipalMin))
     safety = []
     for s, v in zip(strengths, divided):
         if s is None:

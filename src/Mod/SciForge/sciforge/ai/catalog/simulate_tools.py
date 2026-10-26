@@ -343,7 +343,8 @@ define(
     "acetal, acrylic, polypropylene, ptfe, peek, wood, glass) or same_as_model to go back to "
     "the body's physical material. safety_basis: what the safety factor divides for the "
     "whole study (yield: yield strength / von Mises, Fusion's default; ultimate: ultimate "
-    "tensile strength / 1st principal stress). Answers the values the study uses (E, "
+    "tensile strength / 1st principal stress, or the 3rd where the part is pushed together "
+    "harder than pulled). Answers the values the study uses (E, "
     "Poisson's ratio, density, yield and ultimate strength). " + STUDY_HELP,
     schema(
         {
