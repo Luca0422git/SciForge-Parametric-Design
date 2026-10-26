@@ -121,3 +121,9 @@ sections Engine and Benchmarks.
   the summary); displacement lengths and the result statistics with numpy. sim-ui's two open
   engine issues fixed (per-body rows of same-named bodies, fingerprints from the solve's
   start), each with an engine check.
+- 20:50-21:05 the pre-check of 20 stacked plates with holes took 5.8 s (contacts 4 s, overlaps
+  2 s: OpenCASCADE's distance and common of every touching pair), and sim-ui runs it after every
+  SETUP command. Contacts and overlaps are now remembered per geometry (each body's shape hash,
+  face / edge / corner counts, box and place, its component's place, the tolerance): 0.2 s
+  after the first time; a moved or edited body is seen at once (engine check). Only checking
+  the faces near the other body did not make OpenCASCADE's distance faster.

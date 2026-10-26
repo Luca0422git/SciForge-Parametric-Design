@@ -1208,6 +1208,25 @@ def check_contacts(doc, out):
             checks,
         )
     )
+    # the contacts are remembered per geometry (the pre-check runs after every command):
+    # moving a body or changing its shape is seen at once
+    b.Placement = App.Placement(App.Vector(1, 0, 0), App.Rotation())
+    doc.recompute()
+    moved = sorted((p.Label, q.Label) for p, q, _k in sim.contacts(study))
+    b.Placement = App.Placement()
+    doc.recompute()
+    back = sorted((p.Label, q.Label) for p, q, _k in sim.contacts(study))
+    out.append(
+        (
+            "B moved 1 mm away: no longer glued; moved back: glued again",
+            ("A", "B") not in moved and ("A", "B") in back and back == pairs,
+            (moved, back),
+        )
+    )
+    b.BaseFeature.Shape = Part.makeBox(49, 10, 10, App.Vector(51, 0, 0))
+    doc.recompute()
+    shorter = sorted((p.Label, q.Label) for p, q, _k in sim.contacts(study))
+    out.append(("B made shorter, 1 mm off A: not glued", ("A", "B") not in shorter, shorter))
 
 
 # -- running ----------------------------------------------------------------------------------
