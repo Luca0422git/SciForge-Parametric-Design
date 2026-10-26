@@ -601,5 +601,45 @@ class MeshHelpers(unittest.TestCase):
         self.assertAlmostEqual(out[1]["a"][0], 35.0, places=6)
 
 
+class BaseSpans(unittest.TestCase):
+    """recognize._base_spans (no FreeCAD in it): where a base extrude may end when a feature
+    along another axis crosses its end levels (a rod that ends in an eye)."""
+
+    def setUp(self):
+        from sciforge import recognize
+
+        self.spans = recognize._base_spans
+        # a rod 0..10, then an eye crossing the levels 10..40 (a rod end at 12 inside it)
+        self.slabs = [{"lo": 0.0, "hi": 10.0}, {"lo": 10.0, "hi": 12.0}, {"lo": 12.0, "hi": 40.0}]
+
+    def test_whole_run_first_then_stops_inside_the_feature(self):
+        out = self.spans(self.slabs, [0, 1, 2], [[10.0, 40.0]], lambda i: i >= 1)
+        self.assertEqual(out[0], (0.0, 40.0))
+        # the eye's middle (25), a level (12), the feature's start (10): farthest first
+        self.assertEqual(out[1:], [(0.0, 25.0), (0.0, 12.0), (0.0, 10.0)])
+
+    def test_both_ends_crossed(self):
+        out = self.spans(self.slabs, [0, 1, 2], [[0.0, 10.0]], lambda i: i == 0)
+        self.assertEqual(out[0], (0.0, 40.0))
+        self.assertIn((5.0, 40.0), out)  # the start moved to the feature's middle
+        self.assertIn((10.0, 40.0), out)
+        self.assertTrue(all(b - a > 0 for a, b in out))
+
+    def test_nothing_crossed_one_span(self):
+        self.assertEqual(self.spans(self.slabs, [0, 1, 2], [], lambda i: False), [(0.0, 40.0)])
+
+    def test_every_level_crossed_one_span(self):
+        out = self.spans(self.slabs, [0, 1, 2], [[0.0, 40.0]], lambda i: True)
+        self.assertEqual(out, [(0.0, 40.0)])
+
+    def test_capped(self):
+        from sciforge import recognize
+
+        ranges = [[10.0 + k, 40.0 - k] for k in range(12)]
+        out = self.spans(self.slabs, [0, 1, 2], ranges, lambda i: i >= 1)
+        self.assertLessEqual(len(out), recognize.MAX_SPANS)
+        self.assertEqual(out[0], (0.0, 40.0))
+
+
 if __name__ == "__main__":
     unittest.main()

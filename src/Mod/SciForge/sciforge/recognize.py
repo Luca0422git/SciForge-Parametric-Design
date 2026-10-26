@@ -95,6 +95,7 @@ MAX_SLABS = 60  # levels along one axis beyond which that axis is not read (a fr
 MAX_PIECES = 400  # bosses + cuts beyond which a reading is dropped (it is not the part's)
 MAX_SPANS = 6  # where a lenient reading's base extrude may end (see _base_spans)
 SMOOTH = 0.9998  # cos of ~1.1 degrees: two faces meeting this smoothly are tangent
+_ANALYTIC = ("plane", "cylinder", "cone", "sphere", "torus")  # (not free-form)
 
 
 # -- the entry point ----------------------------------------------------------------------------
@@ -1120,12 +1121,15 @@ class _Reader:
         """Round faces tangent to two neighbours (or more), of constant radius: one entry per
         connected chain of blend faces of one radius."""
         in_holes = set(i for h in holes for i in h["_faces"])
+        split = self._split_walls(in_holes)
         blend = {}
         for f in self.facts:
             if f.index in in_holes or f.kind not in ("cylinder", "torus", "sphere"):
                 continue
             if f.kind == "cylinder" and (f.span is None or f.span >= math.pi - 1e-3):
                 continue
+            if f.index in split:
+                continue  # (a piece of a round wall cut in pieces: not a fillet)
             if len(self.topo.tangent_neighbours(f.index)) < 2:
                 continue
             blend[f.index] = f.minor if f.kind == "torus" else f.radius
@@ -1205,6 +1209,30 @@ class _Reader:
         a0, a1 = self._extent([i], f.axis, f.point)
         b0, b1 = self._extent([j], f.axis, f.point)
         return min(a1, b1) - max(a0, b0) > 1e-6
+
+    def _split_walls(self, skip):
+        """Cylinder faces that are pieces of one round wall cut in pieces (a file whose outer
+        wall is in 41 pieces): together they go half way round or more, so they are no
+        fillet (taking that "fillet" off made OpenCASCADE's defeaturing run out of memory and
+        crash FreeCAD). Pieces stacked along the axis (a fillet in pieces) cover one arc."""
+        cyl = [
+            f
+            for f in self.facts
+            if f.kind == "cylinder" and f.index not in skip and f.radius and f.span is not None
+        ]
+        out = set()
+        for f in cyl:
+            if f.index in out or f.span >= math.pi - 1e-3:
+                continue
+            same = [g for g in cyl if abs(g.radius - f.radius) < 1e-6 and _coaxial(f, g)]
+            if len(same) < 2:
+                continue
+            try:
+                if _arc_cover(same, f.axis, f.point) >= math.pi - 1e-3:
+                    out.update(g.index for g in same)
+            except Exception:
+                continue
+        return out
 
     def find_chamfers(self, holes, blends):
         """Narrow flat faces cut across the edge between two faces; narrow cones across a
@@ -1368,6 +1396,39 @@ class _Reader:
             out = None
         cache[key] = out
         return out
+
+    def _untangled(self, holes):
+        """The holes but those whose faces meet many other faces (a bore crossed by a ring of
+        slots: no whole rim to close it by, and OpenCASCADE's defeaturing of such a "hole" took
+        3 to 4 minutes on a 200-face part and cannot be interrupted): those are left in the
+        base, said in the notes and listed as not recognized."""
+        out = []
+        for h in holes:
+            if not self._tangled(h):
+                out.append(h)
+                continue
+            self.notes.append(
+                "%s %s meets many other faces (slots or pockets cross it): it is left in the "
+                "base shape and not in the plan (OpenCASCADE's defeaturing of such a hole can "
+                "take minutes, so it is not tried)." % (h["kind"].capitalize(), h["id"])
+            )
+            self.unrecognized.append(
+                {
+                    "faces": self.face_refs(h["_faces"]),
+                    "why": "a %s crossed by other features, left in the base" % h["kind"],
+                }
+            )
+        return out
+
+    def _tangled(self, group, most=16):
+        """The feature's faces meet more than `most` other faces (a bore crossed by a ring
+        of slots): OpenCASCADE's defeaturing of such a "hole" took 3 to 4 minutes on a
+        200-face part and cannot be interrupted."""
+        own = set(group["_faces"])
+        around = set()
+        for i in own:
+            around.update(j for j in self.topo.neighbours(i) if j not in own)
+        return len(around) > most
 
     def _accept(self, groups, start=(), shape=None):
         """(accepted, rejected): the groups OpenCASCADE can take off together with `start`
@@ -1740,6 +1801,8 @@ class _Reader:
         or with OpenCASCADE's defeaturing), then chamfers and fillets (defeaturing: all at
         once, else by halves). The ones that cannot be taken off stay in the base and are
         listed as such. Returns {"base": shape, "ok": {feature ids}, "accepted": [features]}."""
+        holes = self._untangled(holes)  # (one crossed by many faces is not taken off)
+
         start, holes_ok, left = self._drop_holes(holes)
         for g in [h for h in left if h.get("kind") == "island"]:
             self.notes.append(
@@ -2912,6 +2975,37 @@ def _surface_key(face):
     return (kind,)
 
 
+def _arc_cover(facts, axis, point, bins=720):
+    """The angle (radians) round faces about one axis line cover together: each face's arc
+    from points on its edges, arcs that overlap counted once (to 0.5 degree)."""
+    helper = min(core.AXES.values(), key=lambda a: abs(core.dot(a, axis)))
+    ref = core.unit(core.sub(helper, core.mul(axis, core.dot(helper, axis))))
+    ref2 = core.cross(axis, ref)
+    full = 2 * math.pi
+    covered = [False] * bins
+    for f in facts:
+        pts = [v.Point for v in f.face.Vertexes]
+        for e in f.face.Edges:
+            pts += e.discretize(9)
+        angles = []
+        for p in pts:
+            r = core.sub(_t(p), point)
+            x, y = core.dot(r, ref), core.dot(r, ref2)
+            if math.hypot(x, y) > 1e-9:
+                angles.append(math.atan2(y, x) % full)
+        if len(angles) < 2:
+            continue
+        angles.sort()
+        gaps = [(angles[k + 1] - angles[k], k) for k in range(len(angles) - 1)]
+        gaps.append((angles[0] + full - angles[-1], len(angles) - 1))
+        gap, k = max(gaps)  # (the face's arc is the circle but its widest gap)
+        start = angles[(k + 1) % len(angles)]
+        first = int(start / full * bins)
+        for m in range(int(math.ceil((full - gap) / full * bins))):
+            covered[(first + m) % bins] = True
+    return sum(covered) * full / bins
+
+
 def _coaxial(a, b):
     """Two round faces turn about one axis line."""
     if a.axis is None or b.axis is None or not core.parallel(a.axis, b.axis, 1e-7):
@@ -3787,7 +3881,7 @@ def _fill_copies(faces):
         try:
             filled = Part.Face(f.OuterWire)
             if keep:
-                filled = filled.cutHoles(keep)
+                filled.cutHoles(keep)  # (in place: it answers None)
             out.append(filled if filled.isValid() else f)
         except Exception:
             out.append(f)
