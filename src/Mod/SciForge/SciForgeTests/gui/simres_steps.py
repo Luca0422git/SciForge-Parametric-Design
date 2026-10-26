@@ -361,3 +361,40 @@ def wait_until(test, name="wait", seconds=60):
     step.__name__ = name
     step.wait_ms = 300
     return step
+
+
+def edit_cell(table, row, column, text):
+    """Double-click a table cell, type `text` over what is there and press Enter."""
+    from PySide6 import QtTest
+
+    item = table.item(row, column) if table is not None else None
+    if item is None:
+        h.check("the table cell %d, %d" % (row, column), False)
+        return False
+    table.scrollToItem(item)
+    _process()
+    from SciForgeTests.gui import widget_input as wi
+
+    wi.double_click(table.viewport(), table.visualItemRect(item).center())
+    editor = QtWidgets.QApplication.focusWidget()
+    if editor is None or editor is table or not isinstance(editor, QtWidgets.QLineEdit):
+        h.check("the cell opens for typing", False, editor)
+        return False
+    QtTest.QTest.keyClick(editor, QtCore.Qt.Key_A, QtCore.Qt.ControlModifier)
+    QtTest.QTest.keyClicks(editor, text)
+    QtTest.QTest.keyClick(editor, QtCore.Qt.Key_Return)
+    _process()
+    return True
+
+
+def tree_rows(tree):
+    """{section: {name: value}} of a two-column tree (Solver Data)."""
+    out = {}
+    for i in range(tree.topLevelItemCount()):
+        top = tree.topLevelItem(i)
+        rows = {}
+        for k in range(top.childCount()):
+            child = top.child(k)
+            rows[child.text(0).strip()] = child.text(1)
+        out[top.text(0)] = rows
+    return out

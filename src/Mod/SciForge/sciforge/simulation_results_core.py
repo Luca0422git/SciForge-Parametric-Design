@@ -203,6 +203,15 @@ def fmt_plain(value, digits=4):
     return text
 
 
+def fmt_mm(value):
+    """A place's coordinate in mm as typed (to the micrometre, no trailing zeros)."""
+    if value is None or value != value:
+        return "-"
+    text = "%.3f" % float(value)
+    text = text.rstrip("0").rstrip(".")
+    return "0" if text in ("-0", "") else text
+
+
 def with_unit(value, unit, digits=4):
     text = fmt(value, digits)
     return "%s %s" % (text, unit) if unit and text != "-" else text
@@ -736,54 +745,305 @@ def straight_tets(tets):
     return np.concatenate([tets[:, list(piece)] for piece in SPLIT10])
 
 
-def cut(points, values, tets, origin, normal):
-    """Where the plane (origin, normal) cuts a mesh of straight tetrahedra (straight_tets): a
-    list of triangles [(p0, p1, p2), ...] with their values [(v0, v1, v2), ...] interpolated
-    along the cut edges, each wound to face against the normal. values: one per point (NaN
-    allowed)."""
+def level_set(points, field, values, tets, carry=None):
+    """Where `field` (one number per point) crosses zero inside a mesh of straight tetrahedra
+    (straight_tets): (triangles (k, 3, 3), their values (k, 3), carried (k, 3, c) or None).
+    The values, and the columns of `carry` ((n, c), one row per point), are interpolated along
+    the cut edges; each triangle is wound to face the field's negative side. A tetrahedron
+    with a NaN field is left out. The slice plane (field = distance to the plane) and the
+    iso-surface (field = value - level) are both this."""
     np = _np()
     points = np.asarray(points, dtype=float)
+    field = np.asarray(field, dtype=float)
     values = np.asarray(values, dtype=float)
     tets = np.asarray(tets, dtype=np.int64)
+    extra = None if carry is None else np.asarray(carry, dtype=float)
+    if extra is not None and extra.ndim == 1:
+        extra = extra[:, None]
+
+    def empty():
+        return (
+            np.zeros((0, 3, 3)),
+            np.zeros((0, 3)),
+            None if extra is None else np.zeros((0, 3, extra.shape[1])),
+        )
+
+    if tets.ndim != 2 or len(tets) == 0:
+        return empty()
+    d = field[tets]
+    # a corner exactly at zero counts as above it: a face lying on the level (a slice through a
+    # layer of nodes) comes once, from the tetrahedron below it
+    with np.errstate(invalid="ignore"):
+        crossing = (d.min(axis=1) < 0) & (d.max(axis=1) >= 0)
+    if not crossing.any():
+        return empty()
+    tets, d = tets[crossing], d[crossing]
+    pos = d >= 0
+    npos = pos.sum(axis=1)
+    order = np.argsort(~pos, axis=1, kind="stable")  # the corners above zero first
+    idx = np.take_along_axis(tets, order, axis=1)
+    dd = np.take_along_axis(d, order, axis=1)
+
+    def at(rows, i, j):
+        """Where edge (i, j) (sorted corner numbers) of the rows crosses zero."""
+        a, b = idx[rows, i], idx[rows, j]
+        t = (dd[rows, i] / (dd[rows, i] - dd[rows, j]))[:, None]
+        out = [points[a] + t * (points[b] - points[a])]
+        out.append(values[a] + t[:, 0] * (values[b] - values[a]))
+        if extra is not None:
+            out.append(extra[a] + t * (extra[b] - extra[a]))
+        return out
+
+    pieces = []  # (rows, (edge, edge, edge)) per triangle kind
+    one = np.flatnonzero(npos == 1)  # one corner above: the triangle around it
+    pieces.append((one, ((0, 1), (0, 2), (0, 3))))
+    three = np.flatnonzero(npos == 3)  # one corner below
+    pieces.append((three, ((3, 0), (3, 1), (3, 2))))
+    two = np.flatnonzero(npos == 2)  # a quadrilateral, two triangles
+    pieces.append((two, ((0, 2), (0, 3), (1, 3))))
+    pieces.append((two, ((0, 2), (1, 3), (1, 2))))
+    tris, vals, carried, owner = [], [], [], []
+    for rows, edges in pieces:
+        if not len(rows):
+            continue
+        corners = [at(rows, i, j) for i, j in edges]
+        tris.append(np.stack([c[0] for c in corners], axis=1))
+        vals.append(np.stack([c[1] for c in corners], axis=1))
+        if extra is not None:
+            carried.append(np.stack([c[2] for c in corners], axis=1))
+        owner.append(rows)
+    tris = np.concatenate(tris)
+    vals = np.concatenate(vals)
+    carried = np.concatenate(carried) if extra is not None else None
+    owner = np.concatenate(owner)
+    # each triangle faces the negative side: against the way from the corners below zero to
+    # the ones above (all the triangles then take the light the same way)
+    corner_points = points[idx[owner]]  # (k, 4, 3)
+    above = np.take_along_axis(pos[owner], order[owner], axis=1)[:, :, None]
+    n_above = above.sum(axis=1)
+    up = (corner_points * above).sum(axis=1) / np.maximum(n_above, 1) - (
+        corner_points * ~above
+    ).sum(axis=1) / np.maximum(4 - n_above, 1)
+    cross = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+    size = np.linalg.norm(cross, axis=1)
+    keep = size > 1e-12 * max(float(size.max()), 1e-300)  # (no slivers of nothing)
+    facing = np.einsum("ij,ij->i", cross, up)
+    turn = facing > 0
+    tris[turn] = tris[turn][:, [0, 2, 1]]
+    vals[turn] = vals[turn][:, [0, 2, 1]]
+    if carried is not None:
+        carried[turn] = carried[turn][:, [0, 2, 1]]
+        carried = carried[keep]
+    return tris[keep], vals[keep], carried
+
+
+def cut(points, values, tets, origin, normal, carry=None):
+    """Where the plane (origin, normal) cuts a mesh of straight tetrahedra (straight_tets):
+    level_set's (triangles (k, 3, 3), values (k, 3), carried) with each triangle facing against
+    the normal. values: one per point (NaN allowed)."""
+    np = _np()
+    points = np.asarray(points, dtype=float)
     n = np.asarray(normal, dtype=float)
     length = float(np.linalg.norm(n))
-    if length < 1e-12 or len(tets) == 0:
-        return [], []
-    n = n / length
-    dist = (points - np.asarray(origin, dtype=float)) @ n
-    d = dist[tets]
-    crossing = (d.min(axis=1) < 0) & (d.max(axis=1) > 0)
-    tris, vals = [], []
-    for tet, dd in zip(tets[crossing], d[crossing]):
-        above = [k for k in range(4) if dd[k] > 0]
-        below = [k for k in range(4) if dd[k] <= 0]
+    if length < 1e-12:
+        return level_set(points, np.zeros(len(points)), values, [], carry)
+    distance = (points - np.asarray(origin, dtype=float)) @ (n / length)
+    return level_set(points, distance, values, tets, carry)
 
-        def at(i, j):
-            t = dd[i] / (dd[i] - dd[j])
-            a, b = tet[i], tet[j]
-            return points[a] + t * (points[b] - points[a]), values[a] + t * (values[b] - values[a])
 
-        if len(above) == 1 or len(below) == 1:
-            lone, others = (above[0], below) if len(above) == 1 else (below[0], above)
-            corners = [at(lone, k) for k in others]
-            tris.append(tuple(c[0] for c in corners))
-            vals.append(tuple(c[1] for c in corners))
-        else:
-            a, b = above
-            c, e = below
-            quad = [at(a, c), at(a, e), at(b, e), at(b, c)]
-            tris.append((quad[0][0], quad[1][0], quad[2][0]))
-            vals.append((quad[0][1], quad[1][1], quad[2][1]))
-            tris.append((quad[0][0], quad[2][0], quad[3][0]))
-            vals.append((quad[0][1], quad[2][1], quad[3][1]))
-    # every triangle wound to face against the normal (out of the half that is kept), so they
-    # all take the light the same way
-    for k, (p0, p1, p2) in enumerate(tris):
-        if float(np.dot(np.cross(p1 - p0, p2 - p0), n)) > 0:
-            tris[k] = (p0, p2, p1)
-            v0, v1, v2 = vals[k]
-            vals[k] = (v0, v2, v1)
-    return tris, vals
+def iso_surface(points, values, tets, level, carry=None):
+    """The surface inside a mesh of straight tetrahedra where `values` equal `level`
+    (level_set of values - level, facing the lower values)."""
+    np = _np()
+    values = np.asarray(values, dtype=float)
+    return level_set(points, values - float(level), values, tets, carry)
+
+
+def iso_default(lo, hi):
+    """The value an iso-surface starts at: half way between the lowest and the highest."""
+    if lo is None or hi is None:
+        return 0.0
+    return (float(lo) + float(hi)) / 2.0
+
+
+def tet_boxes(points, tets, chunk=200000):
+    """(lows (m, 3), highs (m, 3)): each straight tetrahedron's bounding box (worked out a
+    chunk of tetrahedra at a time: a big mesh's corners at once would take a lot of memory)."""
+    np = _np()
+    points = np.asarray(points, dtype=float)
+    tets = np.asarray(tets, dtype=np.int64)
+    lows = np.empty((len(tets), 3))
+    highs = np.empty((len(tets), 3))
+    for start in range(0, len(tets), chunk):
+        corners = points[tets[start : start + chunk]]
+        lows[start : start + chunk] = corners.min(axis=1)
+        highs[start : start + chunk] = corners.max(axis=1)
+    return lows, highs
+
+
+def locate(points, tets, point, boxes=None):
+    """The straight tetrahedron (straight_tets) a point lies in, with its 4 barycentric weights:
+    (row, weights) or None when the point is outside the mesh. A point on a shared face goes
+    to the tetrahedron it is the most inside of."""
+    np = _np()
+    points = np.asarray(points, dtype=float)
+    tets = np.asarray(tets, dtype=np.int64)
+    if len(tets) == 0:
+        return None
+    lows, highs = boxes if boxes is not None else tet_boxes(points, tets)
+    p = np.asarray(point, dtype=float)
+    size = float(np.max(highs.max(axis=0) - lows.min(axis=0))) or 1.0
+    tol = 1e-7 * size
+    near = np.flatnonzero(np.all(lows <= p + tol, axis=1) & np.all(highs >= p - tol, axis=1))
+    if not len(near):
+        return None
+    corners = points[tets[near]]  # (c, 4, 3)
+    frame = np.stack(
+        [
+            corners[:, 1] - corners[:, 0],
+            corners[:, 2] - corners[:, 0],
+            corners[:, 3] - corners[:, 0],
+        ],
+        axis=2,
+    )
+    det = np.linalg.det(frame)
+    good = np.abs(det) > 1e-12 * size**3
+    if not good.any():
+        return None
+    near, frame, corners = near[good], frame[good], corners[good]
+    local = np.linalg.solve(frame, (p - corners[:, 0])[:, :, None])[:, :, 0]
+    weights = np.column_stack([1.0 - local.sum(axis=1), local])
+    worst = weights.min(axis=1)
+    best = int(np.argmax(worst))
+    if worst[best] < -1e-6:
+        return None
+    return int(near[best]), weights[best]
+
+
+def at_point(values, tets, where):
+    """A value per point (values (n,) or (n, c)) interpolated at locate()'s (row, weights)."""
+    np = _np()
+    row, weights = where
+    corner_values = np.asarray(values, dtype=float)[np.asarray(tets[row], dtype=np.int64)]
+    return np.tensordot(weights, corner_values, axes=(0, 0))
+
+
+# -- Solver Data -----------------------------------------------------------------------------------
+STAGE_NAMES = (
+    ("model", "Preparing the model"),
+    ("mesh", "Meshing"),
+    ("mesh_read", "Reading the mesh"),
+    ("mesh_stats", "Measuring the mesh"),
+    ("refine", "Refining the mesh (adaptive)"),
+    ("input", "Writing the solver input"),
+    ("solve", "Solving (CalculiX)"),
+    ("solve_read", "Reading the solver's output"),
+    ("results_read", "Reading the results"),
+    ("results", "Results into the design"),
+)
+
+
+def _seconds(value):
+    return "%s s" % fmt(value, 3) if value is not None else "-"
+
+
+def solver_rows(summary, mesh=None):
+    """Solver Data: [(section, [(name, value text), ...]), ...] from a study's result summary
+    (simulation.summary) and, when there is one, its mesh statistics (mesh_summary)."""
+    summary = summary or {}
+    rows = []
+    solve = []
+    if summary.get("solved"):
+        solve.append(("Solved", str(summary["solved"])))
+    if summary.get("seconds") is not None:
+        solve.append(("Time taken", _seconds(summary["seconds"])))
+    known = dict(STAGE_NAMES)
+    timings = summary.get("timings") or {}
+    for key, _name in STAGE_NAMES:
+        if key in timings:
+            solve.append((" " * 4 + known[key], _seconds(timings[key])))
+    for key in sorted(k for k in timings if k not in known):
+        solve.append((" " * 4 + key.replace("_", " ").capitalize(), _seconds(timings[key])))
+    basis = summary.get("safety_basis")
+    if basis:
+        solve.append(
+            (
+                "Safety factor from",
+                "Yield strength" if basis == "yield" else "Ultimate tensile strength",
+            )
+        )
+    if solve:
+        rows.append(("Solve", solve))
+    info = dict(mesh or {})
+    info.update({k: v for k, v in (summary.get("mesh") or {}).items() if v is not None})
+    meshed = []
+    if info.get("nodes") is not None:
+        meshed.append(("Nodes", "{:,}".format(int(info["nodes"]))))
+        meshed.append(("Degrees of freedom", "{:,}".format(3 * int(info["nodes"]))))
+    if info.get("elements") is not None:
+        meshed.append(("Elements", "{:,}".format(int(info["elements"]))))
+    order = info.get("order")
+    if order:
+        meshed.append(
+            (
+                "Element order",
+                (
+                    "Parabolic (10-node tetrahedra)"
+                    if order == "parabolic"
+                    else "Linear (4-node tetrahedra)"
+                ),
+            )
+        )
+    for key, name in (
+        ("size", "Element size"),
+        ("smallest", "Smallest element edge"),
+        ("largest", "Largest element edge"),
+    ):
+        if info.get(key) is not None:
+            meshed.append((name, "%s mm" % fmt(info[key])))
+    if info.get("worst_aspect") is not None:
+        meshed.append(("Worst aspect ratio", fmt(info["worst_aspect"], 3)))
+    if info.get("over_limit") is not None:
+        meshed.append(("Elements over the aspect ratio limit", str(int(info["over_limit"]))))
+    if info.get("mesher"):
+        meshed.append(("Mesher", str(info["mesher"]).capitalize()))
+    if meshed:
+        rows.append(("Mesh", meshed))
+    adaptive = summary.get("adaptive") or {}
+    passes = adaptive.get("passes") or []
+    if passes:
+        key = adaptive.get("result")
+        title = result_name(key) if key else "Result"
+        unit = base_unit(key) if key in result_keys() else ""
+        steps = []
+        for number, step in enumerate(passes, 1):
+            steps.append(
+                (
+                    "Solve %d" % number,
+                    "%s nodes, %s elements; %s %s"
+                    % (
+                        "{:,}".format(int(step.get("nodes", 0))),
+                        "{:,}".format(int(step.get("elements", 0))),
+                        title,
+                        with_unit(step.get("value"), unit) if unit else fmt(step.get("value")),
+                    ),
+                )
+            )
+        rows.append(("Adaptive mesh refinement", steps))
+    notes = [str(n) for n in summary.get("notes") or []]
+    if notes:
+        rows.append(("Messages", [("", n) for n in notes]))
+    return rows
+
+
+def solver_text(rows):
+    """Solver Data as plain text (its Copy button)."""
+    out = []
+    for section, items in rows:
+        out.append(section)
+        for name, value in items:
+            out.append("  %s: %s" % (name, value) if name else "  %s" % value)
+    return "\n".join(out)
 
 
 # -- the report ------------------------------------------------------------------------------------

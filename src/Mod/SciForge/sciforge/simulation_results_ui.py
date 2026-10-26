@@ -431,7 +431,10 @@ class Session:
         self.ranges = {}  # result key -> (lo, hi) set in Legend Min/Max (base unit)
         self.targets = core.DEFAULT_TARGETS
         self.probes = []  # {"node": index} or {"point": (x, y, z), "values": {...}}
+        self.points = []  # Point Probes: {"at": (x, y, z) on the unloaded part, "where": ...}
         self.slice = None  # {"axis": "x"|"y"|"z", "offset": mm, "flip": bool, "style": ...}
+        self.iso_on = False  # the iso-surface of the result shown
+        self.iso_levels = {}  # result key -> the iso-surface's value (base unit)
         self.anim = {
             "shown": False,
             "playing": False,
@@ -521,6 +524,8 @@ class Session:
         self.data = results_data.data(study)
         self.display = view_mod.ResultDisplay(self.data)
         self.probes = []
+        for point in self.points:  # (kept: they are places of the part, found in the new mesh)
+            point.pop("where", None)
         if self.slice is not None:
             self.slice = dict(self.slice)
 
@@ -668,6 +673,7 @@ class Session:
         self.display.set_mesh(self.mesh)
         self.display.set_ghost(self.ghost and self.factor() != 0.0)
         self._apply_slice()
+        self._apply_iso()
         info = core.legend(
             self.result,
             stats,
@@ -776,6 +782,24 @@ class Session:
                         "colour": core.map_colour(core.position(value, lo, hi, reverse)),
                     }
                 )
+            for number, point in enumerate(self.points, 1):
+                value = self.point_value(point)
+                if value is None:
+                    text, colour = "P%d: outside the part" % number, core.NO_VALUE
+                elif value != value:
+                    text, colour = "P%d: -" % number, core.NO_VALUE
+                else:
+                    text = "P%d: %s" % (number, core.with_unit(core.convert(value, unit), unit))
+                    colour = core.map_colour(core.position(value, lo, hi, reverse))
+                tags.append(
+                    {
+                        "kind": "point",
+                        "value": value,
+                        "point": tuple(float(c) for c in self.point_place(point)),
+                        "text": text,
+                        "colour": colour,
+                    }
+                )
         del np
         self.tag_list = tags
         if self.tags is not None and view_mod._alive(self.tags):
@@ -807,6 +831,7 @@ class Session:
             return
         self.result = key
         self.apply()
+        self._panels_follow()
         log("results: %s" % core.result_name(key))
 
     def set_unit(self, unit):
@@ -814,6 +839,18 @@ class Session:
             return
         self.units[core.kind_of(self.result)] = unit
         self.apply()
+        self._panels_follow()
+
+    def _panels_follow(self):
+        """The open probe and iso-surface panels show the result (and unit) now chosen."""
+        for panel in list(self.panels):
+            follow = getattr(panel, "result_changed", None)
+            if follow is None:
+                continue
+            try:
+                follow()
+            except Exception as exc:
+                warn("results: %s" % exc)
 
     def set_deformation(self, key):
         if key not in [k for k, _n in core.deformations()]:
@@ -869,40 +906,24 @@ class Session:
         else:
             point = np.asarray(origin) + t * np.asarray(direction)
             probe = {"point": tuple(float(c) for c in point), "values": {}}
-            probe["values"] = self._cap_values_at(point)
+            rest = self.display.cap_rest[3 * tri : 3 * tri + 3]
+            probe["values"] = self._values_at(np.asarray(weights) @ rest)
         self.probes.append(probe)
         self.update_tags()
         self._redraw()
         return probe
 
-    def _cap_values_at(self, point):
-        """Every result's value at a point of the slice (interpolated in the mesh)."""
+    def _values_at(self, rest):
+        """Every result's value at a point of the unloaded part (interpolated in the mesh)."""
         out = {}
-        np = view_mod._np()
-        data = self.data
-        origin_p, normal = slice_plane(self)
-        deformed = data.deformed(self.display.factor)
-        tets = data.straight()
+        where = self.data.locate(rest)
+        if where is None:
+            return out
         for key in core.result_keys():
             try:
-                values = data.values(key)
+                out[key] = self.data.at(where, key)
             except Exception:
                 continue
-            tris, vals = core.cut(deformed, values, tets, origin_p, normal)
-            if not tris:
-                continue
-            arr = np.asarray(tris, dtype=float)
-            hit = core.ray_hit(
-                np.asarray(point) + np.asarray(normal) * 1e-3,
-                -np.asarray(normal),
-                arr.reshape((-1, 3)),
-                np.arange(len(arr) * 3).reshape((-1, 3)),
-            )
-            if hit is None:
-                continue
-            _t, tri, w = hit
-            v = vals[tri]
-            out[key] = float(w[0] * v[0] + w[1] * v[1] + w[2] * v[2])
         return out
 
     def clear_probes(self):
@@ -922,28 +943,175 @@ class Session:
         if self.slice is None:
             display.set_clip(None, None)
             display.set_cap([], [], [])
-            display.set_see_through(False)
-            return
-        origin, normal = slice_plane(self)
-        if self.slice.get("style", "clip") == "slice":
-            display.set_clip(None, None)
-            display.set_see_through(True)
         else:
-            display.set_clip(origin, normal)
-            display.set_see_through(False)
-        self._cut(origin, normal)
+            origin, normal = slice_plane(self)
+            if self.slice.get("style", "clip") == "slice":
+                display.set_clip(None, None)
+            else:
+                display.set_clip(origin, normal)
+            self._cut(origin, normal)
+        display.set_see_through(self.see_through())
+
+    def see_through(self):
+        """The result is drawn see-through around a slice shown alone or an iso-surface."""
+        alone = self.slice is not None and self.slice.get("style", "clip") == "slice"
+        return bool(alone or self.iso_on)
 
     def _cut(self, origin, normal):
         np = view_mod._np()
         data = self.data
         values = data.values(self.result)
         lo, hi, reverse = self.scale()
-        tris, vals = core.cut(
-            data.deformed(self.display.factor), values, data.straight(), origin, normal
+        tris, vals, rest = core.cut(
+            data.deformed(self.display.factor),
+            values,
+            data.straight(),
+            origin,
+            normal,
+            carry=data.points,
         )
-        flat_vals = np.asarray(vals, dtype=float).ravel() if vals else np.zeros(0)
+        flat_vals = vals.ravel()
         positions = _positions(np, flat_vals, lo, hi, reverse) if len(flat_vals) else []
-        self.display.set_cap(tris, flat_vals, positions, normal)
+        self.display.set_cap(tris, flat_vals, positions, normal, rest=rest)
+
+    # -- iso-surface
+    def iso_level(self, result=None):
+        """The iso-surface's value for a result (base unit): the one set, else half way
+        between the result's lowest and highest."""
+        result = result or self.result
+        level = self.iso_levels.get(result)
+        if level is None:
+            lo, hi, _reverse = self.scale(result)
+            stats = self.data.stats(result)
+            low = stats.get("min") if stats.get("min") is not None else lo
+            high = stats.get("max") if stats.get("max") is not None else hi
+            if result == "safety":
+                high = min(high, hi)
+            level = core.iso_default(low, high)
+        return float(level)
+
+    def set_iso(self, level):
+        """The iso-surface at `level` (base unit) of the result shown; None takes it away."""
+        if level is None:
+            self.iso_on = False
+        else:
+            self.iso_on = True
+            self.iso_levels[self.result] = float(level)
+        self.apply()
+
+    def _apply_iso(self):
+        display = self.display
+        if not self.iso_on:
+            display.set_iso([])
+            display.set_see_through(self.see_through())
+            return
+        data = self.data
+        level = self.iso_level()
+        tris, _vals, rest = core.iso_surface(
+            data.deformed(display.factor),
+            data.values(self.result),
+            data.straight(),
+            level,
+            carry=data.points,
+        )
+        lo, hi, reverse = self.scale()
+        colour = core.map_colour(core.position(level, lo, hi, reverse), self.banded)
+        display.set_iso(tris, colour, rest=rest)
+        display.set_see_through(self.see_through())
+
+    # -- point probes (Fusion: values inside the part, placed on a visible surface - the result,
+    # a slice's cut face or the iso-surface - then moved by their X, Y, Z)
+    def pick_rest_point(self, x, y):
+        """Where the Coin pixel (x, y) meets what is drawn (a slice's cut face or the
+        iso-surface first when the result is see-through), as a point of the unloaded part;
+        None when it meets nothing."""
+        if self.display is None or self.view is None:
+            return None
+        np = view_mod._np()
+        display = self.display
+        origin, direction = view_mod.ray_coin(self.view, x, y)
+        hits = []  # (distance, rest point)
+        for shown, pts, rest in (
+            (display.cap_shown(), display.cap_points, display.cap_rest),
+            (display.iso_shown(), display.iso_points, display.iso_rest),
+        ):
+            if not shown or not len(pts):
+                continue
+            hit = core.ray_hit(origin, direction, pts, np.arange(len(pts)).reshape((-1, 3)))
+            if hit is not None:
+                t, tri, weights = hit
+                hits.append((t, np.asarray(weights) @ rest[3 * tri : 3 * tri + 3]))
+        if not hits or not display.see_through():
+            pts = display.surface_points()
+            tris = display.triangles
+            if display.clipped() and self.slice is not None:
+                origin_p, normal = slice_plane(self)
+                keep = (pts[tris].mean(axis=1) - np.asarray(origin_p)) @ np.asarray(normal) >= -1e-6
+                tris = tris[keep]
+            hit = core.ray_hit(origin, direction, pts, tris)
+            if hit is not None:
+                t, tri, weights = hit
+                corners = display.nodes[tris[tri]]
+                hits.append((t, np.asarray(weights) @ self.data.points[corners]))
+        if not hits:
+            return None
+        return min(hits, key=lambda h: h[0])[1]
+
+    def add_point_at(self, x, y):
+        """A Point Probe where the Coin pixel (x, y) meets what is drawn, or None."""
+        rest = self.pick_rest_point(x, y)
+        if rest is None:
+            return None
+        return self.add_point(rest)
+
+    def add_point(self, at):
+        point = {"at": tuple(float(c) for c in at)}
+        self.points.append(point)
+        self.update_tags()
+        self._redraw()
+        return point
+
+    def move_point(self, index, at):
+        """Point Probe `index` to (x, y, z) of the unloaded part (its X, Y, Z typed)."""
+        if not 0 <= index < len(self.points):
+            return
+        self.points[index] = {"at": tuple(float(c) for c in at)}
+        self.update_tags()
+        self._redraw()
+
+    def remove_point(self, index):
+        if 0 <= index < len(self.points):
+            del self.points[index]
+            self.update_tags()
+            self._redraw()
+
+    def clear_points(self):
+        self.points = []
+        self.update_tags()
+        self._redraw()
+
+    def point_where(self, point):
+        if "where" not in point:
+            point["where"] = self.data.locate(point["at"]) if self.data is not None else None
+        return point["where"]
+
+    def point_value(self, point, key=None):
+        """A Point Probe's value of a result (base unit; NaN where it has none), None when it
+        is outside the part."""
+        where = self.point_where(point)
+        if where is None:
+            return None
+        return self.data.at(where, key or self.result)
+
+    def point_place(self, point):
+        """Where a Point Probe is drawn now (it moves with the part as it is drawn bent)."""
+        np = view_mod._np()
+        at = np.asarray(point["at"], dtype=float)
+        where = self.point_where(point)
+        offset = self.display.offset if self.display is not None else 0.0
+        if where is None or self.display is None:
+            return at + offset
+        return at + self.display.factor * self.data.moved(where) + offset
 
     # -- animation
     def toggle_animation(self):
@@ -1045,6 +1213,8 @@ class Session:
             self.display.set_factor(full * fraction)
             if self.slice is not None and len(self.data.tets) <= 20000:
                 self._apply_slice()
+            if self.iso_on and len(self.data.tets) <= 20000:
+                self._apply_iso()
             self.update_tags()
             if core.animation_done(self.anim["step"], frames, mode):
                 self.anim["playing"] = False
@@ -1750,6 +1920,42 @@ class ProbesCommand(_ResultsCommand):
         panels.probes(session)
 
 
+class PointProbesCommand(_ResultsCommand):
+    menu = "Point Probes"
+    tip = (
+        "Values inside the part: click the result, a slice's cut face or the iso-surface, "
+        "then type X, Y, Z to move the probe"
+    )
+    icon = "simr_point_probe"
+
+    def run(self, session):
+        from . import simulation_results_panels as panels
+
+        panels.point_probes(session)
+
+
+class IsoCommand(_ResultsCommand):
+    menu = "Iso-surface"
+    tip = "The surface inside the part where the result shown has one value"
+    icon = "simr_iso"
+
+    def run(self, session):
+        from . import simulation_results_panels as panels
+
+        panels.iso_panel(session)
+
+
+class SolverDataCommand(_ResultsCommand):
+    menu = "Solver Data"
+    tip = "How the study was solved: time taken, the mesh and its quality, the solver's messages"
+    icon = "simr_solver_data"
+
+    def run(self, session):
+        from . import simulation_results_panels as panels
+
+        panels.solver_data(session)
+
+
 class SliceCommand(_ResultsCommand):
     menu = "Slice Plane"
     tip = "Cut the result with a plane to see inside it"
@@ -1803,6 +2009,9 @@ COMMANDS = {
     "SciForge_SimResultsMinMax": MinMaxCommand,
     "SciForge_SimResultsProbes": ProbesCommand,
     "SciForge_SimResultsSlice": SliceCommand,
+    "SciForge_SimResultsPointProbes": PointProbesCommand,
+    "SciForge_SimResultsIso": IsoCommand,
+    "SciForge_SimResultsSolverData": SolverDataCommand,
     "SciForge_SimResultsReactions": ReactionsCommand,
     "SciForge_SimResultsFinish": FinishCommand,
 }

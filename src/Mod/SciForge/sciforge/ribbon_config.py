@@ -1581,13 +1581,12 @@ SIMR_INSPECT = group(
         item("Slice Plane", "SciForge_SimResultsSlice", "simr_slice"),  # owner: sim-results
         SEP,
         item(
-            "Point Probes",
-            None,
-            "simr_point_probe",
-            note=_SIM_LATER + ": a Surface Probe on a slice plane reads the value inside",
-        ),
-        item("Iso-surface", None, "simr_iso", note=_SIM_LATER),
-        item("Solver Data", None, "simr_solver_data", note=_SIM_LATER),
+            "Point Probes", "SciForge_SimResultsPointProbes", "simr_point_probe"
+        ),  # owner: sim-results
+        item("Iso-surface", "SciForge_SimResultsIso", "simr_iso"),  # owner: sim-results
+        item(
+            "Solver Data", "SciForge_SimResultsSolverData", "simr_solver_data"
+        ),  # owner: sim-results
         SEP,
         item("Measure", ("SciForge_Measure", "Std_Measure"), "measure"),
     ],

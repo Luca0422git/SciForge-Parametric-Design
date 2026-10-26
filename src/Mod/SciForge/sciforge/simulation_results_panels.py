@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""The RESULTS tab's dialogs: Surface Probes and Slice Plane (task panels with Close / OK,
-nothing to undo: they only change what is drawn), Results Details, Report, Reaction Force, and
-the solve run from out-of-date results when sim-ui's Solve command is not there. The controller
+"""The RESULTS tab's dialogs: Surface Probes, Point Probes, Slice Plane and Iso-surface (task
+panels with Close / OK, nothing to undo: they only change what is drawn), Results Details,
+Report, Reaction Force, Solver Data, and the solve run from out-of-date results when sim-ui's
+Solve command is not there. The controller
 is simulation_results_ui.py; the rules simulation_results_core.py.
 """
 
@@ -24,6 +25,7 @@ OPEN = {
     "solve": None,
     "range": None,
     "compare": None,
+    "solver": None,
 }
 
 PANEL_STYLE = """
@@ -127,6 +129,9 @@ class ProbePanel:
             if tag.get("kind") == "probe":
                 self.listing.addItem(tag.get("text", ""))
         self.clear_button.setEnabled(bool(self.session.probes))
+
+    def result_changed(self):  # (the legend's result or unit changed)
+        self.refresh()
 
     def clear(self):
         try:
@@ -439,6 +444,462 @@ def slice_panel(session):
     panel = SlicePanel(session)
     Gui.Control.showDialog(panel)
     log("Slice Plane started")
+    return panel
+
+
+# -- Point Probes ----------------------------------------------------------------------------------
+def _length(text):
+    """mm from what was typed in a coordinate cell ("12.5", "12.5 mm", "0.5 in"); None when it
+    is not a length."""
+    text = str(text).strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        pass
+    try:
+        quantity = App.Units.Quantity(text)
+        if quantity.Unit != App.Units.Quantity("1 mm").Unit:
+            return None
+        return float(quantity.getValueAs("mm"))
+    except Exception:
+        return None
+
+
+class PointProbePanel:
+    """Point Probes (Fusion): values inside the part. A click on the result, on a slice's cut
+    face or on the iso-surface puts a probe there; its X, Y, Z (on the unloaded part, in mm)
+    can then be typed to move it anywhere inside. The probes stay after Close."""
+
+    title = "Point Probes"
+    COLUMNS = ("Probe", "X (mm)", "Y (mm)", "Z (mm)", "Value")
+
+    def __init__(self, session):
+        self.session = session
+        self._closed = False
+        self._press = None
+        self._filling = False
+        self.form = QtWidgets.QWidget()
+        self.form.setObjectName("SciForgeSimPointProbes")
+        self.form.setWindowTitle(self.title)
+        self.form.setWindowIcon(ui_icon("simr_point_probe"))
+        self.form.setStyleSheet(PANEL_STYLE)
+        box = QtWidgets.QVBoxLayout(self.form)
+        hint = QtWidgets.QLabel(
+            "Click on the result to put a probe there: on a Slice Plane's cut face or an "
+            "Iso-surface it lands inside the part. Type X, Y and Z to move a probe anywhere "
+            "inside (places on the unloaded part)."
+        )
+        hint.setWordWrap(True)
+        box.addWidget(hint)
+        self.table = QtWidgets.QTableWidget(0, len(self.COLUMNS))
+        self.table.setObjectName("SciForgeSimPointTable")
+        self.table.setHorizontalHeaderLabels(list(self.COLUMNS))
+        self.table.verticalHeader().setVisible(False)
+        self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.table.itemChanged.connect(self._edited)
+        box.addWidget(self.table)
+        self.message = QtWidgets.QLabel("")
+        self.message.setObjectName("SciForgeSimPointMessage")
+        self.message.setProperty("role", "warning")
+        self.message.setWordWrap(True)
+        box.addWidget(self.message)
+        row = QtWidgets.QHBoxLayout()
+        self.remove_button = QtWidgets.QPushButton("Remove")
+        self.remove_button.setObjectName("SciForgeSimPointRemove")
+        self.remove_button.clicked.connect(self.remove)
+        self.clear_button = QtWidgets.QPushButton("Clear All")
+        self.clear_button.setObjectName("SciForgeSimPointClear")
+        self.clear_button.clicked.connect(self.clear)
+        row.addWidget(self.remove_button)
+        row.addWidget(self.clear_button)
+        row.addStretch(1)
+        box.addLayout(row)
+        self.callbacks = []
+        try:
+            view = session.view
+            self.callbacks.append(
+                ("SoMouseButtonEvent", view.addEventCallback("SoMouseButtonEvent", self._mouse))
+            )
+        except Exception as exc:
+            warn("Point Probes: clicks unavailable: %s" % exc)
+        self._guards = []
+        try:
+            from . import preview
+
+            self._guards = [preview.EscapeCancels(self)]
+        except Exception as exc:
+            warn("Point Probes: keys unavailable: %s" % exc)
+        session.panels.append(self)
+        taskui.set_current(self)
+        self.refresh()
+
+    def _mouse(self, info):
+        try:
+            if self._closed or info.get("Button") != "BUTTON1":
+                return
+            x, y = info.get("Position", (0, 0))
+            if info.get("State") == "DOWN":
+                self._press = (x, y)
+                return
+            if info.get("State") != "UP" or self._press is None:
+                return
+            px, py = self._press
+            self._press = None
+            if abs(px - x) > 4 or abs(py - y) > 4:
+                return  # a drag (orbit, pan, box): not a probe
+            QtCore.QTimer.singleShot(0, lambda: self._probe(x, y))
+        except Exception as exc:
+            warn("Point Probes: %s" % exc)
+
+    def _probe(self, x, y):
+        try:
+            if self._closed:
+                return
+            point = self.session.add_point_at(x, y)
+            if point is None:
+                return
+            self.refresh()
+            self.table.selectRow(len(self.session.points) - 1)
+            log("results: point probe added")
+        except Exception as exc:
+            warn("Point Probes: %s" % exc)
+
+    def refresh(self):
+        session = self.session
+        unit = session.unit()
+        self._filling = True
+        try:
+            self.table.setRowCount(len(session.points))
+            for r, point in enumerate(session.points):
+                value = session.point_value(point)
+                if value is None:
+                    shown = "outside the part"
+                elif value != value:
+                    shown = "-"
+                else:
+                    shown = core.with_unit(core.convert(value, unit), unit)
+                cells = ["P%d" % (r + 1)] + [core.fmt_mm(c) for c in point["at"]] + [shown]
+                for c, text in enumerate(cells):
+                    item = QtWidgets.QTableWidgetItem(text)
+                    flags = item.flags()
+                    if c in (1, 2, 3):
+                        item.setFlags(flags | QtCore.Qt.ItemIsEditable)
+                    else:
+                        item.setFlags(flags & ~QtCore.Qt.ItemIsEditable)
+                    self.table.setItem(r, c, item)
+            self.table.resizeColumnsToContents()
+        finally:
+            self._filling = False
+        self.remove_button.setEnabled(bool(session.points))
+        self.clear_button.setEnabled(bool(session.points))
+
+    def result_changed(self):  # (the legend's result or unit changed)
+        self.refresh()
+
+    def _edited(self, item):
+        if self._filling or self._closed:
+            return
+        try:
+            r, c = item.row(), item.column()
+            if c not in (1, 2, 3) or r >= len(self.session.points):
+                return
+            value = _length(item.text())
+            if value is None:
+                self.message.setText("Type a length for %s, such as 12.5 or 0.5 in." % "XYZ"[c - 1])
+                self.refresh()
+                return
+            at = list(self.session.points[r]["at"])
+            at[c - 1] = value
+            self.session.move_point(r, at)
+            outside = self.session.point_value(self.session.points[r]) is None
+            self.message.setText(
+                "P%d is outside the part: it shows no value there." % (r + 1) if outside else ""
+            )
+            QtCore.QTimer.singleShot(0, self.refresh)  # (not while the table edits the cell)
+        except Exception as exc:
+            warn("Point Probes: %s" % exc)
+
+    def remove(self):
+        try:
+            rows = sorted({i.row() for i in self.table.selectedIndexes()}, reverse=True)
+            if not rows and self.session.points:
+                rows = [len(self.session.points) - 1]
+            for r in rows:
+                self.session.remove_point(r)
+            self.message.setText("")
+            self.refresh()
+        except Exception as exc:
+            warn("Point Probes: %s" % exc)
+
+    def clear(self):
+        try:
+            self.session.clear_points()
+            self.message.setText("")
+            self.refresh()
+        except Exception as exc:
+            warn("Point Probes: %s" % exc)
+
+    # task dialog
+    def getStandardButtons(self):
+        buttons = QtWidgets.QDialogButtonBox.Close
+        return getattr(buttons, "value", buttons)
+
+    def accept(self):
+        return self.close()
+
+    def reject(self):
+        return self.close()
+
+    def finish(self):
+        self.close()
+
+    def close(self):
+        if self._closed:
+            return True
+        self._closed = True
+        for kind, callback in self.callbacks:
+            try:
+                self.session.view.removeEventCallback(kind, callback)
+            except Exception:
+                pass
+        self.callbacks = []
+        for guard in self._guards:
+            try:
+                guard.remove()
+            except Exception:
+                pass
+        self._guards = []
+        if self in self.session.panels:
+            self.session.panels.remove(self)
+        if taskui.current() is self:
+            taskui.set_current(None)
+        try:
+            Gui.Control.closeDialog()
+        except Exception:
+            pass
+        return True
+
+
+def point_probes(session):
+    if not _finish_open():
+        return None
+    panel = PointProbePanel(session)
+    Gui.Control.showDialog(panel)
+    log("Point Probes started")
+    return panel
+
+
+# -- Iso-surface -----------------------------------------------------------------------------------
+class IsoPanel:
+    """Iso-surface: the surface inside the part where the result shown in the legend has one
+    value, in that value's legend colour, with the result drawn see-through around it. The
+    value is typed or slid between the result's lowest and highest; changing the result in
+    the legend moves the surface to that result. OK keeps it, Cancel / Esc puts back what was
+    there, Remove Iso-surface takes it away."""
+
+    title = "Iso-surface"
+    STEPS = 1000
+
+    def __init__(self, session):
+        self.session = session
+        self._closed = False
+        self.before = (session.iso_on, dict(session.iso_levels))
+        self.form = QtWidgets.QWidget()
+        self.form.setObjectName("SciForgeSimIso")
+        self.form.setWindowTitle(self.title)
+        self.form.setWindowIcon(ui_icon("simr_iso"))
+        self.form.setStyleSheet(PANEL_STYLE)
+        layout = QtWidgets.QFormLayout(self.form)
+        self.result_label = QtWidgets.QLabel("")
+        self.result_label.setObjectName("SciForgeSimIsoResult")
+        layout.addRow("Result", self.result_label)
+        self.value = QtWidgets.QDoubleSpinBox()
+        self.value.setObjectName("SciForgeSimIsoValue")
+        self.value.setDecimals(4)
+        self.value.setKeyboardTracking(False)
+        self.slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.slider.setObjectName("SciForgeSimIsoSlider")
+        self.slider.setRange(0, self.STEPS)
+        layout.addRow("Value", self.value)
+        layout.addRow("", self.slider)
+        self.span_label = QtWidgets.QLabel("")
+        self.span_label.setProperty("role", "dim")
+        self.span_label.setWordWrap(True)
+        layout.addRow(self.span_label)
+        self.message = QtWidgets.QLabel("")
+        self.message.setObjectName("SciForgeSimIsoMessage")
+        self.message.setProperty("role", "warning")
+        self.message.setWordWrap(True)
+        layout.addRow(self.message)
+        self.remove_button = QtWidgets.QPushButton("Remove Iso-surface")
+        self.remove_button.setObjectName("SciForgeSimIsoRemove")
+        self.remove_button.clicked.connect(self.remove)
+        layout.addRow("", self.remove_button)
+        self.value.valueChanged.connect(self._value_changed)
+        self.slider.valueChanged.connect(self._slider_moved)
+        self._guards = []
+        try:
+            from . import preview
+
+            self._guards = [preview.EscapeCancels(self)]
+        except Exception as exc:
+            warn("Iso-surface: keys unavailable: %s" % exc)
+        session.panels.append(self)
+        taskui.set_current(self)
+        self.result_changed()
+        self._apply()
+
+    # the result shown (the legend may change it while the panel is open)
+    def result_changed(self):
+        session = self.session
+        self.key = session.result
+        self.unit = session.unit()
+        lo, hi, _reverse = session.scale()
+        stats = session.data.stats(self.key)
+        low = stats.get("min") if stats.get("min") is not None else lo
+        high = stats.get("max") if stats.get("max") is not None else hi
+        if self.key == "safety":
+            high = min(high, hi)
+        self.low, self.high = float(low), float(high)
+        if self.high <= self.low:
+            self.high = self.low + 1e-9
+        self.result_label.setText(core.result_name(self.key))
+        factor = core.convert(1.0, self.unit) or 1.0
+        self.value.blockSignals(True)
+        self.value.setRange(
+            min(self.low, self.high) * factor - abs(self.high - self.low) * factor,
+            max(self.low, self.high) * factor + abs(self.high - self.low) * factor,
+        )
+        self.value.setSingleStep(max(abs(self.high - self.low) * factor / 50.0, 1e-6))
+        self.value.setSuffix(" " + self.unit if self.unit else "")
+        self.value.setValue(core.convert(session.iso_level(self.key), self.unit))
+        self.value.blockSignals(False)
+        self.span_label.setText(
+            "%s runs from %s to %s."
+            % (
+                core.result_name(self.key),
+                core.with_unit(core.convert(self.low, self.unit), self.unit),
+                core.with_unit(core.convert(self.high, self.unit), self.unit),
+            )
+        )
+        self._sync_slider()
+
+    def _base(self, value):
+        factor = core.convert(1.0, self.unit) or 1.0
+        return float(value) / factor
+
+    def _sync_slider(self):
+        level = self._base(self.value.value())
+        t = (level - self.low) / (self.high - self.low)
+        self.slider.blockSignals(True)
+        self.slider.setValue(int(round(min(max(t, 0.0), 1.0) * self.STEPS)))
+        self.slider.blockSignals(False)
+
+    def _value_changed(self, _value):
+        self._sync_slider()
+        self._apply()
+
+    def _slider_moved(self, step):
+        level = self.low + (self.high - self.low) * step / float(self.STEPS)
+        self.value.blockSignals(True)
+        self.value.setValue(core.convert(level, self.unit))
+        self.value.blockSignals(False)
+        self._apply()
+
+    def _apply(self):
+        try:
+            if self._closed:
+                return
+            if self.session.result != self.key:
+                self.result_changed()
+            self.session.set_iso(self._base(self.value.value()))
+            empty = not self.session.display.iso_shown()
+            self.message.setText(
+                "Nothing in the part is at this value: pick one between the lowest and the "
+                "highest."
+                if empty
+                else ""
+            )
+        except Exception as exc:
+            warn("Iso-surface: %s" % exc)
+
+    def remove(self):
+        try:
+            self.session.set_iso(None)
+            self.before = (False, dict(self.session.iso_levels))
+            self._close_dialog()
+            log("results: iso-surface removed")
+        except Exception as exc:
+            warn("Iso-surface: %s" % exc)
+
+    # task dialog
+    def getStandardButtons(self):
+        buttons = QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+        return getattr(buttons, "value", buttons)
+
+    def accept(self):
+        try:
+            before = self.value.value()
+            self.value.interpretText()  # a value typed and not yet taken
+            if self.value.value() != before:
+                self._apply()
+            log(
+                "results: iso-surface of %s at %s"
+                % (
+                    core.result_name(self.key),
+                    core.with_unit(self.value.value(), self.unit),
+                )
+            )
+        except Exception as exc:
+            warn("Iso-surface: %s" % exc)
+        return self._close_dialog()
+
+    def reject(self):
+        try:
+            on, levels = self.before
+            self.session.iso_levels = dict(levels)
+            self.session.iso_on = on
+            self.session.apply()
+        except Exception as exc:
+            warn("Iso-surface: %s" % exc)
+        return self._close_dialog()
+
+    def finish(self):
+        self.accept()
+
+    def close(self):
+        self._close_dialog()
+
+    def _close_dialog(self):
+        if self._closed:
+            return True
+        self._closed = True
+        for guard in self._guards:
+            try:
+                guard.remove()
+            except Exception:
+                pass
+        self._guards = []
+        if self in self.session.panels:
+            self.session.panels.remove(self)
+        if taskui.current() is self:
+            taskui.set_current(None)
+        try:
+            Gui.Control.closeDialog()
+        except Exception:
+            pass
+        return True
+
+
+def iso_panel(session):
+    if not _finish_open():
+        return None
+    panel = IsoPanel(session)
+    Gui.Control.showDialog(panel)
+    log("Iso-surface started")
     return panel
 
 
@@ -869,6 +1330,117 @@ def reactions(session):
     dialog = ReactionsDialog(session, found)
     OPEN["reactions"] = dialog
     dialog.show()
+    return dialog
+
+
+# -- Solver Data -----------------------------------------------------------------------------------
+class SolverDataDialog(QtWidgets.QDialog):
+    """Solver Data (Fusion: INSPECT > Solver Data): how the study was solved - when, how long
+    each step took, the mesh the solver worked on (nodes, elements, their quality), the
+    adaptive mesh refinement's solves, and the solver's messages."""
+
+    def __init__(self, session):
+        super().__init__(_main())
+        self.setObjectName("SciForgeSimSolverData")
+        self.session = session
+        study = session.study
+        self.setWindowTitle("Solver Data")
+        self.setMinimumWidth(480)
+        self.setStyleSheet(PANEL_STYLE)
+        box = QtWidgets.QVBoxLayout(self)
+        heading = QtWidgets.QLabel(study.Label if study is not None else "")
+        heading.setObjectName("SciForgeSimSolverStudy")
+        font = heading.font()
+        font.setBold(True)
+        heading.setFont(font)
+        box.addWidget(heading)
+        self.rows = core.solver_rows(
+            simulation.summary(study) if study is not None else {},
+            _mesh_summary(study),
+        )
+        self.tree = QtWidgets.QTreeWidget()
+        self.tree.setObjectName("SciForgeSimSolverTree")
+        self.tree.setColumnCount(2)
+        self.tree.setHeaderLabels(["", ""])
+        self.tree.setHeaderHidden(True)
+        self.tree.setRootIsDecorated(False)
+        for section, items in self.rows:
+            top = QtWidgets.QTreeWidgetItem([section, ""])
+            bold = top.font(0)
+            bold.setBold(True)
+            top.setFont(0, bold)
+            self.tree.addTopLevelItem(top)
+            top.setFirstColumnSpanned(True)
+            for name, value in items:
+                child = QtWidgets.QTreeWidgetItem([name, value] if name else [value, ""])
+                top.addChild(child)
+                if not name:  # a message: the whole width
+                    child.setFirstColumnSpanned(True)
+                    child.setToolTip(0, value)
+            top.setExpanded(True)
+        self.tree.resizeColumnToContents(0)
+        lines = sum(1 + len(items) for _section, items in self.rows)
+        row = self.tree.sizeHintForRow(0) if lines else 20
+        self.tree.setMinimumHeight(min(600, max(200, (row + 2) * (lines + 1))))
+        box.addWidget(self.tree)
+        if not self.rows:
+            box.addWidget(QtWidgets.QLabel("This study has no solver data: solve it again."))
+        stale = QtWidgets.QLabel(core.OUT_OF_DATE)
+        stale.setProperty("role", "warning")
+        stale.setWordWrap(True)
+        stale.setVisible(study is not None and results_data.out_of_date(study))
+        box.addWidget(stale)
+        row = QtWidgets.QHBoxLayout()
+        copy = QtWidgets.QPushButton("Copy")
+        copy.setObjectName("SciForgeSimSolverCopy")
+        copy.setAutoDefault(False)
+        copy.setToolTip("Copy the solver data as text (to paste it in a message or a note)")
+        copy.clicked.connect(self.copy)
+        row.addWidget(copy)
+        row.addStretch(1)
+        close = QtWidgets.QPushButton("Close")
+        close.setObjectName("SciForgeSimSolverClose")
+        close.clicked.connect(self.close)
+        row.addWidget(close)
+        box.addLayout(row)
+
+    def text(self):
+        study = self.session.study
+        head = study.Label if study is not None else ""
+        return (head + "\n" if head else "") + core.solver_text(self.rows)
+
+    def copy(self):
+        try:
+            QtWidgets.QApplication.clipboard().setText(self.text())
+            log("results: solver data copied")
+        except Exception as exc:
+            warn("Solver Data: %s" % exc)
+
+    def closeEvent(self, event):
+        OPEN["solver"] = None
+        super().closeEvent(event)
+
+
+def _mesh_summary(study):
+    if study is None:
+        return {}
+    try:
+        return simulation.mesh_summary(study) or {}
+    except Exception:
+        return {}
+
+
+def solver_data(session):
+    dialog = OPEN.get("solver")
+    try:
+        if dialog is not None:
+            dialog.close()
+    except RuntimeError:
+        pass
+    dialog = SolverDataDialog(session)
+    OPEN["solver"] = dialog
+    dialog.show()
+    log("Solver Data opened")
     return dialog
 
 

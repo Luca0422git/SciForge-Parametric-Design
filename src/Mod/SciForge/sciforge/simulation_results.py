@@ -75,6 +75,7 @@ class ResultData:
             self.diagonal = 0.0
         self._values = {}
         self._straight = None
+        self._boxes = None
 
     def values(self, key):
         """numpy array of a result at every node (NaN where there is none)."""
@@ -147,6 +148,21 @@ class ResultData:
         if self._straight is None:
             self._straight = core.straight_tets(self.tets)
         return self._straight
+
+    def locate(self, point):
+        """Where a point of the unloaded part lies in the mesh: (straight tetrahedron row,
+        barycentric weights) or None outside it (Point Probes)."""
+        if self._boxes is None:
+            self._boxes = core.tet_boxes(self.points, self.straight())
+        return core.locate(self.points, self.straight(), point, self._boxes)
+
+    def at(self, where, key):
+        """A result's value at locate()'s place (NaN where it has none)."""
+        return float(core.at_point(self.values(key), self.straight(), where))
+
+    def moved(self, where):
+        """The displacement (x, y, z) at locate()'s place."""
+        return core.at_point(self.displacement, self.straight(), where)
 
 
 def stamp(study):

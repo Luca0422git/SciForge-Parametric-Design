@@ -85,6 +85,7 @@ class ResultDisplay:
         coordinates (the deformed surface nodes)
         faces: shape hints, material, colour map texture, texture coordinates, faces
         mesh lines (Show Mesh), outline (sharp) edges
+        iso-surface (where the result shown has one value: one colour)
       cut face (the slice: coloured where the plane cuts the mesh)
       ghost (the undeformed model, see-through)
     """
@@ -162,6 +163,31 @@ class ResultDisplay:
         self.outline_switch.addChild(self._lines(surf["features"], (0.12, 0.13, 0.15), 1.4))
         self.outline_switch.whichChild = coin.SO_SWITCH_ALL
         part.addChild(self.outline_switch)
+
+        # the iso-surface: one colour (the legend's at its value), lit from both sides, cut by
+        # the slice plane's clip like the result
+        self.iso_switch = coin.SoSwitch()
+        iso = coin.SoSeparator()
+        iso_hints = coin.SoShapeHints()
+        iso_hints.vertexOrdering = coin.SoShapeHints.COUNTERCLOCKWISE
+        iso_hints.shapeType = coin.SoShapeHints.UNKNOWN_SHAPE_TYPE
+        iso_hints.creaseAngle = 0.8
+        iso.addChild(iso_hints)
+        self.iso_material = coin.SoMaterial()
+        self.iso_material.diffuseColor.setValue(0.9, 0.5, 0.2)
+        self.iso_material.ambientColor.setValue(0.4, 0.4, 0.4)
+        self.iso_material.specularColor.setValue(0.15, 0.15, 0.15)
+        self.iso_material.shininess.setValue(0.3)
+        iso.addChild(self.iso_material)
+        self.iso_coords = coin.SoCoordinate3()
+        iso.addChild(self.iso_coords)
+        self.iso_faces = coin.SoFaceSet()
+        iso.addChild(self.iso_faces)
+        self.iso_switch.addChild(iso)
+        self.iso_switch.whichChild = coin.SO_SWITCH_NONE
+        part.addChild(self.iso_switch)
+        self.iso_points = np.zeros((0, 3))  # (3 per triangle) as drawn
+        self.iso_rest = np.zeros((0, 3))  # the same points on the unloaded part
         self.root.addChild(self.part_switch)
 
         # the slice plane's cut face: its own coordinates, coloured with the same map
@@ -196,6 +222,7 @@ class ResultDisplay:
         self.cap_switch.whichChild = coin.SO_SWITCH_NONE
         self.root.addChild(self.cap_switch)
         self.cap_points = np.zeros((0, 3))
+        self.cap_rest = np.zeros((0, 3))
         self.cap_values = np.zeros(0)
         self.cap_positions = np.zeros(0)
 
@@ -337,20 +364,25 @@ class ResultDisplay:
     def clipped(self):
         return self.clip_switch.whichChild.getValue() != self.coin.SO_SWITCH_NONE
 
-    def set_cap(self, triangles, values, positions, normal=None):
-        """The slice's cut face: triangles [(p0, p1, p2)], their values and colour map
-        positions (flat lists, three per triangle), `normal` the plane's (the triangles face
-        against it). Empty hides it."""
+    def set_cap(self, triangles, values, positions, normal=None, rest=None):
+        """The slice's cut face: triangles ((k, 3, 3) or [(p0, p1, p2)]), their values and
+        colour map positions (flat, three per triangle), `normal` the plane's (the triangles
+        face against it), `rest` the same points on the unloaded part (Point Probes). Empty
+        hides it."""
         np = _np()
         coin = self.coin
         if not len(triangles):
             self.cap_switch.whichChild = coin.SO_SWITCH_NONE
             self.cap_points = np.zeros((0, 3))
+            self.cap_rest = np.zeros((0, 3))
             self.cap_values = np.zeros(0)
             self.cap_positions = np.zeros(0)
             self.cap_faces.numVertices.setNum(0)
             return
         pts = np.asarray(triangles, dtype=float).reshape((-1, 3))
+        self.cap_rest = (
+            np.asarray(rest, dtype=float).reshape((-1, 3)) if rest is not None else pts.copy()
+        )
         if normal is not None:
             n = App.Vector(*normal)
             if n.Length > 1e-12:
@@ -370,6 +402,36 @@ class ResultDisplay:
 
     def cap_shown(self):
         return self.cap_switch.whichChild.getValue() != self.coin.SO_SWITCH_NONE
+
+    def set_iso(self, triangles, colour=None, rest=None):
+        """The iso-surface: triangles (k, 3, 3) as drawn, its colour, `rest` the same points on
+        the unloaded part (Point Probes). Empty hides it."""
+        np = _np()
+        coin = self.coin
+        tris = np.asarray(triangles, dtype=float).reshape((-1, 3))
+        if not len(tris):
+            self.iso_switch.whichChild = coin.SO_SWITCH_NONE
+            self.iso_points = np.zeros((0, 3))
+            self.iso_rest = np.zeros((0, 3))
+            self.iso_faces.numVertices.setNum(0)
+            return
+        self.iso_points = tris
+        self.iso_rest = (
+            np.asarray(rest, dtype=float).reshape((-1, 3)) if rest is not None else tris.copy()
+        )
+        if colour is not None:
+            self.iso_material.diffuseColor.setValue(*[float(c) for c in colour])
+        _floats(self.iso_coords.point, tris, 3)
+        count = len(tris) // 3
+        self.iso_faces.numVertices.setNum(count)
+        self.iso_faces.numVertices.setValues(0, count, [3] * count)
+        self.iso_switch.whichChild = coin.SO_SWITCH_ALL
+
+    def iso_shown(self):
+        return self.iso_switch.whichChild.getValue() != self.coin.SO_SWITCH_NONE
+
+    def iso_colour(self):
+        return tuple(float(c) for c in self.iso_material.diffuseColor[0].getValue())
 
     def colour_of(self, position):
         """The colour a colour map position is drawn in (what the texture holds there)."""
@@ -488,8 +550,9 @@ def ray_coin(view, x, y):
 class TagLayer(QtWidgets.QWidget):
     """Tags floating over the 3D view (not clickable: clicks reach the view under them): each
     a dot at a 3D point, a short line and a box with its text, like Fusion's min / max tags.
-    tags: [{"point": (x, y, z), "text": str, "kind": "min" | "max" | "probe", "colour":
-    (r, g, b)}]; `placed` holds where each tag was last drawn (the scenarios read it)."""
+    tags: [{"point": (x, y, z), "text": str, "kind": "min" | "max" | "probe" | "point" (a Point
+    Probe: a diamond), "colour": (r, g, b)}]; `placed` holds where each tag was last drawn (the
+    scenarios read it)."""
 
     def __init__(self, gl, view):
         super().__init__(overlay_parent(gl))
@@ -551,7 +614,7 @@ class TagLayer(QtWidgets.QWidget):
             *[min(max(c, 0.0), 1.0) for c in tag.get("colour", (1, 1, 1))]
         )
         dx, dy = (16, -26) if kind != "min" else (16, 18)
-        if kind == "probe":
+        if kind in ("probe", "point"):
             dx, dy = (14, -20)
         box_w = metrics.horizontalAdvance(text) + 14
         box_h = metrics.height() + 6
@@ -560,7 +623,20 @@ class TagLayer(QtWidgets.QWidget):
         painter.setPen(QtGui.QPen(QtGui.QColor(20, 22, 26), 1.6))
         painter.drawLine(pos, QtCore.QPointF(rect.left(), rect.center().y()))
         painter.setBrush(QtGui.QBrush(colour))
-        painter.drawEllipse(pos, 4.5, 4.5)
+        if kind == "point":  # a Point Probe (inside the part): a diamond
+            painter.setPen(QtGui.QPen(QtGui.QColor(245, 245, 245), 1.4))
+            painter.drawPolygon(
+                QtGui.QPolygonF(
+                    [
+                        QtCore.QPointF(pos.x(), pos.y() - 6),
+                        QtCore.QPointF(pos.x() + 6, pos.y()),
+                        QtCore.QPointF(pos.x(), pos.y() + 6),
+                        QtCore.QPointF(pos.x() - 6, pos.y()),
+                    ]
+                )
+            )
+        else:
+            painter.drawEllipse(pos, 4.5, 4.5)
         if kind == "probe":
             painter.setPen(QtGui.QPen(QtGui.QColor(245, 245, 245), 1.2))
             painter.drawLine(

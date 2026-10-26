@@ -2,6 +2,7 @@
 """The RESULTS tab's rules (sciforge/simulation_results_core.py). Runs without FreeCAD; the mesh
 tests need numpy (FreeCAD and the CI's Python have it)."""
 
+import math
 import os
 import sys
 import unittest
@@ -301,7 +302,9 @@ class MeshTests(unittest.TestCase):
     def test_cut_cube(self):
         pts, tets = _cube()
         values = [p[0] for p in pts]  # value = x
-        tris, vals = core.cut(pts, values, core.straight_tets(tets), (0.5, 0.5, 0.5), (1, 0, 0))
+        tris, vals, _rest = core.cut(
+            pts, values, core.straight_tets(tets), (0.5, 0.5, 0.5), (1, 0, 0)
+        )
         import numpy as np
 
         area = 0.0
@@ -315,6 +318,99 @@ class MeshTests(unittest.TestCase):
         for v in vals:
             for x in v:
                 self.assertAlmostEqual(x, 0.5)
+
+    def _area(self, tris):
+        import numpy as np
+
+        tris = np.asarray(tris, dtype=float)
+        if not len(tris):
+            return 0.0
+        cross = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+        return float(0.5 * np.linalg.norm(cross, axis=1).sum())
+
+    def test_cut_carries_the_rest_places(self):
+        import numpy as np
+
+        pts, tets = _cube()
+        moved = np.asarray(pts, dtype=float) + (0.0, 0.0, 2.0)  # the part drawn moved up
+        tris, _vals, rest = core.cut(
+            moved, [0.0] * 8, core.straight_tets(tets), (0.25, 0, 0), (1, 0, 0), carry=pts
+        )
+        self.assertEqual(rest.shape, tris.shape)
+        self.assertTrue(np.allclose(rest[:, :, 2] + 2.0, tris[:, :, 2]))
+        self.assertTrue(np.allclose(rest[:, :, 0], 0.25))
+        self.assertAlmostEqual(self._area(tris), 1.0)
+
+    def test_iso_surface(self):
+        import numpy as np
+
+        pts, tets = _cube()
+        values = [p[0] + p[1] for p in pts]  # x + y: the iso-surface at 1 is a diagonal plane
+        tris, vals, _rest = core.iso_surface(pts, values, core.straight_tets(tets), 1.0)
+        self.assertAlmostEqual(self._area(tris), math.sqrt(2.0))
+        self.assertTrue(np.allclose(tris[:, :, 0] + tris[:, :, 1], 1.0))
+        self.assertTrue(np.allclose(vals, 1.0))
+        normals = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
+        big = np.linalg.norm(normals, axis=1) > 1e-12
+        # every triangle faces the lower values
+        self.assertTrue((normals[big] @ np.array([1.0, 1.0, 0.0]) < 0).all())
+        none, _v, _r = core.iso_surface(pts, values, core.straight_tets(tets), 5.0)
+        self.assertEqual(len(none), 0)
+
+    def test_iso_surface_skips_missing_values(self):
+        import numpy as np
+
+        pts, tets = _cube()
+        values = [p[0] for p in pts]
+        values[6] = float("nan")  # (1, 1, 1): no value (a body without strength)
+        tris, vals, _rest = core.iso_surface(pts, values, core.straight_tets(tets), 0.5)
+        self.assertGreater(len(tris), 0)
+        self.assertFalse(np.isnan(tris).any())
+        self.assertFalse(np.isnan(vals).any())
+        self.assertLess(self._area(tris), 1.0)  # the tetrahedra at (1, 1, 1) are left out
+
+    def test_quadratic_iso_matches_linear_field(self):
+        import numpy as np
+
+        corners = [(0, 0, 0), (2, 0, 0), (0, 2, 0), (0, 0, 2)]
+        pts = list(corners)
+        for a, b in ((0, 1), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3)):
+            pts.append(tuple((corners[a][k] + corners[b][k]) / 2.0 for k in range(3)))
+        values = [p[2] for p in pts]  # z
+        tris, _vals, _rest = core.iso_surface(pts, values, core.straight_tets([range(10)]), 1.0)
+        # the cut at z = 1 of the tetrahedron: a right triangle with legs 1
+        self.assertAlmostEqual(self._area(tris), 0.5)
+        self.assertTrue(np.allclose(tris[:, :, 2], 1.0))
+
+    def test_locate(self):
+        import numpy as np
+
+        pts, tets = _cube()
+        straight = core.straight_tets(tets)
+        field = [p[0] + 2 * p[1] + 3 * p[2] for p in pts]
+        for point in ((0.3, 0.6, 0.2), (0.9, 0.1, 0.95), (0.5, 0.5, 0.5)):
+            where = core.locate(pts, straight, point)
+            self.assertIsNotNone(where)
+            row, weights = where
+            self.assertAlmostEqual(float(np.sum(weights)), 1.0)
+            self.assertTrue((weights >= -1e-9).all())
+            expect = point[0] + 2 * point[1] + 3 * point[2]
+            self.assertAlmostEqual(float(core.at_point(field, straight, where)), expect)
+        # on the surface and at a corner: found; outside: None
+        self.assertIsNotNone(core.locate(pts, straight, (1.0, 0.4, 0.4)))
+        self.assertIsNotNone(core.locate(pts, straight, (1.0, 1.0, 1.0)))
+        self.assertIsNone(core.locate(pts, straight, (1.2, 0.5, 0.5)))
+        self.assertIsNone(core.locate(pts, straight, (0.5, 0.5, -0.01)))
+        # a displacement per point: a vector back
+        moves = [(p[0], 0.0, -p[2]) for p in pts]
+        where = core.locate(pts, straight, (0.25, 0.5, 0.75))
+        moved = core.at_point(moves, straight, where)
+        self.assertTrue(np.allclose(moved, (0.25, 0.0, -0.75)))
+        boxes = core.tet_boxes(pts, straight)
+        self.assertEqual(
+            core.locate(pts, straight, (0.3, 0.6, 0.2), boxes)[0],
+            core.locate(pts, straight, (0.3, 0.6, 0.2))[0],
+        )
 
     def test_split10(self):
         import numpy as np
@@ -331,6 +427,70 @@ class MeshTests(unittest.TestCase):
             a, b, c, d = p[t]
             total += abs(np.dot(b - a, np.cross(c - a, d - a))) / 6.0
         self.assertAlmostEqual(total, 1.0 / 6.0)
+
+
+class SolverDataTests(unittest.TestCase):
+    SUMMARY = {
+        "solved": "2026-10-26 20:15:00",
+        "seconds": 3.21,
+        "timings": {"model": 0.1, "mesh": 1.2, "solve": 1.5, "results": 0.2, "odd_step": 0.01},
+        "mesh": {
+            "nodes": 12345,
+            "elements": 6789,
+            "size": 2.5,
+            "order": "parabolic",
+            "smallest": 0.8,
+            "largest": 3.1,
+            "worst_aspect": 4.25,
+            "over_limit": 0,
+            "mesher": "gmsh",
+        },
+        "safety_basis": "yield",
+        "adaptive": {
+            "result": "von_mises",
+            "passes": [
+                {"nodes": 5000, "elements": 2500, "value": 120.0},
+                {"nodes": 12345, "elements": 6789, "value": 131.5},
+            ],
+        },
+        "notes": ["Netgen meshed this part (Gmsh could not)."],
+    }
+
+    def test_rows(self):
+        rows = dict(core.solver_rows(self.SUMMARY))
+        self.assertEqual(
+            list(dict(core.solver_rows(self.SUMMARY))),
+            ["Solve", "Mesh", "Adaptive mesh refinement", "Messages"],
+        )
+        solve = dict(rows["Solve"])
+        self.assertEqual(solve["Time taken"], "3.21 s")
+        self.assertEqual(solve["    Meshing"], "1.2 s")
+        self.assertEqual(solve["    Odd step"], "0.01 s")
+        self.assertEqual(solve["Safety factor from"], "Yield strength")
+        mesh = dict(rows["Mesh"])
+        self.assertEqual(mesh["Nodes"], "12,345")
+        self.assertEqual(mesh["Degrees of freedom"], "37,035")
+        self.assertEqual(mesh["Element order"], "Parabolic (10-node tetrahedra)")
+        self.assertEqual(mesh["Smallest element edge"], "0.8 mm")
+        self.assertEqual(mesh["Mesher"], "Gmsh")
+        passes = dict(rows["Adaptive mesh refinement"])
+        self.assertIn("131.5 MPa", passes["Solve 2"])
+        self.assertIn("12,345 nodes", passes["Solve 2"])
+        self.assertEqual(rows["Messages"], [("", "Netgen meshed this part (Gmsh could not).")])
+        text = core.solver_text(core.solver_rows(self.SUMMARY))
+        self.assertIn("  Nodes: 12,345", text)
+        self.assertIn("  Netgen meshed this part (Gmsh could not).", text)
+
+    def test_mesh_statistics_fill_in(self):
+        rows = dict(core.solver_rows({"solved": "x"}, {"nodes": 10, "elements": 2}))
+        self.assertEqual(dict(rows["Mesh"])["Elements"], "2")
+        self.assertEqual(core.solver_rows({}), [])
+
+    def test_coordinates(self):
+        self.assertEqual(core.fmt_mm(12.5), "12.5")
+        self.assertEqual(core.fmt_mm(-0.0001), "0")
+        self.assertEqual(core.fmt_mm(1234.56789), "1234.568")
+        self.assertEqual(core.fmt_mm(None), "-")
 
 
 class ReportTests(unittest.TestCase):
