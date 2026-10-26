@@ -35,7 +35,7 @@ Each builder writes only its own sections (beta3-common.md).
 | Deviation | sample points of the unmatched faces (at most 48 faces, spread from the biggest to the smallest, the mean scaled to all of them), their exact distance to the other solid (the faces' boxes first); matched faces count 0; max and an area-weighted mean. |
 | Done and verdict | `done`: match >= 0.999, every face of the original matched and no face of the rebuild left over (an extra 1 mm hole hides inside the 0.1 % volume tolerance; the faces catch it: stricter than the contract's comment, which says the first two). The verdict: "Match 0.9497 (1 is identical); 6 of 14 faces of the original matched. Next: 4 round holes about 6 mm across, 10 deep (along Z) are not cut yet, at (10, 10), (50, 10), (10, 30), (50, 30). 4 rounded edges of radius about 3 are still sharp in the rebuild (the fillet call is ready in groups[1].fix). Fix that, then compare_to_reference again." |
 | Finish | `finish(ref, target=None, keep_reference=False, keep_original=False)`: the rebuilt body takes the original's name, component and place; the original is deleted (an imported body with its imported shape; a mesh body with its steps) or kept hidden as `<name> (original)`; the reference removed or kept hidden (not drawn). One undo step. |
-| Speed | measured in this sandbox (4 CPUs shared by six builders, load about 4.5): the parts of the end-to-end test 0.01 to 0.13 s when done (the same solid: no boolean), the meshed plate (150 faces) 1.6 to 2.1 s; a 298-face plate with 96 chamfered holes: the same solid 0.3 to 0.6 s, the base plate only (96 holes left) 1.5 s, 10 holes left 2.2 s, every chamfer and 4 holes left (188 regions) 3.7 s. OpenCASCADE's General Fuse alone takes 0.5 to 2.4 s of that. What compare measures of the reference is kept between compares (the reference never changes). On a PC without other jobs it should be about half. The 2 s target is met for typical parts and for a 300-face part with a few regions left, not for one with 200 regions left. |
+| Speed | measured in this sandbox (4 CPUs shared by six builders, load about 4.5): the parts of the end-to-end test 0.01 to 0.13 s when done (the same solid: no boolean), the meshed plate (150 faces) 1.6 to 2.1 s; a 298-face plate with 96 chamfered holes: the same solid 0.3 to 0.6 s, the base plate only (96 holes left) 1.5 s, 10 holes left 2.2 s, every chamfer and 4 holes left (188 regions) 3.7 s. OpenCASCADE's General Fuse alone takes 0.5 to 2.4 s of that. What compare measures of the reference is kept between compares (the reference never changes). On a PC without other jobs it should be about half. The 2 s target is met for typical parts, and on the 300-face plate for the same solid and the base plate, not with 10 or 188 regions left at this load. |
 
 ## AI tools and documentation
 
@@ -121,9 +121,10 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
 - `compare` on a 298-face plate (96 chamfered holes), in this sandbox shared by six builders
   (load about 4.5): the same solid 0.3 to 0.6 s (no boolean), the base plate only (96 holes
   left) 1.5 s, 10 holes left 2.2 s, every chamfer and 4 holes left (188 regions) 3.7 s.
-  OpenCASCADE's General Fuse alone is 0.5 to 2.4 s of that (more when the two parts share
-  many faces); the brief's 2 s holds for the same solid and a few regions, not for 200
-  regions at this load.
+  OpenCASCADE's General Fuse alone is 0.5 to 2.4 s of that (the most when the two parts
+  share most of their faces); the brief's 2 s holds for the same solid and for the base
+  plate, not with 10 or 188 regions left at this load (about half on a PC without other
+  jobs).
 - A region is said in words for holes, bosses, rounded edges, chamfers, blocks and layers;
   anything else is "a piece of material about a x b x c". Ready calls exist for holes and
   fillets / chamfers of equal distances only (a pocket or a boss is described, not built).

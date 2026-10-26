@@ -28,7 +28,8 @@ and documentation", "The command a person uses", the at-tools tests and known ga
   mesh's tolerance); when every face of each part lies on a face of the other and the
   volumes agree it is the same solid (no boolean); else one General Fuse, each piece put
   inside / outside each solid from the orientation of its faces (a point test only as a
-  fallback), the pieces must add up to both volumes (else fuzzy, else sampled); regions with
+  fallback), the pieces must add up to both volumes (else fuzzy, else the volumes measured
+  along 4096 rays through both parts' triangles, said so); regions with
   "fix" calls (a Single Hole on the right face, a fillet / chamfer of exactly the rebuild's
   sharp edges, grouped); deviation; `done`; the verdict ("Match 0.9497 ...; Next: 4 round
   holes about 6 mm across, 10 deep (along Z) are not cut yet, at (10, 10), (50, 10), (10,
@@ -108,7 +109,7 @@ at-recognize's (0.06 to 6.5 s).
   `CHAT_ORDER`), `ai/executor.py` (`state()["reference"]`), `ai/tool_docs.py`
   (`NEED_WORDS["reference"]`), `browser_core.py` (2 menu entries), `browser_ui.py` (1
   handler), `marking_menu.py` (`CONTEXT_ITEMS`), `ribbon_config.py` (UTILITIES > AI: a
-  separator and 3 items), `SciForgeTests/headless/runner.py` (5 lines at the end of main),
+  separator and 3 items), `SciForgeTests/headless/runner.py` (4 lines at the end of main),
   `SciForgeTests/docs/tool_examples.py` (2 setups, 4 examples), `tools/sciforge/run_tests.sh`
   (the rebuild e2e block; merged with at-recognize's `run_recognize`).
   `docs/sciforge/parity-checklist.md` regenerated (`tools/sciforge/parity.py`): regenerate
@@ -125,6 +126,12 @@ at-recognize's (0.06 to 6.5 s).
 
 In the parity doc's "Known gaps (at-tools)": no Fusion **Find Features** (in-place recognition
 in direct modeling); compare is 2 to 4 s on a 300-face part with many regions left (the
-General Fuse alone is up to 2.4 s there at this load);
-ready calls only for holes and fillets / chamfers; a mesh's "done" is within the mesh's
-tolerance.
+General Fuse alone is up to 2.4 s there at this load); ready calls only for holes and fillets
+/ chamfers; a mesh's "done" is within the mesh's tolerance; when OpenCASCADE cannot split the
+two parts, only the volumes are given (about 1 %), not the regions.
+
+Seen, not mine: `ribbon_sweep` with `SWEEP_TABS=utilities` (not a default run) fails on the
+pop-ups of Export, Export Everything, Scripts and Add-Ins, Add-on Manager and Add an AI App
+(windows those commands open on purpose) and then hangs at FreeCAD Tools, whose menu
+(`QMenu.exec_`) the harness's `close_popups` does not close (it closes `QDialog`s only). The
+three new UTILITIES > AI items passed it (no pop-up).
