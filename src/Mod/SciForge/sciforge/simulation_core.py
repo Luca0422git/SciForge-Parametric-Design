@@ -993,6 +993,319 @@ def reactions_from_dat(text):
     return out
 
 
+# -- reactions: the loads that act right at the held nodes -----------------------------------------
+# CalculiX's reaction output (RF) is the whole external force at a node: the support's reaction
+# plus any load that acts right at that node. A held face's nodes also carry a share of the
+# loads next to them: the weight of the elements that touch the face (gravity), the pressure on
+# a face that meets it along an edge, a force on such a face. RF leaves those shares out of the
+# reaction, so the reaction CalculiX prints was short: a bracket held at its 6 mm wall plate
+# carried 7.4 % less than its weight, a clamped plate under pressure 9 % less than p A. SciForge
+# adds them back: reaction = RF - (the loads at the node), worked out from the solver input the
+# way CalculiX applies them (consistent nodal loads of each element), node by node, each node's
+# reaction shared among the constraints that hold it (split_reactions).
+
+# the faces of CalculiX's tetrahedra (its manual: C3D4 and C3D10): corners, then the mid-side
+# nodes between them (positions in the element, from 1), and the corner across from the face
+TET_FACES = {
+    1: ((1, 2, 3), (5, 6, 7), 4),
+    2: ((1, 4, 2), (8, 9, 5), 3),
+    3: ((2, 4, 3), (9, 10, 6), 1),
+    4: ((3, 4, 1), (10, 8, 7), 2),
+}
+_R15 = math.sqrt(15.0)
+TRI_POINTS = (  # a 7-point rule on a triangle (exact to degree 5): (xi, eta, weight)
+    (1.0 / 3.0, 1.0 / 3.0, 9.0 / 40.0),
+    ((6 - _R15) / 21, (6 - _R15) / 21, (155 - _R15) / 1200),
+    ((9 + 2 * _R15) / 21, (6 - _R15) / 21, (155 - _R15) / 1200),
+    ((6 - _R15) / 21, (9 + 2 * _R15) / 21, (155 - _R15) / 1200),
+    ((6 + _R15) / 21, (6 + _R15) / 21, (155 + _R15) / 1200),
+    ((9 - 2 * _R15) / 21, (6 + _R15) / 21, (155 + _R15) / 1200),
+    ((6 + _R15) / 21, (9 - 2 * _R15) / 21, (155 + _R15) / 1200),
+)
+
+
+def tet10_shape(point):
+    """The ten shape functions of a parabolic tetrahedron at `point` (L1..L4), in CalculiX's
+    node order (corners, then the mid-side nodes of TET10_EDGES)."""
+    out = [l * (2.0 * l - 1.0) for l in point]
+    out += [4.0 * point[a] * point[b] for a, b in TET10_EDGES]
+    return out
+
+
+def tet_volume_shares(xyz):
+    """The integral of each shape function over a tetrahedron (mm3): what a body force per
+    volume puts on each node (consistent nodal loads). xyz: the 4 (C3D4) or 10 (C3D10) nodes'
+    coordinates; parabolic elements with CalculiX's 4-point rule (straight ones: the corners
+    -V/20, the mid-side nodes V/5)."""
+    if len(xyz) == 4:
+        a, b, c, d = xyz
+        volume = abs(_dot(_sub(b, a), _cross(_sub(c, a), _sub(d, a)))) / 6.0
+        return [volume / 4.0] * 4
+    out = [0.0] * 10
+    for point in TET10_POINTS[:4]:
+        grads = tet10_gradients(point)
+        jac = [
+            [sum(xyz[i][r] * grads[i][c] for i in range(10)) for c in range(3)] for r in range(3)
+        ]
+        det = (
+            jac[0][0] * (jac[1][1] * jac[2][2] - jac[1][2] * jac[2][1])
+            - jac[0][1] * (jac[1][0] * jac[2][2] - jac[1][2] * jac[2][0])
+            + jac[0][2] * (jac[1][0] * jac[2][1] - jac[1][1] * jac[2][0])
+        )
+        for i, n in enumerate(tet10_shape(point)):
+            out[i] += abs(det) / 24.0 * n
+    return out
+
+
+def tet_face_shares(xyz, face):
+    """[(node position in the element, area vector (mm2) pointing into the element)] of face
+    `face` (1..4) of a tetrahedron: a pressure p on that face puts p x the vector on the node.
+    xyz: the element's 4 or 10 nodes' coordinates."""
+    corners, mids, across = TET_FACES[face]
+    pts = [xyz[i - 1] for i in corners]
+    inward = _sub(xyz[across - 1], [sum(p[k] for p in pts) / 3.0 for k in range(3)])
+    if len(xyz) == 4:
+        area = _cross(_sub(pts[1], pts[0]), _sub(pts[2], pts[0]))
+        sign = 1.0 if _dot(area, inward) >= 0 else -1.0
+        return [(i, [sign * c / 6.0 for c in area]) for i in corners]
+    nodes = list(corners) + list(mids)
+    x = [xyz[i - 1] for i in nodes]
+    shares = [[0.0, 0.0, 0.0] for _ in nodes]
+    total = [0.0, 0.0, 0.0]
+    for xi, eta, weight in TRI_POINTS:
+        l1, l2, l3 = 1.0 - xi - eta, xi, eta
+        n = [
+            l1 * (2 * l1 - 1),
+            l2 * (2 * l2 - 1),
+            l3 * (2 * l3 - 1),
+            4 * l1 * l2,
+            4 * l2 * l3,
+            4 * l3 * l1,
+        ]
+        d_xi = [-(4 * l1 - 1), 4 * l2 - 1, 0.0, 4 * (l1 - l2), 4 * l3, -4 * l3]
+        d_eta = [-(4 * l1 - 1), 0.0, 4 * l3 - 1, -4 * l2, 4 * l2, 4 * (l1 - l3)]
+        t_xi = [sum(d_xi[i] * x[i][k] for i in range(6)) for k in range(3)]
+        t_eta = [sum(d_eta[i] * x[i][k] for i in range(6)) for k in range(3)]
+        da = [c * weight / 2.0 for c in _cross(t_xi, t_eta)]
+        for i in range(6):
+            for k in range(3):
+                shares[i][k] += n[i] * da[k]
+        total = [total[k] + da[k] for k in range(3)]
+    sign = 1.0 if _dot(total, inward) >= 0 else -1.0
+    return [(i, [sign * c for c in share]) for i, share in zip(nodes, shares)]
+
+
+def _keyword(line):
+    """(keyword in upper case, {PARAMETER: value}) of a CalculiX keyword line."""
+    parts = [p.strip() for p in line[1:].split(",")]
+    params = {}
+    for p in parts[1:]:
+        if "=" in p:
+            key, value = p.split("=", 1)
+            params[key.strip().upper()] = value.strip()
+        elif p:
+            params[p.upper()] = ""
+    return parts[0].upper(), params
+
+
+def inp_loads_at(text, wanted):
+    """{node: [fx, fy, fz]} of the loads of a CalculiX input (`text`) that act right at the
+    nodes `wanted`: *CLOAD lines, pressures on element faces (*DLOAD Pn) and gravity (*DLOAD
+    GRAV, each element with its section's *DENSITY), as consistent nodal loads of the C3D4 /
+    C3D10 elements, the way CalculiX applies them."""
+    wanted = set(wanted)
+    nodes, elements, elsets = {}, {}, {}
+    density, sections = {}, []
+    cloads, pressures, gravity = [], [], []
+    keyword, params, pending, material = None, {}, [], None
+    per_element = {"C3D4": 4, "C3D10": 10}
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("**"):
+            continue
+        if line.startswith("*"):
+            keyword, params = _keyword(line)
+            pending = []
+            if keyword == "MATERIAL":
+                material = params.get("NAME", "").upper()
+            elif keyword == "SOLID SECTION":
+                sections.append(
+                    (params.get("ELSET", "").upper(), params.get("MATERIAL", "").upper())
+                )
+            continue
+        fields = [f.strip() for f in line.split(",")]
+        if keyword == "NODE":
+            if len(fields) >= 4:
+                nodes[int(fields[0])] = (float(fields[1]), float(fields[2]), float(fields[3]))
+        elif keyword == "ELEMENT":
+            count = per_element.get(params.get("TYPE", "").upper())
+            if count is None:
+                continue
+            pending += [int(f) for f in fields if f]
+            if len(pending) >= count + 1:
+                elements[pending[0]] = tuple(pending[1 : count + 1])
+                if "ELSET" in params:
+                    elsets.setdefault(params["ELSET"].upper(), []).append(pending[0])
+                pending = []
+        elif keyword == "ELSET":
+            elsets.setdefault(params.get("ELSET", "").upper(), []).extend(f for f in fields if f)
+        elif keyword == "DENSITY" and material is not None and material not in density:
+            density[material] = float(fields[0])
+        elif keyword == "CLOAD" and len(fields) >= 3:
+            cloads.append((fields[0], int(fields[1]), float(fields[2])))
+        elif keyword == "DLOAD" and len(fields) >= 3:
+            kind = fields[1].upper()
+            if kind == "GRAV" and len(fields) >= 6:
+                g = float(fields[2])
+                gravity.append((fields[0], [g * float(c) for c in fields[3:6]]))
+            elif kind.startswith("P") and kind[1:].isdigit():
+                pressures.append((int(fields[0]), int(kind[1:]), float(fields[2])))
+
+    def members(name, seen=None):
+        """Element numbers of an element set (sets may name other sets)."""
+        seen = set() if seen is None else seen
+        out = []
+        key = name.upper()
+        if key in seen:
+            return out
+        seen.add(key)
+        for entry in elsets.get(key, []):
+            if isinstance(entry, int) or entry.isdigit():
+                out.append(int(entry))
+            else:
+                out += members(entry, seen)
+        return out
+
+    out = {}
+
+    def add(node, f):
+        acc = out.setdefault(node, [0.0, 0.0, 0.0])
+        for k in range(3):
+            acc[k] += f[k]
+
+    for node, dof, value in cloads:
+        if node.isdigit() and int(node) in wanted and 1 <= dof <= 3:
+            f = [0.0, 0.0, 0.0]
+            f[dof - 1] = value
+            add(int(node), f)
+    for element, face, p in pressures:
+        conn = elements.get(element)
+        if conn is None or face not in TET_FACES:
+            continue
+        on_face = [conn[i - 1] for i in TET_FACES[face][0]]
+        if len(conn) == 10:
+            on_face += [conn[i - 1] for i in TET_FACES[face][1]]
+        if not wanted.intersection(on_face):
+            continue
+        for position, vector in tet_face_shares([nodes[n] for n in conn], face):
+            node = conn[position - 1]
+            if node in wanted:
+                add(node, [p * c for c in vector])
+    if gravity:
+        rho = {}
+        for elset, mat in sections:
+            for element in members(elset):
+                rho[element] = density.get(mat, 0.0)
+        for elset, accel in gravity:
+            ids = [int(elset)] if elset.isdigit() else members(elset)
+            for element in ids:
+                conn = elements.get(element)
+                if conn is None or not wanted.intersection(conn) or not rho.get(element):
+                    continue
+                shares = tet_volume_shares([nodes[n] for n in conn])
+                for node, share in zip(conn, shares):
+                    if node in wanted:
+                        add(node, [rho[element] * share * a for a in accel])
+    return out
+
+
+def node_forces_from_dat(text, set_name):
+    """{node: [fx, fy, fz]} of CalculiX's table "forces (fx,fy,fz) for set NAME and time ..."
+    in a .dat file (*NODE PRINT ... RF without totals; the last one printed)."""
+    out = {}
+    lines = (text or "").splitlines()
+    for i, line in enumerate(lines):
+        low = line.strip().lower()
+        if not low.startswith("forces (fx,fy,fz) for set "):
+            continue
+        if low.split("for set", 1)[1].split("and time")[0].strip() != set_name.lower():
+            continue
+        out = {}
+        for follow in lines[i + 1 :]:
+            parts = follow.split()
+            if not parts:
+                if out:
+                    break
+                continue
+            try:
+                if len(parts) != 4:
+                    raise ValueError
+                out[int(parts[0])] = [float(v) for v in parts[1:]]
+            except ValueError:
+                break
+    return out
+
+
+def split_reactions(forces, applied, held):
+    """{label: [fx, fy, fz]}: the force each constraint takes. forces: CalculiX's RF at the
+    held nodes (the whole external force at a node: the reaction plus the loads acting right
+    there), applied: the loads acting right at them (inp_loads_at), held: {node: [(label,
+    (dx, dy, dz))]}: the directions each constraint holds at that node. A node held by one
+    constraint gives it all its reaction; a node several hold (the edge where a Fixed face
+    meets a Frictionless plane) is shared along the directions each holds (a direction held
+    by two: half each), so no reaction is counted twice (CalculiX's totals over node sets
+    counted a shared node's whole reaction in every set)."""
+    out = {}
+    for node, owners in held.items():
+        f = forces.get(node)
+        if f is None or not owners:
+            continue
+        a = applied.get(node, (0.0, 0.0, 0.0))
+        r = [f[k] - a[k] for k in range(3)]
+        labels = []
+        for label, _d in owners:
+            if label not in labels:
+                labels.append(label)
+        if len(labels) == 1:
+            acc = out.setdefault(labels[0], [0.0, 0.0, 0.0])
+            for k in range(3):
+                acc[k] += r[k]
+            continue
+        # the held directions, parallel ones merged (with every label that holds them)
+        dirs = []
+        for label, d in owners:
+            length = _norm(d)
+            if length <= EPS:
+                continue
+            u = [c / length for c in d]
+            for entry in dirs:
+                if abs(abs(_dot(entry[0], u)) - 1.0) <= 1e-9:
+                    if label not in entry[1]:
+                        entry[1].append(label)
+                    break
+            else:
+                dirs.append((u, [label]))
+        if not dirs:
+            continue
+        alpha = _least_squares([u for u, _l in dirs], r)
+        for (u, owners_of), amount in zip(dirs, alpha):
+            for label in owners_of:
+                acc = out.setdefault(label, [0.0, 0.0, 0.0])
+                for k in range(3):
+                    acc[k] += amount * u[k] / len(owners_of)
+    return out
+
+
+def _least_squares(directions, vector):
+    """Amounts a_j with sum a_j d_j nearest `vector` (the smallest such amounts when the
+    directions are more than three or depend on each other): the pseudo-inverse."""
+    import numpy as np
+
+    d = np.array(directions, dtype=float).T  # 3 x k
+    amounts = np.linalg.lstsq(d, np.array(vector, dtype=float), rcond=1e-10)[0]
+    return [float(v) for v in amounts]
+
+
 # -- held enough? (rigid body modes) ---------------------------------------------------------------
 # A model must be held so that no piece of it can move or turn as a whole (Fusion: "rigid
 # body motion"; its DOF View). CalculiX does not always notice: a part held only along X can

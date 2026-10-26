@@ -2094,6 +2094,7 @@ def _solver_cards(study, model, femmesh, subs, groups=None):
     mesh = _MeshData(femmesh, groups)
     rows, reactions, notes = [], {}, []
     held = set()
+    directions = {}  # node -> [(constraint label, direction it holds there)]
     model_lines, step_lines = [], []
     constraint_items = [i for i in items(study, "constraint") if not i.Suppressed]
     for index, item in enumerate(constraint_items, 1):
@@ -2104,6 +2105,13 @@ def _solver_cards(study, model, femmesh, subs, groups=None):
             )
         rows += item_rows
         held.update(nodes)
+        for node, _source, kind, data in item_rows:
+            d = [0.0, 0.0, 0.0]
+            if kind == "spc":
+                d[data[0]] = 1.0
+            else:
+                d = list(data)
+            directions.setdefault(node, []).append((item.Label, tuple(d)))
         name = "SFR%d" % index
         reactions[name] = item.Label
         model_lines.append("*NSET,NSET=%s" % name)
@@ -2140,10 +2148,20 @@ def _solver_cards(study, model, femmesh, subs, groups=None):
     for name in reactions:
         step_lines.append("*NODE PRINT, NSET=%s, TOTALS=ONLY" % name)
         step_lines.append("RF")
+    if held:
+        # every held node's force too: the reactions are worked out node by node from them
+        # (simulation_core.split_reactions; the totals above are the fallback)
+        model_lines.append("*NSET,NSET=%s" % HELD_SET)
+        ordered = sorted(held)
+        for i in range(0, len(ordered), 16):
+            model_lines.append(",".join(str(n) for n in ordered[i : i + 16]))
+        step_lines.append("*NODE PRINT, NSET=%s" % HELD_SET)
+        step_lines.append("RF")
     return {
         "model": model_lines,
         "step": step_lines,
         "reactions": reactions,
+        "held": directions,
         "notes": notes,
         "equations": len(merged["equations"]),
     }
@@ -2165,6 +2183,28 @@ def _inject(path, cards):
     lines = lines[:step] + head + lines[step:end] + tail + lines[end:]
     with open(path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
+
+
+HELD_SET = "SFRHELD"  # the node set of every held node (its forces are printed node by node)
+
+
+def _held_reactions(inp_path, dat_path, held):
+    """({constraint label: [fx, fy, fz]}, None): the force each constraint takes, from the
+    solver's forces at the held nodes less the loads acting right at them, each node shared
+    among the constraints that hold it (simulation_core.split_reactions); or (None, the reason
+    it could not be worked out). Pure file work, never raises (it runs in the background)."""
+    if not held:
+        return {}, None
+    try:
+        with open(dat_path, encoding="utf-8", errors="replace") as handle:
+            forces = core.node_forces_from_dat(handle.read(), HELD_SET)
+        if not forces:
+            return None, "the solver printed no forces at the held nodes"
+        with open(inp_path, encoding="utf-8", errors="replace") as handle:
+            applied = core.inp_loads_at(handle.read(), set(held))
+        return core.split_reactions(forces, applied, held), None
+    except Exception as exc:
+        return None, str(exc) or exc.__class__.__name__
 
 
 def _straighten_input(path):
@@ -2524,6 +2564,9 @@ class Job:
         self._subs = {}
         self._input = None
         self._reactions = {}
+        self._held = {}  # held node -> [(constraint label, direction it holds)]
+        self._held_forces = None  # constraint label -> its reaction (node by node)
+        self._held_error = None
         self._netgen_out = None
         self._gmsh_problem = None
         self._straight = False  # mesh again with straight-sided elements (bad curved ones)
@@ -2746,6 +2789,10 @@ class Job:
             return
         from feminout import importCcxFrdResults as frd_module
 
+        inp = os.path.join(self.work, self._input + ".inp")
+        dat = os.path.join(self.work, self._input + ".dat")
+        held = dict(self._held)
+
         def work():
             quiet, real = _Quiet(), frd_module.Console
             frd_module.Console = quiet  # (no printing from this thread)
@@ -2753,6 +2800,7 @@ class Job:
                 self._frd_data = frd_module.read_frd_result(frd)
             finally:
                 frd_module.Console = real
+            self._held_forces, self._held_error = _held_reactions(inp, dat, held)
 
         self._background_call(work, "results")
 
@@ -2943,6 +2991,7 @@ class Job:
         cards = _solver_cards(self.study, self._model_shape, self._mesh.FemMesh, self._subs, groups)
         _inject(path, cards)
         self._reactions = cards["reactions"]
+        self._held = cards.get("held", {})
         self.notes += cards["notes"]
         self._input = os.path.splitext(os.path.basename(path))[0]
         self.timings["input"] = self.timings.get("input", 0.0) + time.time() - t
@@ -3055,8 +3104,24 @@ class Job:
         if os.path.isfile(dat):
             with open(dat, encoding="utf-8", errors="replace") as handle:
                 printed = core.reactions_from_dat(handle.read())
+            split = self._held_forces
+            if split is None and self._held_error:
+                warn(
+                    "simulation: the reactions could not be worked out node by node (%s): "
+                    "CalculiX's totals are shown" % self._held_error
+                )
             for name, label in self._reactions.items():
-                if name.upper() in printed:
+                if split is not None:
+                    # node by node: CalculiX's force at a held node is the reaction plus the
+                    # loads acting right there, and a node two constraints hold is shared
+                    fx, fy, fz = split.get(label, (0.0, 0.0, 0.0))
+                    reactions[label] = {
+                        "x": fx,
+                        "y": fy,
+                        "z": fz,
+                        "total": (fx * fx + fy * fy + fz * fz) ** 0.5,
+                    }
+                elif name.upper() in printed:
                     fx, fy, fz = printed[name.upper()]
                     reactions[label] = {
                         "x": fx,

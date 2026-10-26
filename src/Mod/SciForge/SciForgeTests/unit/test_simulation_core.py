@@ -495,6 +495,102 @@ class SolverText(unittest.TestCase):
         self.assertEqual(q["over_limit"], 1)
 
 
+def _tet10(corners):
+    """A straight parabolic tetrahedron: its 4 corners and the middles of its 6 edges."""
+    mids = [[(corners[a][k] + corners[b][k]) / 2.0 for k in range(3)] for a, b in core.TET10_EDGES]
+    return [list(c) for c in corners] + mids
+
+
+TET = [(0.0, 0.0, 0.0), (2.0, 0.0, 0.0), (0.0, 3.0, 0.0), (0.0, 0.0, 4.0)]  # volume 4
+
+
+class HeldNodeLoads(unittest.TestCase):
+    """The loads acting right at held nodes (CalculiX's RF leaves them out of the reaction)."""
+
+    def test_volume_shares(self):
+        shares = core.tet_volume_shares(_tet10(TET))
+        for value in shares[:4]:
+            self.assertAlmostEqual(value, -4.0 / 20.0)
+        for value in shares[4:]:
+            self.assertAlmostEqual(value, 4.0 / 5.0)
+        self.assertAlmostEqual(sum(core.tet_volume_shares(TET)), 4.0)
+
+    def test_face_shares_point_into_the_element(self):
+        # face 1 (nodes 1, 2, 3) lies in z = 0, area 3; node 4 is above it: +Z is inward
+        shares = dict(core.tet_face_shares(_tet10(TET), 1))
+        self.assertEqual(sorted(shares), [1, 2, 3, 5, 6, 7])
+        for node in (1, 2, 3):
+            self.assertAlmostEqual(core._norm(shares[node]), 0.0)
+        for node in (5, 6, 7):
+            self.assertAlmostEqual(shares[node][2], 1.0)  # a third of the area each
+        linear = dict(core.tet_face_shares(TET, 1))
+        self.assertAlmostEqual(sum(v[2] for v in linear.values()), 3.0)
+
+    def test_loads_at_held_nodes_from_an_input(self):
+        corners = ["%d, %r, %r, %r" % (i + 1, *p) for i, p in enumerate(_tet10(TET))]
+        text = "\n".join(
+            ["** a test", "*NODE, NSET=Nall"]
+            + corners
+            + ["*ELEMENT, TYPE=C3D10, ELSET=Evolumes", "7, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10"]
+            + ["*ELSET, ELSET=Eall", "Evolumes", "*ELSET,ELSET=M1Solid", "Eall"]
+            + ["*MATERIAL, NAME=M1", "*ELASTIC", "200000, 0.3", "*DENSITY", "7.9E-09"]
+            + ["*SOLID SECTION, ELSET=M1Solid, MATERIAL=M1", "*STEP", "*STATIC"]
+            + ["*DLOAD", "Eall,GRAV,9806.65,0,0,-1", "*DLOAD", "7,P1,2.0"]
+            + ["*CLOAD", "5,3,-1.5", "1,1,2.0", "*NSET,NSET=SFR1", "5, 6, 7", "*END STEP"]
+        )
+        at = core.inp_loads_at(text, {5, 6, 7, 1})
+        weight = 7.9e-9 * 9806.65 * 4.0
+        # node 5: pressure 2 MPa x 1 mm2 into the element (+Z), the CLOAD, its weight share
+        self.assertAlmostEqual(at[5][2], 2.0 - 1.5 - weight / 5.0)
+        self.assertAlmostEqual(at[6][2], 2.0 - weight / 5.0)
+        self.assertAlmostEqual(at[1][0], 2.0)
+        self.assertAlmostEqual(at[1][2], weight / 20.0)  # (a corner's share is negative)
+        # node 4, the corner above the face: only its weight share (a corner's is negative)
+        self.assertAlmostEqual(core.inp_loads_at(text, {4})[4][2], weight / 20.0)
+
+    def test_forces_from_dat(self):
+        dat = "\n".join(
+            [
+                " forces (fx,fy,fz) for set SFRHELD and time  0.1000000E+01",
+                "",
+                "         5  1.000000E+00 -2.000000E+00  3.000000E-01",
+                "         6  0.000000E+00  0.000000E+00  1.000000E+00",
+                "",
+                " total force (fx,fy,fz) for set SFR1 and time  0.1000000E+01",
+                "",
+                "        1.000000E+00 -2.000000E+00  1.300000E+00",
+            ]
+        )
+        self.assertEqual(
+            core.node_forces_from_dat(dat, "SFRHELD"), {5: [1.0, -2.0, 0.3], 6: [0.0, 0.0, 1.0]}
+        )
+        self.assertEqual(core.node_forces_from_dat(dat, "SFR1"), {})
+
+    def test_reactions_split_node_by_node(self):
+        x, y, z = (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)
+        held = {
+            1: [("Fixed 1", x), ("Fixed 1", y), ("Fixed 1", z)],
+            # an edge node: Fixed 1 holds X, Y and Z, a Frictionless plane (normal Y) holds Y
+            2: [("Fixed 1", x), ("Fixed 1", y), ("Fixed 1", z), ("Plane", y)],
+            3: [("Plane", y)],
+        }
+        forces = {1: [1.0, 2.0, 3.0], 2: [4.0, 6.0, 5.0], 3: [0.5, 7.0, 0.0]}
+        # node 3 is free along X and Z: its force there is the load acting at it
+        applied = {3: [0.5, 1.0, 0.0], 1: [0.0, 0.0, -1.0]}
+        out = core.split_reactions(forces, applied, held)
+        self.assertEqual([round(v, 9) for v in out["Fixed 1"]], [5.0, 5.0, 9.0])
+        self.assertEqual([round(v, 9) for v in out["Plane"]], [0.0, 9.0, 0.0])
+        # nothing counted twice: the two add up to every node's force less its loads
+        total = [out["Fixed 1"][k] + out["Plane"][k] for k in range(3)]
+        self.assertEqual([round(v, 9) for v in total], [5.0, 14.0, 9.0])
+        # a tilted plane and an axis at one node: the force split along each
+        tilted = (0.0, math.sqrt(0.5), math.sqrt(0.5))
+        out = core.split_reactions({7: [0.0, 1.0, 3.0]}, {}, {7: [("A", z), ("B", tilted)]})
+        self.assertAlmostEqual(out["B"][1], 1.0)
+        self.assertAlmostEqual(out["B"][2], 1.0)
+        self.assertAlmostEqual(out["A"][2], 2.0)
+
+
 class ProgramText(unittest.TestCase):
     def test_solver_failures_become_sentences(self):
         self.assertIn("not held enough", core.solver_failure(" *ERROR: zero pivot in node 12"))

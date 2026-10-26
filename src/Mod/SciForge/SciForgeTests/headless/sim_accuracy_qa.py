@@ -1913,6 +1913,64 @@ def force_picks(doc, out):
     )
 
 
+@engine_check("reactions on sliding planes")
+def reactions_on_planes(doc, out):
+    """A quarter of a thick ring (inner 20, outer 40, 10 mm long) on Frictionless planes (its
+    two cuts and both ends), 10 MPa inside: the bore's pressure meets the planes along edges,
+    where a node is held across the plane and free along it. The plane x = 0 holds the X half
+    of the pressure's push, p ri h, the plane y = 0 the Y half, the ends nothing (statics: the
+    resultant of a pressure on a quarter cylinder is p ri h along each cut's normal)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    ri, ro, h, p = 20.0, 40.0, 10.0, 10.0
+    ring = Part.makeCylinder(ro, h, App.Vector(0, 0, 0), App.Vector(0, 0, 1), 90).cut(
+        Part.makeCylinder(ri, h, App.Vector(0, 0, 0), App.Vector(0, 0, 1), 90)
+    )
+    body = sb.make_body(doc, ring, "Ring")
+    study = sim.create_study(doc)
+
+    def plane(pred):
+        return sb.one_face(body, lambda f: f.Surface.TypeId == "Part::GeomPlane" and pred(f))
+
+    x0 = plane(lambda f: sb.near(f.CenterOfMass.x, 0))
+    y0 = plane(lambda f: sb.near(f.CenterOfMass.y, 0))
+    ends = sb.faces(
+        body, lambda f: f.Surface.TypeId == "Part::GeomPlane" and abs(f.normalAt(0, 0).z) > 0.99
+    )
+    sim.add_item(study, "constraint", "frictionless", [(body, x0)], label="Cut X")
+    sim.add_item(study, "constraint", "frictionless", [(body, y0)], label="Cut Y")
+    sim.add_item(study, "constraint", "frictionless", [(body, e) for e in ends], label="Ends")
+    bore = sb.one_face(
+        body, lambda f: f.Surface.TypeId == "Part::GeomCylinder" and sb.near(f.Surface.Radius, ri)
+    )
+    sim.add_item(study, "load", "pressure", [(body, bore)], {"magnitude": p})
+    m = sim.solve(study, timeout=900)
+    push = p * ri * h
+    r = m["reactions"]
+    for label, expected in (
+        ("Cut X", (-push, 0.0, 0.0)),
+        ("Cut Y", (0.0, -push, 0.0)),
+        ("Ends", (0.0, 0.0, 0.0)),
+    ):
+        got = (r[label]["x"], r[label]["y"], r[label]["z"])
+        off = math.sqrt(sum((a - b) ** 2 for a, b in zip(got, expected)))
+        out.append(
+            (
+                "%s holds (%s) N (statics (%s))"
+                % (
+                    label,
+                    ", ".join("%.5g" % v for v in got),
+                    ", ".join("%.5g" % v for v in expected),
+                ),
+                off <= 0.002 * push,
+                r,
+            )
+        )
+
+
 @engine_check("results kept in and dropped from the file")
 def kept_and_dropped(doc, out):
     """A solved study saved and reopened: the results come back with the same numbers; with
