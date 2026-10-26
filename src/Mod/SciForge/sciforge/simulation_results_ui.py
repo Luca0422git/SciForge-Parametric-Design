@@ -368,6 +368,15 @@ class _DocWatch:
             session.drop()
             if ACTIVE["session"] is session:
                 ACTIVE["session"] = None
+        compare = COMPARE["session"]
+        if compare is not None and compare.doc_name == name:
+            COMPARE["session"] = None
+            try:
+                if compare._timer is not None:
+                    compare._timer.stop()
+            except RuntimeError:
+                pass
+            compare.active = False
         results_data.forget(name)
 
 
@@ -478,7 +487,8 @@ class Session:
             self.deactivate()
         self.view = gui.ActiveView
         self.gl = gl
-        self.display.attach(self.view)
+        for view in _views_of(gui, self.view):  # (every pane of Multiple Views)
+            self.display.attach(view)
         self._hide_design()
         if gl is not None:
             self.legend = view_mod.Legend(
@@ -1126,6 +1136,18 @@ def _to_setup():
         sync()
     except Exception as exc:
         warn("results: %s" % exc)
+
+
+def _views_of(gui, active):
+    """The 3D views of a design, the active one first."""
+    views = [active]
+    try:
+        for view in gui.mdiViewsOfType("Gui::View3DInventor"):
+            if view is not active and hasattr(view, "getSceneGraph"):
+                views.append(view)
+    except Exception:
+        pass
+    return views
 
 
 def glyphs_available():

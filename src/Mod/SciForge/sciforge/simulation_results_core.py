@@ -596,8 +596,11 @@ def surface(points, tets):
     owner = np.tile(np.arange(m), 4)  # the tetrahedron of each row
     key = np.sort(faces[:, :3], axis=1)
     n = np.int64(max(int(points.shape[0]), int(tets.max()) + 1))
-    code = (key[:, 0] * n + key[:, 1]) * n + key[:, 2]
-    _uniq, first, counts = np.unique(code, return_index=True, return_counts=True)
+    if n < 2000000:  # one number per face (n cubed stays inside 64 bits)
+        code = (key[:, 0] * n + key[:, 1]) * n + key[:, 2]
+        _uniq, first, counts = np.unique(code, return_index=True, return_counts=True)
+    else:
+        _uniq, first, counts = np.unique(key, axis=0, return_index=True, return_counts=True)
     keep = first[counts == 1]
     keep.sort()
     abc = faces[keep, :3].copy()
