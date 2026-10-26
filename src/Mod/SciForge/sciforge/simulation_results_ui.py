@@ -1455,8 +1455,9 @@ class Session:
                 self._follow_bodies()
             if _picking_dialog_open():
                 # a command that picks faces of the design (a load or constraint edited from the
-                # browser, Local Mesh Control) opened: the model is needed, back to SETUP
-                log("results put away: a setup command needs the model")
+                # browser, Local Mesh Control, Measure) opened: the model is needed, back to
+                # SETUP
+                log("results put away: a command needs the model")
                 QtCore.QTimer.singleShot(0, _to_setup)
         except Exception as exc:
             warn("results: %s" % exc)
@@ -1498,12 +1499,22 @@ def _glyph_module():
 
 
 def _picking_dialog_open():
-    """A task dialog that picks on the design (pickpanel.PickPanel) is open, not one of ours."""
+    """A task dialog that picks on the design (pickpanel.PickPanel, Measure) is open, not one
+    of ours: the design's bodies are needed, and they are hidden on RESULTS."""
     try:
         from . import pickpanel, taskui
 
         current = taskui.current()
-        return current is not None and isinstance(current, pickpanel.PickPanel)
+        if current is None:
+            return False
+        if isinstance(current, pickpanel.PickPanel):
+            return True
+        try:
+            from . import measure_ui
+
+            return isinstance(current, measure_ui.MeasurePanel)
+        except Exception:
+            return False
     except Exception:
         return False
 
@@ -1513,6 +1524,7 @@ def _to_setup():
         ribbon = _ribbon()
         if ribbon is not None and _current_tab(ribbon) == RESULTS_TAB:
             ribbon.select_tab(SETUP_TAB)
+            commands.tell("This command works on the model: the results are put away (RESULTS).")
         sync()
     except Exception as exc:
         warn("results: %s" % exc)

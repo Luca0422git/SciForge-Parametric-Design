@@ -20,6 +20,8 @@ D  Iso-surface again, Remove Iso-surface: gone, the result solid again.
 E  Slice Plane (OK at the middle), Point Probes: a click on the cut face puts a probe on the
    plane, inside the part; Clear All; Close; Slice Plane > Remove Slice.
 F  Nothing in the undo history, the design not modified; Finish Results takes the tags away.
+G  RESULTS again, INSPECT > Measure: it works on the model, so SETUP comes back with the beam
+   shown and Measure open; Esc closes it.
 """
 
 import FreeCAD as App
@@ -595,6 +597,34 @@ def f_finish_check():
     h.check("no results left on the view", not s.result_root_in_view())
 
 
+def g_results():
+    s.click_tab("sim_results")
+
+
+def g_measure():
+    h.check("results shown again", s.session() is not None)
+    s.menu("INSPECT", "Measure")
+
+
+g_measure.wait_ms = 600
+
+
+def g_measure_check():
+    from sciforge import measure_ui, taskui
+
+    h.check("Measure open", isinstance(taskui.current(), measure_ui.MeasurePanel))
+    h.check("SETUP in front: the model is needed", s.current_tab() == "sim_setup", s.current_tab())
+    h.check("the results put away", s.session() is None)
+    h.check("the beam shown", s.design_switches() != -1)
+    s.esc()
+
+
+def g_esc_check():
+    from sciforge import taskui
+
+    h.check("Esc closed Measure", taskui.current() is None)
+
+
 h.run(
     "simres_inspect",
     [
@@ -648,5 +678,9 @@ h.run(
         e_check,
         f_check,
         f_finish_check,
+        g_results,
+        g_measure,
+        g_measure_check,
+        g_esc_check,
     ],
 )
