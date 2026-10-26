@@ -959,3 +959,66 @@ def ideal_points(points, pattern, tol):
         free.remove(q)
         out.append(q)
     return out
+
+
+def shift_item(item, dx, dy):
+    """A create_sketch geometry item moved by (dx, dy)."""
+    out = dict(item)
+    if "circle" in out:
+        cx, cy, r = out["circle"]
+        out["circle"] = [cx + dx, cy + dy, r]
+    elif "rect" in out:
+        x0, y0, x1, y1 = out["rect"]
+        out["rect"] = [x0 + dx, y0 + dy, x1 + dx, y1 + dy]
+    elif "center_rect" in out:
+        cx, cy, w, h = out["center_rect"]
+        out["center_rect"] = [cx + dx, cy + dy, w, h]
+    elif "slot" in out:
+        x1, y1, x2, y2, w = out["slot"]
+        out["slot"] = [x1 + dx, y1 + dy, x2 + dx, y2 + dy, w]
+    elif "polyline" in out:
+        out["polyline"] = [[x + dx, y + dy] for x, y in out["polyline"]]
+    elif "polygon" in out:
+        spec = dict(out["polygon"])
+        spec["center"] = [spec["center"][0] + dx, spec["center"][1] + dy]
+        out["polygon"] = spec
+    elif "segments" in out:
+        segs = []
+        for seg in out["segments"]:
+            if "line" in seg:
+                x0, y0, x1, y1 = seg["line"]
+                segs.append({"line": [x0 + dx, y0 + dy, x1 + dx, y1 + dy]})
+            elif "arc" in seg:
+                cx, cy, r, a0, a1 = seg["arc"]
+                segs.append({"arc": [cx + dx, cy + dy, r, a0, a1]})
+            else:
+                segs.append(dict(seg))
+        out["segments"] = segs
+    return out
+
+
+def same_items(a, b, tol=1e-6):
+    """Two geometry item lists alike (same kinds, numbers within tol), in any order."""
+    if len(a) != len(b):
+        return False
+    left = list(b)
+    for item in a:
+        for k, other in enumerate(left):
+            if _close(item, other, tol):
+                del left[k]
+                break
+        else:
+            return False
+    return True
+
+
+def _close(a, b, tol):
+    if isinstance(a, dict) and isinstance(b, dict):
+        if set(a) - {"name"} != set(b) - {"name"}:
+            return False
+        return all(_close(a[k], b[k], tol) for k in a if k != "name")
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return len(a) == len(b) and all(_close(x, y, tol) for x, y in zip(a, b))
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return abs(a - b) <= tol
+    return a == b

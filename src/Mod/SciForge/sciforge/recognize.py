@@ -1023,7 +1023,7 @@ class _Reader:
             public["steps"] = [plan.step_of(sketch), plan.step_of(rev)]
             return
         first = True
-        for op in _group_ops(base["ops"]):
+        for op in _group_ops(base["ops"], self._pattern_args):
             plane, offset = op["plane"], op["offset"]
             kind = op["kind"]
             where = (" at %s mm" % core.fmt(offset)) if offset else ""
@@ -1071,10 +1071,38 @@ class _Reader:
                     why = "Cut it %s mm into the part." % core.fmt(op["height"])
                 else:
                     why = "Extrude it %s mm, joined to the part: a boss." % core.fmt(op["height"])
+            if op.get("count", 1) > 1 and not op.get("pattern"):
+                why = why[:-1] + " (%d of them, drawn in one sketch)." % op["count"]
             ext = plan.add("extrude", args, why, fids, uses={"profile": plan.step_of(sketch)})
-            steps += [plan.step_of(sketch), plan.step_of(ext)]
+            made = [plan.step_of(sketch), plan.step_of(ext)]
+            if op.get("pattern"):
+                tool, pargs, pattern = op["pattern"]
+                pid = self.new_id()
+                plan.add(
+                    tool,
+                    dict(features=[ext], **pargs),
+                    "Repeat it: %s." % _pattern_words(pattern),
+                    [pid],
+                    uses={"features[0]": plan.step_of(ext)},
+                )
+                made.append(len(plan.steps))
+                features.append(
+                    {
+                        "id": pid,
+                        "kind": "pattern",
+                        "of": fids[0],
+                        "pattern": _public_pattern(pattern, op["plane"], op["offset"]),
+                        "count": op["count"],
+                        "steps": [len(plan.steps)],
+                        "faces": [],
+                        "_faces": [],
+                    }
+                )
+            steps += made
             if fids:
-                features[-1]["steps"] = [plan.step_of(sketch), plan.step_of(ext)]
+                for f in features:
+                    if f["id"] == fids[0]:
+                        f["steps"] = made
             first = False
         public["steps"] = steps
 
@@ -1322,13 +1350,19 @@ class _Reader:
         return out
 
     def plan_chamfers(self, chamfers, removed, plan, features):
+        """One chamfer step per size (two distances: per side, measured as SciForge's Chamfer
+        does: distance 1 on the edge's first face), the edges picked on the part without its
+        chamfers and fillets."""
         if not chamfers:
             return
         accepted = removed["accepted"]
         shape = self._defeature([g for g in accepted if g["kind"] in ("chamfer", "fillet")])
         by_size = {}
         for c in chamfers:
-            by_size.setdefault((c["distance"], c.get("distance2")), []).append(c)
+            d1, d2 = c["distance"], c.get("distance2")
+            if d2 is not None and shape is not None and not self._first_face_is_a(shape, c):
+                d1, d2 = d2, d1
+            by_size.setdefault((d1, d2), []).append(c)
         for (d1, d2), group in sorted(by_size.items(), key=lambda kv: -kv[0][0]):
             edges = self._sharp_edges(shape, group) if shape is not None else []
             sel = self._edge_selector(shape, edges) if edges else None
@@ -1340,26 +1374,27 @@ class _Reader:
                     % ("s" if len(group) > 1 else "", ", ".join(fids))
                 )
             else:
-                args = {"edges": sel, "distance": d1}
-                if d2 is not None:
-                    args["distance2"] = d2
-                plan.add(
-                    "chamfer",
-                    args,
-                    "Chamfer %d edge%s %s mm%s."
-                    % (
-                        len(edges),
-                        "" if len(edges) == 1 else "s",
-                        core.fmt(d1),
-                        (
-                            ""
-                            if d2 is None
-                            else " x %s mm (check which side gets which distance: flip swaps them)"
-                            % core.fmt(d2)
-                        ),
-                    ),
-                    fids,
+                words = "Chamfer %d edge%s %s mm%s." % (
+                    len(edges),
+                    "" if len(edges) == 1 else "s",
+                    core.fmt(d1),
+                    "" if d2 is None else " x %s mm (flip swaps the two sides)" % core.fmt(d2),
                 )
+                if _chain_complete(shape, edges):
+                    args = {"edges": sel, "distance": d1}
+                    if d2 is not None:
+                        args["distance2"] = d2
+                    plan.add("chamfer", args, words, fids)
+                else:
+                    row = {"edges": sel, "distance": d1, "tangent_chain": False}
+                    if d2 is not None:
+                        row.update(chamfer_type="two", distance2=d2)
+                    plan.add(
+                        "fillet_sets",
+                        {"kind": "chamfer", "sets": [row], "tangent_chain": False},
+                        words[:-1] + ", Tangent Chain off (only these edges).",
+                        fids,
+                    )
             for c in group:
                 item = {"id": c["id"], "kind": "chamfer", "distance": c["distance"]}
                 if "distance2" in c:
@@ -1368,6 +1403,21 @@ class _Reader:
                 item["steps"] = [len(plan.steps)] if sel is not None else []
                 item["_faces"] = list(c["_faces"])
                 features.append(item)
+
+    def _first_face_is_a(self, shape, chamfer):
+        """Whether SciForge's Chamfer measures distance 1 (the one on face A) for this
+        chamfer: its sharp edge's first face on `shape` lies on face A."""
+        import Part
+
+        names = self._sharp_edges(shape, [chamfer])
+        if not names:
+            return True
+        try:
+            edge = shape.getElement(names[0])
+            first = shape.ancestorsOfType(edge, Part.Face)[0]
+        except Exception:
+            return True
+        return _same_surface(self.facts[chamfer["_between"][0]].face, first)
 
     def plan_fillets(self, blends, removed, plan, features):
         """One fillet step per radius (biggest first), each with its edges picked on the part
@@ -1392,11 +1442,23 @@ class _Reader:
                     "will be: pick them with query_geometry."
                     % (core.fmt(radius), "s" if len(group) > 1 else "", ", ".join(fids))
                 )
-            else:
+            elif _chain_complete(shape, edges):
                 plan.add(
                     "fillet",
                     {"edges": sel, "radius": radius},
                     "Round %d edge%s with a %s mm fillet."
+                    % (len(edges), "" if len(edges) == 1 else "s", core.fmt(radius)),
+                    fids,
+                )
+            else:  # the edges go on smoothly into edges that stay sharp
+                plan.add(
+                    "fillet_sets",
+                    {
+                        "sets": [{"edges": sel, "radius": radius, "tangent_chain": False}],
+                        "tangent_chain": False,
+                    },
+                    "Round %d edge%s with a %s mm fillet, Tangent Chain off (the edges they "
+                    "run on into stay sharp)."
                     % (len(edges), "" if len(edges) == 1 else "s", core.fmt(radius)),
                     fids,
                 )
@@ -1538,6 +1600,36 @@ def _hole_void(reader, h):
             (ta, ra), (tb, rb) = sorted(rings.items())[:2]
             total += math.pi * (tb - ta) * (ra * ra + ra * rb + rb * rb) / 3.0
     return total
+
+
+def _chain_complete(shape, names):
+    """True when no edge that runs on smoothly from a picked edge (tangent where they meet:
+    what OpenCASCADE's fillet follows by itself) is left out of the pick."""
+    want = set(names)
+    if not want:
+        return True
+    at_vertex = {}
+    for i, e in enumerate(shape.Edges, start=1):
+        for v in e.Vertexes:
+            at_vertex.setdefault(v.hashCode(), []).append(("Edge%d" % i, e))
+    for name in want:
+        edge = shape.getElement(name)
+        for v in edge.Vertexes:
+            try:
+                t1 = edge.tangentAt(edge.parameterAt(v))
+            except Exception:
+                continue
+            for other_name, other in at_vertex.get(v.hashCode(), []):
+                if other_name == name or other_name in want:
+                    continue
+                try:
+                    t2 = other.tangentAt(other.parameterAt(v))
+                except Exception:
+                    continue
+                if t1.Length > 0 and t2.Length > 0:
+                    if abs(t1.dot(t2)) / (t1.Length * t2.Length) > 0.9998:
+                        return False
+    return True
 
 
 # -- shape helpers ------------------------------------------------------------------------------
@@ -2017,29 +2109,65 @@ def _same_region(a, b):
         return False
 
 
-def _group_ops(ops):
-    """Extrudes on one plane at one offset with the same arguments go in one sketch (four
-    bosses of one height: one sketch, one extrude). The base stays first, then the bosses,
-    then the cuts."""
+def _group_ops(ops, pattern_args=None):
+    """The base first, then the bosses, then the cuts. Bosses / cuts on one plane at one
+    offset with the same extrude arguments go in one step: copies of one shape on a grid or
+    a circle as one extrude and a pattern (pattern_args(pattern, plane) -> (tool, args) or
+    None says whether a pattern tool can make it), the others as one sketch with them all."""
     if not ops:
         return []
-    out = [ops[0]]
+    buckets = {}
     for op in ops[1:]:
-        for other in out[1:]:
-            if (
-                other["kind"] == op["kind"]
-                and other["plane"] == op["plane"]
-                and abs(other["offset"] - op["offset"]) < 1e-6
-                and other["extrude"] == op["extrude"]
-            ):
-                other["geometry"] = other["geometry"] + op["geometry"]
-                other["loops_public"] = other["loops_public"] + op["loops_public"]
-                other["words"] = other["words"] + ", " + op["words"]
-                break
-        else:
-            out.append(dict(op))
+        key = (op["kind"], op["plane"], round(op["offset"], 6), repr(sorted(op["extrude"].items())))
+        buckets.setdefault(key, []).append(op)
+    out = [ops[0]]
+    for members in buckets.values():
+        found = _ops_pattern(members, pattern_args) if len(members) >= 2 else None
+        if found is not None:
+            out.append(found)
+            continue
+        merged = dict(members[0])
+        for op in members[1:]:
+            merged["geometry"] = merged["geometry"] + op["geometry"]
+            merged["loops_public"] = merged["loops_public"] + op["loops_public"]
+            merged["words"] = merged["words"] + ", " + op["words"]
+        merged["count"] = len(members)
+        out.append(merged)
     order = {"base": 0, "join": 1, "cut": 2}
     return [out[0]] + sorted(out[1:], key=lambda o: order.get(o["kind"], 3))
+
+
+def _ops_pattern(members, pattern_args):
+    """One extrude and a pattern for copies of one shape (moved, not turned), or None."""
+    if pattern_args is None:
+        return None
+    plane = members[0]["plane"]
+    centres = []
+    for op in members:
+        area = sum(f.Area for f in op["faces"])
+        if area <= 0:
+            return None
+        c = [0.0, 0.0, 0.0]
+        for f in op["faces"]:
+            p = f.CenterOfMass
+            for k, v in enumerate((p.x, p.y, p.z)):
+                c[k] += v * f.Area / area
+        x, y, _h = core.to_plane(plane, tuple(c))
+        centres.append((x, y))
+    x0, y0 = centres[0]
+    for op, (x, y) in zip(members[1:], centres[1:]):
+        moved = [core.shift_item(item, x0 - x, y0 - y) for item in op["geometry"]]
+        if not core.same_items(members[0]["geometry"], moved, 1e-5):
+            return None
+    pattern = core.find_pattern(centres, 1e-4)
+    if pattern is None:
+        return None
+    call = pattern_args(pattern, plane)
+    if call is None:
+        return None
+    first_point = core.pattern_order(centres, pattern)[0]
+    first = members[centres.index(first_point)]
+    return dict(first, pattern=(call[0], call[1], pattern), count=len(members))
 
 
 def _build_ops(chosen):
