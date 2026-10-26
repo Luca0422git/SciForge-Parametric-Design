@@ -188,6 +188,27 @@ EOF_REBUILD
         "${MODULE}/SciForgeTests/headless/rebuild_e2e.py" --mcp --out "${OUT}" \
         > "${OUT}/rebuild-mcp.log" 2>&1 || FAILED+=("rebuild e2e (MCP)")
     grep -aoE "\[SciForge\] rebuild-mcp (FAIL|summary).*" "${OUT}/rebuild-mcp.log"
+    run_recognize  # (at-recognize, beta 3: part of --only headless and base)
+}
+
+# Auto Timeline (beta 3, at-recognize): parts built, sent through STEP / STL and back,
+# described by sciforge/recognize.py, rebuilt from the plan by the headless AI executor and
+# compared (SciForgeTests/headless/recognize_bench.py). Also --only recognize on its own.
+run_recognize() {
+    echo "== [SciForge] Auto Timeline recognition (headless)"
+    need_freecad recognize || return
+    SCIFORGE_RECOGNIZE_OUT="${OUT}" timeout 1200 "${FC_CMD[@]}" -c \
+        "from SciForgeTests.headless import recognize_bench; recognize_bench.main()" \
+        > "${OUT}/recognize.log" 2>&1
+    grep -aoE "\[SciForge\] recognize (FAIL|summary).*" "${OUT}/recognize.log"
+    python3 - "${OUT}/recognize-report.json" <<'EOF4' || FAILED+=("recognize")
+import json, sys
+try:
+    report = json.load(open(sys.argv[1]))
+except Exception as exc:
+    print("no recognize report: %s" % exc); sys.exit(1)
+sys.exit(0 if report.get("passed") else 1)
+EOF4
 }
 
 # run_gui_script NAME SCRIPT LOG RESULT: one GUI test in a real FreeCAD window.
@@ -326,6 +347,7 @@ case "${ONLY}" in
     unit) run_unit ;;
     golden) run_golden ;;
     headless) run_headless ;;
+    recognize) run_recognize ;;
     gui) run_gui ;;
     scenarios) run_scenarios ;;
     base) run_unit; run_golden; run_headless; run_gui_base ;;
