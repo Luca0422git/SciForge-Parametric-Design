@@ -164,11 +164,10 @@ class ResultData:
             found = []
             try:
                 doc = self.study.Document
-                for label in simulation.summary(self.study).get("bodies") or {}:
-                    for obj in doc.getObjectsByLabel(label):
-                        if hasattr(obj, "Shape") and obj not in found:
-                            found.append(obj)
-                            break
+                for key in simulation.summary(self.study).get("bodies") or {}:
+                    body = _body_for_key(doc, key)
+                    if body is not None and body not in found:
+                        found.append(body)
                 if not found:
                     found = list(simulation.study_bodies(self.study))
             except Exception:
@@ -246,6 +245,29 @@ class ResultData:
     def moved(self, where):
         """The displacement (x, y, z) at locate()'s place."""
         return core.at_point(self.displacement, self.straight(), where)
+
+
+def _body_for_key(doc, key):
+    """The body a result summary's per-body key names: its label, or "label (component)"
+    when two bodies of the study share a label (simulation.body_key)."""
+    key = str(key)
+    for obj in doc.getObjectsByLabel(key):
+        if hasattr(obj, "Shape"):
+            return obj
+    if key.endswith(")") and " (" in key:
+        label, parent = key[:-1].rsplit(" (", 1)
+        for obj in doc.getObjectsByLabel(label):
+            if not hasattr(obj, "Shape"):
+                continue
+            try:
+                group = obj.getParentGeoFeatureGroup()
+            except Exception:
+                group = None
+            if group is not None and parent in (group.Label, group.Name):
+                return obj
+            if group is None and parent == obj.Name:
+                return obj
+    return None
 
 
 def stamp(study):
