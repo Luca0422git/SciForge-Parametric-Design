@@ -170,3 +170,8 @@ per-body keys of same-named bodies and the last engine fixes.
   objects in turn every 0.4 s, instead of all of them every 0.4 s (56 ms for 800 objects). A Gui document observer,
   tried first, broke the solve (see the facts above); all fifteen results and simulation
   scenarios pass again.
+- 22:15-22:30 Compare: the layout put back when a split fails half way (the side-by-side
+  fallback now tested), a solve ending meanwhile ends Compare and shows its study, each tag says
+  when its study is out of date; the report's pictures include the convergence chart (drawn on
+  white paper whatever the look); the periodic look for shown-again objects takes 60 in turn
+  (5 ms instead of 56-69 ms on a design of 800 objects).

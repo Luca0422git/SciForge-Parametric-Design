@@ -14,7 +14,7 @@ D  RESULT TOOLS > Convergence Plot: a row per solve with its nodes and stress, t
    (converged or not, and what to do), a dot per solve on the chart (left to right, the higher
    stress higher); Close.
 E  Report (no pictures): the mesh section has the adaptive refinement's solves (nodes, stress,
-   change) and the verdict.
+   change) and the verdict; with pictures the convergence chart is one of them.
 """
 
 import os
@@ -226,6 +226,31 @@ def e_check():
     h.check("the verdict", "onverged" in text)
 
 
+def e_pictures():
+    s.big("Report")
+    dialog = s.dialog("SciForgeSimReport")
+    h.check("Report dialog open again", dialog is not None)
+    if dialog is None:
+        return
+    state["report2"] = os.path.join(s.OUT, "simres_adaptive_report_pictures.html")
+    ui.type_into(dialog.findChild(QtWidgets.QLineEdit, "SciForgeSimReportPath"), state["report2"])
+    s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReportSave"))
+
+
+e_pictures.wait_ms = 2500
+
+
+def e_pictures_check():
+    path = state.get("report2") or ""
+    h.check("report with pictures written", os.path.isfile(path), path)
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding="utf-8") as handle:
+        text = handle.read()
+    h.check("the convergence chart among the pictures", "Convergence: Stress: Von Mises" in text)
+    h.check("five pictures (setup, three results, convergence)", text.count("<img ") == 5)
+
+
 h.run(
     "simres_adaptive",
     [
@@ -242,5 +267,7 @@ h.run(
         d_closed,
         e_report,
         e_check,
+        e_pictures,
+        e_pictures_check,
     ],
 )

@@ -1918,7 +1918,13 @@ def save_animation(session, path, size=None):
     """Write the animation to `path` (.gif or .webp, with Pillow, which FreeCAD bundles): one
     picture of the 3D view per step (the camera as it is, the legend drawn in). Returns the
     number of pictures."""
-    from PIL import Image
+    try:
+        from PIL import Image
+    except ImportError:
+        raise ValueError(
+            "saving an animation needs Pillow (a Python picture library), which this FreeCAD "
+            "does not include"
+        )
 
     path = core.animation_file(path)
     folder = os.path.dirname(os.path.abspath(path))
@@ -2107,11 +2113,11 @@ def solver_data(session):
 
 
 # -- Convergence Plot (adaptive mesh refinement) ---------------------------------------------------
-def convergence_data(session):
+def convergence_data(session, study=None):
     """The convergence plot's data (simulation_results_core.convergence) of the session's
-    study, in the unit the legend uses for that kind of result; None when the study was not
-    solved with adaptive mesh refinement."""
-    study = session.study
+    study (or `study`), in the unit the legend uses for that kind of result; None when the
+    study was not solved with adaptive mesh refinement."""
+    study = study or session.study
     if study is None:
         return None
     adaptive = (simulation.summary(study) or {}).get("adaptive") or {}
@@ -2145,10 +2151,11 @@ class ConvergenceChart(QtWidgets.QWidget):
     GOOD = "#3cc46a"
     NOT_YET = "#f2a03d"
 
-    def __init__(self, data, parent=None):
+    def __init__(self, data, parent=None, paper=False):
         super().__init__(parent)
         self.setObjectName("SciForgeSimConvergenceChart")
         self.data = data or {"solves": []}
+        self.paper = paper  # (dark text on white, for the report, whatever the look)
         self.setMinimumSize(460, 250)
 
     def band(self):
@@ -2210,8 +2217,11 @@ class ConvergenceChart(QtWidgets.QWidget):
         from . import theme
 
         painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
-        text = QtGui.QColor(theme.TEXT or "#f5f5f5")
-        base = QtGui.QColor(theme.FIELD or "#2f3540")
+        if self.paper:
+            text, base = QtGui.QColor("#1f2329"), QtGui.QColor("#ffffff")
+        else:
+            text = QtGui.QColor(theme.TEXT or "#f5f5f5")
+            base = QtGui.QColor(theme.FIELD or "#2f3540")
         grid = QtGui.QColor(text)
         grid.setAlpha(45)
         area = self._area()
@@ -2688,6 +2698,7 @@ def write(
                     images += _pictures(session, sub, size)
                 else:
                     images += _pictures_of(session, study, sub, size)
+                images += _convergence_picture(session, study, sub, size)
             entries.append((study, images))
         results_data.write_report(
             entries[0][0],
@@ -2707,6 +2718,25 @@ def write(
         shutil.rmtree(folder, ignore_errors=True)
     log("report written: %s" % path)
     return path
+
+
+def _convergence_picture(session, study, folder, size):
+    """The Convergence Plot's chart as a picture (a study solved with adaptive mesh
+    refinement; none otherwise)."""
+    try:
+        data = convergence_data(session, study)
+        if data is None:
+            return []
+        chart = ConvergenceChart(data, paper=True)
+        chart.resize(max(460, int(size[0] * 0.8)), max(250, int(size[1] * 0.5)))
+        path = os.path.join(folder, "convergence.png")
+        chart.grab().save(path)
+        chart.deleteLater()
+        unit = " (%s)" % data["unit"] if data.get("unit") else ""
+        return [("Convergence: %s%s at each solve" % (data["title"], unit), path)]
+    except Exception as exc:
+        warn("report: the convergence plot left out: %s" % exc)
+        return []
 
 
 def _setup_picture(session, study, folder, size):

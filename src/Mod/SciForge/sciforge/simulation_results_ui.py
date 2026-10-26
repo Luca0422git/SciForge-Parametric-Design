@@ -2561,6 +2561,7 @@ class FinishCommand(_ResultsCommand):
     menu = "Finish Results"
     tip = "Back to the study's setup (the bodies show again)"
     icon = "simr_finish"
+    in_compare = True  # (it ends Compare too: SETUP puts the results away)
 
     def run(self, session):
         finish()

@@ -22,6 +22,7 @@ G  Compare again; a solve ends meanwhile (sim-ui's Solve dialog shows its study'
    Compare ends, one view with that study's results.
 H  The beam made 120 mm long and only the 300 N study solved again: Compare of all three says
    which ones are out of date on their tags.
+I  FINISH RESULTS during Compare: SETUP, one view, the beam shown.
 """
 
 import FreeCAD as App
@@ -458,7 +459,21 @@ def h_check():
         all("(out of date)" in t for t in others),
         others,
     )
-    s.click_widget(cmp.legend.compare_button)
+
+
+def i_finish():
+    s.big("Finish Results")
+
+
+i_finish.wait_ms = 1000
+
+
+def i_check():
+    h.check("Finish Results ends Compare", _compare() is None)
+    h.check("SETUP again", s.current_tab() == "sim_setup", s.current_tab())
+    h.check("one view", _layout() == "Single View", _layout())
+    h.check("no results left on the view", not s.result_root_in_view())
+    h.check("the beam shows", s.design_switches() != -1)
 
 
 h.run(
@@ -501,5 +516,7 @@ h.run(
         h_compare,
         h_tick_all,
         h_check,
+        i_finish,
+        i_check,
     ],
 )
