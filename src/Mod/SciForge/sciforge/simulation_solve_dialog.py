@@ -23,7 +23,7 @@ import FreeCADGui as Gui
 from . import bodies, log, ui_icon, warn
 from . import simulation_setup_core as score
 from .compat import QtCore, QtWidgets
-from .simulation_dialogs import FocusBack
+from .simulation_dialogs import FocusBack, tick_style
 
 RUN = {
     "queue": [],  # studies waiting
@@ -93,6 +93,7 @@ class SolveDialog(FocusBack, QtWidgets.QDialog):
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
+        tick_style(self.table)
         self.studies = _sim().studies(doc)
         active = _ui().active_study(doc)
         self.table.setRowCount(len(self.studies))
@@ -120,7 +121,7 @@ class SolveDialog(FocusBack, QtWidgets.QDialog):
         )
         where.setObjectName("SciForgeSimSolveWhere")
         where.setWordWrap(True)
-        where.setStyleSheet("color: #9aa7b4;")
+        where.setStyleSheet("color: #9aa4b2;")
         layout.addWidget(where)
         self.message = QtWidgets.QLabel("")
         self.message.setObjectName("SciForgeSimSolveMessage")
@@ -499,6 +500,8 @@ class StatusDialog(FocusBack, QtWidgets.QDialog):
         self.close_button = QtWidgets.QPushButton("Close")
         self.close_button.setObjectName("SciForgeSimJobClose")
         self.close_button.clicked.connect(self.hide)
+        self.close_button.setAutoDefault(False)
+        self.cancel_button.setAutoDefault(False)
         buttons.addWidget(self.cancel_button)
         buttons.addWidget(self.close_button)
         layout.addLayout(buttons)
@@ -547,8 +550,12 @@ def _update_status(final=False):
             dialog.message.setText(note)
             _fill_stages(dialog, rows)
             dialog.cancel_button.setEnabled(True)
+            dialog.cancel_button.setVisible(True)
         elif final or job is None:
+            # nothing left to cancel: only Close stays (Enter closes it)
             dialog.cancel_button.setEnabled(False)
+            dialog.cancel_button.setVisible(False)
+            dialog.close_button.setDefault(True)
             results = RUN["results"]
             failed = [(n, r) for n, r in results.items() if r[0] != "done"]
             if failed:

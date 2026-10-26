@@ -136,11 +136,20 @@ def _number_field(name, value, family, tip=""):
     return field
 
 
+# An on / off button must look on when it is on (the theme draws push buttons alike either
+# way): blue with white text, like Fusion's toggles. Written with the dark look's colours (the
+# theme's style sheet hook swaps them in the light look).
+TOGGLE_STYLE = (
+    "QPushButton:checked { background: #2f7fd1; color: white; border: 1px solid #3fa9f5; }"
+)
+
+
 def _toggle(name, text, on, tip=""):
     button = QtWidgets.QPushButton(text)
     button.setObjectName("SciForgeSim_" + name)
     button.setCheckable(True)
     button.setChecked(bool(on))
+    button.setStyleSheet(TOGGLE_STYLE)
     if tip:
         button.setToolTip(tip)
     return button
@@ -290,6 +299,7 @@ class ItemPanel(pickpanel.PickPanel):
             self.body_mode.setObjectName("SciForgeSim_body_selection")
             self.body_mode.setCheckable(True)
             self.body_mode.setChecked(self.whole)
+            self.body_mode.setStyleSheet(TOGGLE_STYLE)
             self.body_mode.setToolTip("On: a click picks a whole body; off: faces and edges")
             self.body_mode.toggled.connect(self._body_mode)
             self.layout.addRow(self.body_mode)

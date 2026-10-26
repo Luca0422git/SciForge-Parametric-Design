@@ -20,7 +20,7 @@ from .compat import QtCore, QtWidgets
 from .taskui import Panel
 
 OPEN = {"new_study": None, "dialogs": []}  # the open windows (tests, and to keep them alive)
-NOTE_STYLE = "color: #9aa7b4;"
+NOTE_STYLE = "color: #9aa4b2;"
 ERROR_STYLE = "color: #ff8a80;"
 
 
@@ -92,6 +92,25 @@ class FocusBack:
     def hideEvent(self, event):
         give_back_focus()
         super().hideEvent(event)
+
+
+def tick_style(table):
+    """A table's tick boxes drawn like the theme's check boxes: on the dark panels an unticked
+    one showed nothing at all (only a ticked one showed its tick). Written with the dark look's
+    colours (the theme's style sheet hook swaps them in the light look)."""
+    try:
+        from . import ui_icon_path
+
+        icon = ui_icon_path("palette_check").replace("\\", "/")
+        table.setStyleSheet(
+            "QTableView::indicator { width: 13px; height: 13px; border: 1px solid #8a94a3; "
+            "border-radius: 2px; background: #2b313b; } "
+            "QTableView::indicator:hover { border-color: #3fa9f5; } "
+            "QTableView::indicator:checked { background: #3fa9f5; border-color: #3fa9f5; "
+            "image: url(%s); }" % icon
+        )
+    except Exception as exc:
+        log("simulation: tick boxes: %s" % exc)
 
 
 def _note(text, style=NOTE_STYLE):
@@ -551,6 +570,19 @@ class SettingsForm(QtWidgets.QTabWidget):
         )
         form.addRow("Contact Detection Tolerance", self.tolerance)
         self.addTab(page, "Contacts")
+        self._fit_narrow()
+
+    def _fit_narrow(self):
+        """Fit the task panel's width (the four tab names and the long Mesh labels pushed it
+        past the window's edge): the tab names scroll, a long label puts its field on the next
+        line, and a list box no longer asks for its longest entry's width."""
+        self.setUsesScrollButtons(True)
+        self.setElideMode(QtCore.Qt.ElideNone)
+        for form in self.findChildren(QtWidgets.QFormLayout):
+            form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
+        for box in self.findChildren(QtWidgets.QComboBox):
+            box.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            box.setMinimumContentsLength(12)
 
     def _order_changed(self, *_a):
         self.curved.setEnabled(self.order.currentData() == "parabolic")
@@ -1195,7 +1227,8 @@ class PrecheckDialog(FocusBack, QtWidgets.QDialog):
         buttons.addWidget(self.solve)
         buttons.addWidget(close)
         layout.addLayout(buttons)
-        self.resize(520, 260)
+        # as tall as its list (one line when nothing is missing)
+        self.resize(520, 130 + 34 * min(max(len(checks), 1), 8))
 
     def _solve(self):
         try:
