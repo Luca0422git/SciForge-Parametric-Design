@@ -321,6 +321,10 @@ class Follow:
             mine = obj.Name in self.new_names
             todo = []
             try:
+                if _follows_original(obj, self.old_names):
+                    # a step the original's extrude drives in another body: part of that
+                    # extrude, it cannot follow (the original is kept for it)
+                    raise _Stuck("it is a step of the original's own extrude in another body")
                 for prop, kind in _link_props(obj):
                     try:
                         value = obj.getPropertyByName(prop)
@@ -455,6 +459,20 @@ class Follow:
 
 class _Stuck(Exception):
     pass
+
+
+def _follows_original(obj, names):
+    """A follower step (timeline_ops: a multi-body extrude's step in another body) led by a
+    step of the original."""
+    try:
+        from . import timeline_ops
+
+        if not timeline_ops.is_follower(obj):
+            return False
+        lead = getattr(obj, "Source", None)
+        return lead is not None and lead.Name in names
+    except Exception:
+        return False
 
 
 def _is_obj(value):

@@ -18,6 +18,10 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * deleted reference: the reference deleted with delete_step: the original is shown again.
 * driven: the jointed arm turned while it is rebuilt: the reference turns with it (compare
   said match 0.16 and the plan came out turned).
+* follower: a body whose extrude also cuts another body: Finish deleted it and the other
+  body lost the cut; now the original is kept (hidden) for it.
+* component id: start_rebuild given the component's id (what import_file answers) rebuilds
+  its one body (it refused: "pick the body").
 * vex plate: a VEX-like plate with 125 square holes (506 faces): describe_reference took 56 s
   (a section and a boolean per level along X, two booleans on 506 coincident faces).
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
@@ -512,6 +516,9 @@ def driven(agent, folder):
         },
     )
     agent.call("drive_joint", {"joint": "Joint", "angle": 30})
+    from sciforge import bodies
+
+    at_30 = App.BoundBox(bodies.global_shape(doc.getObject("Body001")).BoundBox)
     agent.call("start_rebuild", {"body": "Body001"})
     text, error = agent.call("describe_reference", {})
     plan = (_json(text) or {}).get("plan") or []
@@ -534,10 +541,24 @@ def driven(agent, folder):
         result.get("done"),
         result.get("verdict"),
     )
-    from sciforge import bodies
-
     gap = rebuild.reference_shape(ref).BoundBox.Center - bodies.global_shape(target).BoundBox.Center
     agent.check("driven: the reference stands where the arm is now", gap.Length < 1e-6, gap)
+    agent.call("finish_rebuild", {})
+    agent.call("drive_joint", {"joint": "Joint", "angle": 30})
+    box = bodies.global_shape(target).BoundBox
+    off = max(
+        abs(a - b)
+        for a, b in zip(
+            (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax),
+            (at_30.XMin, at_30.YMin, at_30.ZMin, at_30.XMax, at_30.YMax, at_30.ZMax),
+        )
+    )
+    agent.check(
+        "driven: turned back to 30 degrees the rebuilt arm is where the original was (it was "
+        "built turned inside its component)",
+        off < 1e-6,
+        (box, at_30),
+    )
 
 
 # -- a VEX plate: 125 square holes (506 faces) -------------------------------------------------
@@ -581,7 +602,90 @@ def vex_plate(agent, folder):
     agent.check("vex plate: the plan rebuilds it (done)", result.get("done"), result.get("verdict"))
 
 
-CHECKS = (jointed, dependents, kept, reopened, deleted_reference, threaded, driven, vex_plate)
+# -- the id import_file answers with is the component's ------------------------------------------
+def component_id(agent, folder):
+    import FreeCAD as App
+
+    from sciforge import rebuild
+
+    path = _golden(agent, "QaArm3", ARM, folder)
+    agent.call("new_design", {"name": "QaComponentId"})
+    text, error = agent.call("import_file", {"path": path})
+    from . import rebuild_e2e as e2e
+
+    ident = e2e.made_id(text)  # ("Its id is 'Component'": the component)
+    text, error = agent.call("start_rebuild", {"body": ident or "Component"})
+    refs = rebuild.references(App.ActiveDocument)
+    agent.check(
+        "component id: start_rebuild takes the component import_file named (its one body; it "
+        "said to pick a body)",
+        not error and refs and refs[0].SourceName == "Body001",
+        (ident, text[:300]),
+    )
+
+
+# -- a body whose extrude also cuts another body --------------------------------------------------
+def follower(agent, folder):
+    import FreeCAD as App
+
+    agent.call("new_design", {"name": "QaFollower"})
+    doc = App.ActiveDocument
+    agent.call("create_sketch", {"plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]})
+    agent.call("extrude", {"profile": "Sketch1", "distance": 10})
+    text, error = agent.call("new_body", {})
+    agent.call("create_sketch", {"plane": "XY", "geometry": [{"rect": [40, 0, 80, 30]}]})
+    agent.call("extrude", {"profile": "Sketch2", "distance": 10})
+    agent.call("activate", {"target": "Body"})
+    # a slot cut through both blocks by the first body's extrude
+    agent.call(
+        "create_sketch", {"plane": "XY", "offset": 10, "geometry": [{"rect": [30, 10, 50, 20]}]}
+    )
+    text, error = agent.call(
+        "extrude",
+        {
+            "profile": "Sketch3",
+            "distance": 5,
+            "operation": "cut",
+            "flip": True,
+            "bodies": ["Body", "Body001"],
+        },
+    )
+    other = doc.getObject("Body001")
+    before = other.Shape.Volume if other is not None and not other.Shape.isNull() else None
+    if not agent.check(
+        "follower: the first body's cut goes into the other body too",
+        not error and before is not None and abs(before - (12000 - 10 * 10 * 5)) < 1e-3,
+        (text[:300], before),
+    ):
+        return
+    result = rebuild_through_tools(agent, "Body")
+    if not agent.check("follower: the first body is rebuilt (done)", result.get("done"), result):
+        return
+    text, error = agent.call("finish_rebuild", {})
+    doc.recompute()
+    agent.check(
+        "follower: the other body keeps the cut the original's extrude made in it (the "
+        "original is kept for it; deleting it took the cut away)",
+        not error
+        and abs(other.Shape.Volume - before) < 1e-3
+        and "kept hidden" in text
+        and doc.getObject("Body") is not None,
+        (text[:400], other.Shape.Volume, before),
+    )
+
+
+CHECKS = (
+    jointed,
+    dependents,
+    kept,
+    reopened,
+    deleted_reference,
+    threaded,
+    driven,
+    vex_plate,
+    component_id,
+    follower,
+)
 
 
 def run(agent):
