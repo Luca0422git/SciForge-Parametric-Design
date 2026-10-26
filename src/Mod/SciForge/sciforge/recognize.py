@@ -134,6 +134,9 @@ def describe(shape, options=None):
             return _describe_turned(shape, options, frame, started)
     try:
         _Reader(shape, options).read(out)
+    except RecognizeError as exc:  # (a shape with no solid: said, not a crash)
+        log("recognize: %s" % exc)
+        out["notes"].append("%s Nothing to rebuild: describe a solid." % exc)
     except Exception as exc:  # never raise for a shape it does not understand
         import traceback
 
@@ -467,7 +470,7 @@ class _Reader:
         self.original = shape
         solids = list(shape.Solids)
         if not solids:
-            raise RecognizeError("The shape has no solid.")
+            raise RecognizeError("The shape has no solid (only faces or a shell).")
         if len(solids) > 1:
             solids.sort(key=lambda s: -s.Volume)
             self.notes.append(
