@@ -2,7 +2,7 @@
 
 <!-- Generated from the tool catalogue (src/Mod/SciForge/sciforge/ai/catalog) by tools/sciforge/make_ai_docs.py: do not edit by hand. The unit test test_ai_docs_contract.py fails when this file and the catalogue differ. -->
 
-SciForge offers 117 tools to AI apps (through MCP, the built-in chat panel and the command line), listed here in the order tools/list gives them. All lengths are in millimetres (mm) and all angles in degrees. Every tool that changes the design is one undo step named "AI: ..."; errors come back as plain sentences. Each tool has a reference page (reference/<tool>.md: every argument, the answer, the errors and a complete example with its real answer); the resource sciforge://tools has every schema as JSON.
+SciForge offers 127 tools to AI apps (through MCP, the built-in chat panel and the command line), listed here in the order tools/list gives them. All lengths are in millimetres (mm) and all angles in degrees. Every tool that changes the design is one undo step named "AI: ..."; errors come back as plain sentences. Each tool has a reference page (reference/<tool>.md: every argument, the answer, the errors and a complete example with its real answer); the resource sciforge://tools has every schema as JSON.
 
 ## All tools
 
@@ -125,6 +125,16 @@ SciForge offers 117 tools to AI apps (through MCP, the built-in chat panel and t
 | [`docs_search`](sciforge://docs/reference/docs_search.md) | Search the documentation | Help | (Fusion's help search, for SciForge) | read-only | nothing |
 | [`docs_read`](sciforge://docs/reference/docs_read.md) | Read documentation | Help | (Fusion's help page, for SciForge) | read-only | nothing |
 | [`examples_search`](sciforge://docs/reference/examples_search.md) | Search examples | Help | (Fusion's sample designs, for SciForge) | read-only | nothing |
+| [`create_study`](sciforge://docs/reference/create_study.md) | New simulation study | Simulation | SIMULATION > SETUP > STUDY > New Simulation Study (Static Stress) | changes the design (one undo step) | a solid body |
+| [`add_constraint`](sciforge://docs/reference/add_constraint.md) | Structural constraint | Simulation | SIMULATION > SETUP > CONSTRAINTS > Structural Constraints | changes the design (one undo step) | an open design |
+| [`add_load`](sciforge://docs/reference/add_load.md) | Structural load | Simulation | SIMULATION > SETUP > LOADS > Structural Loads | changes the design (one undo step) | an open design |
+| [`local_mesh_control`](sciforge://docs/reference/local_mesh_control.md) | Local mesh control | Simulation | SIMULATION > SETUP > MANAGE > Local Mesh Control | changes the design (one undo step) | an open design |
+| [`set_study_material`](sciforge://docs/reference/set_study_material.md) | Study material | Simulation | SIMULATION > SETUP > MATERIALS > Study Materials | changes the design (one undo step) | an open design |
+| [`study_settings`](sciforge://docs/reference/study_settings.md) | Study settings | Simulation | SIMULATION > SETUP > MANAGE > Settings | changes the design (one undo step) | an open design |
+| [`precheck_study`](sciforge://docs/reference/precheck_study.md) | Pre-check study | Simulation | SIMULATION > SETUP > SOLVE > Pre-check | read-only | an open design |
+| [`solve_study`](sciforge://docs/reference/solve_study.md) | Solve study | Simulation | SIMULATION > SETUP > SOLVE > Solve | changes the design (one undo step) | an open design |
+| [`study_results`](sciforge://docs/reference/study_results.md) | Study results | Simulation | SIMULATION > RESULTS (legend, Show Min / Max, Reaction Force, Results Details) | read-only | an open design |
+| [`delete_study`](sciforge://docs/reference/delete_study.md) | Delete study | Simulation | SIMULATION > browser > study > Delete | changes the design (one undo step), destructive | an open design |
 
 ## Help
 
@@ -284,6 +294,19 @@ SciForge offers 117 tools to AI apps (through MCP, the built-in chat panel and t
 - [`named_view`](sciforge://docs/reference/named_view.md): Named views kept in the design (Fusion's Named Views): action save (the current camera under name), go (turn the view to it), delete, list.
 - [`show_hide`](sciforge://docs/reference/show_hide.md): Show or hide bodies, components, sketches, construction geometry or drawings in the 3D view (they stay in the design).
 - [`render`](sciforge://docs/reference/render.md): Take a picture of the design and get the image itself (PNG), to look at what was built.
+
+## Simulation
+
+- [`create_study`](sciforge://docs/reference/create_study.md): Make a Static Stress study, Fusion's linear stress simulation: where a part is held (add_constraint), what pushes on it (add_load, or gravity in study_settings), then solve_study and study_results.
+- [`add_constraint`](sciforge://docs/reference/add_constraint.md): Hold part of the model in a study (Fusion's structural constraints).
+- [`add_load`](sciforge://docs/reference/add_load.md): Push on part of the model in a study (Fusion's structural loads).
+- [`local_mesh_control`](sciforge://docs/reference/local_mesh_control.md): Make the mesh finer (smaller elements, size in mm) on picked faces, edges or whole bodies of a study, blending back into the study's element size: where the stress matters (a hole, a fillet in a corner).
+- [`set_study_material`](sciforge://docs/reference/set_study_material.md): Choose the material a body is made of in one study only (Fusion's Study Materials; the design keeps its own): material is a key of the material library (steel, stainless, iron, aluminium, aluminium_6061, copper, titanium, abs, pla, pet, nylon, polycarbonate, acetal, acrylic, polypropylene, ptfe, peek, wood, glass) or same_as_model to go back to the body's physical material.
+- [`study_settings`](sciforge://docs/reference/study_settings.md): Read or change a study's settings; with none given it answers them all.
+- [`precheck_study`](sciforge://docs/reference/precheck_study.md): Check a study before solving it, like Fusion's Pre-check traffic light: ready (green), caution (yellow: it solves, but read the warnings) or cannot solve (red: what to fix), with every message as a sentence: missing constraints or loads, materials without the values a stress study needs, constraints or loads whose faces are gone, bodies that would fly away, bodies that overlap.
+- [`solve_study`](sciforge://docs/reference/solve_study.md): Solve a study on this computer (Gmsh meshes it, CalculiX solves it; Fusion solves in Autodesk's cloud): seconds for a simple part, minutes for a fine mesh; SciForge waits until it is done (timeout, seconds: then it gives up).
+- [`study_results`](sciforge://docs/reference/study_results.md): The results of a study's last solve as numbers: the minimum and maximum of every result (safety factor, von Mises, 1st / 3rd principal and the stress components in MPa, displacement in mm, strain) with where they are [x, y, z] mm, per body (material, largest stress and displacement, lowest safety factor), the reaction force at every constraint (N), the mesh, and the verdict in a sentence (lowest safety factor against target: "lowest safety factor 1.4 at (x, y, z) on Body1: below 2"; below 1 the part would bend for good).
+- [`delete_study`](sciforge://docs/reference/delete_study.md): Delete a study with its constraints, loads, mesh controls and results (one undo step).
 
 ## Shared rules
 
