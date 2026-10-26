@@ -388,13 +388,31 @@ def _next():
     return None
 
 
+# An undo step open with no dialog for longer than this is a leftover (a dialog of a design
+# closed while it was open left its step's name active in FreeCAD): the solve goes on and the
+# engine's next turn closes the step, instead of waiting for it forever.
+LEFTOVER_STEP_S = 2.0
+
+
 def _dialog_open(doc):
     """A command's dialog of the design is open (its undo step must not take the solve's
     objects): the job waits for it."""
     try:
         if Gui.Control.activeDialog():
+            RUN["pending_since"] = None
             return True
-        return bool(getattr(doc, "HasPendingTransaction", False))
+        if not getattr(doc, "HasPendingTransaction", False):
+            RUN["pending_since"] = None
+            return False
+        since = RUN.get("pending_since")
+        if since is None:
+            RUN["pending_since"] = time.time()
+            return True
+        if time.time() - since < LEFTOVER_STEP_S:
+            return True
+        log("an undo step open with no command (%s): the solve goes on" % doc.Label)
+        RUN["pending_since"] = None
+        return False
     except Exception:
         return False
 

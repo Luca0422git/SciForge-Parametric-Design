@@ -391,6 +391,7 @@ def sync():
     try:
         want = in_workspace()
         _finish_sim_dialog()
+        _close_leftover_step()
         if want != STATE["on"]:
             _apply(want)
         elif want:
@@ -400,16 +401,43 @@ def sync():
 
 
 def _finish_sim_dialog():
-    """A SETUP dialog of another design ends when its design is no longer in front."""
+    """A SETUP dialog of another design ends when its design is no longer in front (let go of
+    without touching the design when it was closed)."""
     try:
         from . import taskui
 
         current = taskui.current()
         if current is not None and getattr(current, "simulation_dialog", False):
-            if current.doc is not _doc():
+            if not _doc_open(current.doc):
+                from . import hole_common
+
+                hole_common.abandon(current)
+                log("%s ended: its design was closed" % current.title)
+            elif current.doc is not _doc():
                 current.finish()
     except Exception as exc:
         warn("simulation dialog: %s" % exc)
+
+
+def _doc_open(doc):
+    try:
+        return doc is not None and doc.Name in App.listDocuments()
+    except Exception:
+        return False
+
+
+def _close_leftover_step():
+    """A design closed while a dialog of it was open leaves the dialog's undo step open in
+    FreeCAD (the step's name is application-wide): the next design's changes went into a step
+    of that name, and a solve waited for it forever. With no dialog open it is closed (keeping
+    what is in it)."""
+    try:
+        if Gui.Control.activeDialog() or not App.getActiveTransaction():
+            return
+        App.closeActiveTransaction(False)
+        log("an undo step left open by a closed design's dialog was closed")
+    except Exception as exc:
+        log("undo step: %s" % exc)
 
 
 def refresh():

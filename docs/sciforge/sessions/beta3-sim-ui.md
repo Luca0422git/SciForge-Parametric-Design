@@ -79,7 +79,12 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   deleted study whose mesh showed left Show Mesh ticked (and Undo drew the mesh again); a body
   deleted while its study solved made the engine fail with "Cannot access attribute 'Label' of
   deleted object" (the UI now stops the job first, with a sentence naming the body); a cancelled
-  solve's progress still showed its stage "running".
+  solve's progress still showed its stage "running"; a design closed while a SETUP dialog was
+  open left the dialog's undo step open in FreeCAD (its name is application-wide): the next
+  design's changes went into it and every solve there waited forever for "the open command"
+  (now: `simulation_ui._close_leftover_step` after a design closes, `_finish_sim_dialog` lets
+  go of a closed design's Settings / Materials dialog without touching it, and the solve stops
+  waiting for an undo step open with no dialog after 2 s).
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
@@ -105,7 +110,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_lost` | 54 | PASS |
 | `sim_setup_two` | 40 | PASS |
 | `sim_setup_mesh` | 42 | PASS |
-| `sim_setup_odd` | 44 | PASS |
+| `sim_setup_odd` | 58 | PASS |
 | `sim_setup_during` | 30 | PASS |
 
 The first fourteen in one batch (22:35-22:57 UTC, with the five below): every one passes. Shared
@@ -169,6 +174,12 @@ GUI smoke / journey / restart: all passed.
    study's bodies each turn); the engine could check them too (scripts and the AI's solve).
 
 ## FreeCAD / Qt facts and traps
+
+- `doc.openTransaction(name)` makes `name` FreeCAD's application-wide active transaction. A
+  dialog abandoned because its design was closed (`hole_common.abandon`, shared code) leaves it
+  active: the next change in any design opens an undo step of that name. SIMULATION closes it
+  after a design closes; `hole_common.abandon` could call `App.closeActiveTransaction(False)`
+  for every SciForge dialog (not changed here: not sim-ui's file).
 
 - A PropertyLinkSubListGlobal drops an entry with an empty sub-list; `(obj, "")` keeps it.
 - Without a window manager (xvfb), closing a top-level dialog leaves no active window: the main
