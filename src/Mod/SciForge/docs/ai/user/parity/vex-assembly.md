@@ -74,36 +74,40 @@ spread in brackets; "before" is the same scenario before the speed work of beta 
 | What | Target | Before | After |
 |---|---|---|---|
 | Open the robot | < 30 s | 127 s (180 s under load) | 36 s (36 - 62 s with the load) |
-| Browser: rows rebuilt (a forced refresh) | < 0.3 s | 0.79 s (0.79 - 2.2) | 0.42 s (0.42 - 0.87) |
-| Browser: the design read again after a change | < 0.3 s | 0.35 s (0.35 - 0.78) | 0.30 s (0.30 - 0.50) |
-| Timeline refresh | | 0.13 s | 0.13 s |
+| Browser: rows rebuilt (a forced refresh) | < 0.3 s | 0.79 s (0.79 - 2.2) | 0.42 s (0.42 - 1.34) |
+| Browser: the design read again after a change | < 0.3 s | 0.35 s (0.35 - 0.78) | 0.30 s (0.30 - 0.62) |
+| Timeline refresh | | 0.13 s | 0.12 s (0.12 - 0.27) |
 | Hover dots on a rail's web (245 square holes) | < 0.1 s | minutes (every edge walked per corner) | first 0.05 - 0.15 s (the part's index made), then 0.014 s (0.014 - 0.36) |
-| Drive the shaft's joint: one step | live | 1.86 s (1.86 - 2.59) | 0.15 s (0.15 - 1.0); SciForge's part 0.04 s, the rest is the redraw |
-| Orbit: one frame (the redraw of 300 parts) | | 0.48 s | 0.35 s (0.35 - 0.81): software OpenGL |
-| Insert twenty STEP files in one go | < 20 s | 34.0 s | 22.4 s (22.4 - 28.7) |
-| Save | < 10 s | 4.3 s | 3.9 s (3.9 - 5.3) |
-| Recompute after the screw's part changed (130 occurrences) | | 32.4 s | 14.1 s (14.1 - 15.5) |
-| Build the robot by script (insert, occurrences, recompute, joint) | | 115 s | 83 s |
+| Drive the shaft's joint by script: one step | live | 1.86 s (1.86 - 2.59) | 0.05 s (0.05 - 1.45; median 0.45 - 0.68): SciForge's part 0.04 s, the rest is the redraw |
+| Drive Joints dialog: one step of the slider | live | 1.09 s (median 1.40) | 0.70 s (median 0.96): the drive and recompute 0.12 s, the rest the other tools' reactions to a change (timeline, looks, display) and the redraw |
+| Orbit: one frame (the redraw of 300 parts) | | 0.48 s | 0.35 s (0.35 - 1.45): software OpenGL |
+| Insert twenty STEP files in one go | < 20 s | 34.0 s | 21.8 s (21.8 - 29.5) |
+| Save | < 10 s | 4.3 s | 3.8 s (3.8 - 6.1) |
+| Recompute after the screw's part changed (130 occurrences) | | 32.4 s | 14.1 s (14.1 - 16.6) |
+| Build the robot by script (insert, occurrences, recompute, joint) | | 115 s | 83 s (83 - 92) |
 
 What the time goes on, and what was done:
 
 - **Opening**: FreeCAD alone (no window) opens the file in 3.7 s. The rest is FreeCAD's window
   side: FreeCAD 1.1 makes a placement indicator (three axes with text labels drawn with Qt)
-  for every origin plane, axis and body when it is created, about 5400 in this robot (a third
-  of the reading in stack samples), and it meshes the 298 bodies for display (11 s: each occurrence
-  is a copy with its own mesh). SciForge's own share was a document observer of decals that
-  looked at every object on each change (3562 calls while loading, 117 of 180 s): it now asks
-  FreeCAD for its own objects only and waits while a file loads. A FreeCAD change (make the
-  indicator when it is first shown) would take a good part of the rest: not made in this
-  branch (a change to FreeCAD's C++ can be tried only in a full build).
+  for every origin plane, axis and body when it is created, about 5400 in this robot (1.6 ms
+  each here: 8 s; a third of the reading in stack samples), and it meshes the 298 bodies for
+  display (11 s: each occurrence is a copy with its own mesh). SciForge's own share was a
+  document observer of decals that looked at every object on each change (3562 calls while
+  loading, 117 of 180 s): it now asks FreeCAD for its own objects only and waits while a file
+  loads. A FreeCAD change (make the indicator when it is first shown) would save those 8 s:
+  not made in this branch (a change to FreeCAD's C++ can be tried only in a full build).
 - **Browser**: a row's item kept its node with the node's whole subtree (Qt copied it in and
   out on every read and every paint); the origin rows (2400 here) asked FreeCAD for their
   parents one plane at a time.
 - **Hover**: the snap points come from an index made once per part (FreeCAD's own indexed map
   names the edges); only the dots near the pointer are drawn.
-- **Drive, recompute**: joints, grounds, links and the occurrences' sync looked at all 6000
-  objects (or all bodies) many times per step; they ask FreeCAD for their type now. The
-  recompute's rest is FreeCAD meshing the 130 changed screws.
+- **Drive, recompute**: joints, grounds, links, the joints' views and the occurrences' sync
+  looked at all 6000 objects (or all bodies) many times per step; they ask FreeCAD for their
+  type now. In the Drive Joints dialog each step also recomputes the design, and the other
+  tools that follow a change (the timeline, the looks of the bodies, the display settings)
+  each read the whole design again (0.1 - 0.2 s each here): not changed (their modules).
+  The recompute's rest is FreeCAD meshing the 130 changed screws.
 - **Insert**: files are read before the undo step opens (the reading is 6.3 s of the twenty
   without the window), a body read from the file is not copied again, the import notes no
   longer build a compound of every face; the rest is FreeCAD meshing the twenty parts.
@@ -140,3 +144,5 @@ published numbers (G).
 | Opening a 300-part robot in under 30 s | 36 s at best here (see section 4): most of it is FreeCAD's window side (a placement indicator made for each of 5400 origin planes and bodies; a mesh per occurrence) |
 | Occurrences that share one mesh (Fusion's are light) | an occurrence is a copy with its own solid and mesh (instances.py); FreeCAD's links would share the mesh but every SciForge tool works on copies |
 | Rows rebuilt in the browser in under 0.3 s on a 300-part robot | 0.42 s at best here (3300 rows made again); reading the design after a change: 0.30 s |
+| A live Drive Joints dialog on a 300-part robot | 0.70 s a step at best here (software OpenGL; the timeline, looks and display tools read the whole design after each step) |
+| Twenty STEP files inserted in under 20 s | 21.8 s at best here: FreeCAD's STEP reader (6 - 8 s) and its meshing of the twenty parts (about 9 s) |
