@@ -427,6 +427,20 @@ def deleted_reference(agent, folder):
         rebuild.references(doc) and not plate.Visibility,
         plate.Visibility,
     )
+    # the same in a design opened again (what start remembered is gone then)
+    path = os.path.join(folder, "qa_deleted.FCStd")
+    agent.call("save_as", {"path": path})
+    agent.call("close_design", {})
+    agent.call("open_design", {"path": path})
+    doc = App.ActiveDocument
+    refs = rebuild.references(doc)
+    original = doc.getObject(refs[0].SourceName) if refs else None
+    text, error = agent.call("delete_step", {"steps": [refs[0].Name]} if refs else {})
+    agent.check(
+        "deleted reference: in a design opened again the original is shown again too",
+        not error and original is not None and bool(original.Visibility),
+        (text, getattr(original, "Visibility", None)),
+    )
 
 
 # -- a threaded hole (recognition cannot read a thread: it must say so, quickly) ---------------

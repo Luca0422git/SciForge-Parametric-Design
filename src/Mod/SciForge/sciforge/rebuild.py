@@ -2336,6 +2336,8 @@ class _Watch:
                 return
             hidden = _HIDDEN.get(doc.Name, {})
             source_name = hidden.pop(obj.Name, None)
+            if source_name is None and getattr(obj, "Shown", False):
+                source_name = getattr(obj, "SourceName", "")  # (a design opened again)
             source = doc.getObject(source_name) if source_name else None
             if source is not None and bodies.alive(source):
                 bodies.set_shown(source, True)
