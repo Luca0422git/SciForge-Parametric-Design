@@ -241,6 +241,8 @@ def _resume_later(name, tries=0):
                 if tries < 50:
                     _resume_later(name, tries + 1)
                 return
+            for ref in active_references(doc):  # (the ghost where its component stands now)
+                _notify("moved", ref, None)
             body = working_body(doc)
             if body is None or bodies.active_body(doc) is not None:
                 return

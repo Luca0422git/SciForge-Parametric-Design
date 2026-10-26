@@ -31,8 +31,11 @@ def find_body():
             components.sync_part_slot(body)  # the active body's component is the active one
             return body
         later = body  # used only when no body of its component exists at the marker
-    if body is None:
-        try:  # (beta 3 QA) a design opened again with a rebuild going on carries on there
+    component = components.active_component(doc)
+    if body is None and component is None:
+        # (beta 3 QA) a design opened again (no body active, the root the active component)
+        # with a rebuild going on carries on in the rebuilt body, not in the root's first body
+        try:
             from . import rebuild
 
             working = rebuild.working_body(doc)
@@ -41,7 +44,6 @@ def find_body():
         if working is not None and not not_made_yet(working):
             components.activate_body(working)
             return working
-    component = components.active_component(doc)
     candidates = []
     preferred = components.preferred_body(doc, component)
     if preferred is not None:

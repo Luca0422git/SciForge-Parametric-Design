@@ -224,6 +224,8 @@ class ViewProviderReference:
     def updateData(self, obj, prop):
         if prop in (rebuild.SHAPE, "Shown"):
             self._update(obj)
+        elif prop in ("FrozenFrame", "TargetName"):
+            self.follow(obj)
 
     def onChanged(self, vobj, prop):
         pass
@@ -447,6 +449,11 @@ def offer_message(ref):
             cursor = chat.input.textCursor()
             cursor.movePosition(QtGui.QTextCursor.End)
             chat.input.setTextCursor(cursor)
+            # (beta 3 QA: nothing said the message waits for the person; a beginner waited)
+            commands.tell(
+                "The message for the AI is ready in the chat (AI panel): read it, then press "
+                "Send."
+            )
             return "chat"
         except Exception as exc:
             warn("rebuild: the chat could not be prepared (%s)" % exc)
