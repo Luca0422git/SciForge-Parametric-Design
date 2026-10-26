@@ -338,8 +338,14 @@ def _after(study, state, message):
             if RUN["kind"] == "mesh":
                 show_mesh(study)
             else:
-                RUN["last_done"] = study
                 _keep_out_of_date(study)
+                loose = loose_result(study)
+                if loose:
+                    state, message = "suspect", loose
+                    RUN["results"][study.Name] = (state, message)
+                    log("%s: %s" % (study.Label, loose))
+                else:
+                    RUN["last_done"] = study
             log("%s %s" % (study.Label, "meshed" if RUN["kind"] == "mesh" else "solved"))
         try:
             sim.summary(study)
@@ -348,6 +354,40 @@ def _after(study, state, message):
     _update_status()
     if _next() is None:
         _finish_all()
+
+
+def model_size(study):
+    """The diagonal of the study's bodies (mm)."""
+    box = None
+    for body in _sim().study_bodies(study):
+        b = bodies.global_shape(body, copy=False).BoundBox
+        if box is None:
+            box = b
+        else:
+            box.add(b)
+    return box.DiagonalLength if box is not None else 0.0
+
+
+def loose_result(study):
+    """A sentence when a solve "worked" but the model moved further than half its own size:
+    it was not held enough (a part could still turn about a held edge or slide), CalculiX
+    found a mechanism instead of an error, and the numbers mean nothing. None otherwise."""
+    try:
+        data = _sim().summary(study) or {}
+        moved = (data.get("stats", {}).get("displacement", {}) or {}).get("max")
+        size = model_size(study)
+        if moved is None or size <= 0 or moved <= 0.5 * size:
+            return None
+        from . import simulation_core as core
+
+        return (
+            "Solved, but the model moved %s mm, more than half its own size (%s mm): it is not "
+            "held enough (a part can still turn or slide about what holds it). Check the "
+            "constraints (DOF View), then solve again: these results are not meaningful."
+            % (core.fmt(moved, 3), core.fmt(size, 3))
+        )
+    except Exception:
+        return None
 
 
 def _keep_out_of_date(study):
@@ -494,7 +534,9 @@ def _update_status(final=False):
                 study = App.ActiveDocument.getObject(name) if App.ActiveDocument else None
                 label = study.Label if study is not None else name
                 dialog.title.setText("%s: %s" % (label, score.STATE_WORDS.get(state, state)))
-                dialog.message.setStyleSheet("color: #ff8a80;" if state == "failed" else "")
+                dialog.message.setStyleSheet(
+                    "color: #ff8a80;" if state in ("failed", "suspect") else ""
+                )
                 dialog.message.setText(message or "")
                 dialog.bar.setValue(0)
             elif results:

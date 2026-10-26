@@ -110,6 +110,7 @@ STATE_WORDS = {
     "failed": "Stopped",
     "cancelled": "Cancelled",
     "waiting": "Waiting",
+    "suspect": "Not held enough",
 }
 
 

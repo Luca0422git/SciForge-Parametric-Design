@@ -134,6 +134,10 @@ def plate_bottom(body_obj):
 
 # -- clicking a face like a person ----------------------------------------------------------------
 def _face_points(face, count=7):
+    """Points on the face, the ones farthest from its edges first (a click near an edge picks
+    the edge: FreeCAD picks edges within a few pixels)."""
+    import Part
+
     pts = []
     u0, u1, v0, v1 = face.ParameterRange
     for i in range(count):
@@ -142,6 +146,11 @@ def _face_points(face, count=7):
             v = v0 + (v1 - v0) * (j + 0.5) / count
             if face.isPartOfDomain(u, v):
                 pts.append(face.valueAt(u, v))
+    try:
+        wires = Part.Compound(face.Edges)
+        pts.sort(key=lambda p: -wires.distToShape(Part.Vertex(p))[0])
+    except Exception:
+        pass
     return pts
 
 
@@ -171,9 +180,45 @@ def click_face(body_obj, face_name):
 
 # -- workspace, ribbon, dialogs -------------------------------------------------------------------
 def workspace(label):
+    """The workspace button's menu > label. When the mouse click on the entry does not take
+    (under xvfb, once any task dialog was shown in another design, QMenu drops the synthetic
+    click: an environment quirk, checked with a bare FreeCAD task dialog), the entry is chosen
+    with the keyboard instead (arrow keys and Enter in the open menu, as a person can)."""
     from SciForgeTests.gui import drawing_input as d
+    from sciforge import simulation_ui
 
-    return d.workspace(label)
+    want = label == "Simulation"
+    ok = d.workspace(label)
+    _process()
+    if label in ("Simulation", "Design") and simulation_ui.in_workspace() != want:
+        print("[SciForge] workspace %s: the click did not take, using the keys" % label, flush=True)
+        ok = menu_keys(ribbon_ui().workspace, label)
+        _process()
+    return ok
+
+
+def menu_keys(button, label):
+    """Open the button's menu and choose `label` with the keyboard (Enter on it)."""
+    done = {}
+
+    def choose(tries=0):
+        menu = QtWidgets.QApplication.activePopupWidget()
+        if not isinstance(menu, QtWidgets.QMenu):
+            if tries < 20:
+                QtCore.QTimer.singleShot(100, lambda: choose(tries + 1))
+            return
+        for action in menu.actions():
+            if action.text().replace("&", "").strip() == label:
+                menu.setActiveAction(action)
+                QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Return)
+                done["ok"] = True
+                return
+        menu.close()
+
+    QtCore.QTimer.singleShot(200, choose)
+    button.click()
+    _process()
+    return h.check("menu %s (keys)" % label, done.get("ok"), done)
 
 
 def ribbon_ui():
