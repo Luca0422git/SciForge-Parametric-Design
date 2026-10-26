@@ -70,6 +70,7 @@ class RebuildError(ValueError):
 
 REFERENCE = "RebuildReference"
 SHAPE = "FrozenShape"
+KEPT_UNDER = "SciForgeKeptUnder"  # on an original kept at Finish: the rebuild's name
 # (beta 3 QA) triangles beyond which a mesh is not made into a solid: the time grows much
 # faster than the count (in the sandbox: 6,000 5 s; 15,000 23 s; 16,780 79 s under load;
 # 37,740 160 s, then describe as long again), and FreeCAD cannot be stopped meanwhile
@@ -211,6 +212,24 @@ def reference_for(obj):
 def active_references(doc):
     """The references still being worked on (drawn; Finish with keep keeps one hidden)."""
     return [r for r in references(doc) if getattr(r, "Shown", True)]
+
+
+def under_rebuilds(doc):
+    """{body or mesh body name: why} for the originals that lie under their rebuild on
+    purpose: the ones being rebuilt (hidden, the reference) and the ones Finish kept, hidden
+    (beta 3 QA: check_design called each pair an overlap)."""
+    out = {}
+    try:
+        for ref in active_references(doc):
+            if target_of(ref) is not None and getattr(ref, "SourceName", ""):
+                out[ref.SourceName] = "being rebuilt, hidden under the rebuild"
+        for obj in doc.Objects:
+            name = getattr(obj, KEPT_UNDER, "") if KEPT_UNDER in obj.PropertiesList else ""
+            if name and doc.getObject(name) is not None and not obj.Visibility:
+                out[obj.Name] = "the original, kept hidden under its rebuild"
+    except Exception as exc:
+        warn("rebuild: %s" % exc)
+    return out
 
 
 def working_body(doc):
@@ -2122,6 +2141,13 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
             else:
                 source.Label = new_label
             bodies.set_shown(source, False)
+            # (beta 3 QA) it lies under its rebuild on purpose: check_design and interference
+            # leave it out (they called the pair an overlap, NOT OK)
+            try:
+                bodies.add_prop(source, "App::PropertyString", KEPT_UNDER, "Rebuild", "", True)
+                setattr(source, KEPT_UNDER, target.Name)
+            except Exception as exc:
+                warn("rebuild: %s" % exc)
         else:
             _delete_original(doc, source)
         if place is not None:

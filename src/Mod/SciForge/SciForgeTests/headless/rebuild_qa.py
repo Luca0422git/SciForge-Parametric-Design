@@ -705,6 +705,16 @@ def follower(agent, folder):
         and doc.getObject("Body") is not None,
         (text[:400], other.Shape.Volume, before),
     )
+    text, error = agent.call("check_design", {})
+    report = _json(text) or {}
+    agent.check(
+        "follower: check_design leaves the kept original out of the overlap check (it called "
+        "the original and its rebuild an overlap: NOT OK)",
+        not error
+        and not any("overlap" in str(p) for p in report.get("problems", []))
+        and "kept hidden under its rebuild" in text,
+        text[:500],
+    )
 
 
 # -- check_design while a rebuild goes on ----------------------------------------------------------

@@ -290,8 +290,8 @@ def interference(ctx, args):
         left = [b for b in found if b.Name in rebuilt]
         if left:
             found = [b for b in found if b.Name not in rebuilt]
-            note = " (Left out: %s, being rebuilt, hidden under the rebuild.)" % ", ".join(
-                b.Label for b in left
+            note = " (Left out: %s.)" % "; ".join(
+                "%s, %s" % (b.Label, rebuilt[b.Name]) for b in left
             )
     if len(found) < 2:
         raise UserError(analysis.TOO_FEW + note)
