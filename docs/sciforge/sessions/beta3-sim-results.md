@@ -94,7 +94,8 @@ per-body keys of same-named bodies and the last engine fixes.
   stay as they were. FreeCAD may show a switch again on a display mode change (or Undo may
   bring a deleted body back): the App document observer's `slotCreatedObject` and
   `slotChangedObject(obj, "Visibility")` flag it and the results' timer hides it again; a full
-  look every 3 s catches the rest (a display mode change tells only the Gui side).
+  look at a few hidden objects in turn (60 every 0.4 s) catches the rest (a display mode change
+  tells only the Gui side); a look at all of a design of 800 objects took 56 ms.
 - **A Gui document observer (`Gui.addDocumentObserver`; ours had `slotCreatedObject` and
   `slotChangedObject`) breaks FEM object creation**: with it registered, `ObjectsFem.makeMeshGmsh(doc, "SimMesh")` failed
   inside `addObject` with "Cannot create object 'SimMesh': (Cannot add static property)" and
@@ -165,7 +166,7 @@ per-body keys of same-named bodies and the last engine fixes.
 - 22:00-22:15 the report's Preview (the page opened in the web browser from the temporary
   folder, nothing saved) and its reaction force table; with a body's eye off the min / max tags
   mark the bodies still drawn; objects shown again under the results are found through the
-  App document observer (a new object, a Visibility switched on) and a full look every 3 s,
-  instead of every 0.4 s (a long design's every object each time). A Gui document observer,
+  App document observer (a new object, a Visibility switched on) and a look at 60 hidden
+  objects in turn every 0.4 s, instead of all of them every 0.4 s (56 ms for 800 objects). A Gui document observer,
   tried first, broke the solve (see the facts above); all fifteen results and simulation
   scenarios pass again.

@@ -334,14 +334,14 @@ def _tab_changed(_index):
     QtCore.QTimer.singleShot(0, sync)
 
 
-def _hide_again(ticks):
-    """Time to look for objects shown again under the results: something changed a view
-    provider (the Gui observer said so), or about every 3 seconds (the 70 ms timer's 42nd
-    tick) for what changes without telling (a long design would cost every tick)."""
-    if WATCH["shown_again"] or ticks % 42 == 0:
+def _hide_again(session):
+    """Objects shown again under the results hidden again: every object of the design when
+    the document observer saw one made or shown, else the next few hidden ones in turn."""
+    if WATCH["shown_again"]:
         WATCH["shown_again"] = False
-        return True
-    return False
+        Session._keep_design_hidden(session)
+    else:
+        Session._keep_design_hidden(session, part=60)
 
 
 def _poll_watch():
@@ -384,7 +384,8 @@ class _DocWatch:
 
     # what may show a hidden object again while the results show: an object made or brought
     # back by Undo, a Visibility switched on (the results' timer then hides the design again;
-    # a display mode change, which tells only the Gui side, is found by its look every 3 s;
+    # a display mode change, which tells only the Gui side, is found by the timer's look at a
+    # few hidden objects in turn;
     # a Gui document observer made FreeCAD fail to create FEM objects: "Cannot add static
     # property")
     def slotCreatedObject(self, _obj):
@@ -728,16 +729,39 @@ class Session:
             except Exception:
                 continue
 
-    def _keep_design_hidden(self):
+    def _keep_design_hidden(self, part=None):
         """What FreeCAD shows again while the results show (a display mode change, a body
-        brought back by Undo, a new object) is hidden again; deleted objects are forgotten."""
+        brought back by Undo, a new object) is hidden again; deleted objects are forgotten.
+        part: look at only that many of the hidden objects, the next ones in turn (the
+        periodic look: a design of 800 objects took 56 ms each time); None: every object of
+        the design (the document observer said something was made or shown)."""
         doc = self.doc
         if doc is None:
             return
-        for name in list(self.hidden):
-            if doc.getObject(name) is None:
+        if part is None:
+            for name in list(self.hidden):
+                if doc.getObject(name) is None:
+                    self.hidden.pop(name, None)
+            Session._hide_design(self)  # (Compare's session borrows it too)
+            return
+        names = sorted(self.hidden)
+        if not names:
+            return
+        start = getattr(self, "_hide_cursor", 0) % len(names)
+        for name in (names[start:] + names[:start])[:part]:
+            obj = doc.getObject(name)
+            try:
+                if obj is None or obj.ViewObject is None:
+                    self.hidden.pop(name, None)
+                    continue
+                switch = obj.ViewObject.SwitchNode
+                which = switch.whichChild.getValue()
+                if which != -1:  # (shown again: a display mode change...)
+                    self.hidden[name] = which
+                    switch.whichChild = -1
+            except Exception:
                 self.hidden.pop(name, None)
-        Session._hide_design(self)  # (Compare's session borrows it too)
+        self._hide_cursor = start + part
 
     def _show_design(self):
         doc = self.doc
@@ -1513,8 +1537,7 @@ class Session:
                     self.tags.relayout()
             self._ticks += 1
             if self._ticks % 6 == 0:
-                if _hide_again(self._ticks):
-                    self._keep_design_hidden()
+                _hide_again(self)
                 self._follow_bodies()
             if _picking_dialog_open():
                 # a command that picks faces of the design (a load or constraint edited from the
@@ -2183,8 +2206,8 @@ class CompareSession:
                     if layer is not None and view_mod._alive(layer):
                         layer.relayout()
             self._ticks += 1
-            if self._ticks % 6 == 0 and _hide_again(self._ticks):
-                Session._keep_design_hidden(self)
+            if self._ticks % 6 == 0:
+                _hide_again(self)
         except Exception as exc:
             warn("Compare: %s" % exc)
 
