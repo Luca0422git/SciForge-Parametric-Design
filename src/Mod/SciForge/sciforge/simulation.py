@@ -2364,6 +2364,9 @@ def _freecad_cmd():
 
 # -- solving ---------------------------------------------------------------------------------------
 STAGES = ("model", "mesh", "input", "solve", "results")
+# a mesh this big takes CalculiX minutes and GBs (143 000 nodes: 2 minutes on 2 threads; 300 000
+# nodes: over 6 GB and 9 minutes): the solve's message says so
+BIG_MESH_NODES = 150000
 
 
 class Job:
@@ -2778,7 +2781,14 @@ class Job:
         self.notes += cards["notes"]
         self._input = os.path.splitext(os.path.basename(path))[0]
         self.timings["input"] = self.timings.get("input", 0.0) + time.time() - t
-        self.stage, self.message = "solve", "Solving"
+        nodes = self._mesh.FemMesh.NodeCount
+        self.stage = "solve"
+        self.message = "Solving %s nodes with CalculiX" % "{:,}".format(nodes).replace(",", " ")
+        if nodes > BIG_MESH_NODES:
+            self.message += (
+                ": a big mesh, it can take several minutes and some GB of memory (a larger "
+                "element size solves faster)"
+            )
         env = dict(os.environ)
         if not env.get("OMP_NUM_THREADS"):
             env["OMP_NUM_THREADS"] = str(max(1, (os.cpu_count() or 2) - 1))
