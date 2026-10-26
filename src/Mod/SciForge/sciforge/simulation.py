@@ -2465,10 +2465,12 @@ class Job:
                 self._thread = None
                 if self._cancel:
                     return self._stop("cancelled", "Cancelled.")
+                _close_open_transaction(self.doc)  # (what a turn changes is no undo step)
                 self._after_background()
                 return self.state
             if self._cancel:
                 return self._stop("cancelled", "Cancelled.")
+            _close_open_transaction(self.doc)
             getattr(self, "_stage_" + self.stage)()
         except SimulationError as exc:
             return self._stop("failed", str(exc))
@@ -3090,6 +3092,8 @@ class Job:
         self._mesh_tools = None
         if state != "done":
             log("simulation %s: %s" % (state, message))
+        # (no undo step is closed here: a cancel can come while a dialog of the person has
+        # its own open, which its Cancel must still be able to undo)
         for run in (self._analysis, self._previous_run):
             if run is not None:  # a run that did not make it: nothing left behind
                 try:

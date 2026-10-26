@@ -150,3 +150,9 @@ sections Engine and Benchmarks.
   in the file for good: nothing linked it, nothing removed it. A solve now removes such left
   overs first (objects of a solve that no study links and no running job is making; engine
   check "a design saved while it solves").
+- 21:50-22:00 an undo step someone opened between two turns of a solve (a command run between
+  the timer's ticks) took in what the next turn made (the result objects, the mesh): undoing it
+  took the results away. Every turn now closes such a step first (keeping it), except when a
+  cancel removes a run (a dialog's own step must stay open for its Cancel; sim-ui does not
+  poll while a dialog is open). Engine check "undo steps opened while it solves" (fails
+  without the change).

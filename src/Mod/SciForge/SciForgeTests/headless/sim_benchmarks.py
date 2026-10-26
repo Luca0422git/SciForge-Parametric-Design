@@ -1074,6 +1074,38 @@ def check_saved_mid_solve(doc, out):
         App.closeDocument(again.Name)
 
 
+@engine_check("undo steps opened while it solves")
+def check_steps_between_turns(doc, out):
+    """Someone opens an undo step before every turn of the solve (a command running between
+    the timer's ticks): the step is closed before the turn changes anything, so undoing them
+    all leaves the solve's results."""
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc)
+    doc.UndoMode = 1
+    job = sim.Job(study)
+    turns = 0
+    while job.state == "running" and turns < 20000:
+        if job._thread is not None and job._thread.is_alive():
+            job._thread.join(0.002)
+            continue
+        doc.openTransaction("Someone's step %d" % turns)
+        turns += 1
+        job.poll()
+    if getattr(doc, "HasPendingTransaction", False):
+        doc.commitTransaction()
+    out.append(("solved", job.state == "done", job.message))
+    for _ in range(int(doc.UndoCount)):
+        doc.undo()
+    out.append(
+        (
+            "every step undone: the results stay (%d turns)" % turns,
+            sim.results(study) is not None and sim.result_object(study) is not None,
+            list(doc.UndoNames),
+        )
+    )
+
+
 @engine_check("a change while it solves")
 def check_change_during(doc, out):
     """The results are of the study as the solve started: a load changed while CalculiX runs
