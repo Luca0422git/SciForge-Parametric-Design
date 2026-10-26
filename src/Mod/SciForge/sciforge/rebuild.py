@@ -942,10 +942,10 @@ def _sampled(a, b, count=4096):
     # (a little off the cells' centres: no ray runs along an edge of a part drawn on a grid)
     xs = box.XMin + (numpy.arange(n) + 0.5 + 0.0137) * dx
     ys = box.YMin + (numpy.arange(n) + 0.5 - 0.0219) * dy
-    inside_a = _ray_insides(a, xs, ys, box)
-    inside_b = _ray_insides(b, xs, ys, box)
+    inside_a, odd_a = _ray_insides(a, xs, ys, box)
+    inside_b, odd_b = _ray_insides(b, xs, ys, box)
     common = missing = extra = 0.0
-    for ray in set(inside_a) | set(inside_b):
+    for ray in (set(inside_a) | set(inside_b)) - odd_a - odd_b:
         along_a, along_b = inside_a.get(ray, []), inside_b.get(ray, [])
         both = _overlap(along_a, along_b)
         common += both
@@ -956,15 +956,15 @@ def _sampled(a, b, count=4096):
 
 
 def _ray_insides(shape, xs, ys, box):
-    """{ray: [(z0, z1)]}: where the rays along Z through (xs[i], ys[j]) (ray i * len(ys) + j)
-    are inside the solid: their crossings of its triangles, in pairs. A ray with an odd number
-    of crossings (it grazes an edge) is left out."""
+    """({ray: [(z0, z1)]}, {rays left out}): where the rays along Z through (xs[i], ys[j]) (ray
+    i * len(ys) + j) are inside the solid: their crossings of its triangles, in pairs. A ray
+    with an odd number of crossings (it grazes an edge) is left out (of both solids)."""
     import numpy as np
 
     size = max(box.DiagonalLength, 1e-6)
     points, triangles = shape.tessellate(1e-3 * size)
     if not triangles:
-        return {}
+        return {}, set()
     xyz = np.array([(p.x, p.y, p.z) for p in points])
     tri = np.array(triangles, dtype=int)
     pa, pb, pc = xyz[tri[:, 0]], xyz[tri[:, 1]], xyz[tri[:, 2]]
@@ -983,7 +983,7 @@ def _ray_insides(shape, xs, ys, box):
     counts = wide * tall
     total = int(counts.sum())
     if total == 0:
-        return {}
+        return {}, set()
     which = np.repeat(np.arange(len(tri)), counts)
     k = np.arange(total) - np.repeat(np.cumsum(counts) - counts, counts)
     tall_k = np.repeat(tall, counts)
@@ -1005,6 +1005,7 @@ def _ray_insides(shape, xs, ys, box):
     order = np.lexsort((z, rays))
     rays, z = rays[order], z[order]
     out = {}
+    odd = set()
     same = 1e-9 * size
     start = 0
     for end in list(np.nonzero(np.diff(rays))[0] + 1) + [len(rays)]:
@@ -1012,10 +1013,12 @@ def _ray_insides(shape, xs, ys, box):
         for value in z[start:end]:
             if not zs or value - zs[-1] > same:  # (two triangles meeting where the ray crosses)
                 zs.append(float(value))
-        if zs and len(zs) % 2 == 0:
+        if len(zs) % 2:
+            odd.add(int(rays[start]))
+        elif zs:
             out[int(rays[start])] = [(zs[i], zs[i + 1]) for i in range(0, len(zs), 2)]
         start = end
-    return out
+    return out, odd
 
 
 def _overlap(one, other):
