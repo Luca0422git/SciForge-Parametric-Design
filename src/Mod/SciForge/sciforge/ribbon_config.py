@@ -1359,12 +1359,12 @@ SIM_STUDY = group(
 SIM_SIMPLIFY = group(
     "sim_simplify",
     "SIMPLIFY",
-    [],
+    ["Simplify"],
     [
         item(
             "Simplify",
             None,
-            SIM_ICON,
+            "sim_simplify",
             note=_SIM_LATER + ": a study uses the design as it is (leave a body out in Study "
             "Materials)",
         ),
@@ -1402,10 +1402,10 @@ SIM_LOADS = group(
             toggle="simulation_ui:gravity_on",
         ),  # owner: sim-ui
         SEP,
-        item("Linear Global Load", None, SIM_ICON, note=_SIM_LATER),
-        item("Angular Global Load", None, SIM_ICON, note=_SIM_LATER),
-        item("Point Mass (Auto)", None, SIM_ICON, note=_SIM_LATER),
-        item("Point Mass (Manual)", None, SIM_ICON, note=_SIM_LATER),
+        item("Linear Global Load", None, "sim_global_linear", note=_SIM_LATER),
+        item("Angular Global Load", None, "sim_global_angular", note=_SIM_LATER),
+        item("Point Mass (Auto)", None, "sim_point_mass_auto", note=_SIM_LATER),
+        item("Point Mass (Manual)", None, "sim_point_mass_manual", note=_SIM_LATER),
     ],
 )
 SIM_CONTACTS = group(
@@ -1417,23 +1417,25 @@ SIM_CONTACTS = group(
         item(
             "Manual Contacts",
             None,
-            SIM_ICON,
+            "sim_manual_contacts",
             note=_SIM_LATER + ": bodies that touch are bonded, found automatically",
         ),
         item(
             "Contact Manager", "SciForge_SimContactManager", "sim_contact_manager"
         ),  # owner: sim-ui
         SEP,
-        item("Bolt Connector", None, SIM_ICON, note=_SIM_LATER),
-        item("Rigid Body Connector", None, SIM_ICON, note=_SIM_LATER),
+        item("Bolt Connector", None, "sim_bolt", note=_SIM_LATER),
+        item("Rigid Body Connector", None, "sim_rigid_connector", note=_SIM_LATER),
     ],
 )
 SIM_DISPLAY = group(
     "sim_display",
     "DISPLAY",
-    [],
+    ["DOF View"],
     [
-        item("DOF View", "SciForge_SimDOFView", "sim_dof"),  # owner: sim-ui
+        item(
+            "DOF View", "SciForge_SimDOFView", "sim_dof", toggle="simulation_ui:dof_on"
+        ),  # owner: sim-ui
         item(
             "Show Mesh",
             "SciForge_SimShowMesh",
@@ -1445,7 +1447,7 @@ SIM_DISPLAY = group(
 SIM_MANAGE = group(
     "sim_manage",
     "MANAGE",
-    [],
+    ["Settings"],
     [
         item("Settings", "SciForge_SimSettings", "sim_settings"),  # owner: sim-ui
         item("Local Mesh Control", "SciForge_SimLocalMesh", "sim_local_mesh"),  # owner: sim-ui
@@ -1462,6 +1464,34 @@ SIM_SOLVE = group(
         item("Generate Mesh", "SciForge_SimGenerateMesh", "sim_mesh"),  # owner: sim-ui
     ],
 )
+# The right-click marking menu in the SIMULATION workspace (Fusion's offers the setup's
+# commands there, not the design's; the places are SciForge's choice). No Delete: in
+# SIMULATION the design is not changed (a study item is deleted from the browser).
+# owner: sim-ui (simulation_ui.open_marking_menu)
+SIM_MARKING_MENU = [
+    item("Repeat", "__repeat__", "compute"),
+    item("Study Materials", "SciForge_SimStudyMaterials", "sim_materials"),
+    item("Structural Loads", "SciForge_SimLoads", "sim_loads"),
+    item("Undo", "Std_Undo", "qa_undo", "Ctrl+Z"),
+    item("Structural Constraints", "SciForge_SimConstraints", "sim_constraints"),
+    item("Pre-check", "SciForge_SimPrecheck", "sim_precheck"),
+    item("Solve", "SciForge_SimSolve", "sim_solve"),
+    item("Settings", "SciForge_SimSettings", "sim_settings"),
+]
+SIM_MARKING_LIST = [
+    item("Redo", "Std_Redo", "qa_redo", "Ctrl+Y"),
+    item("Generate Mesh", "SciForge_SimGenerateMesh", "sim_mesh"),
+    item("Local Mesh Control", "SciForge_SimLocalMesh", "sim_local_mesh"),
+    item("DOF View", "SciForge_SimDOFView", "sim_dof"),
+    SEP,
+    item("Hide", "Std_HideSelection", "nav_display"),
+    item("Show All", "Std_ShowObjects", "nav_display"),
+    item("Fit", "Std_ViewFitAll", "nav_fit", "F6"),
+    item("Look At", "Std_AlignToSelection", "nav_lookat"),
+    SEP,
+    item("Set Orbit Center", "SciForge_SetOrbitCenter", "orbit_center"),
+    item("Reset Orbit Center", "SciForge_ResetOrbitCenter", "orbit_center"),
+]
 SIMR_TOOLS = group(
     "simr_tools",
     "RESULT TOOLS",

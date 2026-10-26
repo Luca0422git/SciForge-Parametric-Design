@@ -37,6 +37,8 @@ RUN = {
     "results": {},  # study name -> "done" / "failed" / "cancelled" / message, this run
     "last_done": None,
     "waiting": False,  # a command's dialog is open: the job waits
+    "run": 0,  # how many runs this session (Solve or Generate Mesh)
+    "history": [],  # [(run, "HH:MM", kind, study label, state)] newest first (Job Status)
 }
 MESH = {"shown": None}  # (document, study) whose mesh is shown on the model
 
@@ -231,6 +233,7 @@ def start(studies, kind="solve"):
     if not commands.finish_open_dialog():
         return False
     hide_mesh()
+    RUN["run"] = RUN.get("run", 0) + 1
     RUN["queue"] = list(studies)
     RUN["kind"] = kind
     RUN["results"] = {}
@@ -270,6 +273,7 @@ def _next():
         except Exception as exc:
             RUN["job"] = None
             RUN["results"][study.Name] = ("failed", str(exc))
+            _remember(study.Label, "failed")
             continue
         log("%s %s" % ("meshing" if RUN["kind"] == "mesh" else "solving", study.Label))
         _update_status()
@@ -370,6 +374,7 @@ def _after(study, state, message):
                 else:
                     RUN["last_done"] = study
             log("%s %s" % (study.Label, "meshed" if RUN["kind"] == "mesh" else "solved"))
+        _remember(study.Label, state)
         try:
             sim.summary(study)
         except Exception:
@@ -377,6 +382,18 @@ def _after(study, state, message):
     _update_status()
     if _next() is None:
         _finish_all()
+
+
+def _remember(label, state):
+    """A finished job for the progress window's list of earlier ones (Fusion's Job Status
+    lists the completed and failed solves; SciForge keeps this session's)."""
+    try:
+        RUN.setdefault("history", []).insert(
+            0, (RUN.get("run", 0), time.strftime("%H:%M"), RUN["kind"], label, state)
+        )
+        del RUN["history"][20:]
+    except Exception as exc:
+        warn("job status: %s" % exc)
 
 
 def model_size(study):
@@ -401,13 +418,17 @@ def loose_result(study):
         size = model_size(study)
         if moved is None or size <= 0 or moved <= 0.5 * size:
             return None
-        from . import simulation_core as core
+        from .simulation_panels import doc_units
 
+        length = doc_units(study.Document)["length"]
         return (
-            "Solved, but the model moved %s mm, more than half its own size (%s mm): it is not "
+            "Solved, but the model moved %s, more than half its own size (%s): it is not "
             "held enough (a part can still turn or slide about what holds it). Check the "
             "constraints (DOF View), then solve again: these results are not meaningful."
-            % (core.fmt(moved, 3), core.fmt(size, 3))
+            % (
+                score.format_quantity(moved, "length", 3, length),
+                score.format_quantity(size, "length", 3, length),
+            )
         )
     except Exception:
         return None
@@ -445,12 +466,15 @@ def _finish_all():
 
 def cancel():
     """Cancel the solve running now and the ones waiting (Fusion: Cancel in Job Status)."""
-    RUN["queue"] = []
-    job = RUN["job"]
-    if job is not None:
-        job.cancel()
-        log("solve cancelled")
-    _update_status()
+    try:
+        RUN["queue"] = []
+        job = RUN["job"]
+        if job is not None:
+            job.cancel()
+            log("solve cancelled")
+        _update_status()
+    except Exception as exc:
+        warn("cancel: %s" % exc)
 
 
 # -- progress window (Fusion's Job Status, research 3.10) ----------------------------------------
@@ -486,7 +510,7 @@ class StatusDialog(FocusBack, QtWidgets.QDialog):
         layout.addWidget(self.elapsed)
         self.studies = QtWidgets.QListWidget()
         self.studies.setObjectName("SciForgeSimJobStudies")
-        self.studies.setMaximumHeight(90)
+        self.studies.setMaximumHeight(110)
         layout.addWidget(self.studies)
         self.message = QtWidgets.QLabel("")
         self.message.setObjectName("SciForgeSimJobMessage")
@@ -614,9 +638,25 @@ def _fill_studies(dialog):
     for study in RUN["queue"]:
         if bodies.alive(study):
             rows.append("%s: waiting" % study.Label)
+    current = len(rows)
+    for run, when, kind, label, state in RUN.get("history", []):
+        if run == RUN.get("run"):
+            continue  # (this run's own are above)
+        rows.append(
+            "Earlier, %s: %s%s: %s"
+            % (
+                when,
+                "Mesh of " if kind == "mesh" else "",
+                label,
+                score.STATE_WORDS.get(state, state),
+            )
+        )
     if [dialog.studies.item(i).text() for i in range(dialog.studies.count())] != rows:
         dialog.studies.clear()
         dialog.studies.addItems(rows)
+        for i in range(current, len(rows)):  # the earlier ones greyed
+            item = dialog.studies.item(i)
+            item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
 
 
 def stage_states():

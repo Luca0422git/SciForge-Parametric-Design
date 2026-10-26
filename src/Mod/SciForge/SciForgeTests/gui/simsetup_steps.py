@@ -11,7 +11,7 @@ import time
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtWidgets
+from PySide import QtCore, QtGui, QtWidgets
 from PySide6 import QtTest
 
 from SciForgeTests.gui import dialog_input as ui
@@ -300,9 +300,19 @@ def click_widget(widget):
 
 
 def menu_item(group, label):
-    """GROUP > label in the ribbon (the group's name opens its menu), with the mouse."""
+    """GROUP > label in the ribbon (the group's name opens its menu), with the mouse. The
+    pointer first goes over the 3D view, as a person's does: QMenu ignores a click on an
+    entry when the pointer has not moved since the menu opened (it rested on that very
+    entry after the same click a moment before: DISPLAY > Show Mesh twice)."""
     from SciForgeTests.gui import sketch_input
 
+    try:
+        gl = h.gl_widget()
+        QtGui.QCursor.setPos(gl.mapToGlobal(QtCore.QPoint(gl.width() // 2, gl.height() // 2)))
+        QtTest.QTest.mouseMove(gl, QtCore.QPoint(gl.width() // 2, gl.height() // 2))
+        _process()
+    except Exception:
+        pass
     return sketch_input.menu_item(group, label)
 
 
@@ -401,6 +411,8 @@ def browser_row(label):
     if item is not None:
         tree.scrollToItem(item)
         _process()
+        # (the browser may have been rebuilt while events ran: its row of now)
+        item = tree.row(label)
     return item
 
 
@@ -411,42 +423,53 @@ def row_node(label):
     return item.data(1, ROLE_NODE) if item is not None else None
 
 
-def right_click_row(label, entry):
+def _row_pos(label):
+    """(tree, position of the row `label`) or (tree, None); the row is found again when the
+    browser was rebuilt in between (it refreshes itself after a change)."""
     tree = browser()
-    item = browser_row(label)
-    if item is None:
+    for _try in range(3):
+        item = browser_row(label)
+        if item is None:
+            return tree, None
+        try:
+            return tree, w.tree_row_pos(tree, item)
+        except RuntimeError:  # (rebuilt while the row was being found)
+            continue
+    return tree, None
+
+
+def right_click_row(label, entry):
+    tree, pos = _row_pos(label)
+    if pos is None:
         h.check("browser row %s" % label, False, browser_labels())
         return False
-    ok = w.right_click(tree.viewport(), w.tree_row_pos(tree, item), entry)
+    ok = w.right_click(tree.viewport(), pos, entry)
     h.check("right-click %s > %s" % (label, entry), ok)
     return ok
 
 
 def menu_entries(label):
-    tree = browser()
-    item = browser_row(label)
-    if item is None:
+    tree, pos = _row_pos(label)
+    if pos is None:
         return []
-    return [t for t, _enabled in w.menu_texts(tree.viewport(), w.tree_row_pos(tree, item))]
+    return [t for t, _enabled in w.menu_texts(tree.viewport(), pos)]
 
 
 def double_click_row(label):
-    tree = browser()
-    item = browser_row(label)
-    if item is None:
+    tree, pos = _row_pos(label)
+    if pos is None:
         h.check("browser row %s" % label, False, browser_labels())
         return False
-    w.double_click(tree.viewport(), w.tree_row_pos(tree, item))
+    w.double_click(tree.viewport(), pos)
     return True
 
 
 def click_row(label):
-    tree = browser()
-    item = browser_row(label)
-    if item is None:
+    tree, pos = _row_pos(label)
+    if pos is None:
         h.check("browser row %s" % label, False, browser_labels())
         return False
-    w.click(tree.viewport(), w.tree_row_pos(tree, item))
+    w.click(tree.viewport(), pos)
     return True
 
 

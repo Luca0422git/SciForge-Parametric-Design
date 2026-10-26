@@ -36,6 +36,8 @@ STATE = {
     "light": None,  # (document, study, state) shown on the Pre-check button
     "light_key": None,
     "glyph_key": None,
+    "dof": False,  # DOF View is on (SETUP > DISPLAY)
+    "held": [],  # the design's shortcuts switched off while SIMULATION shows
 }
 
 
@@ -91,6 +93,11 @@ def set_active_study(study):
         STATE["active"][study.Document.Name] = study.Name
         log("active study: %s" % study.Label)
         _setup_tab_without_results(study)
+        from . import simulation_solve_dialog
+
+        shown = simulation_solve_dialog.MESH["shown"]
+        if shown is not None and shown != (study.Document.Name, study.Name):
+            simulation_solve_dialog.hide_mesh()  # (another study's mesh)
     except Exception as exc:
         warn("active study: %s" % exc)
     refresh()
@@ -234,14 +241,24 @@ def _apply(on, tab=None):
         except Exception as exc:
             warn("simulation ribbon: %s" % exc)
     _timeline(on)
+    _hold_design_keys(on)
     if not on:
         _results_hide()
+        STATE["dof"] = False  # (DOF View is a SIMULATION display: off when it is left)
+        try:  # the mesh Generate Mesh showed is a SIMULATION display: not over the design
+            from . import simulation_solve_dialog
+
+            simulation_solve_dialog.hide_mesh()
+        except Exception as exc:
+            warn("simulation mesh: %s" % exc)
     try:
         from . import simulation_glyphs
 
         if on:
+            simulation_glyphs.set_dof(STATE["dof"])
             simulation_glyphs.refresh(_doc(), active_study(), force=True)
         else:
+            simulation_glyphs.set_dof(False)
             simulation_glyphs.clear()
     except Exception as exc:
         warn("simulation glyphs: %s" % exc)
@@ -258,6 +275,76 @@ def _apply(on, tab=None):
             "%s workspace%s"
             % ("simulation" if on else "design", (": %s" % doc.Label) if doc is not None else "")
         )
+
+
+# Keys that change the design (Fusion's design shortcuts do nothing in Simulation): Press
+# Pull, Extrude, Fillet, Hole, Move, Joint, copy / paste, Compute All, Delete and the sketch
+# tools. Delete made a Delete Face step from a face picked in the view (or deleted a body DOF
+# View had selected); the browser takes Del itself, so a study item is still deleted there.
+DESIGN_KEYS = (
+    "Del",
+    "Backspace",
+    "Q",
+    "E",
+    "F",
+    "H",
+    "M",
+    "J",
+    "Ctrl+C",
+    "Ctrl+V",
+    "Ctrl+B",
+    "D",
+    "L",
+    "C",
+    "R",
+    "T",
+    "X",
+    "O",
+    "P",
+)
+
+
+def _hold_design_keys(on):
+    """In SIMULATION the design's keys are off (Fusion does not change the design from
+    Simulation); they are on again when it is left."""
+    try:
+        from . import shortcuts
+
+        if on:
+            for key in DESIGN_KEYS:
+                entry = shortcuts._bound.get(shortcuts.normalise(key))
+                if entry is not None and entry[1].isEnabled():
+                    entry[1].setEnabled(False)
+                    STATE["held"].append(entry[1])
+        else:
+            held, STATE["held"] = STATE["held"], []
+            for shortcut in held:
+                try:
+                    shortcut.setEnabled(True)
+                except RuntimeError:
+                    pass  # (rebound meanwhile: the new one is on)
+    except Exception as exc:
+        warn("simulation workspace: keys: %s" % exc)
+
+
+def open_marking_menu(global_pos):
+    """The right-click marking menu with the SETUP commands (ribbon_config.SIM_MARKING_MENU
+    and SIM_MARKING_LIST) instead of the design's."""
+    from . import marking_menu, recent, ribbon_config as cfg
+
+    ring, listing, last = cfg.MARKING_MENU, cfg.MARKING_LIST, recent.last
+
+    def simulation_last():
+        # Repeat offers the last SETUP command only (not a design command run before)
+        found = last()
+        return found if found and str(found[0]).startswith("SciForge_Sim") else None
+
+    cfg.MARKING_MENU, cfg.MARKING_LIST = cfg.SIM_MARKING_MENU, cfg.SIM_MARKING_LIST
+    recent.last = simulation_last
+    try:
+        return marking_menu.open_at(global_pos)
+    finally:
+        cfg.MARKING_MENU, cfg.MARKING_LIST, recent.last = ring, listing, last
 
 
 def _timeline(on):
@@ -482,9 +569,21 @@ def light():
 # -- results hand-over ---------------------------------------------------------------------------
 def show_results(study):
     """A solve ended: the results show (sim-results' simulation_results_ui.show(study) when it
-    is there, else the RESULTS tab is selected)."""
+    is there, else the RESULTS tab is selected). Only when the design is in front in the
+    SIMULATION workspace: a person who went on working in DESIGN (or in another design) while
+    it solved is not taken away from it; they are told where the results are."""
     try:
         if study is None:
+            return
+        doc = study.Document
+        if not (STATE["on"] and in_workspace(doc) and App.ActiveDocument is doc):
+            STATE["active"][doc.Name] = study.Name
+            from . import commands
+
+            commands.tell(
+                "%s is solved: its results are in Workspace > Simulation, RESULTS tab."
+                % study.Label
+            )
             return
         set_active_study(study)
         try:
@@ -595,6 +694,11 @@ class LoadsCommand(_SetupCommand):
             simulation_panels.open_item(study, "load")
 
 
+def dof_on():
+    """True while DOF View is on (the menu's tick)."""
+    return bool(STATE["dof"] and STATE["on"])
+
+
 def gravity_on():
     """True when the active study has gravity on (the menu's tick)."""
     try:
@@ -647,7 +751,7 @@ class ContactManagerCommand(_SetupCommand):
 
 class DOFViewCommand(_SetupCommand):
     TEXT = "DOF View"
-    TIP = "Show which bodies are not held yet and could still move"
+    TIP = "On / off: arrows show how the bodies that are not held yet could still move"
     ICON = "sim_dof"
 
     def run(self):

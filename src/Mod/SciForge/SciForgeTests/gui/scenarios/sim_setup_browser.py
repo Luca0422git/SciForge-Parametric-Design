@@ -7,7 +7,8 @@ made by script; everything after that is clicks and keys.
 A  The study solved (SOLVE > Solve); the Results row shows.
 B  Right-click Force 1 > Edit Load: its dialog opens with its face picked and 250 N; 500 N
    typed, OK. The results are now out of date: the row says so (yellow).
-C  Right-click Results > Solve: solved again, the Results row is up to date.
+C  Right-click Results > Solve: solved again, the Results row is up to date; the progress
+   window lists the earlier solve too.
 D  Double-click Fixed 1: Edit Constraint opens on its two holes; Cancel changes nothing.
 E  Right-click Force 1 > Suppress: greyed, its glyphs gone, the pre-check turns yellow (nothing
    pushes); Unsuppress brings it back.
@@ -122,6 +123,15 @@ def c_go():
 def c_check():
     h.check("up to date again", not s.sim().out_of_date(study()))
     h.check("Results row plain again", "Results" in s.browser_labels(), s.browser_labels())
+    status = s.status_dialog()
+    rows = [status.studies.item(i).text() for i in range(status.studies.count())] if status else []
+    h.check(
+        "the progress lists the earlier solve too (Job Status)",
+        any(
+            r.startswith("Earlier, ") and r.endswith("Study 1 - Static Stress: Done") for r in rows
+        ),
+        rows,
+    )
     s.close_popup("SciForgeSimJobStatus")
 
 

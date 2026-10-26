@@ -371,3 +371,98 @@ def _():
 @icon("sim_stage_failed")
 def _():
     return _cross(24, 24, 14)
+
+
+# Fusion's SETUP commands SciForge does not build yet (greyed on the ribbon, with their own
+# pictures so the menus read like Fusion's).
+def _minus_badge(cx=37, cy=37, r=8.5):
+    return circle(cx, cy, r, BAD_RED) + line(cx - r * 0.5, cy, cx + r * 0.5, cy, WHITE, 2.4)
+
+
+@icon("sim_simplify")
+def _():
+    return (
+        _bracket(22, 30)
+        + ellipse(22, 22, 5.5, 3.2, "none", DARK, 1.4)
+        + path("M 9 14 Q 14 6 21 9", ORANGE, 1.8, extra='stroke-dasharray="2.5 2"')
+        + _minus_badge(37, 36)
+    )
+
+
+@icon("sim_global_linear")
+def _():
+    return (
+        block(-6, -6, 0, 12, 12, 10, GREY, 16, 30)
+        + arrow(28, 14, 44, 14, WEIGHT, 2.4, 6)
+        + arrow(28, 24, 44, 24, WEIGHT, 2.4, 6)
+        + arrow(28, 34, 44, 34, WEIGHT, 2.4, 6)
+    )
+
+
+@icon("sim_global_angular")
+def _():
+    return (
+        block(-6, -6, 0, 12, 12, 10, GREY, 24, 34)
+        + line(24, 4, 24, 44, DARK, 1.6, 'stroke-dasharray="3 2"')
+        + path("M 10 14 A 14 6 0 1 0 38 14", WEIGHT, 2.6)
+        + poly([(34, 9), (42, 13), (35, 18)], WEIGHT)
+    )
+
+
+@icon("sim_point_mass_auto")
+def _():
+    return (
+        rect(6, 34, 36, 7, GREY[1], 1)
+        + line(24, 16, 10, 34, DARK, 1.2)
+        + line(24, 16, 24, 34, DARK, 1.2)
+        + line(24, 16, 38, 34, DARK, 1.2)
+        + circle(24, 14, 8, WEIGHT)
+        + circle(21.5, 11.5, 2.2, "#c9b8f5")
+    )
+
+
+@icon("sim_point_mass_manual")
+def _():
+    return (
+        line(4, 28, 44, 28, GREY[2], 1.4, 'stroke-dasharray="3 2"')
+        + line(20, 4, 20, 44, GREY[2], 1.4, 'stroke-dasharray="3 2"')
+        + circle(20, 28, 8, WEIGHT)
+        + circle(17.5, 25.5, 2.2, "#c9b8f5")
+        + rect(30, 6, 14, 9, GREY[1], 1.5)
+        + line(32.5, 10.5, 41.5, 10.5, DARK, 1.4)
+    )
+
+
+@icon("sim_manual_contacts")
+def _():
+    return (
+        block(-12, -6, 0, 12, 12, 10, GREY, 20, 30)
+        + block(0, -6, 0, 12, 12, 10, BLUE, 20, 30)
+        + circle(21, 25, 2.2, PUSH)
+        + circle(21, 31, 2.2, PUSH)
+        + plus_badge(38, 37, 7.5)
+    )
+
+
+@icon("sim_bolt")
+def _():
+    return (
+        rect(6, 20, 36, 8, GREY[1], 1)
+        + rect(6, 30, 36, 8, GREY[2], 1)
+        + rect(20, 14, 8, 30, "#c9ced6", 1)
+        + poly([(14, 8), (34, 8), (36, 14), (12, 14)], "#8a929d")
+        + line(20, 40, 28, 38, DARK, 1.0)
+        + line(20, 36, 28, 34, DARK, 1.0)
+    )
+
+
+@icon("sim_rigid_connector")
+def _():
+    import math as _m
+
+    out = circle(24, 24, 16, "none", GREY[2], 3.5)
+    for i in range(6):
+        a = _m.radians(i * 60 + 15)
+        x, y = 24 + 16 * _m.cos(a), 24 + 16 * _m.sin(a)
+        out += line(24, 24, x, y, TEAL_D, 1.8) + circle(x, y, 2.2, TEAL)
+    return out + circle(24, 24, 4, TEAL)

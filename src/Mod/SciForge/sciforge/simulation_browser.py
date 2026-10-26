@@ -39,13 +39,19 @@ def is_sim(node):
     return bool(node) and str(node.get("kind", "")).startswith("sim_")
 
 
-def _item_row(item, lost):
+def _units(doc):
+    from . import simulation_panels
+
+    return simulation_panels.doc_units(doc)
+
+
+def _item_row(item, lost, units=None):
     sim = _sim()
     data = sim.item_data(item)
     try:
         info = core.kind_info(data["category"], data["kind"])
         built = bool(info.get("built"))
-        text = core.describe(data["category"], data["kind"], data["options"])
+        text = score.describe(data["category"], data["kind"], data["options"], units)
     except Exception:
         built, text = False, data.get("kind", "")
     return {
@@ -60,12 +66,13 @@ def _item_row(item, lost):
     }
 
 
-def _study_row(study):
+def _study_row(study, units=None):
     sim = _sim()
+    units = units or _units(study.Document)
     lost = {i.Name for i in sim.lost_items(study)}
     constraints, loads, local = [], [], []
     for item in sim.items(study):
-        row = _item_row(item, lost)
+        row = _item_row(item, lost, units)
         {"constraint": constraints, "load": loads}.get(row["category"], local).append(row)
     settings = sim.settings(study)
     gravity = settings["gravity"]
@@ -105,9 +112,9 @@ def _study_row(study):
         "constraints": constraints,
         "loads": loads,
         "gravity": bool(gravity.get("on")),
-        "gravity_text": "Gravity %s m/s^2 along (%s)"
+        "gravity_text": "Gravity %s along (%s)"
         % (
-            core.fmt(gravity["g"] / 1000.0),
+            score.format_quantity(gravity["g"], "acceleration", 4, units["acceleration"]),
             ", ".join(core.fmt(c, 3) for c in gravity.get("direction") or []),
         ),
         "mesh_text": mesh_text,
@@ -115,8 +122,8 @@ def _study_row(study):
         "solved": solved,
         "out_of_date": solved and sim.out_of_date(study),
         "results_text": results_text,
-        "contacts_text": "Bodies closer than %s mm are bonded (glued) when it solves"
-        % core.fmt(settings["contact_tolerance"]),
+        "contacts_text": "Bodies closer than %s are bonded (glued) when it solves"
+        % score.format_quantity(settings["contact_tolerance"], "length", 4, units["length"]),
     }
 
 
@@ -126,10 +133,11 @@ def tree(doc):
 
     sim = _sim()
     active = _ui().active_study(doc)
+    units = _units(doc)
     studies = []
     for study in sim.studies(doc):
         try:
-            studies.append(_study_row(study))
+            studies.append(_study_row(study, units))
         except Exception as exc:
             warn("simulation browser: %s: %s" % (study.Label, exc))
     in_study = set()

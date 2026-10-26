@@ -121,16 +121,19 @@ G = guess (the SciForge choice when the sources are silent).
 | S12 | Glyphs on the model for each load and constraint | Cones (Fixed), pins (Pin), balls (Frictionless), arrows (Force, Displacement, Bearing), short arrows (Pressure), a curved arrow (Moment), a big arrow (gravity), green dots (local mesh); same screen size at any zoom; never picked; only in SIMULATION; a lighter live preview while picking | G (mem) |
 | S13 | Gravity: off in a new study; Toggle Gravity On / Off; Edit Gravity (Normal from a face or edge, or angles; Flip) | LOADS > Toggle Gravity On/Off (a tick shows the state); the browser's Gravity row: Edit Gravity (on/off, Vector or Normal from a flat face / straight edge, Flip, magnitude in m/s^2) | A[26] A[28] |
 | S14 | Automatic contacts made bonded at solve time; Automatic Contacts dialog (tolerance, Generate); Contact Manager | Same (0.1 mm); Generate lists the bonded pairs with their gap; Contact Manager is a read-only list; Manual Contacts and connectors greyed | A[33] A[34] A[35]; T[106] |
-| S15 | Mesh made at solve time; Generate Mesh to preview; Local Mesh Control (faces / edges / Body Selection, Fine-Coarse slider or Length) | Same; Generate Mesh shows the mesh on the model (DISPLAY > Show Mesh toggles it), its node and element counts on the Mesh row; Local Mesh Control with Body Selection, slider and Length (starts at the study's element size) | A[37] A[38] |
+| S15 | Mesh made at solve time; Generate Mesh to preview; Local Mesh Control (faces / edges / Body Selection, Fine-Coarse slider or Length) | Same; Generate Mesh shows the mesh on the model (DISPLAY > Show Mesh toggles it; never drawn over the design in DESIGN, nor for another study), its node and element counts on the Mesh row; Local Mesh Control with Body Selection, slider and Length (starts at the study's element size) | A[37] A[38] |
 | S16 | Pre-check: a traffic-light icon (green / yellow / red) and a list of messages | The Pre-check button's icon follows the active study (green, yellow, red), its tooltip and the Pre-check list give the engine's sentences; Solve from the list | A[42] F[92] |
-| S17 | Solve dialog: the studies, "Solve 1 Study"; Job Status with progress per phase, Cancel during some phases | The design's studies with their light, ticked, "Solve N Studies"; it says it solves on this computer; a red study is refused with its sentences; progress by stage, elapsed time, Cancel at any stage; studies solved one after another; the window stays usable | A[43] A[44]; **(SciForge)** local |
-| S18 | Results open on the RESULTS tab when the solve ends | Handed over to `simulation_results_ui.show(study)` (sim-results), else the RESULTS tab | A[8]; G (mem) |
+| S17 | Solve dialog: the studies, "Solve 1 Study"; Job Status with progress per phase, Cancel during some phases; Job Status lists completed and failed solves | The design's studies with their light, ticked, "Solve N Studies"; it says it solves on this computer; a red study is refused with its sentences; progress by stage, elapsed time, Cancel at any stage (only Close once it ended); studies solved one after another; the window stays usable; the progress window also lists this session's earlier solves and meshes with their time and result | A[43] A[44]; **(SciForge)** local |
+| S18 | Results open on the RESULTS tab when the solve ends | Handed over to `simulation_results_ui.show(study)` (sim-results), else the RESULTS tab; only when the design is in front in SIMULATION: a person who went on working in DESIGN (or another design) while it solved stays there and is told where the results are | A[8]; G (mem) |
 | S19 | Out of date when the design or study changed after the solve | "Results (out of date)" row, yellow; a setup change made during the solve also makes it out of date | F[85] A[65] |
 | S20 | MANAGE: Settings, Local Mesh Control, Load Case Attributes | Same; Load Case Attributes lists every load and constraint with place, size, direction and status (OK / lost / suppressed) | A[28] A[49] |
-| S21 | DISPLAY: DOF View | Selects the bodies nothing holds and says which | F[92] |
+| S21 | DISPLAY: DOF View shows which bodies can still move | A toggle: arrows over the model show each way a piece can still move (three slides and three turns for a piece nothing holds; the slides and turns its constraints leave free for one held in part, e.g. a turn about a held edge, from the engine's not-held analysis); those bodies are selected and named with how they can move; the arrows follow the setup until DOF View is switched off (or the workspace left) | F[92] |
 | S22 | Browser: Simulation Model, the study (Study Materials, Load Case with Constraints and Loads and Gravity, Contacts, Mesh, Results); Clone Study; Edit / Suppress / Delete; double-click | Same tree (bodies under the model, with Exclude from Study / Include in Study); Activate, Settings, Clone Study, Rename, Delete on a study; Edit (bold), Suppress / Unsuppress, Rename, Delete on an item; double-click: activate a study, edit an item, open Study Materials / Gravity / Contact Manager / Mesh settings / Results; Delete and F2 keys | A[28] A[46] A[45]; G (mem) |
 | S23 | Undo | Adding, editing, deleting, suppressing, renaming items; settings; materials; gravity; studies (new, clone, delete): one undo step each; Esc / Cancel leave nothing; a solve or a mesh is never in the undo history | outline 2.2 |
 | S24 | A model not held enough fails | CalculiX's "singular" error turns into the engine's sentence; a solve that "worked" with the model moving more than half its size (a mechanism) is not shown as results: the progress says it is not held enough | A[41]; outline 0.8 |
+| S25 | SETUP groups in workflow order (STUDY, SIMPLIFY, MATERIALS, CONSTRAINTS, LOADS, CONTACTS, DISPLAY, MANAGE, SOLVE, INSPECT, SELECT), each with its big button | Same order and members (research 9.2); every group shows a big button; the commands not built (Simplify, Linear / Angular Global Load, Point Mass, Manual Contacts, Bolt / Rigid Body Connector) are greyed with their sentence; original icons for every entry; on / off buttons (Ux, Uy, Uz, Flip Direction, Body Selection) look on when on | A[4]; G (mem) for the order |
+| S26 | Every value field takes a unit override; Simulation follows the document's units (Document Settings > Units) | Same: the fields, the browser's texts, Load Case Attributes, Study Materials' properties and the mesh / contact lengths show N, MPa, N mm and the design's length in a metric design (N m in metres), lbf, psi, lbf in and inches in an inch design (lbf ft and feet in feet); a bare number is in the unit shown, a typed unit wins; the engine keeps N, MPa, mm, and a field left unchanged keeps its exact value | A[23] A[67] F[99] |
+| S27 | In Simulation the right-click marking menu offers the setup's commands; the design's keys do nothing (the design is changed in Design) | The marking menu's ring: Repeat (the last setup command only), Study Materials, Structural Loads, Undo, Structural Constraints, Pre-check, Solve, Settings (OK / Cancel while a dialog is open); its list: Redo, Generate Mesh, Local Mesh Control, DOF View, Hide / Show All / Fit / Look At, orbit centre. Delete, E, Q, F, H, M, J, Ctrl+C / Ctrl+V, Ctrl+B and the sketch keys are off while SIMULATION shows (Delete made a Delete Face step from a face picked in the view); the browser still deletes a study item with Delete | G (mem); outline 2.2 |
 
 ### Scenarios (real clicks, `SciForgeTests/gui/scenarios/sim_setup_*.py`)
 
@@ -138,12 +141,14 @@ G = guess (the SciForge choice when the sources are silent).
 |---|---|
 | `sim_setup_bracket` | enter, New Study, Fixed at the holes, Force on the arm, Pre-check green, Solve, results handed over, leave (tabs, timeline, browser, nothing leaked), enter again |
 | `sim_setup_dialogs` | Esc on New Study, the gear's settings, a refusal (nothing holds), Esc / Cancel in the item dialogs, Study Materials + undo / redo, Settings + undo, gravity on, Edit Gravity, contacts, Load Case Attributes, undo / redo of a constraint |
-| `sim_setup_browser` | solve, Edit Load from the browser, out of date, solve again from the Results row, double-click edit + Cancel, Suppress / Unsuppress, F2 rename + undo, Delete key + undo, Clone Study, Activate, delete a study, a design change makes it out of date |
-| `sim_setup_documents` | two glued bodies (Automatic Contacts, Contact Manager), DOF View, Exclude / Include, solve with a result per body, design tabs keep their workspaces, save / close / reopen with the study and results |
-| `sim_setup_kinds` | every constraint and load type (Pin filter and defaults, Moment with a unit, vector force components, pressure flip, prescribed displacement), Local Mesh Control with Body Selection, Generate Mesh + Show Mesh, Cancel a solve |
-| `sim_setup_workspace` | entering with a sketch open, leaving with a dialog open, Esc, a second study, Solve dialog with two studies (one refused), undo while results show, leaving from RESULTS |
-| `sim_setup_components` | an empty design, moved components, a model held by one edge (not held enough) |
-| `sim_setup_glyphs` | the glyphs rendered off screen: drawn, hidden on request, same screen size after a zoom, gone in DESIGN |
+| `sim_setup_browser` | solve, Edit Load from the browser, out of date, solve again from the Results row (the progress lists the earlier solve), double-click edit + Cancel, Suppress / Unsuppress, F2 rename + undo, Delete key + undo, Clone Study, Activate, delete a study, a design change makes it out of date |
+| `sim_setup_documents` | two glued bodies (Automatic Contacts, Contact Manager), DOF View on (both free, six arrows) and off once the base is fixed, Exclude / Include, solve with a result per body, design tabs keep their workspaces, save / close / reopen with the study and results |
+| `sim_setup_kinds` | every constraint and load type (Pin filter and defaults, Moment with a unit, vector force components, pressure flip, prescribed displacement), Local Mesh Control with Body Selection, Generate Mesh + Show Mesh (not drawn in DESIGN), Cancel a solve |
+| `sim_setup_workspace` | entering with a sketch open, leaving with a dialog open, Esc, a second study, Solve dialog with two studies (one refused), undo while results show, leaving from RESULTS, leaving for DESIGN during a solve (not taken back when it ends) |
+| `sim_setup_components` | an empty design, moved components, a model held by one edge (DOF View: it can still turn about the edge, one turning arrow; not held enough) |
+| `sim_setup_glyphs` | the glyphs rendered off screen: drawn, hidden on request, same screen size after a zoom, gone in DESIGN; DOF View's arrows drawn over the model and gone when it is off |
+| `sim_setup_canvas` | the right-click marking menu in SIMULATION (the setup's commands, none of the design's; Structural Loads from the ring; Repeat Structural Loads), Delete and E on a face picked in the view change nothing, the design's ring and keys back in DESIGN |
+| `sim_setup_units` | Document Settings > Units: Inch from the SIMULATION browser; a force typed as 50 (lbf) kept as 222.4 N, the browser and Load Case Attributes in lbf, Edit + OK changes nothing, psi, inches for Local Mesh Control, the mesh size and the contact tolerance (0.1 mm kept exactly); back to Millimeter |
 
 ### Known gaps
 
@@ -158,21 +163,20 @@ G = guess (the SciForge choice when the sources are silent).
   Connectors, Linear / Angular Global Load, Point Mass: greyed (CalculiX contact is nonlinear;
   outline 7.18 keeps Static Stress linear).
 - **Force direction by Angle** and **Limit Target** are not in the Structural Loads dialog
-  (Normal and Vector only); Remote Moment and Hydrostatic Pressure are not listed.
-- **Units follow the engine** (N, MPa, N mm, mm): a value typed with another unit (lbf, psi,
-  N m, in) is converted, but a design in inches still shows metric values.
-- **Repair** (Fusion's button for a study with serious input errors) and the Job Status
-  history of earlier solves are not built.
+  (Normal and Vector only: the engine stores a direction as normal or a vector); Remote Moment,
+  Hydrostatic Pressure and the Remote constraint are listed greyed with a sentence.
+- **Repair** (Fusion's button for a study with serious input errors) is not built; the Job
+  Status list of earlier solves covers this session only (Fusion's cloud keeps its jobs).
 - **Glyph look**: SciForge's own (Fusion's are unknown here; research 3.12 is G). xvfb shows no
   3D on the screen, but FreeCAD's off-screen picture does: `sim_setup_glyphs` renders the view
   with and without them and checks their colours.
 - **Engine issues found while building the UI** (reported to sim-core in
-  `docs/sciforge/sessions/beta3-sim-ui.md`): a whole-body pick was dropped by the engine's link
-  list (the UI keeps it: `simulation_panels._keep_whole_bodies`); the result summary keys bodies
-  by label, so two components' "Body1" share one entry; a model held by one edge solved with
-  1e10 mm of movement instead of failing (the UI refuses to show it); the result fingerprint is
-  taken when the solve ends, so the UI records the one from its start
-  (`simulation_solve_dialog._keep_out_of_date`).
+  `docs/sciforge/sessions/beta3-sim-ui.md`): fixed by sim-core since: a whole-body pick dropped by
+  the engine's link list, a model held by one edge that "solved" with 1e10 mm of movement (now
+  "not held enough" in the pre-check; the UI still refuses such results:
+  `simulation_solve_dialog.loose_result`). Still open: the result summary keys bodies by label,
+  so two components' "Body1" share one entry; the result fingerprint is taken when the solve
+  ends, so the UI records the one from its start (`simulation_solve_dialog._keep_out_of_date`).
 
 ## Results
 

@@ -16,6 +16,10 @@ F  Undo while the results show (the last setup change, the Force): the results a
    that changed: out of date; no error; Redo brings the Force back.
 G  Workspace > Design with the RESULTS tab in front, then Simulation again: a SIMULATION tab is
    selected, the results row is there.
+H  Solve Study 1 again (a finer mesh, so it takes a few seconds) and at once Workspace >
+   Design: the solve goes on; when it ends, DESIGN stays in front (a person working on the
+   design is not taken away) and a message says where the results are; Workspace > Simulation:
+   the results are up to date.
 """
 
 import FreeCAD as App
@@ -220,6 +224,47 @@ def g_check():
     h.check("the Results row", "Results" in s.browser_labels(), s.browser_labels())
 
 
+# -- H ------------------------------------------------------------------------------------------
+def h_finer():
+    # (a precondition: a finer mesh, so the solve lasts long enough to leave during it)
+    study = s.active_study()
+    App.ActiveDocument.openTransaction("finer mesh")
+    s.sim().set_settings(study, {"mesh": {"size_pct": 3.0}})
+    App.ActiveDocument.commitTransaction()
+    h.ribbon("Solve")
+
+
+def h_go():
+    dialog = s.solve_dialog()
+    if h.check("Solve dialog", dialog is not None):
+        s.click_widget(dialog.go)
+    s.close_popup("SciForgeSimJobStatus")
+
+
+def h_leave():
+    h.check("solving", s.solving())
+    s.workspace("Design")
+
+
+def h_left():
+    h.check("DESIGN while it solves", s.tab_visible("solid"))
+    h.check("still solving", s.solving())
+
+
+def h_check():
+    h.check("DESIGN stays in front", s.tab_visible("solid") and not s.tab_visible("sim_setup"))
+    h.check("not taken to RESULTS", s.current_tab() not in ("sim_setup", "sim_results"))
+    text = s.tooltip_text()
+    h.check("it says where the results are", "results are in Workspace > Simulation" in text, text)
+    s.workspace("Simulation")
+
+
+def h_back():
+    study = s.active_study()
+    h.check("Study 1 has results", bool(s.sim().summary(study)))
+    h.check("up to date", not s.sim().out_of_date(study))
+
+
 h.run(
     "sim_setup_workspace",
     [
@@ -251,5 +296,12 @@ h.run(
         g_leave,
         g_back,
         g_check,
+        h_finer,
+        h_go,
+        h_leave,
+        h_left,
+        s.wait_solved("wait_solved_in_design"),
+        h_check,
+        h_back,
     ],
 )

@@ -10,6 +10,9 @@ B  The picture with the glyphs has the loads' orange and the constraints' teal; 
    are gone and the model is the same.
 C  Zoomed out: the glyphs keep their size on the screen (their size in mm grows).
 D  Workspace > Design: no glyph left in the view (the picture has none of their colours).
+E  Back in Simulation with the Fixed suppressed (nothing holds the bracket): DISPLAY > DOF
+   View draws its arrows (three slides, three turns) over the model in their own colour;
+   DOF View off: that colour is gone.
 """
 
 import os
@@ -25,6 +28,7 @@ OUT = os.environ.get("SCIFORGE_SMOKE_OUT") or App.getUserAppDataDir()
 state = {}
 ORANGE = (245, 133, 26)  # simulation_glyphs.PUSH, lit
 TEAL = (26, 158, 168)  # simulation_glyphs.HOLD
+MAGENTA = (219, 66, 168)  # simulation_glyphs.DOF
 
 
 def setup():
@@ -133,9 +137,55 @@ def d_check():
     image = picture("design")
     orange = count(image, ORANGE)
     h.check("no glyph left in DESIGN", orange == 0 and count(image, TEAL) == 0, orange)
+    fixed = [i for i in s.items("constraint")]
+    if fixed:
+        fixed[0].Suppressed = True  # (nothing holds the bracket now)
+        App.ActiveDocument.recompute()
+    s.workspace("Simulation")
+
+
+# -- E ------------------------------------------------------------------------------------------
+def e_dof():
+    h.fit()
+    state["magenta_before"] = count(picture("before-dof"), MAGENTA)
+    s.menu_item("DISPLAY", "DOF View")
+
+
+def e_check():
+    from sciforge import simulation_ui
+
+    h.check("DOF View on", simulation_ui.dof_on())
+    h.check("six free movements", s.glyph_counts().get("dof") == 6, s.glyph_counts())
+    magenta = count(picture("dof"), MAGENTA)
+    h.check(
+        "its arrows are drawn",
+        magenta > 20 and state["magenta_before"] == 0,
+        (state["magenta_before"], magenta),
+    )
+    s.menu_item("DISPLAY", "DOF View")
+
+
+def e_off():
+    from sciforge import simulation_ui
+
+    h.check("DOF View off", not simulation_ui.dof_on())
+    magenta = count(picture("dof-off"), MAGENTA)
+    h.check("its arrows are gone", magenta == 0, magenta)
 
 
 h.run(
     "sim_setup_glyphs",
-    [setup, enter, a_counts, b_shown_hidden, c_zoom, c_check, d_leave, d_check],
+    [
+        setup,
+        enter,
+        a_counts,
+        b_shown_hidden,
+        c_zoom,
+        c_check,
+        d_leave,
+        d_check,
+        e_dof,
+        e_check,
+        e_off,
+    ],
 )
