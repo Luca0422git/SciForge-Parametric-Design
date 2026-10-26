@@ -218,7 +218,6 @@ def b_cap_probe():
 
 
 def b_cap_probe_check():
-    sess = s.session()
     probes = [t for t in s.tags("probe") if t.get("node") is None]
     h.check("a probe on the cut face", len(probes) == 1, s.tags("probe"))
     if probes:
