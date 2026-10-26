@@ -465,3 +465,46 @@ def preview_count():
     from sciforge import simulation_glyphs
 
     return simulation_glyphs.preview_count()
+
+
+# -- designs and their tabs ------------------------------------------------------------------------
+def click_doc_tab(label):
+    """Click the design's tab at the top (as a person switches designs)."""
+    bar = h.document_tabs()
+    if bar is None:
+        h.check("document tabs", False)
+        return False
+    for index in range(bar.count()):
+        if bar.tabText(index).replace("[*]", "").strip().startswith(label):
+            w.click(bar, bar.tabRect(index).center())
+            _process()
+            return True
+    h.check("a tab for %s" % label, False, [bar.tabText(i) for i in range(bar.count())])
+    return False
+
+
+def visible_face(body_obj, names):
+    """The first of `names` (face names) that can be clicked from the view now."""
+    for name in names:
+        if name and aim(body_obj, name) is not None:
+            return name
+    return None
+
+
+def side_faces(body_obj):
+    """The body's flat faces, the largest first."""
+    found = []
+    for i, face in enumerate(body_obj.Shape.Faces, 1):
+        if "Plane" in face.Surface.TypeId:
+            found.append((face.Area, "Face%d" % i))
+    return [n for _a, n in sorted(found, reverse=True)]
+
+
+def top_face(body_obj):
+    z = body_obj.Shape.BoundBox.ZMax
+    return face_named(
+        body_obj,
+        lambda f: "Plane" in f.Surface.TypeId
+        and abs(f.BoundBox.ZMin - z) < 1e-6
+        and abs(f.BoundBox.ZMax - z) < 1e-6,
+    )
