@@ -1039,19 +1039,24 @@ class Session:
         data = self.data
         values = data.values(self.result)
         lo, hi, reverse = self.scale()
-        tris, vals, rest = core.cut(
+        tris, vals, rest, owners = core.cut(
             data.deformed(self.display.factor),
             values,
             data.straight(),
             origin,
             normal,
             carry=data.points,
+            owners=True,
         )
         flat_vals = vals.ravel()
         positions = (
             _positions(np, flat_vals, lo, hi, reverse, self._grey()) if len(flat_vals) else []
         )
         self.display.set_cap(tris, flat_vals, positions, normal, rest=rest)
+        lines = (self.slice or {}).get("lines")
+        self.display.set_cap_lines(
+            core.cut_lines(tris, owners, len(data.tets)) if lines and len(tris) else []
+        )
 
     # -- iso-surface
     def iso_level(self, result=None):

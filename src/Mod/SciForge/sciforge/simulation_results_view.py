@@ -216,8 +216,32 @@ class ResultDisplay:
         cap_binding = coin.SoTextureCoordinateBinding()
         cap_binding.value = coin.SoTextureCoordinateBinding.PER_VERTEX
         cap.addChild(cap_binding)
+        cap_offset = coin.SoPolygonOffset()  # (the mesh lines drawn on it stay on top)
+        cap_offset.factor = 1.0
+        cap_offset.units = 1.0
+        cap.addChild(cap_offset)
         self.cap_faces = coin.SoFaceSet()
         cap.addChild(self.cap_faces)
+        # Mesh Lines: where the plane crosses the elements' faces
+        self.cap_lines_switch = coin.SoSwitch()
+        lines = coin.SoSeparator()
+        light = coin.SoLightModel()
+        light.model = coin.SoLightModel.BASE_COLOR
+        lines.addChild(light)
+        lines_colour = coin.SoBaseColor()
+        lines_colour.rgb.setValue(0.1, 0.1, 0.12)
+        lines.addChild(lines_colour)
+        lines_style = coin.SoDrawStyle()
+        lines_style.lineWidth.setValue(1.0)
+        lines.addChild(lines_style)
+        self.cap_line_coords = coin.SoCoordinate3()
+        lines.addChild(self.cap_line_coords)
+        self.cap_line_set = coin.SoLineSet()
+        lines.addChild(self.cap_line_set)
+        self.cap_lines_switch.addChild(lines)
+        self.cap_lines_switch.whichChild = coin.SO_SWITCH_NONE
+        cap.addChild(self.cap_lines_switch)
+        self.cap_line_count = 0
         self.cap_switch.addChild(cap)
         self.cap_switch.whichChild = coin.SO_SWITCH_NONE
         self.root.addChild(self.cap_switch)
@@ -373,6 +397,7 @@ class ResultDisplay:
         coin = self.coin
         if not len(triangles):
             self.cap_switch.whichChild = coin.SO_SWITCH_NONE
+            self.set_cap_lines([])
             self.cap_points = np.zeros((0, 3))
             self.cap_rest = np.zeros((0, 3))
             self.cap_values = np.zeros(0)
@@ -402,6 +427,24 @@ class ResultDisplay:
 
     def cap_shown(self):
         return self.cap_switch.whichChild.getValue() != self.coin.SO_SWITCH_NONE
+
+    def set_cap_lines(self, segments):
+        """The mesh lines on the cut face: (s, 2, 3) segments; empty hides them."""
+        np = _np()
+        coin = self.coin
+        segs = np.asarray(segments, dtype=float).reshape((-1, 3))
+        self.cap_line_count = len(segs) // 2
+        if not self.cap_line_count:
+            self.cap_lines_switch.whichChild = coin.SO_SWITCH_NONE
+            self.cap_line_set.numVertices.setNum(0)
+            return
+        _floats(self.cap_line_coords.point, segs, 3)
+        self.cap_line_set.numVertices.setNum(self.cap_line_count)
+        self.cap_line_set.numVertices.setValues(0, self.cap_line_count, [2] * self.cap_line_count)
+        self.cap_lines_switch.whichChild = coin.SO_SWITCH_ALL
+
+    def cap_lines_shown(self):
+        return self.cap_lines_switch.whichChild.getValue() != self.coin.SO_SWITCH_NONE
 
     def set_iso(self, triangles, colour=None, rest=None):
         """The iso-surface: triangles (k, 3, 3) as drawn, its colour, `rest` the same points on

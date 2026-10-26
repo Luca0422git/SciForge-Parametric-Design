@@ -301,8 +301,9 @@ def _picks_text(item):
     return "; ".join(parts) or "-"
 
 
-def report_data(study, title=None, author="", images=(), lower=None, upper=None):
-    """The dict simulation_results_core.report_html() turns into the report."""
+def report_data(study, title=None, author="", images=(), lower=None, upper=None, unit_of=None):
+    """The dict simulation_results_core.report_html() turns into the report. unit_of(result)
+    gives the unit of the results table (the legend's), else SciForge's own (mm, MPa)."""
     from . import __version__
 
     done = simulation.summary(study)
@@ -369,7 +370,13 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None)
         st = stats.get(key)
         if not st:
             continue
-        results.append((key, st.get("min"), st.get("max"), sim.result_unit(key)))
+        unit = unit_of(key) if unit_of is not None else None
+        if unit is None or not core.unit_ok(key, unit):
+            results.append((key, st.get("min"), st.get("max"), sim.result_unit(key)))
+        else:
+            results.append(
+                (key, core.convert(st.get("min"), unit), core.convert(st.get("max"), unit), unit)
+            )
     bodies_rows = []
     for row in body_rows(study):
         bodies_rows.append(
@@ -430,7 +437,16 @@ def image_source(path):
 
 
 def write_report(
-    study, path, title=None, author="", images=(), lower=None, upper=None, cover=None, more=()
+    study,
+    path,
+    title=None,
+    author="",
+    images=(),
+    lower=None,
+    upper=None,
+    cover=None,
+    more=(),
+    unit_of=None,
 ):
     """Write the study's report to `path` (HTML). images: [(caption, png file)]; cover: the
     report's own fields {"summary", "logo" and "picture" (image files), "project",
@@ -447,7 +463,7 @@ def write_report(
                 embedded.append((caption, image_source(png)))
             except Exception as exc:
                 warn("report: picture %s left out: %s" % (caption, exc))
-        studies.append(report_data(one, title, author, embedded, lower, upper))
+        studies.append(report_data(one, title, author, embedded, lower, upper, unit_of))
     data = dict(studies[0])
     data["studies"] = studies
     cover = dict(cover or {})

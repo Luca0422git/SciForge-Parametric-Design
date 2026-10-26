@@ -416,6 +416,40 @@ class MeshTests(unittest.TestCase):
         self.assertAlmostEqual(self._area(tris), 0.5)
         self.assertTrue(np.allclose(tris[:, :, 2], 1.0))
 
+    def test_mesh_lines_of_a_cut(self):
+        import numpy as np
+
+        corners = [(0, 0, 0), (2, 0, 0), (0, 2, 0), (0, 0, 2)]
+        pts = list(corners)
+        for a, b in ((0, 1), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3)):
+            pts.append(tuple((corners[a][k] + corners[b][k]) / 2.0 for k in range(3)))
+        straight = core.straight_tets([list(range(10))])
+        tris, _v, _r, owners = core.cut(
+            pts, [0.0] * 10, straight, (0, 0, 0.5), (0, 0, 1), owners=True
+        )
+        self.assertEqual(len(owners), len(tris))
+        lines = core.cut_lines(tris, owners, 1)
+        # one 10-node element: only its outline (the cut of its outer faces), not the pieces'
+        length = float(np.linalg.norm(lines[:, 1] - lines[:, 0], axis=1).sum())
+        self.assertAlmostEqual(length, 3.0 + 1.5 * math.sqrt(2.0))
+        # the cube of 5 straight tetrahedra cut across X: the square, and the faces between
+        # the tetrahedra where the plane crosses them (drawn once from each side)
+        pts, tets = _cube()
+        tris, _v, _r, owners = core.cut(
+            pts, [0.0] * 8, core.straight_tets(tets), (0.5, 0.5, 0.5), (1, 0, 0), owners=True
+        )
+        lines = core.cut_lines(tris, owners, len(tets))
+        self.assertTrue(np.allclose(lines[:, :, 0], 0.5))
+        on_square = [
+            s
+            for s in lines
+            if all(min(abs(c), abs(c - 1.0)) < 1e-9 for c in (s[0][1], s[1][1]))
+            or all(min(abs(c), abs(c - 1.0)) < 1e-9 for c in (s[0][2], s[1][2]))
+        ]
+        outline = sum(float(np.linalg.norm(s[1] - s[0])) for s in on_square)
+        self.assertAlmostEqual(outline, 4.0)
+        self.assertEqual(len(core.cut_lines([], [], 3)), 0)
+
     def test_slice_planes(self):
         import numpy as np
 

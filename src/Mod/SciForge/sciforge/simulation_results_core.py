@@ -861,13 +861,14 @@ def face_slice(outward, points, style="clip"):
     return spec
 
 
-def level_set(points, field, values, tets, carry=None):
+def level_set(points, field, values, tets, carry=None, owners=False):
     """Where `field` (one number per point) crosses zero inside a mesh of straight tetrahedra
     (straight_tets): (triangles (k, 3, 3), their values (k, 3), carried (k, 3, c) or None).
     The values, and the columns of `carry` ((n, c), one row per point), are interpolated along
     the cut edges; each triangle is wound to face the field's negative side. A tetrahedron
     with a NaN field is left out. The slice plane (field = distance to the plane) and the
-    iso-surface (field = value - level) are both this."""
+    iso-surface (field = value - level) are both this. With `owners` a fourth item: the row of
+    `tets` each triangle comes from."""
     np = _np()
     points = np.asarray(points, dtype=float)
     field = np.asarray(field, dtype=float)
@@ -878,11 +879,12 @@ def level_set(points, field, values, tets, carry=None):
         extra = extra[:, None]
 
     def empty():
-        return (
+        out = (
             np.zeros((0, 3, 3)),
             np.zeros((0, 3)),
             None if extra is None else np.zeros((0, 3, extra.shape[1])),
         )
+        return out + (np.zeros(0, dtype=np.int64),) if owners else out
 
     if tets.ndim != 2 or len(tets) == 0:
         return empty()
@@ -893,6 +895,7 @@ def level_set(points, field, values, tets, carry=None):
         crossing = (d.min(axis=1) < 0) & (d.max(axis=1) >= 0)
     if not crossing.any():
         return empty()
+    crossing_rows = np.flatnonzero(crossing)
     tets, d = tets[crossing], d[crossing]
     pos = d >= 0
     npos = pos.sum(axis=1)
@@ -950,10 +953,12 @@ def level_set(points, field, values, tets, carry=None):
     if carried is not None:
         carried[turn] = carried[turn][:, [0, 2, 1]]
         carried = carried[keep]
+    if owners:
+        return tris[keep], vals[keep], carried, crossing_rows[owner[keep]]
     return tris[keep], vals[keep], carried
 
 
-def cut(points, values, tets, origin, normal, carry=None):
+def cut(points, values, tets, origin, normal, carry=None, owners=False):
     """Where the plane (origin, normal) cuts a mesh of straight tetrahedra (straight_tets):
     level_set's (triangles (k, 3, 3), values (k, 3), carried) with each triangle facing against
     the normal. values: one per point (NaN allowed)."""
@@ -962,9 +967,37 @@ def cut(points, values, tets, origin, normal, carry=None):
     n = np.asarray(normal, dtype=float)
     length = float(np.linalg.norm(n))
     if length < 1e-12:
-        return level_set(points, np.zeros(len(points)), values, [], carry)
+        return level_set(points, np.zeros(len(points)), values, [], carry, owners)
     distance = (points - np.asarray(origin, dtype=float)) @ (n / length)
-    return level_set(points, distance, values, tets, carry)
+    return level_set(points, distance, values, tets, carry, owners)
+
+
+def cut_lines(triangles, owners, elements):
+    """The mesh lines of a cut (Fusion's slice style Mesh Lines): where the plane crosses the
+    faces of the elements. triangles (k, 3, 3) and their owners from cut(owners=True) through
+    straight_tets(), whose row r is a piece of element r % elements; the edges that two
+    triangles of one element share (inside it: a quadrilateral's diagonal, the pieces of a
+    10-node element) are left out. Returns (s, 2, 3) segments."""
+    np = _np()
+    tris = np.asarray(triangles, dtype=float).reshape((-1, 3, 3))
+    if not len(tris) or elements <= 0:
+        return np.zeros((0, 2, 3))
+    group = np.asarray(owners, dtype=np.int64) % int(elements)
+    edges = np.concatenate([tris[:, [0, 1]], tris[:, [1, 2]], tris[:, [2, 0]]])
+    groups = np.tile(group, 3)
+    size = float(np.ptp(tris.reshape((-1, 3)), axis=0).max()) or 1.0
+    grid = np.round(edges / (size * 1e-7)).astype(np.int64)  # the same point from both sides
+    a, b = grid[:, 0], grid[:, 1]
+    swap = (a[:, 0] > b[:, 0]) | (
+        (a[:, 0] == b[:, 0]) & ((a[:, 1] > b[:, 1]) | ((a[:, 1] == b[:, 1]) & (a[:, 2] > b[:, 2])))
+    )
+    first = np.where(swap[:, None], b, a)
+    second = np.where(swap[:, None], a, b)
+    real = np.any(first != second, axis=1)
+    key = np.column_stack([groups, first, second])[real]
+    edges = edges[real]
+    _uniq, inverse, counts = np.unique(key, axis=0, return_inverse=True, return_counts=True)
+    return edges[counts[inverse.ravel()] == 1]
 
 
 def iso_surface(points, values, tets, level, carry=None):

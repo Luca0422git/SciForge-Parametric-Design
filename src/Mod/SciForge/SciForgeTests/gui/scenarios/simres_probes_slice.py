@@ -9,8 +9,9 @@ A  INSPECT > Surface Probes: the mouse over the result shows the value under it 
    the legend's Stress makes the probes read the stress there; Clear All removes them; Close.
    Esc in the dialog closes it and keeps the probes.
 B  Slice Plane: the result is cut across X at the middle and the cut face is coloured with the
-   values inside (each between the result's min and max); dragging the plane's arrow moves the
-   cut along X; Across Y at 2 mm puts the cut face on
+   values inside (each between the result's min and max); Mesh lines on the cut draws where
+   the plane crosses the elements (on the plane, more than the outline), and goes again;
+   dragging the plane's arrow moves the cut along X; Across Y at 2 mm puts the cut face on
    that plane; Flip keeps the other half; a probe click on the cut face reads the value inside;
    Slice alone shows the cut face inside the whole result drawn see-through; OK keeps it.
 C  Slice Plane again, Cancel: the slice stays as it was; again, Remove Slice: the result is whole.
@@ -224,6 +225,29 @@ def b_slice_check():
     )
     xs = sess.display.cap_points[:, 0]
     h.check("on the plane x = 50", abs(xs.min() - 50) < 1e-6 and abs(xs.max() - 50) < 1e-6)
+
+
+def b_lines():
+    s.click_widget(s.panel_field("SciForgeSimSliceLines", QtWidgets.QCheckBox))
+
+
+def b_lines_check():
+    sess = s.session()
+    display = sess.display
+    h.check("mesh lines on the cut", display.cap_lines_shown() and sess.slice.get("lines"))
+    pts = display.cap_line_coords.point.getValues()
+    xs = [p[0] for p in pts]
+    h.check("on the plane x = 50", xs and max(abs(x - 50.0) for x in xs) < 1e-4)
+    h.check(
+        "the elements' edges, not only the outline",
+        display.cap_line_count > 4,
+        display.cap_line_count,
+    )
+    s.click_widget(s.panel_field("SciForgeSimSliceLines", QtWidgets.QCheckBox))
+
+
+def b_lines_off_check():
+    h.check("mesh lines off again", not s.session().display.cap_lines_shown())
 
 
 def b_drag():
@@ -549,6 +573,9 @@ h.run(
         a_esc_check,
         b_slice,
         b_slice_check,
+        b_lines,
+        b_lines_check,
+        b_lines_off_check,
         b_drag,
         b_drag_check,
         b_axis_y,

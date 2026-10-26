@@ -390,6 +390,14 @@ class SlicePanel:
         self.style_box.setCurrentIndex(max(0, self.style_box.findData(spec.get("style", "clip"))))
         self.style_box.currentIndexChanged.connect(self._changed)
         layout.addRow("Style", self.style_box)
+        self.lines = QtWidgets.QCheckBox("Mesh lines on the cut")
+        self.lines.setObjectName("SciForgeSimSliceLines")
+        self.lines.setToolTip(
+            "Draw where the plane crosses the elements: is the mesh fine enough inside?"
+        )
+        self.lines.setChecked(bool(spec.get("lines")))
+        self.lines.toggled.connect(self._changed)
+        layout.addRow("", self.lines)
         self.remove_button = QtWidgets.QPushButton("Remove Slice")
         self.remove_button.setObjectName("SciForgeSimSliceRemove")
         self.remove_button.clicked.connect(self.remove)
@@ -450,6 +458,7 @@ class SlicePanel:
             spec = core.face_slice(outward, self.points, self.style_box.currentData())
             if spec is None:
                 return
+            spec["lines"] = bool(self.lines.isChecked())
             self.use(spec)
             log("results: slice plane parallel to the face clicked")
         except Exception as exc:
@@ -578,6 +587,7 @@ class SlicePanel:
                 "offset": float(self.offset.value()),
                 "flip": bool(self.flip.isChecked()),
                 "style": self.style_box.currentData(),
+                "lines": bool(self.lines.isChecked()),
             }
             if self.spec["axis"] == "face":
                 self.spec["normal"] = tuple(self.face_normal)
@@ -2177,6 +2187,7 @@ def write(
             session.targets[1],
             cover=cover,
             more=entries[1:],
+            unit_of=session.unit,
         )
     finally:
         import shutil
