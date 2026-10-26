@@ -150,9 +150,9 @@ the top); OK waits only for a formula that does not fit.
 | Tangent Chain (on): tangent edges are picked together and highlighted | Same; off, only the picked edges are highlighted and rounded (part 2) |
 | Only edges that can be rounded light up under the mouse | Same (selection filter: smooth edges, vertices, sketches, other bodies do not highlight) |
 | Live preview | The result is shown solid; the part before the fillet is shown see-through around it, with the picks highlighted at their original corner (so they stay clickable) |
-| Blue drag arrow on the first picked edge | Same. It lies on the face next to the edge, its tip on the line where the round starts, pointing away from the edge; drag it out to make the round bigger |
+| Blue drag arrow on the first picked edge | Same. **Diagonal since 0.1.0-beta.2.2** (Luca: "any dragging done on an angle has an arrow that is diagonal"): it stands on the middle of the round, on the line halfway between the two faces (45° on a box edge, the real angle on others), and points out of the material. It stays on the round as the size changes: on an outside edge the round's middle moves into the part as it grows, so pushing the arrow in makes the round bigger; in an inside corner it moves out. The drag along that line is turned into the radius (`blend.fillet_per_unit`: the middle moves 1/sin(γ/2) − 1 mm per mm of radius, γ the angle between the faces). Variable-radius points and Chord Length rows have the same diagonal arrow; faces nearly back to back (no halfway line) keep the arrow lying on a face |
 | A value box floating next to the drag arrow; digits typed over the view go into it | Same since 2026-10-13 (`taskui.ValueBoxes`): the box shows the dialog's value with units, follows the arrow, takes a value or formula (Enter = OK). A digit typed with the mouse over the 3D view goes into it |
-| The chamfer's arrow is where you can see it | Same since 2026-10-13 (Luca: "the chamfer tool doesn't have an arrow to drag"): Equal Distance and Distance and Angle put the arrow on the face toward the viewer, as the fillet does; it is sized for the screen (about 75 px, never longer than about half the picked edge, never shorter than about 1 mm), so it shows on a 400 mm part and on a 4 mm part. Two Distances keeps one arrow per face. Drawn in front of the part and grabbable through it |
+| The chamfer's arrow is where you can see it | Same since 2026-10-13 (Luca: "the chamfer tool doesn't have an arrow to drag"). Equal Distance: the diagonal arrow, like the fillet's, on the middle of the bevel pointing out of the material (since 0.1.0-beta.2.2). Distance and Angle puts its distance arrow on the face toward the viewer (its angle is typed); it is sized for the screen (about 75 px, never longer than about half the picked edge, never shorter than about 1 mm), so it shows on a 400 mm part and on a 4 mm part. Two Distances keeps one arrow per face. Drawn in front of the part and grabbable through it |
 | Radius field, units, parameters and formulas (`r`, `r * 2`, `0.1 in`) | Same: a formula is kept on the feature as an expression (the value follows the parameter) and listed under the boxes ("Radius = r*2"); a bare number is always mm (degrees for an angle); a typo is explained in the dialog and OK waits; no FreeCAD pop-up |
 | Dragging the arrow back through the edge | The size stops at 0.1 mm and the arrow comes back to the value shown when the mouse is let go |
 | Impossible radius: the dialog says so, OK stays disabled | **Differs (Luca, 2026-10-21):** dragged or typed, the radius stops at the largest that fits, the preview shows it and a blue note says "Largest that fits here: 9.99 mm" (typed: "50 mm does not fit: limited to 9.99 mm"); OK works. A radius from a formula is not rewritten: explained, with the largest radius, and OK waits. **Nothing** is printed to the Report view |
@@ -169,6 +169,20 @@ the top); OK waits only for a formula that does not fit.
 Chamfer: the same picking, plus **Chamfer Type** Equal Distance / Two Distances / Distance and
 Angle, a **Flip** button (two distances, distance and angle) and one drag arrow per distance,
 each lying on the face its distance is measured on (so it is visible which side is which).
+
+Which chamfer arrows are diagonal (0.1.0-beta.2.2). Sources: Autodesk Fusion help *Create a
+chamfer* (SLD-CHAMFER-SOLID: "drag the distance or angle manipulator handles in the canvas";
+the first distance applies to both sides, further adjustments to the side being modified;
+Flip swaps the sides of Two Distances), *Chamfer reference* (SLD-REF-CHAMFER) and the Autodesk
+forum thread *Confusion about chamfers: what distance am I actually specifying?* (with Two
+Distances "you get a second arrow" and each arrow points the way its side of the chamfer
+moves; with Distance and Angle "the arrow points to the distance from the original edge").
+So: **Equal Distance** has one size for both faces and gets the one diagonal arrow (its
+middle moves `blend.chamfer_per_unit` mm per mm of distance); **Two Distances** keeps one
+arrow on each face, each setting its own distance; **Distance and Angle** keeps its one
+distance arrow on the face the distance is measured on. Fillet sources: *Create a fillet*
+(SLD-FILLET-SOLID: "drag the radius manipulator handle in the canvas" for Radius, Chord
+Length and Variable, and for Rule Fillet).
 
 Press Pull on a round or bevelled face still edits that fillet's/chamfer's size (it is the same
 PartDesign feature), as before.

@@ -1699,11 +1699,19 @@ class BlendPanel(Panel):
                     if edge is not None and edge.Length > 1e-6:
                         longest = edge.Length
                 size = handle_size_at(view, placement.multVec(spot["point"]), hi=longest / 6.0)
-                # The arrow's inner tip sits on the line where the blend starts; it lies on the
-                # face (lifted a little) and points away from the edge.
-                local = (
-                    spot["point"] + spot["lift"] * (0.25 * size) + spot["direction"] * (1.6 * size)
-                )
+                if spot.get("diagonal"):
+                    # On the line halfway between the faces, measured from the edge (where
+                    # the sharp edge was), a little out of the material: the arrow stands on
+                    # the blend's middle and points out of the part (blend.diagonal_spot).
+                    local = spot["point"] + spot["direction"] * (0.25 * size)
+                else:
+                    # The arrow's inner tip sits on the line where the blend starts; it lies
+                    # on the face (lifted a little) and points away from the edge.
+                    local = (
+                        spot["point"]
+                        + spot["lift"] * (0.25 * size)
+                        + spot["direction"] * (1.6 * size)
+                    )
                 origin = placement.multVec(local)
                 direction = placement.Rotation.multVec(spot["direction"])
                 value = self._value(row, spot["what"])
@@ -1714,6 +1722,7 @@ class BlendPanel(Panel):
                     size,
                     on_drag=lambda d, s=spot: self._dragged(s, d),
                     on_release=lambda d, s=spot: self._dragged(s, d, True),
+                    keep_pointing=bool(spot.get("diagonal")),
                 )
                 self.arrows.append((dragger, spot, origin, direction))
                 self._attach_box(dragger, spot, len(self.arrows) - 1)

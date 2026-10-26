@@ -949,11 +949,65 @@ def friendly(text):
 
 
 # -- drag arrows ----------------------------------------------------------------
+def diagonal(data):
+    """The line halfway between an edge's two faces, pointing out of the material (into the
+    air: the sum of the two outward normals), or None for faces nearly back to back."""
+    b = data["normals"][0] + data["normals"][1]
+    if b.Length < 1e-6:
+        return None
+    b.normalize()
+    return b
+
+
+def fillet_per_unit(data):
+    """How far the middle of a round moves along diagonal(data) per 1 mm of radius: its
+    centre stands r / sin(gamma / 2) from the edge, its surface r nearer; into the material
+    on an outside edge (a minus), out into the air in an inside corner."""
+    m = 1.0 / math.sin(max(data["gamma"], 1e-3) / 2.0) - 1.0
+    m = min(max(m, 0.1), 5.0)
+    return -m if data["convex"] else m
+
+
+def chamfer_per_unit(data):
+    """How far the middle of an equal-distance chamfer moves along diagonal(data) per 1 mm
+    of distance (the middle of the two points the distance sets on the faces)."""
+    b = diagonal(data)
+    if b is None:
+        return 1.0
+    k = 0.5 * (data["into"][0] + data["into"][1]).dot(b)
+    if abs(k) < 0.1:
+        k = 0.1 if k >= 0 else -0.1
+    return k
+
+
+def diagonal_spot(data, what, per_unit):
+    """An arrow on the line halfway between the two faces (Fusion: a blend on an angle has
+    a diagonal arrow; Luca, 2026-10-26): it stands on the blend's middle and points out of
+    the material whatever the size (`point` is the edge, the arrow at point + direction *
+    size * per_unit)."""
+    b = diagonal(data)
+    if b is None:
+        return None
+    return {
+        "what": what,
+        "point": data["point"],
+        "direction": b,
+        "lift": b,
+        "per_unit": per_unit,
+        "diagonal": True,
+        "convex": data["convex"],
+        "gamma": data["gamma"],
+    }
+
+
 def arrow_spots(kind, info, refs, options, toward=None):
     """Where the blue drag arrows go, on the first picked edge: a list of
     {"what": option name, "point", "direction", "lift", "per_unit"}.
-    The arrow lies on a face next to the edge, at the line where the blend starts, and
-    points away from the edge; dragging it by `per_unit` mm changes the size by 1 mm."""
+    A fillet's and an equal-distance chamfer's arrow is diagonal (diagonal_spot). A Two
+    Distances chamfer has one arrow on each face (each distance belongs to its face, as in
+    Fusion), Distance and Angle one on the face its distance is measured on: such an arrow
+    lies on the face, at the line where the blend starts, and points away from the edge.
+    Dragging an arrow by `per_unit` mm changes the size by 1 mm."""
     names = blended_edges(info, refs[:1]) or blended_edges(info, refs)
     if not names:
         return []
@@ -972,6 +1026,9 @@ def arrow_spots(kind, info, refs, options, toward=None):
         }
 
     if kind == "fillet":
+        spot = diagonal_spot(data, "radius", fillet_per_unit(data))
+        if spot is not None:
+            return [spot]
         index = 0
         if first_face is not None:
             face = element(info.shape, first_face)
@@ -985,6 +1042,10 @@ def arrow_spots(kind, info, refs, options, toward=None):
     if options.get("chamfer_type") == "two":
         # One arrow per face: each sets the distance measured on its own face.
         return [side(ref, "distance", 1.0), side(1 - ref, "distance2", 1.0)]
+    if options.get("chamfer_type", "equal") == "equal":
+        spot = diagonal_spot(data, "distance", chamfer_per_unit(data))
+        if spot is not None:
+            return [spot]
     # Equal Distance, and Distance and Angle: one arrow, on the face toward the viewer (on
     # the reference face it was invisible behind the part for the top-back edge of a box in
     # the iso view; Luca: "the chamfer tool doesn't have an arrow to drag"). For Distance

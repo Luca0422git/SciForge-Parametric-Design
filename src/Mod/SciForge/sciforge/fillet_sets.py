@@ -1351,6 +1351,10 @@ def variable_spots(info, row, refs, toward=None, chain=True):
         data = _frame_at(info, name, point)
         if data is None:
             continue
+        spot = blend.diagonal_spot(dict(data, point=point), what, blend.fillet_per_unit(data))
+        if spot is not None:
+            spots.append(spot)
+            continue
         index = 0
         if toward is not None:
             index = blend.toward_face(data["normals"], toward)
@@ -1368,10 +1372,16 @@ def variable_spots(info, row, refs, toward=None, chain=True):
 
 
 def chord_per_unit(info, refs):
-    """How far the arrow of a Chord Length row moves for 1 mm of chord: the round starts
-    chord / (2 sin(gamma / 2)) from the edge (gamma: the corner's angle)."""
+    """How far the arrow of a Chord Length row moves for 1 mm of chord. The arrow is
+    diagonal (blend.diagonal_spot): a chord c is a radius c / (2 cos(gamma / 2)), whose
+    middle moves blend.fillet_per_unit per mm of radius. On a face arrow (faces nearly back
+    to back): the round starts c / (2 sin(gamma / 2)) from the edge."""
     names = blend.blended_edges(info, refs[:1]) or blend.blended_edges(info, refs)
     data = info.frame(names[0]) if names else None
     if data is None:
         return 1.0
-    return min(max(1.0 / (2.0 * math.sin(max(data["gamma"], 1e-3) / 2.0)), 0.2), 5.0)
+    half = max(data["gamma"], 1e-3) / 2.0
+    if blend.diagonal(data) is not None:
+        k = blend.fillet_per_unit(data) / (2.0 * max(math.cos(half), 0.1))
+        return k if abs(k) >= 0.05 else math.copysign(0.05, k)
+    return min(max(1.0 / (2.0 * math.sin(half)), 0.2), 5.0)
