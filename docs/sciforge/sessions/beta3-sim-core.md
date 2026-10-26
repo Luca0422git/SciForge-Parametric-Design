@@ -193,3 +193,8 @@ sections Engine and Benchmarks.
   - A note when many elements are stretched far past the aspect ratio limit (the tube: 789 of
     2192, the worst 131:1; its axial stiffness is then 11 % too high).
   Engine checks "a thin tube at the default mesh"; unit tests for the new rules.
+- 22:00-22:10 more shapes: a hollow ball under internal pressure held by nothing (Remove rigid
+  body modes): hoop stress at the bore 0.9 % / 0.1 % off Lame (now a benchmark,
+  hollow_sphere); a shaft glued in a hub (a round contact) under a moment: solves, the hub's
+  reaction balances; a 2 x 2 x 200 mm rod: 2.1 % / 0.8 % off beam theory with 16:1 elements,
+  so the stretched-elements note only comes far past the limit (over 3 times it).

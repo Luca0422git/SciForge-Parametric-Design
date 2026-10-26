@@ -484,8 +484,8 @@ class ProgramText(unittest.TestCase):
         note = core.mesh_quality_note(thin, 10)
         self.assertIn("40 of the 2400", note)
         self.assertIn("131", note)
-        many = {"worst_aspect": 20.0, "over_limit": 50, "elements": 1000}
-        self.assertIsNotNone(core.mesh_quality_note(many, 10))
+        rod = {"worst_aspect": 16.4, "over_limit": 56, "elements": 67}  # (bends within 2 %)
+        self.assertIsNone(core.mesh_quality_note(rod, 10))
         self.assertIsNone(core.mesh_quality_note({}, 10))
 
     def test_gmsh_errors(self):

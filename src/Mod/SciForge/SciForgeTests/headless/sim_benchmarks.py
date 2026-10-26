@@ -634,6 +634,43 @@ def bearing_lug(doc):
     return study, checks
 
 
+@case(
+    "hollow_sphere",
+    "Hollow steel ball, outer 40 / inner 36 mm, 10 MPa inside, held by nothing (Remove rigid "
+    "body modes)",
+    {"size_pct": 4.0},
+)
+def hollow_sphere(doc):
+    import Part
+
+    from sciforge import simulation as sim
+
+    R, r, p = 20.0, 18.0, 10.0
+    body = make_body(doc, Part.makeSphere(R).cut(Part.makeSphere(r)), "Ball")
+    study = sim.create_study(doc)
+    sim.set_settings(study, {"remove_rigid": True})
+    inner = [
+        "Face%d" % i
+        for i, f in enumerate(body.Shape.Faces, 1)
+        if abs(getattr(f.Surface, "Radius", 0.0) - r) < 1e-6
+    ]
+    sim.add_item(study, "load", "pressure", [(body, n) for n in inner], {"magnitude": p})
+    # Lame for a thick sphere: the hoop stress at the bore
+    hoop = p * (R**3 + 2 * r**3) / (2 * (R**3 - r**3))
+
+    def bore_hoop(study, summary):
+        return mean(
+            v
+            for q, v in node_values(study, "principal_1")
+            if abs(math.sqrt(q[0] ** 2 + q[1] ** 2 + q[2] ** 2) - r) < 0.05
+        )
+
+    checks = [
+        ("hoop stress at the bore (MPa), Lame for a sphere", hoop, bore_hoop, 3.0),
+    ]
+    return study, checks
+
+
 # -- engine checks (not accuracy: what must hold around a solve) ------------------------------
 # Each check(doc, out) appends (name, ok, detail) to `out`; they run after the accuracy cases.
 ENGINE_CHECKS = []

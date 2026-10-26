@@ -1183,7 +1183,8 @@ def mesh_quality_note(info, limit):
     worst = info.get("worst_aspect")
     over = int(info.get("over_limit") or 0)
     count = int(info.get("elements") or 0)
-    if not worst or worst <= 3.0 * float(limit) and over <= 0.01 * max(count, 1):
+    # (only far past the limit: a slender rod's 16:1 parabolic elements still bend within 2 %)
+    if not worst or worst <= 3.0 * float(limit):
         return None
     return (
         "%d of the %d mesh elements are stretched more than %s:1 (the worst %s:1): results near "
