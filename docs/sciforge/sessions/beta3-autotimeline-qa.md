@@ -36,7 +36,9 @@ up to bc1bf483); `sf/at-recognize` merged again as it went on (see "Merges").
 | Giving a rebuild up | **Bug, fixed**: there was no way but Undo (none in a design opened again: the original stayed hidden, the ghost drawn); now Stop Rebuild... (UTILITIES > AI, the rebuilt body's right-click) |
 | A drawing of the original (3 views, 26 dimensions) | the views follow the rebuild; no dimension changed its value |
 | A body two components deep, both turned, the body moved in its component | rebuilt to done and finished in place (the same world volume) |
-| A modelled thread after at-recognize's latest merge (28b49f4d) | **Regression, fixed**: its new round-floor rule took the thread's flanks for a floor: no hole, base none |
+| A modelled thread after at-recognize's merges (28b49f4d, dd0b0fe2) | **Regressions, fixed**: its new round-floor rule took the thread's flanks for a floor, then its tangled-hole rule took them for crossing features: no hole, base none, both times |
+| A finely exported STL (37,740 triangles) | **Bug, fixed**: start_rebuild 160 s and describe_reference 250 s with FreeCAD frozen; now refused at once over 10,000 triangles, with what to do |
+| Two rebuilds going on, the 3D view's right-click on one rebuilt body | **Bug, fixed**: Compare, Finish and Stop took the other one (the active body's) |
 
 ## Fixes (each with a check that fails on the code before it)
 
@@ -81,6 +83,15 @@ Commits on `sf/autotimeline-qa` (oldest first):
 19. After merging at-recognize 28b49f4d: a modelled thread is read again (its round-floor rule
     limited to analytic faces). Check `threaded` (failed on the merge).
 20. Stop Rebuild keeps the rebuilt body by default when the original was deleted meanwhile.
+21. A mesh over 10,000 triangles is refused at once (a 37,740-triangle STL froze FreeCAD for
+    160 s in start_rebuild and 250 s in describe_reference); describe reads the reference's
+    solid instead of making it again. Check `big_mesh`.
+22. After merging at-recognize d0592799: its tangled-hole rule took a thread's faces for
+    crossing features (the threaded hole lost again); a hole's thread counts as its own.
+    Check `threaded` (failed on the merge).
+23. The 3D view's right-click Compare / Finish / Stop act on the body under the mouse (with
+    two rebuilds going on they took the active body's: "Stop rebuilding Arm?" on the base).
+    Scenario `rebuild_qa_joints` D.
 
 `SciForgeTests/headless/rebuild_qa.py` is run by `rebuild_e2e.main()` (so by
 `run_tests.sh --only headless / base`); `SCIFORGE_REBUILD_FILTER=qa` runs only it. On the code
@@ -93,8 +104,10 @@ component id, follower).
 hole's thread for free-form faces: fixed in 5bdbdd82), 8ca93fd0 (135be235: its axis skipping
 conflicted with mine in `_best_prismatic`: theirs kept), a5682d67 (db65af29), 71810a78
 (28b49f4d: its round-floor rule broke threads: fixed in dd8022eb; parity doc conflicts
-resolved by hand, the AI docs copy regenerated). After each: recognition bench and rebuild
-e2e passed (see the report for the numbers).
+resolved by hand, the AI docs copy regenerated), d0592799 (dd0b0fe2: its tangled-hole rule
+broke threads: fixed in 325d48f4; at-recognize took QA's lines verbatim each time), 2d7806ac
+(25ce07ba). After each: recognition bench and rebuild e2e passed (see the report for the
+numbers).
 
 ## FreeCAD facts learned
 
