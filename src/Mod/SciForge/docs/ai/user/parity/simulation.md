@@ -150,7 +150,7 @@ Run of 2026-10-26 (report `sim-benchmarks.json` in the output folder, from `--on
 |  | rim turns (mm) = T L r / (G J) | 0.008276 | 0.008374 (1.18 %) | 0.008277 (0.01 %) | 3 % | 488 / 4446 | 0.27 / 1.6 | PASS |
 | **hanging_bar**: Steel bar 20 x 20 x 200 mm hanging from its top, gravity only | stress at the top (MPa) = rho g L | 0.01549 | 0.01545 (0.28 %) | 0.01547 (0.17 %) | 3 % | 457 / 2385 | 0.28 / 0.81 | PASS |
 |  | the bottom drops (mm) = rho g L^2 / 2E | 7.75e-06 | 7.76e-06 (0.14 %) | 7.76e-06 (0.14 %) | 3 % | 457 / 2385 | 0.28 / 0.81 | PASS |
-|  | the hold carries the weight (N) = rho g V | 6.198 | 6.149 (0.79 %) | 6.171 (0.42 %) | 1 % | 457 / 2385 | 0.28 / 0.81 | PASS |
+|  | the hold carries the weight (N) = rho g V | 6.198 | 6.198 (0.00 %; 6.149 before QA's reaction fix) | 6.198 (0.00 %; 6.171 before) | 1 % | 457 / 2385 | 0.28 / 0.81 | PASS |
 | **remote_force**: Cantilever with 100 N acting 50 mm beyond its tip (a Remote Force) | tip deflection (mm) = F L^3 / 3EI + F a L^2 / 2EI | 0.35 | 0.3477 (0.67 %) | 0.3491 (0.24 %) | 3 % | 459 / 3953 | 0.24 / 1.46 | PASS |
 |  | reaction (N) | 100 | 100 (0.00 %) | 100 (0.00 %) | 1 % | 459 / 3953 | 0.24 / 1.46 | PASS |
 | **prescribed**: Cantilever whose tip is pushed down 0.2 mm (a Prescribed Displacement) | force it takes (N) = 3 E I d / L^3 | 100 | 100.6 (0.56 %) | 100 (0.04 %) | 3 % | 459 / 3953 | 0.31 / 1.24 | PASS |
@@ -186,6 +186,130 @@ How to read it: "Default" is the study's default mesh (10 % of the model size) e
 case says otherwise; "finer" is the size in the case's own row. Stresses are read away from a
 fixed constraint's edge where the formula is for the material inside (beam theory, torsion),
 and at the peak where the formula is for the peak (Kt at the hole, Lame at the bore).
+
+### QA's own hand calculations (sim-engine-qa)
+
+The engine's QA wrote its own cases, independent of the builder's: every formula with its
+source next to it in `SciForgeTests/headless/sim_accuracy_qa.py` (run by `run_tests.sh --only
+sim` after the builder's benchmarks), at the default and a finer mesh, a few through the AI
+tools (their answers only), and engine checks for numbers that would be wrong without a word.
+Run of 2026-10-27 (`sim-accuracy-qa.json`): 191 checks (152 accuracy rows, 39 engine checks), 0 failed. A row marked "warned" is outside its
+tolerance at the default mesh and the solve says why (a thin wall met by large elements); the
+finer mesh is within it. Steel is Steel-Generic, aluminium Aluminum-Generic (E read from the
+study material).
+
+| Case | Check | Hand calculation | Default mesh: SciForge (error) | Finer mesh: SciForge (error) | Tolerance | Result |
+|---|---|---|---|---|---|---|
+| **ss_beam_centre**: Simply supported beam 200 x 10 x 20 mm (pin and roller lines under its ends), 1 kN on a line across the top at mid span (a force on an edge) | mid-span deflection (mm) = P L^3 / 48EI + P L / 4kGA | 0.1288 | 0.1289 (0.074 %) | 0.1298 (0.754 %) | 3 % | PASS |
+|  | bottom bending stress / (M c / I), x 30-70 and 130-170 mm (M = P x / 2) | 1 | 1.002 (0.205 %) | 0.9999 (0.009 %) | 3 % | PASS |
+|  | pin line carries half (N, z) | 500 | 500 (0 %) | 500 (0 %) | 0.5 % | PASS |
+|  | roller line carries half (N, z) | 500 | 500 (0 %) | 500 (0 %) | 0.5 % | PASS |
+| **ss_beam_pressure**: Simply supported beam 200 x 10 x 20 mm under 0.5 MPa on its top (5 N/mm) | mid-span deflection (mm) = 5wL^4/384EI + wL^2/8kGA | 0.08004 | 0.08045 (0.519 %) | 0.08121 (1.469 %) | 3 % | PASS |
+|  | bottom bending stress / (M c / I), x 30-70 and 130-170 mm (M = w x (L - x) / 2) | 1 | 1.002 (0.192 %) | 1.003 (0.336 %) | 3 % | PASS |
+|  | the supports carry the load (N) = q b L | 1000 | 1000 (0 %) | 1000 (0 %) | 0.5 % | PASS |
+| **symmetry_beam**: Half of the centre-loaded beam on a Frictionless symmetry plane at mid span against the full beam (the line load on the plane's top edge, halved) | half model's mid-span deflection = the full model's (mm) | 0.1289 | 0.1294 (0.375 %) | 0.13 (0.147 %) | 1 % | PASS |
+|  | half model's bending stress ratio = the full model's (x 30-70 mm) | 1.002 | 1.001 (0.171 %) | 0.9998 (0.027 %) | 1 % | PASS |
+|  | half model's support carries half the load (N) = full model's pin line | 500 | 500 (0 %) | 500 (0 %) | 0.5 % | PASS |
+| **cantilever_edge_vertex**: Cantilever 100 x 10 x 10 mm loaded on an edge (100 N), on two corners (shared, then per corner) | edge load: tip deflection (mm) = FL^3/3EI + FL/kGA | 0.2015 | 0.1989 (1.324 %) | 0.1999 (0.812 %) | 3 % | PASS |
+|  | edge load: the fixed end holds 100 N | 100 | 100 (0 %) | 100 (0 %) | 0.5 % | PASS |
+|  | two corners sharing 100 N: tip deflection (mm) | 0.2015 | 0.1989 (1.324 %) | 0.1999 (0.815 %) | 3 % | PASS |
+|  | two corners sharing 100 N: the fixed end holds 100 N | 100 | 100 (0 %) | 100 (0 %) | 0.5 % | PASS |
+|  | 100 N per corner (Force Per Entity): the fixed end holds 200 N | 200 | 200 (0 %) | 200 (0 %) | 0.5 % | PASS |
+|  | 100 N per corner: tip deflection twice the shared one (mm) | 0.4031 | 0.3977 (1.324 %) | 0.3998 (0.814 %) | 3 % | PASS |
+| **stepped_bar**: Stepped bar pulled by 5 kN: steel 20 x 20 x 100 mm glued to aluminium 10 x 10 x 100 mm | the end moves (mm) = F L1/E1A1 + F L2/E2A2 | 0.07768 | 0.07769 (0.017 %) | 0.07798 (0.389 %) | 2 % | PASS |
+|  | steel bar stress (MPa) = F / A1, x 30-70 mm | 12.5 | 12.5 (0.004 %) | 12.5 (0.006 %) | 2 % | PASS |
+|  | aluminium bar stress (MPa) = F / A2, x 130-170 mm | 50 | 49.99 (0.013 %) | 50 (0.001 %) | 2 % | PASS |
+|  | materials not swapped: end movement far from the swapped value 0.04286 mm | 1 | 1 (0 %) | 1 (0 %) | 0 % | PASS |
+|  | per-body rows name each body's material (steel part) | Steel-Generic | Steel-Generic (0 %) | Steel-Generic (0 %) | 0 % | PASS |
+|  | per-body rows name each body's material (aluminium part) | Aluminum-Generic | Aluminum-Generic (0 %) | Aluminum-Generic (0 %) | 0 % | PASS |
+|  | the hold takes the pull (N) | 5000 | 5000 (0 %) | 5000 (0 %) | 0.5 % | PASS |
+| **clamped_plate**: Circular plate, radius 50 mm, 2.5 mm thick, clamped at its rim, 0.1 MPa on top | centre deflection (mm) = q a^4 / 64D + q a^2 / 4 kappa G t | 0.03451 | 0.03089 (10.52 %) warned | 0.03422 (0.853 %) | 5 % | PASS (default: warned) |
+|  | bottom bending stress / plate theory, r < 0.4 a | 1 | 0.9382 (6.182 %) warned | 0.9959 (0.414 %) | 5 % | PASS (default: warned) |
+|  | the rim holds the load (N) = q pi a^2 | 785.4 | 785.4 (0.006 %) | 785.4 (0 %) | 0.5 % | PASS |
+| **tube_torsion**: Tube 30 / 24 mm across, 150 mm long, held at one end, twisted by 50 N m (a Moment, N mm) | von Mises on the outer surface (MPa) = sqrt(3) T r / J | 27.67 | 25.92 (6.319 %) warned | 27.67 (0.004 %) | 3 % | PASS (default: warned) |
+|  | the free end's rim turns (mm) = T L r / (G J) | 0.03115 | 0.03027 (2.819 %) | 0.03115 (0.004 %) | 3 % | PASS |
+|  | the held end takes no force (N): a moment only | 0 | 0.0001046 (0 %) | 3.13e-05 (0 %) | 0.5 % | PASS |
+| **gravity_bracket**: Steel L bracket held at its wall face with an aluminium block glued on it, gravity alone | the wall holds the weight (N, z) = g sum(rho V) | 2.226 | 2.226 (0 %) | 2.226 (0 %) | 0.2 % | PASS |
+|  | nothing sideways (N) | 0 | 8.748e-08 (0 %) | 1.885e-07 (0 %) | 0.2 % | PASS |
+|  | the arm's tip goes down, not up (sign of its z movement) | -1 | -1 (0 %) | -1 (0 %) | 0 % | PASS |
+| **gravity_sideways**: The same bracket with gravity along -Y: the wall holds the weight along +Y | the wall holds the weight along +Y (N) | 2.12 | 2.12 (0 %) | 2.12 (0 %) | 0.2 % | PASS |
+|  | nothing along Z (N) | 0 | 8.347e-10 (0 %) | 5.418e-09 (0 %) | 0.2 % | PASS |
+| **shaft_bearing**: Shaft 20 mm across, 120 mm long, held at one end, 500 N bearing load on its last 20 mm | free end deflection (mm), distributed load on the journal | 0.1631 | 0.1599 (1.967 %) | 0.1613 (1.128 %) | 3 % | PASS |
+|  | the held end takes the load (N, z) | 500 | 500 (0 %) | 500 (0 %) | 0.5 % | PASS |
+|  | nothing sideways (N) | 0 | 0.000316 (0 %) | 0.08346 (0.083 %) | 0.5 % | PASS |
+| **inch_cantilever**: Cantilever 1 x 1 x 12 in, 100 lbf at its end (an inch-sized part; numbers in mm, N, MPa) | tip deflection (mm) = 25.4 x F L^3 / 3EI [in] | 0.6052 | 0.6023 (0.481 %) | 0.6054 (0.023 %) | 3 % | PASS |
+|  | top stress / (0.00689 x M c / I [psi]), 20-80 % of the length (24.82 MPa at mid) | 1 | 1 (0.004 %) | 1 (0.001 %) | 3 % | PASS |
+|  | reaction (N) = 100 lbf | 444.8 | 444.8 (0 %) | 444.8 (0 %) | 0.5 % | PASS |
+| **scale_1000mm**: The 100 mm cantilever made 10 times bigger (1000 x 100 x 100 mm, 10 kN): the same stress, 10 times the deflection | tip deflection (mm) = F L^3 / 3EI | 2 | 1.995 (0.256 %) | 2.005 (0.245 %) | 3 % | PASS |
+|  | bending stress / (M c / I), top face 20-80 % | 1 | 0.9996 (0.039 %) | 1 (0.001 %) | 3 % | PASS |
+|  | reaction (N) | 1e+04 | 1e+04 (0 %) | 1e+04 (0 %) | 0.5 % | PASS |
+| **scale_1mm**: The 100 mm cantilever made 100 times smaller (1 x 0.1 x 0.1 mm, 0.01 N): the same stress, a hundredth of the deflection | tip deflection (mm) = F L^3 / 3EI | 0.002 | 0.001995 (0.254 %) | 0.002002 (0.101 %) | 3 % | PASS |
+|  | bending stress / (M c / I), top face 20-80 % | 1 | 0.9997 (0.028 %) | 0.9991 (0.091 %) | 3 % | PASS |
+|  | reaction (N) | 0.01 | 0.01 (0 %) | 0.01 (0 %) | 0.5 % | PASS |
+| **safety_basis**: Bar 20 x 20 x 100 mm, 100 MPa in tension and in compression: safety factor on yield (207 MPa / von Mises) and on ultimate (345 MPa / largest principal stress) | pulled 100 MPa, yield basis: lowest safety factor = 207 / 100 | 2.07 | 2.07 (0.001 %) | 2.07 (0.001 %) | 1 % | PASS |
+|  | pulled 100 MPa, ultimate basis: lowest safety factor = 345 / 100 | 3.45 | 3.45 (0.001 %) | 3.45 (0.001 %) | 1 % | PASS |
+|  | pushed 100 MPa, yield basis: lowest safety factor = 207 / 100 | 2.07 | 2.07 (0.001 %) | 2.07 (0.001 %) | 1 % | PASS |
+|  | pushed 100 MPa, ultimate basis: lowest safety factor = 345 / 100 | 3.45 | 3.45 (0.001 %) | 3.45 (0.001 %) | 1 % | PASS |
+| **shared_vs_per_entity**: Simply supported beam, 1 kN on two top faces of 60 and 140 mm: shared by area, then per face (Force Per Entity) | shared: the pin line takes 500 N | 500 | 500 (0 %) | 500 (0 %) | 0.5 % | PASS |
+|  | shared: deflection at x = 60 mm = an even load's (mm) | 0.06513 | 0.06558 (0.681 %) | 0.06632 (1.826 %) | 3 % | PASS |
+|  | per face: the pin line takes 1200 N | 1200 | 1200 (0 %) | 1200 (0 %) | 0.5 % | PASS |
+|  | per face: the roller line takes 800 N | 800 | 800 (0 %) | 800 (0 %) | 0.5 % | PASS |
+| **directions**: Which way things push: pressure into the face, a normal force into the face, Flip, a negative pressure, a moment about the face's normal (right-hand rule), gravity | pressure pushes into the face: the tip goes down | -1 | -1 (0 %) | -1 (0 %) | 0 % | PASS |
+|  | a negative pressure pulls: the tip goes up | 1 | 1 (0 %) | 1 (0 %) | 0 % | PASS |
+|  | Flip on a pressure pulls: the tip goes up | 1 | 1 (0 %) | 1 (0 %) | 0 % | PASS |
+|  | a normal force on the top face pushes into it: down | -1 | -1 (0 %) | -1 (0 %) | 0 % | PASS |
+|  | a normal force on the end face pushes into it (mm): shortens by F L / E A | -0.005 | -0.004979 (0.417 %) | -0.004982 (0.355 %) | 3 % | PASS |
+|  | Flip on a force along -Z: the tip goes up | 1 | 1 (0 %) | 1 (0 %) | 0 % | PASS |
+|  | a moment about the end face's normal (+X) turns the top edge to -Y | -1 | -1 (0 %) | -1 (0 %) | 0 % | PASS |
+|  | gravity along -Z: the tip goes down | -1 | -1 (0 %) | -1 (0 %) | 0 % | PASS |
+| **moved_component**: The cantilever inside a component moved by (120, -40, 35) mm and turned 37 degrees about (1, 1, 0.3): the same numbers as unmoved | largest displacement = unmoved (mm) | 0.09977 | 0.0997 (0.075 %) | 0.1002 (0.049 %) | 1 % | PASS |
+|  | unmoved: top stress along the part / (-F/A + M c / I), x 20-80 mm | 1 | 0.9994 (0.057 %) | 1 (0.001 %) | 3 % | PASS |
+|  | moved and turned: top stress along the part / (-F/A + M c / I), x 20-80 mm | 1 | 1 (0 %) | 0.9999 (0.01 %) | 3 % | PASS |
+|  | reaction = unmoved (N) | 111.8 | 111.8 (0 %) | 111.8 (0 %) | 0.2 % | PASS |
+|  | reaction turned with the part (N off (100, 0, 50) in its axes) | 0 | 6.782e-05 (0 %) | 6.586e-06 (0 %) | 0.5 % | PASS |
+
+Finer mesh nearer the hand calculation (every check off by more than 1 % at the default):
+
+| Case | Check | Error default -> finer | Result |
+|---|---|---|---|
+| cantilever_edge_vertex | edge load: tip deflection (mm) = FL^3/3EI + FL/kGA | 1.324 % -> 0.812 % | PASS |
+| cantilever_edge_vertex | two corners sharing 100 N: tip deflection (mm) | 1.324 % -> 0.815 % | PASS |
+| cantilever_edge_vertex | 100 N per corner: tip deflection twice the shared one (mm) | 1.324 % -> 0.814 % | PASS |
+| clamped_plate | centre deflection (mm) = q a^4 / 64D + q a^2 / 4 kappa G t | 10.52 % -> 0.853 % | PASS |
+| clamped_plate | bottom bending stress / plate theory, r < 0.4 a | 6.182 % -> 0.414 % | PASS |
+| tube_torsion | von Mises on the outer surface (MPa) = sqrt(3) T r / J | 6.319 % -> 0.004 % | PASS |
+| tube_torsion | the free end's rim turns (mm) = T L r / (G J) | 2.819 % -> 0.004 % | PASS |
+| shaft_bearing | free end deflection (mm), distributed load on the journal | 1.967 % -> 1.128 % | PASS |
+
+Through the AI tools (study_results' answers only):
+
+| Case | Check | Hand calculation | SciForge (error) | Tolerance | Result |
+|---|---|---|---|---|---|
+| ai_cantilever | tip deflection (mm) = F L^3 / 3EI | 0.2 | 0.1995 (0.27 %) | 3 % | PASS |
+| ai_cantilever | reaction (N) | 100 | 100 (0 %) | 0.5 % | PASS |
+| ai_cantilever | lowest safety factor = yield / largest von Mises | 3.504 | 3.504 (0 %) | 0.5 % | PASS |
+| ai_cantilever | units named mm, N, MPa | 1 | 1 (0 %) | 0 % | PASS |
+| ai_pressure_gravity | 1 MPa on top: tip deflection (mm) = wL^4/8EI + wL^2/2kGA | 0.7577 | 0.747 (1.402 %) | 3 % | PASS |
+| ai_pressure_gravity | 1 MPa on 1000 mm2: reaction (N) = 1000 | 1000 | 1000 (0 %) | 0.5 % | PASS |
+| ai_pressure_gravity | gravity: reaction (N) = rho V g | 0.7747 | 0.7747 (0 %) | 0.2 % | PASS |
+| ai_moment_units | 10000 N mm: the rim turns (mm) = T L r / GJ | 0.008276 | 0.008277 (0.013 %) | 3 % | PASS |
+| ai_out_of_date | in date right after the solve | 0 | 0 (0 %) | 0 % | PASS |
+| ai_out_of_date | OUT OF DATE after the box grew to 120 mm | 1 | 1 (0 %) | 0 % | PASS |
+
+| Engine check | What is checked | Checks | Result |
+|---|---|---|---|
+| picks follow their faces through edits | as made: the end (x = 100) bends 0.1998 mm (beam theory 0.2; 2394 nodes); made 140 mm long: the end (x = 140) bends 0.5472 mm (beam theory 0.5488; 1238 nodes); with a slot through its middle: the end (x = 140) bends 0.593 mm (beam theory 0.5883; 1410 nodes); then 120 mm long again: the end (x = 120) bends 0.3689 mm (beam theory 0.3659; 1932 nodes); with the end's top edge rounded: the end (x = 120) bends 0.3689 mm (beam theory 0.3659; 2442 nodes) | 5 | PASS |
+| materials stay with their bodies in any order | stretch 0.013379 mm = sum of F L / E A (0.013429); each body's row names its own material | 2 | PASS |
+| a thin wall at the default mesh is not silently wrong | default mesh: centre deflection 0.03089 mm vs plate theory 0.03451 (10.5 % off); warned: True; a solid cantilever at the default mesh: no thin-wall note | 2 | PASS |
+| reactions add up to the loads | reaction (0.0, -30.0, 194.1196) + applied (0.0, 30.0, -194.1196) = (2e-05, -0.0, -1e-05) (N) | 1 | PASS |
+| a force's picks | shared over a face and a corner: refused; shared over a face and an edge: refused; along the normal on an edge: refused; per entity on a face and a corner: the hold takes 2 x 100 N (200); per entity on a plate's top that a glued block splits, and the block's roof: the hold takes 2 x 1000 N (2000) | 5 | PASS |
+| reactions of two holds that share an edge, linear elements | Wall + Foot + loads = (-2e-06, 0.0, 0.0) N (loads (0.0, 30.0, -2.1196)) | 1 | PASS |
+| reactions on sliding planes | Cut X holds (-2000.1, -0.01458, -4.5955e-13) N (statics (-2000, 0, 0)); Cut Y holds (-0.01458, -2000.1, -1.7967e-13) N (statics (0, -2000, 0)); Ends holds (0.23459, 0.23459, -2.5275e-05) N (statics (0, 0, 0)) | 3 | PASS |
+| the bodies of a study of the whole design | eye off: the same bodies; eye off: not out of date; a new body is in the study; a new body hidden is still in it; a body a Combine used up is not | 5 | PASS |
+| nothing asks for a recompute after a solve | after the solve; after Keep results in the file off and on; after a study material; after a load changed; those changes leave the results out of date | 5 | PASS |
+| along the normal of a curved face | force along a round face's normal: refused; moment along a round face's normal: refused; a force along a vector on it: taken | 3 | PASS |
+| out of date after a change that keeps the size | solved: in date; the hole moved from x 30 to 60: out of date; the bar solved: in date; the bar turned a quarter about its axis: out of date | 4 | PASS |
+| results kept in and dropped from the file | kept: reopened with its results and the same numbers, in date; dropped: reopened with the numbers only, in date, says solve again; reopened, then the part changed: out of date | 3 | PASS |
 
 ### Big parts
 
