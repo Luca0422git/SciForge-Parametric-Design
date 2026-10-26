@@ -145,7 +145,32 @@ def duplicate(doc, members, joint, side, pick, snap):
         raise DuplicateError(
             "Click where the copy goes on another component, not on %s." % pick.part.Label
         )
-    copies = {}
+    copies, made = {}, []
+    try:
+        return _duplicate(doc, members, joint, side, pick, snap, copies, made)
+    except Exception:
+        _take_back(doc, copies, made)  # a copy that failed half way leaves nothing behind
+        raise
+
+
+def _take_back(doc, copies, made):
+    for new in reversed(made):
+        try:
+            joints.delete_joint(new)
+        except Exception as exc:
+            log("Duplicate With Joints: %s not removed (%s)" % (new.Name, exc))
+    for copy in copies.values():
+        try:
+            components.remove(doc, copy, _top=False)
+        except Exception as exc:
+            log("Duplicate With Joints: %s not removed (%s)" % (copy.Name, exc))
+    try:
+        doc.recompute()
+    except Exception:
+        pass
+
+
+def _duplicate(doc, members, joint, side, pick, snap, copies, made):
     for member in members:
         copies[member.Name] = instances.make_instance(
             member, components.KEEP, placement=joints.global_placement(member)
@@ -154,7 +179,7 @@ def duplicate(doc, members, joint, side, pick, snap):
     inside = _part(joint, side)
     pick1, snap1 = _moved_pick(joint, side, copies)
     kind = joints.fusion_type(joint)
-    made = [joints.create_joint(doc, kind, pick1, snap1, pick, snap)]
+    made.append(joints.create_joint(doc, kind, pick1, snap1, pick, snap))
     _copy_settings(joint, made[0])
     copy_inside = copies[inside.Name]
     before = joints.global_placement(copy_inside)

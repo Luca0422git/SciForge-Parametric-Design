@@ -229,6 +229,18 @@ a_copies.wait_ms = 800
 def a_ok():
     h.check("OK closed the dialog", panel() is None)
     h.check("the copies stay", len(copies_of(S["screw"])) == 6)
+    # a drawing's parts list counts the occurrences as the same part (Fusion: Qty)
+    from sciforge import drawing, drawing_core
+
+    doc = App.ActiveDocument
+    found = [b for b in doc.Objects if b.TypeId == "PartDesign::Body"]
+    rows = drawing_core.parts_rows(drawing.components_of(found))
+    qty = {r["PartNumber"]: r["Qty"] for r in rows}
+    h.check(
+        "the parts list: 7 screws and 7 nuts, one row each",
+        qty.get(S["screw"].Label) == 7 and qty.get(S["nut"].Label) == 7 and len(rows) == 3,
+        qty,
+    )
 
 
 # -- B ---------------------------------------------------------------------------------------------

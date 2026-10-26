@@ -26,6 +26,8 @@ Code (all in `src/Mod/SciForge/`):
 | `sciforge/data_panel_ui.py`, `data_panel_core.py` | Upload of several files, STEP cards dragged into the 3D view, Insert into Current Design of every selected STEP card |
 | `sciforge/instances.py` | an occurrence of an assembly keeps the copies nested in it |
 | `sciforge/duplicate_joints.py`, `duplicate_joints_ui.py` | Duplicate With Joints (ASSEMBLE) |
+| `sciforge/drawing.py` (`_part_name`) | a drawing's parts list counts an occurrence ("screw:2") as its original: one row, the count in Qty |
+| `sciforge/browser_ui.py`, `components.py`, `export_report.py`, `decal.py`, `decal_ui.py` | speed on a 300-part robot (section 4) |
 | `SciForgeTests/fixtures/vex/vex_parts.py` | SciForge's own VEX-like parts from VEX's published numbers (never VEX's files), as STEP files made at test time |
 | `SciForgeTests/fixtures/vex/vex_robot.py` | a drivetrain of about 300 parts for the speed tests |
 | `tools/sciforge/icons_vex.py` | the Duplicate With Joints icon |
@@ -56,7 +58,7 @@ Code (all in `src/Mod/SciForge/`):
 |---|---|---|
 | Upload takes several files at once | Autodesk [18]; Tutorial [63] | Same: the Data Panel's Upload picks several files |
 | Insert into Current Design: one design per insert | Autodesk [16] | **(SciForge)** INSERT > Insert STEP picks several STEP / IGES files at once: one component per file (named after it), laid side by side along X from the origin (each one's box starting 10 mm after the previous one's), one undo step, then the Move dialog (Initial Position) on all of them; a file that cannot be read is named in the message and the others come in. The Data Panel's Insert into Current Design inserts every selected STEP card the same way, and STEP cards can be dragged into the 3D view (designs could) |
-| Inserting the same design again: another instance of the same component | Autodesk [16] (excerpt) | Same for a STEP / IGES file: the same path, size and date as one inserted before in this design = another occurrence of that component (linked, "screw:2"; the browser shows the first as "screw:1"), not a second reading of the file; a changed file (or another copy of it elsewhere) comes in as a part of its own, "screw (2)" |
+| Inserting the same design again: another instance of the same component | Autodesk [16] (excerpt) | Same for a STEP / IGES file: the same path, size and date as one inserted before in this design = another occurrence of that component (linked, "screw:2"; the browser shows the first as "screw:1"), not a second reading of the file; a changed file (or another copy of it elsewhere) comes in as a part of its own, "screw (2)". A drawing's parts list counts the occurrences of a part in one row (Qty) |
 | Duplicate With Joints: pick components that are already joined, the open joint, then click new places (Simple or Between Two Faces): each click a duplicate, joined there; enclosed joints duplicated with them | Autodesk [22]; Forum [48] | Same (ASSEMBLE > Duplicate With Joints, after Rigid Group (G: its place in the menu)): Components (view or browser), Joint (taken by itself when there is one open joint, else a list), Position (Simple or Between Two Faces; hole centres work); each copy is an occurrence of each picked component, placed by a new joint of the open joint's type, offsets, axes and limits, the enclosed joints made again between the copies; OK keeps all (one undo step), Esc / Cancel takes them back. A component with no joint, or a joint on a joint origin / as-built, is refused with the reason |
 | Picking every matching hole at once | Forum [48] (asked for, not in Fusion) | Not built (one click per copy, as Fusion) |
 
@@ -87,13 +89,13 @@ What the time goes on, and what was done:
 
 - **Opening**: FreeCAD alone (no window) opens the file in 3.7 s. The rest is FreeCAD's window
   side: FreeCAD 1.1 makes a placement indicator (three axes with text labels drawn with Qt)
-  for every origin plane, axis and body when it is created, about 5400 in this robot (40 % of
-  the time in stack samples), and it meshes the 298 bodies for display (11 s: each occurrence
+  for every origin plane, axis and body when it is created, about 5400 in this robot (a third
+  of the reading in stack samples), and it meshes the 298 bodies for display (11 s: each occurrence
   is a copy with its own mesh). SciForge's own share was a document observer of decals that
   looked at every object on each change (3562 calls while loading, 117 of 180 s): it now asks
   FreeCAD for its own objects only and waits while a file loads. A FreeCAD change (make the
-  indicator when it is first shown) would take most of the rest: not made in this branch (a
-  change to FreeCAD's C++ can be tried only in a full build).
+  indicator when it is first shown) would take a good part of the rest: not made in this
+  branch (a change to FreeCAD's C++ can be tried only in a full build).
 - **Browser**: a row's item kept its node with the node's whole subtree (Qt copied it in and
   out on every read and every paint); the origin rows (2400 here) asked FreeCAD for their
   parents one plane at a time.

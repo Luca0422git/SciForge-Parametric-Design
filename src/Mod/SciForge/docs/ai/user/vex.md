@@ -15,8 +15,8 @@ Fusion. (The details and the sources: `docs/sciforge/parity/vex-assembly.md`.)
 - The **Data Panel** works too: **Upload** takes several files at once; select STEP cards and
   right-click > **Insert into Current Design**, or drag a card into the 3D view.
 - Inserting the **same file again** gives another copy of the same part ("screw:2",
-  "screw:3"...), linked to the first: it is lighter than a second import, and the parts list
-  counts them as one part.
+  "screw:3"...), linked to the first (a change to the part shows in every copy); the file
+  is not read again, and a drawing's parts list counts them in one row (Qty).
 
 ## 2. Use inches
 
