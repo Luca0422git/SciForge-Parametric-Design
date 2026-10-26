@@ -63,5 +63,6 @@ Done: base.width = 80.00 mm. Bodies now: Body1: 32000 mm3, 80 x 40 x 10 mm.
 ## See also
 
 - Recipe: [parametric mounting plate](sciforge://docs/recipes/parametric-plate.md)
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - Golden models built with its steps (read one with docs_read golden/<id>): `blend_fillet_edit_radius`, `bodies_combine_follows_tool`, `comp_paste_instance_follows`, `comp_paste_new_independent`, `edit_extrude_then_shell`, `edit_fillet_radius`, `edit_pattern_count`, `edit_width_after_fillet_and_hole`, `export_report_design`, `extrude_multi_cut_edit`, `extrude_multi_cut_profile_body_excluded`, `extrude_multi_cut_reopen` and 20 more
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

@@ -61,4 +61,5 @@ Inserted part.step: part.step: 1 component, 1 body. Its id is 'Component'. Bodie
 
 ## See also
 
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

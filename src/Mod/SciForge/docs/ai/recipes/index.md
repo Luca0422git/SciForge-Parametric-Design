@@ -20,6 +20,7 @@ calls, change the sizes, and check with the same tools.
 | [Lofted handle](sciforge://docs/recipes/lofted-handle.md) | loft through three profiles, ellipses, checking the size, diff of a cut |
 | [Curved panel from a surface patch](sciforge://docs/recipes/surface-patch.md) | 3D boundary curves, surface patch, thicken, surface bodies |
 | [Parametric mounting plate](sciforge://docs/recipes/parametric-plate.md) | user parameters, sketch dimensions and model parameters with expressions, a pattern that follows, change and verify |
+| [Rebuild a part that has no timeline](sciforge://docs/recipes/reverse-engineer.md) | reverse engineering: an imported STEP or mesh part rebuilt as timeline steps with start_rebuild, describe_reference, compare_to_reference after every feature, finish_rebuild |
 
 Looking for something else? `examples_search` finds recipes and the golden models (about
 450 small designs with measured results) by words, tool or op, and

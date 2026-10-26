@@ -118,6 +118,7 @@ Done: AI: Extrude 5 mm. Its id is 'Extrude2'. Bodies now: Body1: 36446 mm3, 61.7
 - Recipe: [enclosure with a lid](sciforge://docs/recipes/enclosure-with-lid.md)
 - Recipe: [lofted handle](sciforge://docs/recipes/lofted-handle.md)
 - Recipe: [parametric mounting plate](sciforge://docs/recipes/parametric-plate.md)
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - Recipe: [revolved knob with grip grooves](sciforge://docs/recipes/revolved-knob.md)
 - Recipe: [stepped shaft with a keyway](sciforge://docs/recipes/shaft-with-keyway.md)
 - Recipe: [sheet-like U bracket (thin extrude with bends)](sciforge://docs/recipes/sheet-like-part.md)

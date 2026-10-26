@@ -138,4 +138,5 @@ Body001, read from its 7 faces: 1 feature, a plan of 4 steps. Build the plan in 
 
 ## See also
 
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

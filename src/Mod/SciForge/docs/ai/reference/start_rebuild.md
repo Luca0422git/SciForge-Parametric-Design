@@ -64,4 +64,5 @@ Done: AI: Start rebuild of Body001. Body001 is the reference now (id 'RebuildRef
 
 ## See also
 
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

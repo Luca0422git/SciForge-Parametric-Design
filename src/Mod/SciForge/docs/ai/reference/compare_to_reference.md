@@ -139,4 +139,5 @@ Match 0.9791 (1 is identical); 6 of 7 faces of the original matched. Next: A rou
 
 ## See also
 
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

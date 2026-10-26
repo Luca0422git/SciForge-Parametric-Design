@@ -60,5 +60,6 @@ Done: AI: Parameter thickness = 12. Bodies now: Body1: 24000 mm3, 60 x 40 x 10 m
 ## See also
 
 - Recipe: [parametric mounting plate](sciforge://docs/recipes/parametric-plate.md)
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - Golden models built with its steps (read one with docs_read golden/<id>): `export_report_design`, `param_driven_box`, `pattern_quantity_parameter`, `pattern_symmetric_parameter`, `sf_box_param_driven`, `sf_coil_param_driven`, `sf_coil_taper_height_pitch_param`, `sf_coil_taper_param_driven`, `sf_coil_taper_rev_pitch_param`, `sf_pipe_param_driven`, `sf_sweep_distance_parameter`, `sf_sweep_taper_parameter` and 1 more
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

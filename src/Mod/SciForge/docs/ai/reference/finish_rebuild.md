@@ -71,4 +71,5 @@ Done: AI: Finish rebuild. Body001 is now the rebuilt part (id 'Body002') with 4 
 
 ## See also
 
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

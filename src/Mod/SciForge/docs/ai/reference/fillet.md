@@ -64,6 +64,7 @@ Done: AI: Fillet 5 mm. Its id is 'Fillet1'. Bodies now: Body1: 23785.4 mm3, 60 x
 - Recipe: [L bracket with mounting holes](sciforge://docs/recipes/bracket.md)
 - Recipe: [enclosure with a lid](sciforge://docs/recipes/enclosure-with-lid.md)
 - Recipe: [flange with a bolt circle](sciforge://docs/recipes/flange-bolt-pattern.md)
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - Recipe: [revolved knob with grip grooves](sciforge://docs/recipes/revolved-knob.md)
 - Recipe: [stepped shaft with a keyway](sciforge://docs/recipes/shaft-with-keyway.md)
 - Recipe: [cantilever snap-fit hook](sciforge://docs/recipes/snap-fit.md)
