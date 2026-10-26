@@ -67,7 +67,7 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 | `sim_setup_dialogs` | 85 | PASS |
 | `sim_setup_browser` | 61 | PASS |
 | `sim_setup_documents` | 49 | PASS |
-| `sim_setup_kinds` | 58 | PASS |
+| `sim_setup_kinds` | 70 | PASS |
 | `sim_setup_workspace` | 54 | PASS |
 | `sim_setup_components` | 42 | PASS |
 | `sim_setup_glyphs` | 20 | PASS |
@@ -110,6 +110,11 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
 6. DOF View uses the engine's `_held_rows` and `_pieces` (private) with `free_modes`; a public
    `free_motions(study)` in the engine would be safer (DOF View falls back to the bodies held
    by nothing if they change).
+7. Open: the Bearing Load's default direction (-Z) runs along a hole drilled along Z: no
+   side takes the load and the solve fails with "Flip the direction", which does not help.
+   The UI turns a default that runs along the picked hole's axis across it and refuses a
+   direction along the axis (`simulation_panels.ItemPanel._bearing_across`); the pre-check
+   could say it too.
 
 ## FreeCAD / Qt facts and traps
 

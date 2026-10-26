@@ -14,6 +14,10 @@ C  Force with Direction Type Vector: Fx 0, Fy 100, Fz 0 typed: a force of 100 N 
    Per Entity is greyed with one pick.
 D  Pressure on the arm's top face, 0.5 MPa, Flip Direction: it pulls; OK.
 E  Prescribed Displacement: Ux ticked, 0.2 mm typed, on the arm's top face; OK.
+E2 Bearing Load on the second hole's wall (a click on the flat plate is not taken: round faces
+   only): its direction turns across the hole (the default -Z runs along the hole's axis),
+   200 N typed; OK. Remote Force on the arm's top face acting from the point (120, 15,
+   60); OK. Their glyphs are drawn.
 F  MANAGE > Local Mesh Control: Body Selection, a click on the bracket picks the whole body,
    Length 3 mm typed; OK; "Local Mesh Control 1" under the Mesh row, green dots drawn.
 G  SOLVE > Generate Mesh: the progress shows the two mesh stages; the mesh is shown on the
@@ -26,6 +30,7 @@ H  Solve, then Cancel in the progress window: the solve stops (cancelled), the s
 
 import FreeCAD as App
 from PySide import QtWidgets
+from PySide6 import QtTest
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import simsetup_steps as s
@@ -247,6 +252,85 @@ def e_check():
     h.check("Ux 0.2 mm", abs(opts["x"] - 0.2) < 1e-9, opts)
 
 
+# -- E2 -----------------------------------------------------------------------------------------
+def e2_bearing():
+    h.ribbon("Structural Loads")
+
+
+def e2_choose():
+    s.choose("SciForgeSimItemType", "Bearing Load")
+
+
+def e2_pick():
+    p = s.item_panel()
+    if not h.check("Bearing Load chosen", p is not None and p.kind == "bearing"):
+        return
+    bracket = s.body()
+    point = s.aim(bracket, s.plate_top(bracket))
+    if point is not None:
+        h.click(point)
+    QtTest.QTest.qWait(120)  # (a pick is handled a moment after the click)
+    state["bearing_after_flat"] = list(p.picks)
+    s.click_face(bracket, s.hole_faces(bracket)[1])
+    s.type_in("SciForgeSim_magnitude", "200")
+
+
+def e2_ok():
+    p = s.item_panel()
+    if p is not None:
+        h.check(
+            "the flat plate is not taken (round faces only)",
+            state.get("bearing_after_flat") == [],
+            state.get("bearing_after_flat"),
+        )
+        h.check("the hole's wall picked", len(p.picks) == 1, p.picks)
+        direction = [s.panel_field("SciForgeSim_v" + a).text() for a in "xyz"]
+        h.check(
+            "its direction turned across the hole (the hole runs along Z)",
+            direction[2] in ("0", "-0") and direction != ["0", "0", "0"],
+            direction,
+        )
+        h.check("its arrows previewed", s.preview_count() > 0, s.preview_count())
+    s.ok()
+
+
+def e2_check():
+    found = [i for i in s.items("load") if s.sim().item_data(i)["kind"] == "bearing"]
+    h.check("Bearing Load 1 made", [i.Label for i in found] == ["Bearing Load 1"])
+    if found:
+        opts = s.sim().item_data(found[0])["options"]
+        h.check("200 N", abs(opts["magnitude"] - 200.0) < 1e-9, opts)
+        h.check("its glyphs are drawn", s.glyph_counts().get(found[0].Name, 0) >= 1)
+    h.ribbon("Structural Loads")
+
+
+def e2_remote():
+    s.choose("SciForgeSimItemType", "Remote Force")
+
+
+def e2_remote_pick():
+    p = s.item_panel()
+    if not h.check("Remote Force chosen", p is not None and p.kind == "remote_force"):
+        return
+    s.click_face(s.body(), s.arm_top(s.body()))
+    for name, value in (("px", "120"), ("py", "15"), ("pz", "60")):
+        s.type_in("SciForgeSim_" + name, value)
+
+
+def e2_remote_ok():
+    s.ok()
+
+
+def e2_remote_check():
+    found = [i for i in s.items("load") if s.sim().item_data(i)["kind"] == "remote_force"]
+    h.check("Remote Force 1 made", [i.Label for i in found] == ["Remote Force 1"])
+    if found:
+        opts = s.sim().item_data(found[0])["options"]
+        point = [float(c) for c in opts.get("point") or []]
+        h.check("from the point (120, 15, 60)", point == [120.0, 15.0, 60.0], opts)
+        h.check("its glyphs are drawn", s.glyph_counts().get(found[0].Name, 0) >= 1)
+
+
 # -- F ------------------------------------------------------------------------------------------
 def f_local():
     s.menu_item("MANAGE", "Local Mesh Control")
@@ -398,6 +482,15 @@ h.run(
         e_choose,
         e_values,
         e_check,
+        e2_bearing,
+        e2_choose,
+        e2_pick,
+        e2_ok,
+        e2_check,
+        e2_remote,
+        e2_remote_pick,
+        e2_remote_ok,
+        e2_remote_check,
         f_local,
         f_body,
         f_ok,

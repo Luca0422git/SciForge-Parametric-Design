@@ -774,11 +774,47 @@ class ItemPanel(pickpanel.PickPanel):
         return core.options(self.category, self.kind, opts), None
 
     # -- preview and checks --------------------------------------------------------------------
+    def _bearing_across(self):
+        """A Bearing Load presses across its hole: when the direction is still the default
+        and runs along the picked hole's axis (a hole drilled along Z and the default -Z: no
+        side would take the load), it is turned across the axis (-Z, else -Y, else -X made
+        square to it). Returns a sentence when the direction runs along the axis."""
+        if self.kind != "bearing" or not self.picks:
+            return None
+        try:
+            found = _glyphs()._round_axis(self.picks)
+            if found is None or not all(("v" + a) in self.fields for a in "xyz"):
+                return None
+            axis = found[1]
+            axis.normalize()
+            current = [_value(self.fields["v" + a]) for a in "xyz"]
+            d = core.unit_vector(current)
+            along = abs(d[0] * axis.x + d[1] * axis.y + d[2] * axis.z)
+            default = core.options("load", "bearing").get("vector")
+            if along > 0.95 and not self.editing and list(current) == list(default):
+                for candidate in ((0.0, 0.0, -1.0), (0.0, -1.0, 0.0), (-1.0, 0.0, 0.0)):
+                    dot = candidate[0] * axis.x + candidate[1] * axis.y + candidate[2] * axis.z
+                    across = [candidate[i] - dot * (axis.x, axis.y, axis.z)[i] for i in range(3)]
+                    size = sum(c * c for c in across) ** 0.5
+                    if size > 0.5:
+                        for a, value in zip("xyz", across):
+                            _put(self.fields["v" + a], round(value / size, 9))
+                        return None
+            if along > 0.95:
+                return (
+                    "A Bearing Load presses across the hole: this direction runs along the "
+                    "hole's axis, so no side of it takes the load. Give a direction across it."
+                )
+        except Exception as exc:
+            warn("%s: %s" % (self.title, exc))
+        return None
+
     def _preview(self):
+        across = self._bearing_across()
         opts, problem = self.read_options(lenient=True)
         count = _glyphs().preview(self.doc, self.category, self.kind, opts, self.picks)
-        if problem:
-            self.say(problem, error=True)
+        if problem or across:
+            self.say(problem or across, error=True)
             return
         problems = (
             core.check(self.category, self.kind, opts, _sim().describe_picks(self.picks))
@@ -822,6 +858,9 @@ class ItemPanel(pickpanel.PickPanel):
                 return False
             sim = _sim()
             problems = core.check(self.category, self.kind, opts, sim.describe_picks(self.picks))
+            across = self._bearing_across()
+            if across:
+                problems.append(across)
             if problems:
                 self.say(" ".join(problems), error=True)
                 return False
