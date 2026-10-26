@@ -2004,6 +2004,31 @@ def design_bodies_check(doc, out):
     out.append(("a body a Combine used up is not", names == [body.Name], names))
 
 
+@engine_check("nothing asks for a recompute after a solve")
+def nothing_touched(doc, out):
+    """FreeCAD's recompute mark ("touched") on the study, its items and its results: none after
+    a solve, after a setting changed after the solve (it stayed on the study, and was saved
+    with the design: it came back touched), or after a study material or an item changed."""
+    from sciforge import simulation as sim
+
+    def touched():
+        return [o.Name for o in doc.Objects if "Touched" in (o.State or [])]
+
+    body, study = _cantilever_study(doc)
+    doc.recompute()
+    sim.solve(study, timeout=900)
+    out.append(("after the solve", not touched(), touched()))
+    sim.set_settings(study, {"keep_results": False})
+    sim.set_settings(study, {"keep_results": True})
+    out.append(("after Keep results in the file off and on", not touched(), touched()))
+    sim.set_study_material(study, body, "aluminium")
+    out.append(("after a study material", not touched(), touched()))
+    force = sim.items(study, "load")[0]
+    sim.update_item(force, opts={"magnitude": 150.0})
+    out.append(("after a load changed", not touched(), touched()))
+    out.append(("those changes leave the results out of date", sim.out_of_date(study), ""))
+
+
 @engine_check("results kept in and dropped from the file")
 def kept_and_dropped(doc, out):
     """A solved study saved and reopened: the results come back with the same numbers; with

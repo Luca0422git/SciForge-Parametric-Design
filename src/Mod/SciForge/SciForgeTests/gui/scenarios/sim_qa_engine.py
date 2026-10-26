@@ -5,7 +5,8 @@ sim-engine-qa): what sim-results found while building the RESULTS tab.
 A  A steel cantilever 100 x 10 x 10 mm and a study of the whole design (no bodies chosen):
    Fixed at one end, 100 N down at the other.
 B  Solve as the Solve dialog does (a QTimer polls the Job): done; afterwards no object of the
-   design is left "touched" (FreeCAD's recompute mark), not even after the window has drawn.
+   design is left "touched" (FreeCAD's recompute mark), not even after the window has drawn,
+   or after a setting of the study changed (it has nothing to compute).
 C  The body's eye off (the RESULTS tab says to do it to look inside), and back on: the results
    are not out of date, and the study's bodies are the same (they went by the eyes).
 D  A new body, hidden, in the design: a study of the whole design takes it in (hidden is not
@@ -123,6 +124,14 @@ def after_solve():
 def after_drawing():
     touched = _touched(S["doc"])
     h.check("B: nothing touched after the window drew the results", not touched, touched)
+    # a setting changed after the solve (Keep results in the file) and a study material set
+    # back to the body's own: the study has nothing to compute, so nothing asks to recompute
+    sim = _sim()
+    sim.set_settings(S["study"], {"keep_results": True})
+    sim.set_study_material(S["study"], S["body"], None)
+    touched = _touched(S["doc"])
+    h.check("B: a setting changed after the solve leaves nothing touched", not touched, touched)
+    h.check("B: and the results are not out of date", not sim.out_of_date(S["study"]))
 
 
 after_drawing.wait_ms = 1000

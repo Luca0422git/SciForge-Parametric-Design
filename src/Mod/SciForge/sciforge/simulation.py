@@ -227,6 +227,7 @@ def create_study(doc, kind="static_stress", label=None, study_bodies=None):
     _save(obj, STUDY_PROP, {"type": kind, "settings": core.settings(), "materials": {}})
     if study_bodies:
         obj.SimBodies = list(study_bodies)
+    _clean(obj)
     return obj
 
 
@@ -286,11 +287,26 @@ def clone_study(study, label=None):
         obj.Label = "%s %d" % (title, _label_number(_all_item_labels(doc, obj), title))
         obj.Suppressed = bool(item.Suppressed)
         _save(obj, ITEM_PROP, d)
+    _clean(copy)
     return copy
 
 
 def _save(obj, prop, data):
     bodies.save_meta(obj, prop, data)
+    _clean(obj)
+
+
+def _clean(*objs):
+    """Studies and their items have nothing to compute (their execute does nothing): a change
+    SciForge makes to one leaves no recompute mark ("touched"), so the design does not ask for
+    a recompute after a solve or a setting changed after it (a study changed after its solve
+    was still touched when the design was saved, and came back touched). The design is still
+    marked modified (Save asks), and the results' fingerprint still sees the change."""
+    for obj in objs:
+        try:
+            obj.purgeTouched()
+        except Exception:
+            pass
 
 
 def study_bodies(study):
@@ -413,6 +429,7 @@ def update_item(item, refs=None, opts=None, suppressed=None):
     _save(item, ITEM_PROP, data)
     if suppressed is not None:
         item.Suppressed = bool(suppressed)
+    _clean(item)
     return item
 
 
