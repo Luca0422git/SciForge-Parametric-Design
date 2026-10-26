@@ -78,7 +78,10 @@ def _study_row(study, units=None):
     gravity = settings["gravity"]
     summary = sim.summary(study)
     solved = bool(summary)
-    kept = solved and sim.result_object(study) is not None
+    if hasattr(sim, "results_dropped"):  # (an emptied result object stays in the file)
+        kept = solved and not sim.results_dropped(study)
+    else:
+        kept = solved and sim.result_object(study) is not None
     mesh = settings["mesh"]
     mesh_text = "Average element size %s %% of the model size, %s elements; made when it solves" % (
         core.fmt(mesh["size_pct"]),

@@ -16,6 +16,9 @@ F  A second design in DESIGN: its tab shows SOLID and the timeline; back to the 
 G  The first design saved and closed: the second one shows DESIGN; reopened: it opens in
    DESIGN; Workspace > Simulation: no New Study (the study is in the file), its constraint,
    load and results are back.
+H  Settings > General: "Keep the results in the design file" unticked; saved, closed and
+   reopened: the summary is there, the coloured results are not, and the Results row says
+   only the summary is kept.
 """
 
 import os
@@ -246,6 +249,51 @@ def g_check():
     h.check("its constraint and load", labels == ["Fixed 1", "Force 1"], labels)
     h.check("its results", bool(s.sim().summary(study)) and s.sim().results(study) is not None)
     h.check("Results in the browser", "Results" in s.browser_labels(), s.browser_labels())
+    s.menu_item("MANAGE", "Settings")
+
+
+# -- H ------------------------------------------------------------------------------------------
+def h_keep_off():
+    from sciforge import simulation_dialogs
+
+    p = simulation_dialogs.SettingsPanel.last
+    if not h.check("Study Settings opened", p is not None and not p._closed):
+        return
+    p.tabs.setCurrentIndex(0)
+    if p.tabs.keep.isChecked():
+        s.click_widget(p.tabs.keep)
+    h.check("Keep the results in the design file unticked", not p.tabs.keep.isChecked())
+    s.ok()
+
+
+def h_save_close():
+    h.check(
+        "kept off",
+        s.sim().settings(s.active_study()).get("keep_results") is False,
+        s.sim().settings(s.active_study()),
+    )
+    App.ActiveDocument.save()
+    App.closeDocument(App.ActiveDocument.Name)
+
+
+def h_reopen():
+    App.openDocument(state["path"])
+    h.fit()
+
+
+def h_enter():
+    s.workspace("Simulation")
+
+
+def h_check():
+    study = s.active_study()
+    h.check("the summary kept", bool(s.sim().summary(study)))
+    h.check("the coloured results not kept in the file", s.sim().results(study) is None)
+    labels = s.browser_labels()
+    h.check("the results are up to date", "Results" in labels, labels)
+    h.check("not out of date", not s.sim().out_of_date(study))
+    tip = (s.row_node("Results") or {}).get("tip", "")
+    h.check("the Results row says only the summary is kept", "Only the summary" in tip, tip)
 
 
 h.run(
@@ -279,5 +327,10 @@ h.run(
         g_after_close,
         g_reopened,
         g_check,
+        h_keep_off,
+        h_save_close,
+        h_reopen,
+        h_enter,
+        h_check,
     ],
 )
