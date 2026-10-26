@@ -1,16 +1,42 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
-"""Fusion's SIMULATION workspace (Static Stress): entering and leaving it, its SETUP tab's
-commands and dialogs. Owner: builder sim-ui (beta 3); the engine is simulation.py, the RESULTS
-tab is simulation_results_ui.py (builder sim-results). Spec: docs/sciforge/parity/simulation.md.
+"""Fusion's SIMULATION workspace (Static Stress): entering and leaving it, and the commands of
+its SETUP tab. Owner: builder sim-ui (beta 3). The engine is simulation.py (builder sim-core),
+the RESULTS tab simulation_results_ui.py (builder sim-results). Spec:
+docs/sciforge/parity/simulation.md "Setup"; Fusion's behaviour with sources:
+docs/sciforge/dev/research/fusion-simulation.md.
 
-Scaffold (orchestrator): the workspace switch only. ribbon_ui's workspace menu calls
-enter_workspace() / leave_workspace(); RibbonWidget.set_simulation_mode shows the SETUP and
-RESULTS tabs instead of the design's.
+The workspace (research 1): picked from the workspace drop-down (Design / Simulation /
+Drawing). In SIMULATION the ribbon shows SETUP and RESULTS instead of the design's tabs, the
+timeline is hidden, the browser shows the study tree (simulation_browser.py), the loads and
+constraints are drawn on the model (simulation_glyphs.py) and the Pre-check button shows the
+active study's traffic light. Each open design remembers its own workspace: switching to
+another design's tab shows that design's workspace; closing a design forgets it. Entering
+ends the command or sketch that is open and clears the selection; a design without a study
+opens Fusion's New Study dialog, else its last active study is the active one again.
+
+Dialogs: simulation_dialogs.py (New Study, Settings, Study Materials, contacts, Load Case
+Attributes, Pre-check, gravity), simulation_panels.py (Structural Constraints / Loads, picks on
+the model), simulation_solve_dialog.py (Solve and its progress, Generate Mesh).
 """
 
-from . import log, warn
+import FreeCAD as App
+import FreeCADGui as Gui
 
-STATE = {"on": False}
+from . import log, ui_icon_path, warn
+from .compat import QtCore, QtWidgets
+
+STATE = {
+    "on": False,  # the ribbon shows the SIMULATION workspace now
+    "docs": {},  # document name -> True while that design is in the SIMULATION workspace
+    "active": {},  # document name -> name of its active study
+    "timeline": False,  # the timeline was shown when the workspace hid it
+    "connected": False,
+    "watch": None,
+    "timer": None,
+    "light": None,  # (document, study, state) shown on the Pre-check button
+    "light_key": None,
+    "glyph_key": None,
+}
 
 
 def _ribbon():
@@ -22,33 +48,677 @@ def _ribbon():
         return None
 
 
+def _doc():
+    return App.ActiveDocument
+
+
 def active():
     """True while the SIMULATION workspace is shown."""
     return bool(STATE["on"])
 
 
-def enter_workspace(tab=None):
+def in_workspace(doc=None):
+    """True when `doc` (the active design) is in the SIMULATION workspace."""
+    doc = doc or _doc()
+    return bool(doc is not None and STATE["docs"].get(doc.Name))
+
+
+# -- the active study --------------------------------------------------------------------------
+def active_study(doc=None):
+    """The design's active study (the one the SETUP commands work on), or None: the one made
+    or activated last, else the newest."""
+    from . import simulation
+
+    doc = doc or _doc()
+    if doc is None:
+        return None
     try:
-        ribbon = _ribbon()
-        if ribbon is not None and hasattr(ribbon, "set_simulation_mode"):
-            ribbon.set_simulation_mode(True, tab)
-        STATE["on"] = True
-        log("simulation workspace")
+        found = simulation.studies(doc)
+    except Exception:
+        return None
+    name = STATE["active"].get(doc.Name)
+    for study in found:
+        if study.Name == name:
+            return study
+    return found[-1] if found else None
+
+
+def set_active_study(study):
+    """Make `study` the active one (Fusion: double-click a study in the browser)."""
+    if study is None:
+        return
+    try:
+        STATE["active"][study.Document.Name] = study.Name
+        log("active study: %s" % study.Label)
+    except Exception as exc:
+        warn("active study: %s" % exc)
+    refresh()
+
+
+def require_study(doc=None):
+    """The active study, or None after telling the person to make one first."""
+    from . import commands
+
+    study = active_study(doc)
+    if study is None:
+        commands.tell("Make a study first: STUDY > New Simulation Study.")
+    return study
+
+
+# -- entering and leaving ----------------------------------------------------------------------
+def _finish_open():
+    """Fusion: switching workspace ends the command in progress (a sketch is finished)."""
+    from . import commands
+
+    if not commands.finish_open_dialog():
+        return False
+    try:
+        gdoc = Gui.ActiveDocument
+        if gdoc is not None and gdoc.getInEdit() is not None:
+            commands.leave_edit()
     except Exception as exc:
         warn("simulation workspace: %s" % exc)
+    return True
+
+
+def enter_workspace(tab=None):
+    """Switch the active design to the SIMULATION workspace (the workspace menu's Simulation).
+    Without a study, Fusion's New Study dialog opens."""
+    try:
+        from . import commands
+
+        doc = _doc()
+        if doc is None:
+            commands.tell("Open a design first: the Simulation workspace works on a design.")
+            return False
+        if not _finish_open():
+            return False
+        try:
+            Gui.Selection.clearSelection()
+        except Exception:
+            pass
+        _connect()
+        STATE["docs"][doc.Name] = True
+        _apply(True, tab)
+        if active_study(doc) is None:
+            QtCore.QTimer.singleShot(0, _new_study_on_entry)
+        return True
+    except Exception as exc:
+        warn("simulation workspace: %s" % exc)
+        return False
+
+
+def _new_study_on_entry():
+    try:
+        if in_workspace() and active_study() is None:
+            from . import simulation_dialogs
+
+            simulation_dialogs.open_new_study()
+    except Exception as exc:
+        warn("new study: %s" % exc)
 
 
 def leave_workspace():
+    """Back to the DESIGN workspace (the workspace menu's Design). Studies and results stay
+    in the design."""
     try:
-        if not STATE["on"]:
+        doc = _doc()
+        if doc is not None and not STATE["docs"].get(doc.Name) and not STATE["on"]:
+            return True
+        if not _finish_open():
+            return False
+        if doc is not None:
+            STATE["docs"][doc.Name] = False
+        try:
+            Gui.Selection.clearSelection()
+        except Exception:
+            pass
+        _apply(False)
+        return True
+    except Exception as exc:
+        warn("simulation workspace: %s" % exc)
+        return False
+
+
+def _results_hide():
+    """The RESULTS display (sim-results) put away: the design's bodies shown again."""
+    try:
+        from . import simulation_results_ui as results
+    except Exception:
+        return
+    for name in ("hide", "leave_workspace"):
+        fn = getattr(results, name, None)
+        if fn is not None:
+            try:
+                fn()
+            except Exception as exc:
+                warn("results display: %s" % exc)
             return
-        ribbon = _ribbon()
-        if ribbon is not None and hasattr(ribbon, "set_simulation_mode"):
-            ribbon.set_simulation_mode(False)
-        STATE["on"] = False
-        log("design workspace")
+
+
+def _apply(on, tab=None):
+    """Show the workspace `on` for the active design: ribbon tabs, timeline, browser, glyphs."""
+    ribbon = _ribbon()
+    was = STATE["on"]
+    STATE["on"] = bool(on)
+    if ribbon is not None and hasattr(ribbon, "set_simulation_mode"):
+        try:
+            ribbon.set_simulation_mode(bool(on), tab)
+        except Exception as exc:
+            warn("simulation ribbon: %s" % exc)
+    _timeline(on)
+    if not on:
+        _results_hide()
+    try:
+        from . import simulation_glyphs
+
+        if on:
+            simulation_glyphs.refresh(_doc(), active_study(), force=True)
+        else:
+            simulation_glyphs.clear()
+    except Exception as exc:
+        warn("simulation glyphs: %s" % exc)
+    if on:
+        _start_timer()
+    else:
+        _stop_timer()
+    STATE["light_key"] = None
+    refresh_light()
+    _refresh_browser()
+    if was != STATE["on"]:
+        log("%s workspace" % ("simulation" if on else "design"))
+
+
+def _timeline(on):
+    """Fusion's Simulation workspace has no timeline: hidden while it shows, back after."""
+    try:
+        from . import shell, timeline_ui
+
+        dock = Gui.getMainWindow().findChild(QtWidgets.QDockWidget, "SciForgeTimelineDock")
+        if on:
+            if dock is not None and dock.isVisible():
+                STATE["timeline"] = True
+                timeline_ui.hide()
+        elif STATE["timeline"]:
+            STATE["timeline"] = False
+            if shell.is_on():
+                drawing = False
+                try:
+                    from . import drawing_ui
+
+                    drawing = drawing_ui.is_on()
+                except Exception:
+                    pass
+                if not drawing:
+                    timeline_ui.show()
+    except Exception as exc:
+        warn("simulation workspace timeline: %s" % exc)
+
+
+def _refresh_browser():
+    try:
+        from . import browser_ui
+
+        widget = browser_ui.widget()
+        if widget is not None:
+            widget.refresh(force=True)
+    except Exception as exc:
+        warn("simulation browser: %s" % exc)
+
+
+def sync():
+    """The active design changed (another tab, a design closed): show its own workspace."""
+    try:
+        want = in_workspace()
+        if want != STATE["on"]:
+            if not want:
+                _finish_sim_dialog()
+            _apply(want)
+        elif want:
+            refresh()
     except Exception as exc:
         warn("simulation workspace: %s" % exc)
 
 
-COMMANDS = {}
+def _finish_sim_dialog():
+    """A SETUP dialog of another design ends when its design is no longer in front."""
+    try:
+        from . import taskui
+
+        current = taskui.current()
+        if current is not None and getattr(current, "simulation_dialog", False):
+            if current.doc is not _doc():
+                current.finish()
+    except Exception as exc:
+        warn("simulation dialog: %s" % exc)
+
+
+def refresh():
+    """After a setup change: the browser, the glyphs and the Pre-check light again."""
+    if not STATE["on"]:
+        return
+    STATE["light_key"] = None
+    STATE["glyph_key"] = None
+    try:
+        from . import simulation_glyphs
+
+        simulation_glyphs.refresh(_doc(), active_study(), force=True)
+    except Exception as exc:
+        warn("simulation glyphs: %s" % exc)
+    refresh_light()
+    _refresh_browser()
+
+
+# -- following the documents -------------------------------------------------------------------
+class _Watch:
+    """A design closed: forget its workspace and active study, show the next design's."""
+
+    def slotDeletedDocument(self, doc):
+        try:
+            name = doc.Name
+            STATE["docs"].pop(name, None)
+            STATE["active"].pop(name, None)
+            QtCore.QTimer.singleShot(50, sync)
+        except Exception as exc:
+            warn("simulation workspace: %s" % exc)
+
+    def slotActivateDocument(self, doc):
+        QtCore.QTimer.singleShot(0, sync)
+
+
+def _window_changed(sub=None):
+    if sub is None:
+        return
+    QtCore.QTimer.singleShot(0, sync)
+
+
+def _connect():
+    if STATE["connected"]:
+        return
+    try:
+        area = Gui.getMainWindow().findChild(QtWidgets.QMdiArea)
+        if area is not None:
+            area.subWindowActivated.connect(_window_changed)
+        STATE["watch"] = _Watch()
+        App.addDocumentObserver(STATE["watch"])
+        STATE["connected"] = True
+    except Exception as exc:
+        warn("simulation workspace: %s" % exc)
+
+
+def _start_timer():
+    if STATE["timer"] is None:
+        timer = QtCore.QTimer()
+        timer.setInterval(500)
+        timer.timeout.connect(_tick)
+        STATE["timer"] = timer
+    if not STATE["timer"].isActive():
+        STATE["timer"].start()
+
+
+def _stop_timer():
+    if STATE["timer"] is not None:
+        STATE["timer"].stop()
+
+
+def _tick():
+    """While the workspace shows: the glyphs follow edits and the zoom, the Pre-check light
+    follows the study (only after something changed: doc_epoch)."""
+    try:
+        if not STATE["on"]:
+            return
+        from . import doc_epoch, simulation_glyphs
+
+        if doc_epoch.busy():
+            return
+        doc = _doc()
+        if doc is None or not in_workspace(doc):
+            QtCore.QTimer.singleShot(0, sync)
+            return
+        study = active_study(doc)
+        key = (doc_epoch.key(), study.Name if study is not None else None)
+        simulation_glyphs.follow_zoom()
+        if key != STATE["glyph_key"]:
+            STATE["glyph_key"] = key
+            simulation_glyphs.refresh(doc, study)
+        refresh_light()
+    except Exception as exc:
+        warn("simulation workspace: %s" % exc)
+
+
+# -- the Pre-check light (Fusion: the toolbar icon is a traffic light, research 3.9) ------------
+def precheck_state(study):
+    """(light, [(level, sentence)]) of a study (light None without a study)."""
+    from . import simulation, simulation_setup_core as score
+
+    if study is None:
+        return None, []
+    try:
+        checks = score.ordered_checks(simulation.precheck(study))
+    except Exception as exc:
+        return "red", [("error", "The study could not be checked: %s" % exc)]
+    return score.light(checks), checks
+
+
+def refresh_light():
+    """The Pre-check button's icon and tooltip show the active study's state."""
+    try:
+        from . import doc_epoch, simulation_setup_core as score
+
+        doc = _doc()
+        study = active_study(doc) if STATE["on"] else None
+        key = (doc_epoch.key(), study.Name if study is not None else None, STATE["on"])
+        if key == STATE["light_key"]:
+            return
+        STATE["light_key"] = key
+        state, checks = precheck_state(study) if STATE["on"] else (None, [])
+        STATE["light"] = (doc.Name if doc else None, study.Name if study else None, state)
+        ribbon = _ribbon()
+        if ribbon is None:
+            return
+        from . import ui_icon
+
+        icon = score.light_icon(state)
+        lines = [score.light_text(state)] + [text for _level, text in checks]
+        for button in ribbon.findChildren(QtWidgets.QToolButton):
+            if button.objectName() == "SciForgeBig_Pre-check":
+                button.setIcon(ui_icon(icon))
+                button.setProperty("sciforgeIcon", icon)
+                button.setProperty("simLight", state or "")
+                button.setToolTip("Pre-check\n" + "\n".join(lines))
+    except Exception as exc:
+        warn("pre-check light: %s" % exc)
+
+
+def light():
+    """The Pre-check light shown now: "green" / "yellow" / "red" / None (tests)."""
+    value = STATE.get("light")
+    return value[2] if value else None
+
+
+# -- results hand-over ---------------------------------------------------------------------------
+def show_results(study):
+    """A solve ended: the results show (sim-results' simulation_results_ui.show(study) when it
+    is there, else the RESULTS tab is selected)."""
+    try:
+        if study is None:
+            return
+        set_active_study(study)
+        try:
+            from . import simulation_results_ui as results
+        except Exception:
+            results = None
+        shown = False
+        if results is not None and hasattr(results, "show"):
+            try:
+                results.show(study)
+                shown = True
+            except Exception as exc:
+                warn("results display: %s" % exc)
+        ribbon = _ribbon()
+        if not shown and ribbon is not None and in_workspace(study.Document):
+            ribbon.set_simulation_mode(True, "sim_results")
+    except Exception as exc:
+        warn("results: %s" % exc)
+
+
+# -- commands ------------------------------------------------------------------------------------
+def _run(fn, *args):
+    try:
+        fn(*args)
+    except Exception as exc:
+        warn("simulation: %s" % exc)
+
+
+def _setup_active():
+    return App.ActiveDocument is not None and in_workspace()
+
+
+class _SetupCommand:
+    """A SETUP command: active in the SIMULATION workspace."""
+
+    TEXT = ""
+    TIP = ""
+    ICON = "workspace_simulation"
+
+    def GetResources(self):
+        return {"MenuText": self.TEXT, "ToolTip": self.TIP, "Pixmap": ui_icon_path(self.ICON)}
+
+    def IsActive(self):
+        return _setup_active()
+
+    def Activated(self):
+        _run(self.run)
+
+    def run(self):
+        pass
+
+
+class NewStudyCommand(_SetupCommand):
+    TEXT = "New Simulation Study"
+    TIP = "Make a new study of the design: pick the study type (Static Stress)"
+    ICON = "sim_new_study"
+
+    def IsActive(self):
+        return App.ActiveDocument is not None
+
+    def run(self):
+        from . import simulation_dialogs
+
+        if not in_workspace():
+            if not enter_workspace():
+                return
+            if active_study() is None:
+                return  # entering opens New Study by itself
+        simulation_dialogs.open_new_study()
+
+
+class StudyMaterialsCommand(_SetupCommand):
+    TEXT = "Study Materials"
+    TIP = "The material of each body for this study, and what its safety factor is based on"
+    ICON = "sim_materials"
+
+    def run(self):
+        from . import simulation_dialogs
+
+        study = require_study()
+        if study is not None:
+            simulation_dialogs.open_materials(study)
+
+
+class ConstraintsCommand(_SetupCommand):
+    TEXT = "Structural Constraints"
+    TIP = "Hold the model where it is fixed, pinned or supported"
+    ICON = "sim_constraints"
+
+    def run(self):
+        from . import simulation_panels
+
+        study = require_study()
+        if study is not None:
+            simulation_panels.open_item(study, "constraint")
+
+
+class LoadsCommand(_SetupCommand):
+    TEXT = "Structural Loads"
+    TIP = "Push, pull or twist the model: force, pressure, moment"
+    ICON = "sim_loads"
+
+    def run(self):
+        from . import simulation_panels
+
+        study = require_study()
+        if study is not None:
+            simulation_panels.open_item(study, "load")
+
+
+def gravity_on():
+    """True when the active study has gravity on (the menu's tick)."""
+    try:
+        from . import simulation
+
+        study = active_study()
+        return bool(study is not None and simulation.settings(study)["gravity"]["on"])
+    except Exception:
+        return False
+
+
+class GravityCommand(_SetupCommand):
+    TEXT = "Toggle Gravity On/Off"
+    TIP = "Switch the weight of the bodies on or off for this study (off by default)"
+    ICON = "sim_gravity"
+
+    def run(self):
+        from . import simulation_dialogs
+
+        study = require_study()
+        if study is not None:
+            simulation_dialogs.toggle_gravity(study)
+
+
+class AutoContactsCommand(_SetupCommand):
+    TEXT = "Automatic Contacts"
+    TIP = "Find the bodies that touch: they are bonded (glued) when the study solves"
+    ICON = "sim_contacts"
+
+    def run(self):
+        from . import simulation_dialogs
+
+        study = require_study()
+        if study is not None:
+            simulation_dialogs.open_contacts(study)
+
+
+class ContactManagerCommand(_SetupCommand):
+    TEXT = "Contact Manager"
+    TIP = "The list of the bodies bonded together in this study"
+    ICON = "sim_contact_manager"
+
+    def run(self):
+        from . import simulation_dialogs
+
+        study = require_study()
+        if study is not None:
+            simulation_dialogs.open_contact_manager(study)
+
+
+class DOFViewCommand(_SetupCommand):
+    TEXT = "DOF View"
+    TIP = "Show which bodies are not held yet and could still move"
+    ICON = "sim_dof"
+
+    def run(self):
+        from . import simulation_dialogs
+
+        study = require_study()
+        if study is not None:
+            simulation_dialogs.dof_view(study)
+
+
+class SettingsCommand(_SetupCommand):
+    TEXT = "Settings"
+    TIP = "Study Settings: general, mesh, adaptive refinement"
+    ICON = "sim_settings"
+
+    def run(self):
+        from . import simulation_dialogs
+
+        study = require_study()
+        if study is not None:
+            simulation_dialogs.open_settings(study)
+
+
+class LocalMeshCommand(_SetupCommand):
+    TEXT = "Local Mesh Control"
+    TIP = "Smaller mesh elements on picked faces or edges"
+    ICON = "sim_local_mesh"
+
+    def run(self):
+        from . import simulation_panels
+
+        study = require_study()
+        if study is not None:
+            simulation_panels.open_local_mesh(study)
+
+
+class AttributesCommand(_SetupCommand):
+    TEXT = "Load Case Attributes"
+    TIP = "Every constraint and load of the study with where it is and how big"
+    ICON = "sim_attributes"
+
+    def run(self):
+        from . import simulation_dialogs
+
+        study = require_study()
+        if study is not None:
+            simulation_dialogs.open_attributes(study)
+
+
+class PrecheckCommand(_SetupCommand):
+    TEXT = "Pre-check"
+    TIP = "Check the study before solving: what is missing or may be wrong"
+    ICON = "sim_precheck"
+
+    def run(self):
+        from . import simulation_dialogs
+
+        study = require_study()
+        if study is not None:
+            STATE["light_key"] = None
+            refresh_light()
+            simulation_dialogs.open_precheck(study)
+
+
+class SolveCommand(_SetupCommand):
+    TEXT = "Solve"
+    TIP = "Solve the studies on this computer (CalculiX)"
+    ICON = "sim_solve"
+
+    def run(self):
+        from . import simulation_solve_dialog
+
+        if require_study() is not None:
+            simulation_solve_dialog.open_solve()
+
+
+class GenerateMeshCommand(_SetupCommand):
+    TEXT = "Generate Mesh"
+    TIP = "Make the mesh now and show it on the model (it is made at solve time otherwise)"
+    ICON = "sim_mesh"
+
+    def run(self):
+        from . import simulation_solve_dialog
+
+        study = require_study()
+        if study is not None:
+            simulation_solve_dialog.generate_mesh(study)
+
+
+class ShowMeshCommand(_SetupCommand):
+    TEXT = "Show Mesh"
+    TIP = "Show or hide the mesh made by Generate Mesh on the model"
+    ICON = "sim_mesh"
+
+    def run(self):
+        from . import simulation_solve_dialog
+
+        simulation_solve_dialog.toggle_mesh()
+
+
+COMMANDS = {
+    "SciForge_SimNewStudy": NewStudyCommand,
+    "SciForge_SimStudyMaterials": StudyMaterialsCommand,
+    "SciForge_SimConstraints": ConstraintsCommand,
+    "SciForge_SimLoads": LoadsCommand,
+    "SciForge_SimGravity": GravityCommand,
+    "SciForge_SimAutoContacts": AutoContactsCommand,
+    "SciForge_SimContactManager": ContactManagerCommand,
+    "SciForge_SimDOFView": DOFViewCommand,
+    "SciForge_SimSettings": SettingsCommand,
+    "SciForge_SimLocalMesh": LocalMeshCommand,
+    "SciForge_SimAttributes": AttributesCommand,
+    "SciForge_SimPrecheck": PrecheckCommand,
+    "SciForge_SimSolve": SolveCommand,
+    "SciForge_SimGenerateMesh": GenerateMeshCommand,
+    "SciForge_SimShowMesh": ShowMeshCommand,
+}

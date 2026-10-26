@@ -1353,7 +1353,7 @@ SIM_STUDY = group(
     "STUDY",
     ["New Simulation Study"],
     [
-        item("New Simulation Study", None, SIM_ICON),  # owner: sim-ui
+        item("New Simulation Study", "SciForge_SimNewStudy", "sim_new_study"),  # owner: sim-ui
     ],
 )
 SIM_SIMPLIFY = group(
@@ -1375,7 +1375,7 @@ SIM_MATERIALS = group(
     "MATERIALS",
     ["Study Materials"],
     [
-        item("Study Materials", None, SIM_ICON),  # owner: sim-ui
+        item("Study Materials", "SciForge_SimStudyMaterials", "sim_materials"),  # owner: sim-ui
         item(
             "Manage Physical Materials", ("SciForge_ManageMaterials", "Material_Edit"), "material"
         ),
@@ -1386,7 +1386,7 @@ SIM_CONSTRAINTS = group(
     "CONSTRAINTS",
     ["Structural Constraints"],
     [
-        item("Structural Constraints", None, SIM_ICON),  # owner: sim-ui
+        item("Structural Constraints", "SciForge_SimConstraints", "sim_constraints"),  # sim-ui
     ],
 )
 SIM_LOADS = group(
@@ -1394,8 +1394,13 @@ SIM_LOADS = group(
     "LOADS",
     ["Structural Loads"],
     [
-        item("Structural Loads", None, SIM_ICON),  # owner: sim-ui
-        item("Toggle Gravity On/Off", None, SIM_ICON),  # owner: sim-ui
+        item("Structural Loads", "SciForge_SimLoads", "sim_loads"),  # owner: sim-ui
+        item(
+            "Toggle Gravity On/Off",
+            "SciForge_SimGravity",
+            "sim_gravity",
+            toggle="simulation_ui:gravity_on",
+        ),  # owner: sim-ui
         SEP,
         item("Linear Global Load", None, SIM_ICON, note=_SIM_LATER),
         item("Angular Global Load", None, SIM_ICON, note=_SIM_LATER),
@@ -1408,14 +1413,16 @@ SIM_CONTACTS = group(
     "CONTACTS",
     ["Automatic Contacts"],
     [
-        item("Automatic Contacts", None, SIM_ICON),  # owner: sim-ui
+        item("Automatic Contacts", "SciForge_SimAutoContacts", "sim_contacts"),  # owner: sim-ui
         item(
             "Manual Contacts",
             None,
             SIM_ICON,
             note=_SIM_LATER + ": bodies that touch are bonded, found automatically",
         ),
-        item("Contact Manager", None, SIM_ICON),  # owner: sim-ui
+        item(
+            "Contact Manager", "SciForge_SimContactManager", "sim_contact_manager"
+        ),  # owner: sim-ui
         SEP,
         item("Bolt Connector", None, SIM_ICON, note=_SIM_LATER),
         item("Rigid Body Connector", None, SIM_ICON, note=_SIM_LATER),
@@ -1426,7 +1433,13 @@ SIM_DISPLAY = group(
     "DISPLAY",
     [],
     [
-        item("DOF View", None, SIM_ICON),  # owner: sim-ui
+        item("DOF View", "SciForge_SimDOFView", "sim_dof"),  # owner: sim-ui
+        item(
+            "Show Mesh",
+            "SciForge_SimShowMesh",
+            "sim_mesh",
+            toggle="simulation_solve_dialog:mesh_shown",
+        ),  # owner: sim-ui
     ],
 )
 SIM_MANAGE = group(
@@ -1434,9 +1447,9 @@ SIM_MANAGE = group(
     "MANAGE",
     [],
     [
-        item("Settings", None, SIM_ICON),  # owner: sim-ui (Study Settings)
-        item("Local Mesh Control", None, SIM_ICON),  # owner: sim-ui
-        item("Load Case Attributes", None, SIM_ICON),  # owner: sim-ui
+        item("Settings", "SciForge_SimSettings", "sim_settings"),  # owner: sim-ui
+        item("Local Mesh Control", "SciForge_SimLocalMesh", "sim_local_mesh"),  # owner: sim-ui
+        item("Load Case Attributes", "SciForge_SimAttributes", "sim_attributes"),  # sim-ui
     ],
 )
 SIM_SOLVE = group(
@@ -1444,9 +1457,9 @@ SIM_SOLVE = group(
     "SOLVE",
     ["Pre-check", "Solve"],
     [
-        item("Pre-check", None, SIM_ICON),  # owner: sim-ui
-        item("Solve", None, SIM_ICON),  # owner: sim-ui
-        item("Generate Mesh", None, SIM_ICON),  # owner: sim-ui
+        item("Pre-check", "SciForge_SimPrecheck", "sim_precheck"),  # owner: sim-ui
+        item("Solve", "SciForge_SimSolve", "sim_solve"),  # owner: sim-ui
+        item("Generate Mesh", "SciForge_SimGenerateMesh", "sim_mesh"),  # owner: sim-ui
     ],
 )
 SIMR_TOOLS = group(
