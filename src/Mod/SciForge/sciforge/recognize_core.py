@@ -297,11 +297,7 @@ def clean_loop(loop, tol=TOL):
 
 def _deg(rad):
     d = math.degrees(rad)
-    return snap(d, 1e-7)
-
-
-def _line_item(s):
-    return {"line": [s["a"][0], s["a"][1], s["b"][0], s["b"][1]]}
+    return snap(d, 1e-9)
 
 
 def _arc_item(s):
@@ -312,7 +308,42 @@ def _arc_item(s):
     a1 = _deg(_angle(s["c"], end))
     while a1 <= a0:
         a1 += 360.0
-    return {"arc": [s["c"][0], s["c"][1], s["r"], a0, snap(a1, 1e-7)]}
+    return {"arc": [s["c"][0], s["c"][1], s["r"], a0, snap(a1, 1e-9)]}
+
+
+def _arc_ends(item):
+    """Where SciForge's sketch puts the ends of an {"arc": [cx, cy, r, a0, a1]} item (the
+    same arithmetic, so a line drawn to them meets the arc exactly)."""
+    cx, cy, r, a0, a1 = item["arc"]
+    return (
+        (cx + r * math.cos(math.radians(a0)), cy + r * math.sin(math.radians(a0))),
+        (cx + r * math.cos(math.radians(a1)), cy + r * math.sin(math.radians(a1))),
+    )
+
+
+def _segments(loop):
+    """A loop as create_sketch "segments": arcs counter-clockwise, every line's ends taken
+    from the arcs beside it, so the chain closes within FreeCAD's 1e-7 mm."""
+    pieces = []
+    for s in loop:
+        if s["kind"] == "arc":
+            item = _arc_item(s)
+            p0, p1 = _arc_ends(item)
+            pieces.append([item, p0, p1] if s["ccw"] else [item, p1, p0])
+        else:
+            pieces.append([None, s["a"], s["b"]])
+    n = len(pieces)
+    for i, piece in enumerate(pieces):
+        if piece[0] is None:
+            before, after = pieces[i - 1], pieces[(i + 1) % n]
+            if before[0] is not None:
+                piece[1] = before[2]
+            if after[0] is not None:
+                piece[2] = after[1]
+    out = []
+    for item, a, b in pieces:
+        out.append(item if item is not None else {"line": [a[0], a[1], b[0], b[1]]})
+    return out
 
 
 def _rect_of(loop, tol):
@@ -365,7 +396,7 @@ def loop_geometry(loop, name=None, tol=TOL):
     elif all(s["kind"] == "line" for s in loop) and len(loop) >= 3:
         item = {"polyline": [[s["a"][0], s["a"][1]] for s in loop]}
     elif len(loop) >= 2 and all(s["kind"] in ("line", "arc") for s in loop):
-        item = {"segments": [_line_item(s) if s["kind"] == "line" else _arc_item(s) for s in loop]}
+        item = {"segments": _segments(loop)}
     if item is not None and name and ("rect" in item or "circle" in item):
         item["name"] = name
     return item

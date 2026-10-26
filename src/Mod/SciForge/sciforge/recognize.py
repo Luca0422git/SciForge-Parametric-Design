@@ -417,6 +417,12 @@ class _Reader:
         self.plan_chamfers(kept_chamfers, removed, plan, features)
         kept_blends = [b for b in blends if b["id"] in removed["ok"]]
         self.plan_fillets(kept_blends, removed, plan, features)
+        for b in getattr(self, "bends", []):
+            item = {k: v for k, v in b.items() if not k.startswith("_")}
+            item["faces"] = self.face_refs(b["_faces"])
+            item["steps"] = list(base["public"].get("steps", []))
+            item["in_profile"] = base["public"]["kind"] != "none"
+            features.append(item)
         timing["plan"] = time.time() - t
         out["base"] = base["public"]
         out["features"] = features
@@ -507,10 +513,28 @@ class _Reader:
                 hi = max(ts) if hi is None else max(hi, max(ts))
         return (lo, hi) if lo is not None else (0.0, 0.0)
 
+    def _rim_extent(self, indexes, axis, origin):
+        """(lowest, highest) along the axis of the faces' edges, sampled (a rim on a slanted
+        face is an ellipse whose top is no corner)."""
+        lo, hi = self._extent(indexes, axis, origin)
+        for i in indexes:
+            for e in self.facts[i].face.Edges:
+                try:
+                    pts = e.discretize(24)
+                except Exception:
+                    continue
+                for p in pts:
+                    t = core.dot(core.sub(_t(p), origin), axis)
+                    lo, hi = min(lo, t), max(hi, t)
+        return lo, hi
+
     def _hole(self, idx, bigger):
         f0 = self.facts[idx[0]]
         axis, origin, radius = f0.axis, f0.point, f0.radius
         t0, t1 = self._extent(idx, axis, origin)
+        r0, r1 = self._rim_extent(idx, axis, origin)
+        if r1 - t1 > 1e-6 or t0 - r0 > 1e-6:  # a rim that is not square to the axis
+            t0, t1 = r0, r1
         faces = list(idx)
         ends = {}
         for side, t in (("low", t0), ("high", t1)):
@@ -563,6 +587,21 @@ class _Reader:
             }
         hole["start_face"] = start.get("face")
         hole["id"] = self.new_id()
+        if through and far["kind"] in ("counterbore", "countersink"):
+            # the other end widens too: the hole tool makes one end; the other end's
+            # recess is a short hole of its own, drilled from the other side
+            if far["kind"] == "counterbore":
+                hole["far_recess"] = {
+                    "diameter": self.value(2 * far["radius"]),
+                    "depth": self.value(far["depth"]),
+                    "point": core.add(origin, core.mul(axis, far["t_open"])),
+                    "into": [core.snap(-c) for c in into],
+                }
+            else:
+                self.notes.append(
+                    "Hole %s is countersunk at its other end too: the plan makes the first "
+                    "end only; add the other countersink after it." % hole["id"]
+                )
         return hole
 
     def _hole_end(self, idx, axis, origin, radius, t, side, bigger, faces):
@@ -572,13 +611,18 @@ class _Reader:
         out = {"kind": "open", "t": t, "t_open": t}
         sign = 1.0 if side == "high" else -1.0
         neighbours = []
-        for i in idx:
-            for j in self.topo.neighbours(i):
-                if j in idx or j in neighbours:
-                    continue
-                tj0, tj1 = self._extent([j], axis, origin)
-                if min(abs(tj0 - t), abs(tj1 - t)) < 1e-5:
-                    neighbours.append(j)
+        for i in idx:  # the faces met along an edge that reaches this end of the bore
+            for key in self.topo.face_edges[i]:
+                for j in self.topo.edge_faces.get(key, []):
+                    if j in idx or j in neighbours:
+                        continue
+                    try:
+                        pts = self.topo.edges[key].discretize(12)
+                    except Exception:
+                        continue
+                    ts = [core.dot(core.sub(_t(p), origin), axis) for p in pts]
+                    if min(abs(min(ts) - t), abs(max(ts) - t)) < 1e-5:
+                        neighbours.append(j)
         for j in neighbours:
             fj = self.facts[j]
             tj0, tj1 = self._extent([j], axis, origin)
@@ -664,6 +708,48 @@ class _Reader:
             if len(self.topo.tangent_neighbours(f.index)) < 2:
                 continue
             blend[f.index] = f.minor if f.kind == "torus" else f.radius
+        # bends of a sheet-like wall (an inside and an outside round face on one axis, the
+        # wall's thickness apart) are part of the shape, not fillets: they stay in the base
+        self.bends = []
+        cylinders = [i for i in blend if self.facts[i].kind == "cylinder"]
+        for i in cylinders:
+            fi = self.facts[i]
+            if not fi.concave:
+                continue
+            for j in cylinders:
+                fj = self.facts[j]
+                if j == i or fj.concave or fj.radius <= fi.radius + 1e-6:
+                    continue
+                if any(j in b["_faces"] for b in self.bends):
+                    continue
+                if abs(fi.span - fj.span) > 1e-4 or not _coaxial(fi, fj):
+                    continue
+                if not self._overlap_along_axis(i, j):
+                    continue
+                self.bends.append(
+                    {
+                        "kind": "bend",
+                        "radius": self.value(fi.radius),
+                        "thickness": self.value(fj.radius - fi.radius),
+                        "angle": self.value(math.degrees(fi.span), 1e-4),
+                        "axis": [core.snap(c) for c in fi.axis],
+                        "_faces": [i, j],
+                    }
+                )
+                break
+        # bends in one direction are rounded corners a fillet makes well (Fusion's habit:
+        # fillet, then shell); bends in two directions or more meet at corners where
+        # OpenCASCADE's fillet can fail (or crash): those stay in the base as bends
+        axes = []
+        for b in self.bends:
+            if not any(core.parallel(b["axis"], a, 1e-6) for a in axes):
+                axes.append(b["axis"])
+        if len(axes) < 2:
+            self.bends = []
+        for b in self.bends:
+            b["id"] = self.new_id()
+            for k in b["_faces"]:
+                blend.pop(k, None)
         # corner pieces (free-form or spherical) between blends take their neighbours' radius
         for f in self.facts:
             if f.index in blend or f.index in in_holes:
@@ -696,6 +782,14 @@ class _Reader:
                 }
             )
         return chains
+
+    def _overlap_along_axis(self, i, j):
+        """The two coaxial faces face each other across the wall (they share a stretch of
+        their axis)."""
+        f = self.facts[i]
+        a0, a1 = self._extent([i], f.axis, f.point)
+        b0, b1 = self._extent([j], f.axis, f.point)
+        return min(a1, b1) - max(a0, b0) > 1e-6
 
     def find_chamfers(self, holes, blends):
         """Narrow flat faces cut across the edge between two faces."""
@@ -897,6 +991,38 @@ class _Reader:
             return self.shape, [], list(holes)
         return solid, good, [h for h in holes if h["id"] in bad]
 
+    def _partial_blends(self, base, groups):
+        """The round faces taken for fillets that do not run along the whole edge they would
+        round on the base (the curved edge of a thin rib): those are part of the shape."""
+        out = []
+        for g in groups:
+            if g["kind"] != "fillet":
+                continue
+            faces = g["_faces"]
+            if not all(self.facts[i].kind == "cylinder" for i in faces):
+                continue
+            axis = self.facts[faces[0]].axis
+            if not all(core.parallel(self.facts[i].axis, axis, 1e-6) for i in faces):
+                continue
+            extent = 0.0
+            for i in faces:
+                a0, a1 = self._extent([i], axis, self.facts[i].point)
+                extent += a1 - a0
+            try:
+                names = self._sharp_edges(base, [g])
+            except Exception:
+                continue
+            length = 0.0
+            for name in names:
+                e = base.getElement(name)
+                if type(e.Curve).__name__ in ("Line", "LineSegment"):
+                    d = _t(e.Vertexes[-1].Point - e.Vertexes[0].Point)
+                    if core.parallel(d, axis, 1e-6):
+                        length += e.Length
+            if length > 1.5 * extent + 1e-6:
+                out.append(g)
+        return out
+
     def defeature(self, holes, chamfers, blends):
         """Take off every feature that can be taken off: the holes first (their rims closed,
         or with OpenCASCADE's defeaturing), then chamfers and fillets (defeaturing: all at
@@ -915,6 +1041,30 @@ class _Reader:
                     base = refined.Solids[0]
             except Exception:
                 pass
+        partial = self._partial_blends(base, ok)
+        if partial:
+            ok = [g for g in ok if g not in partial]
+            base = self._defeature(ok, start) if ok else start
+            if base is None:
+                base, ok = start, []
+            try:
+                refined = base.removeSplitter()
+                if not refined.isNull() and refined.isValid() and len(refined.Solids) == 1:
+                    base = refined.Solids[0]
+            except Exception:
+                pass
+            for g in partial:
+                self.notes.append(
+                    "The round face%s of %s (radius %s) cover%s only a part of the edge it "
+                    "would round: read as part of the shape (a curved edge of a rib or a "
+                    "boss), not as a fillet."
+                    % (
+                        "s" if len(g["_faces"]) > 1 else "",
+                        g["id"],
+                        core.fmt(g["radius"]),
+                        "" if len(g["_faces"]) > 1 else "s",
+                    )
+                )
         accepted = holes_ok + ok
         for g in rejected:
             self.notes.append(
@@ -1108,7 +1258,35 @@ class _Reader:
 
     def plan_holes(self, holes, plan, features):
         """One hole step per group of equal holes on one plane: a pattern step when they make
-        a grid / circle / row the pattern tool can repeat, else one sketch with every centre."""
+        a grid / circle / row the pattern tool can repeat, else one sketch with every centre.
+        A hole that widens at both ends gets its other end as a short hole of its own."""
+        recesses = []
+        for h in holes:
+            far = h.get("far_recess")
+            if not far:
+                continue
+            recesses.append(
+                {
+                    "id": h["id"] + "b",
+                    "kind": "hole",
+                    "recess_of": h["id"],
+                    "diameter": far["diameter"],
+                    "depth": far["depth"],
+                    "through": False,
+                    "bottom": "bottom",
+                    "axis": far["into"],
+                    "start": [self.value(c) for c in far["point"]],
+                    "_axis": h["_axis"],
+                    "_start_point": far["point"],
+                    "_faces": [],
+                    "start_face": None,
+                }
+            )
+        if recesses:  # first: the hole tool aims at material at each centre
+            self._plan_hole_groups(recesses, plan, features)
+        self._plan_hole_groups(holes, plan, features)
+
+    def _plan_hole_groups(self, holes, plan, features):
         groups = {}
         for h in holes:
             axis_name = core.origin_axis(h["_axis"])
@@ -1176,6 +1354,8 @@ class _Reader:
             if h0.get("bottom") == "drill_point":
                 args["drill_point"] = "angle"
                 args["drill_angle"] = h0["drill_angle"]
+            if core.dot(tuple(h0["axis"]), core.PLANES[plane]["n"]) > 0.5:
+                args["flip"] = True  # drilled along the sketch's normal (from under the part)
             fids = [h["id"] for h in group]
             how = " through the part" if h0["through"] else " %s mm deep" % core.fmt(h0["depth"])
             count = "" if len(drawn) == 1 else "%d " % len(drawn)
@@ -1344,6 +1524,11 @@ class _Reader:
                 out[key] = h[key]
         out["axis"] = h["axis"]
         out["start"] = h["start"]
+        if h.get("far_recess"):
+            far = h["far_recess"]
+            out["other_end"] = {"counterbore": {"diameter": far["diameter"], "depth": far["depth"]}}
+        if h.get("recess_of"):
+            out["recess_of"] = h["recess_of"]
         out["faces"] = self.face_refs(h["_faces"])
         out["steps"] = steps
         out["_faces"] = list(h["_faces"])
@@ -1674,6 +1859,13 @@ def _surface_key(face):
     return (kind,)
 
 
+def _coaxial(a, b):
+    """Two round faces turn about one axis line."""
+    if a.axis is None or b.axis is None or not core.parallel(a.axis, b.axis, 1e-7):
+        return False
+    return core.norm(core.sub(a.point, b.point)) < 1e-5
+
+
 def _line_key(f):
     return (
         tuple(round(c, 5) + 0.0 for c in f.axis),
@@ -1957,7 +2149,7 @@ def _prismatic(solid, axis_name):
         for piece in piece_shape.Solids:
             if piece.Volume < 1e-9:
                 continue
-            got = _piece_ops(piece, plane, operation, hs[0], hs[-1])
+            got = _piece_ops(piece, plane, operation, hs[0], hs[-1], lo)
             if got is None:
                 return None
             ops += got
@@ -2060,7 +2252,7 @@ def _op(kind, faces, plane, lo, hi):
     }
 
 
-def _piece_ops(piece, plane, operation, part_lo, part_hi):
+def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None):
     """A boss or cut piece as one extrude per height band (consecutive equal regions
     merged), or None when it is not prismatic along the plane's normal."""
     n = core.PLANES[plane]["n"]
@@ -2080,6 +2272,9 @@ def _piece_ops(piece, plane, operation, part_lo, part_hi):
             bands[-1]["hi"] = hi
             continue
         bands.append({"lo": lo, "hi": hi, "faces": faces})
+    base_lo = part_lo if base_lo is None else base_lo
+    if operation == "join" and bands and bands[-1]["hi"] <= base_lo + 1e-6:
+        bands.reverse()  # below the base: the band touching it first, so each one joins
     out = []
     for band in bands:
         lo, hi = band["lo"], band["hi"]
