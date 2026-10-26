@@ -148,6 +148,24 @@ def fmt(value, digits=4):
     return sim.fmt(value, digits)
 
 
+def fmt_plain(value, digits=4):
+    """Like fmt() but never with an exponent for everyday sizes (200000, not 2e5): material
+    tables."""
+    if value is None:
+        return "-"
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if value != value or value == 0 or not (1e-4 <= abs(value) < 1e12):
+        return fmt(value, digits)
+    decimals = max(0, digits - 1 - int(math.floor(math.log10(abs(value)))))
+    text = "%.*f" % (decimals, round(value, decimals))
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text
+
+
 def with_unit(value, unit, digits=4):
     text = fmt(value, digits)
     return "%s %s" % (text, unit) if unit and text != "-" else text

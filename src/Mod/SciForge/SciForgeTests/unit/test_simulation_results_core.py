@@ -45,6 +45,11 @@ class ResultListTests(unittest.TestCase):
         self.assertIsNone(core.convert(None, "mm"))
         self.assertEqual(core.with_unit(1.23456, "mm"), "1.235 mm")
         self.assertEqual(core.fmt(float("nan")), "-")
+        self.assertEqual(core.fmt_plain(200000.0), "200000")
+        self.assertEqual(core.fmt_plain(0.3), "0.3")
+        self.assertEqual(core.fmt_plain(7850), "7850")
+        self.assertEqual(core.fmt_plain(0.0012346), "0.001235")
+        self.assertEqual(core.fmt_plain(None), "-")
 
 
 class LegendTests(unittest.TestCase):

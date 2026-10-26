@@ -277,11 +277,11 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None)
             (
                 body.Label,
                 label,
-                core.fmt(props.get("youngs_mpa")),
-                core.fmt(props.get("poisson")),
-                core.fmt(props.get("density")),
-                core.fmt(props.get("yield_mpa")),
-                core.fmt(props.get("ultimate_mpa")),
+                core.fmt_plain(props.get("youngs_mpa")),
+                core.fmt_plain(props.get("poisson")),
+                core.fmt_plain(props.get("density")),
+                core.fmt_plain(props.get("yield_mpa")),
+                core.fmt_plain(props.get("ultimate_mpa")),
                 "Yield strength" if basis == "yield" else "Ultimate tensile strength",
             )
         )
