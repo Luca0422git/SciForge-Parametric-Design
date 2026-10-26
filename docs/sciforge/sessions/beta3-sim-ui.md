@@ -97,14 +97,16 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
 | `sim_setup_more` | 63 | PASS |
-| `sim_setup_lost` | 48 | PASS |
+| `sim_setup_lost` | 54 | PASS |
 | `sim_setup_two` | 40 | PASS |
 | `sim_setup_mesh` | 42 | PASS |
 
 All fourteen in one batch (22:35-22:57 UTC, with the five below): every one passes. Shared
 files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser` (92),
 `drawing_new` (63), `browser_opacity_hover` (46), `ribbon_sweep` (221) and `hole_qa_more` (363,
-the marking menu) pass.
+the marking menu) pass. `--only base` (23:05): unit tests 2541 OK, golden models 614 + 2 xfail,
+headless AI 306 calls 0 failed, docs examples, agent end to end, simulation benchmarks (138),
+GUI smoke / journey / restart: all passed.
 
 ## Contract with sim-results (agreed by reading its branch)
 

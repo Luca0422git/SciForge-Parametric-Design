@@ -702,6 +702,9 @@ def _update_status(final=False):
     try:
         job = RUN["job"]
         study = RUN["study"]
+        ran = bool(RUN.get("run"))
+        for widget in (dialog.stages, dialog.bar, dialog.elapsed, dialog.studies):
+            widget.setVisible(ran)  # (nothing run yet this session: only the sentence)
         stages = [k for k, _w in score.STAGE_WORDS]
         if RUN["kind"] == "mesh":
             stages = ["model", "mesh"]
