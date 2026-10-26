@@ -585,9 +585,10 @@ def _unit_key(text):
     return key
 
 
-def parse_quantity(text, family):
+def parse_quantity(text, family, shown=None):
     """A value typed in a field ("100", "100 N", "0.5 kN", "2 MPa", "10 lbf") in the unit the
-    engine works in for `family` (QUANTITIES). Raises SimulationError with a sentence."""
+    engine works in for `family` (QUANTITIES). A bare number is in `shown`, the unit the field
+    shows (the engine's when None). Raises SimulationError with a sentence."""
     unit, factors = QUANTITIES.get(family, ("", {}))
     raw = str(text or "").strip().replace(",", ".")
     if not raw:
@@ -607,7 +608,7 @@ def parse_quantity(text, family):
     except ValueError:
         raise core.SimulationError("%r is not a number." % raw)
     if not rest:
-        return value
+        return value * unit_factor(family, shown)
     key = _unit_key(rest)
     if key in factors:
         return value * factors[key]
@@ -619,7 +620,90 @@ def parse_quantity(text, family):
     )
 
 
-def format_quantity(value, family, digits=6):
-    unit = QUANTITIES.get(family, ("", {}))[0]
-    text = core.fmt(value, digits)
+def format_quantity(value, family, digits=6, shown=None):
+    """`value` (in the engine's unit of `family`) as a field shows it, in `shown` (the engine's
+    unit when None): "100 N", "22.48 lbf"."""
+    unit = shown or QUANTITIES.get(family, ("", {}))[0]
+    text = core.fmt(value / unit_factor(family, unit), digits)
     return text + (" " + unit if unit else "")
+
+
+def unit_factor(family, unit):
+    """How many of the engine's units of `family` one `unit` is (1 for the engine's own)."""
+    base, factors = QUANTITIES.get(family, ("", {}))
+    if not unit or _unit_key(unit) == _unit_key(base):
+        return 1.0
+    return factors.get(_unit_key(unit), 1.0)
+
+
+# The units the value fields of a design show (Fusion: Simulation follows the document's units,
+# research 6): N, MPa and N mm with a metric length, lbf, psi and lbf in with inches or feet.
+# The engine keeps N, MPa, N mm and mm whatever the design shows.
+UNIT_SETS = {
+    "mm": {
+        "force": "N",
+        "pressure": "MPa",
+        "moment": "N mm",
+        "length": "mm",
+        "acceleration": "m/s^2",
+    },
+    "cm": {
+        "force": "N",
+        "pressure": "MPa",
+        "moment": "N mm",
+        "length": "cm",
+        "acceleration": "m/s^2",
+    },
+    "m": {"force": "N", "pressure": "MPa", "moment": "N m", "length": "m", "acceleration": "m/s^2"},
+    "in": {
+        "force": "lbf",
+        "pressure": "psi",
+        "moment": "lbf in",
+        "length": "in",
+        "acceleration": "in/s^2",
+    },
+    "ft": {
+        "force": "lbf",
+        "pressure": "psi",
+        "moment": "lbf ft",
+        "length": "ft",
+        "acceleration": "ft/s^2",
+    },
+}
+MAGNITUDE_FAMILY = {"pressure": "pressure", "moment": "moment"}  # (the other loads: force)
+
+
+def unit_set(doc_unit):
+    """{family: unit shown} for a design whose length unit is `doc_unit` ("mm", "in", ...)."""
+    return dict(UNIT_SETS.get(doc_unit or "mm", UNIT_SETS["mm"]))
+
+
+def describe(category, kind, opts, units=None):
+    """The engine's short text of a constraint or load ("Force 100 N") with its values in the
+    design's units (`units` from unit_set)."""
+    units = units or unit_set("mm")
+    text = core.describe(category, kind, opts)
+    try:
+        opts = core.options(category, kind, opts)
+        title = core.kind_info(category, kind)["title"]
+        if category == "load":
+            family = MAGNITUDE_FAMILY.get(kind, "force")
+            return "%s %s" % (
+                title,
+                format_quantity(opts.get("magnitude", 0.0), family, 4, units.get(family)),
+            )
+        if category == "mesh":
+            return "%s %s" % (
+                title,
+                format_quantity(opts.get("size", 0.0), "length", 4, units.get("length")),
+            )
+        if category == "constraint" and kind == "displacement":
+            parts = [
+                "%s %s" % (a.upper(), format_quantity(opts[a], "length", 4, units.get("length")))
+                for a in ("x", "y", "z")
+                if opts.get(a) is not None
+            ]
+            return "%s (%s)" % (title, ", ".join(parts))
+    except Exception:
+        pass
+    return text

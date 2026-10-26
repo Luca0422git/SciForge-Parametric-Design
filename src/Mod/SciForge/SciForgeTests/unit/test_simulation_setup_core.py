@@ -113,6 +113,70 @@ class Quantities(unittest.TestCase):
         self.assertEqual(s.format_quantity(3.0, "number"), "3")
 
 
+class DesignUnits(unittest.TestCase):
+    """Fusion's Simulation follows the document's units (research 6); the engine keeps N, MPa,
+    N mm and mm."""
+
+    def test_unit_sets(self):
+        self.assertEqual(s.unit_set("mm")["force"], "N")
+        self.assertEqual(s.unit_set("m")["moment"], "N m")
+        inch = s.unit_set("in")
+        self.assertEqual(
+            (inch["force"], inch["pressure"], inch["moment"], inch["length"]),
+            ("lbf", "psi", "lbf in", "in"),
+        )
+        self.assertEqual(s.unit_set("ft")["length"], "ft")
+        self.assertEqual(s.unit_set(None), s.unit_set("mm"))
+        self.assertEqual(s.unit_set("furlong"), s.unit_set("mm"))
+
+    def test_shown_in_the_designs_units(self):
+        self.assertEqual(s.format_quantity(4.4482216152605, "force", shown="lbf"), "1 lbf")
+        self.assertEqual(s.format_quantity(25.4, "length", shown="in"), "1 in")
+        self.assertEqual(s.format_quantity(2000.0, "moment", shown="N m"), "2 N m")
+        self.assertEqual(s.format_quantity(9806.65, "acceleration", shown="m/s^2"), "9.80665 m/s^2")
+        self.assertEqual(s.format_quantity(0.689475729, "pressure", shown="psi"), "100 psi")
+
+    def test_a_bare_number_is_in_the_unit_shown(self):
+        self.assertAlmostEqual(s.parse_quantity("50", "force", shown="lbf"), 222.41108, 4)
+        self.assertAlmostEqual(s.parse_quantity("2", "length", shown="in"), 50.8)
+        self.assertAlmostEqual(s.parse_quantity("9.81", "acceleration", shown="m/s^2"), 9810.0)
+        # a typed unit wins over the one shown
+        self.assertAlmostEqual(s.parse_quantity("100 N", "force", shown="lbf"), 100.0)
+        self.assertAlmostEqual(s.parse_quantity("3 mm", "length", shown="in"), 3.0)
+
+    def test_round_trip(self):
+        for family, unit, value in (
+            ("force", "lbf", 123.4),
+            ("pressure", "psi", 0.25),
+            ("moment", "lbf in", 5000.0),
+            ("length", "ft", 1234.5),
+            ("acceleration", "in/s^2", 9806.65),
+        ):
+            text = s.format_quantity(value, family, 12, unit)
+            self.assertAlmostEqual(s.parse_quantity(text, family, shown=unit), value, 6)
+
+    def test_describe_in_the_designs_units(self):
+        inch = s.unit_set("in")
+        self.assertEqual(
+            s.describe("load", "force", {"magnitude": 4.4482216152605 * 50}, inch),
+            "Force 50 lbf",
+        )
+        self.assertEqual(
+            s.describe("load", "pressure", {"magnitude": 0.689475729}, inch), "Pressure 100 psi"
+        )
+        self.assertEqual(
+            s.describe("mesh", "local", {"size": 2.54}, inch), "Local Mesh Control 0.1 in"
+        )
+        self.assertEqual(
+            s.describe("constraint", "displacement", {"x": 25.4}, inch),
+            "Prescribed Displacement (X 1 in)",
+        )
+        self.assertEqual(s.describe("load", "force", {"magnitude": 100.0}), "Force 100 N")
+        self.assertEqual(
+            s.describe("constraint", "fixed", {}), core.describe("constraint", "fixed", {})
+        )
+
+
 def _study(name="SimStudy", constraints=(), loads=(), **extra):
     data = {
         "name": name,

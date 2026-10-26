@@ -127,13 +127,61 @@ def _pick_normal(picks):
     return None
 
 
-def _number_field(name, value, family, tip=""):
-    field = QtWidgets.QLineEdit(score.format_quantity(value, family))
+def doc_units(doc):
+    """{family: unit} the design's value fields show: Fusion's Simulation follows the
+    document's units (N, MPa, mm in a metric design; lbf, psi, in in an inch design)."""
+    try:
+        from . import browser_ui
+
+        return score.unit_set(browser_ui.units(doc))
+    except Exception:
+        return score.unit_set("mm")
+
+
+def _digits(family, shown):
+    """Significant figures a field shows: 6 in the engine's own unit, 4 once converted (22.48
+    lbf, 0.126 in); the exact value is kept while the text is not changed (_value)."""
+    return 6 if score.unit_factor(family, shown) == 1.0 else 4
+
+
+def _number_field(name, value, family, tip="", shown=None):
+    """A value field: `value` in the engine's unit, shown in `shown` (a unit typed with the
+    number wins; a bare number is in the unit shown)."""
+    field = QtWidgets.QLineEdit()
     field.setObjectName("SciForgeSim_" + name)
     field.setProperty("family", family)
+    field.setProperty("shown", shown or "")
+    _put(field, value)
     if tip:
         field.setToolTip(tip)
     return field
+
+
+def _value(field):
+    """A field's value in the engine's unit (SimulationError with a sentence when it is not).
+    A text left as it was shown gives back the exact value (an OK without a change changes
+    nothing, even when the field rounds a converted unit)."""
+    exact = field.property("exact")
+    if exact is not None and field.text() == field.property("exact_text"):
+        return float(exact)
+    return score.parse_quantity(
+        field.text(), field.property("family") or "number", shown=field.property("shown") or None
+    )
+
+
+def _put(field, value, digits=None):
+    """Show `value` (the engine's unit) in a field, in the unit the field shows."""
+    family = field.property("family") or "number"
+    shown = field.property("shown") or None
+    text = score.format_quantity(
+        value, family, digits if digits is not None else _digits(family, shown), shown
+    )
+    field.setText(text)
+    try:
+        field.setProperty("exact", float(value))
+        field.setProperty("exact_text", text)
+    except (TypeError, ValueError):
+        field.setProperty("exact", None)
 
 
 # An on / off button must look on when it is on (the theme draws push buttons alike either
@@ -273,6 +321,7 @@ class ItemPanel(pickpanel.PickPanel):
                 self.opts["size"] = round(_global_size(study), 3)
             self.picks = []
         self.study_names = {b.Name for b in sim.study_bodies(study)}
+        self.units = doc_units(doc)
         self.form.setObjectName("SciForgeSimItemPanel")
         rows = []
         for key, info in table.items():
@@ -487,7 +536,9 @@ class ItemPanel(pickpanel.PickPanel):
                     tick = QtWidgets.QCheckBox("U%s" % axis)
                     tick.setObjectName("SciForgeSim_%s_on" % axis)
                     tick.setChecked(value is not None)
-                    field = _number_field(axis, value or 0.0, "length")
+                    field = _number_field(
+                        axis, value or 0.0, "length", shown=self.units.get("length")
+                    )
                     field.setEnabled(value is not None)
                     tick.toggled.connect(lambda on, f=field: (f.setEnabled(on), self.schedule()))
                     field.editingFinished.connect(self._value_typed)
@@ -517,7 +568,9 @@ class ItemPanel(pickpanel.PickPanel):
             slider.setRange(1, 20)
             slider.setValue(max(1, min(20, int(round(20.0 * size / self.global_size)))))
             slider.setToolTip("Fine (left) to Coarse (right): the share of the study's size")
-            field = _number_field("size", size, "length", "The element size on the picks")
+            field = _number_field(
+                "size", size, "length", "The element size on the picks", self.units.get("length")
+            )
             slider.valueChanged.connect(lambda v, f=field: self._slider_moved(v, f))
             field.editingFinished.connect(self._value_typed)
             holder = QtWidgets.QWidget()
@@ -543,7 +596,11 @@ class ItemPanel(pickpanel.PickPanel):
             self.rows = {}  # field key -> its row (shown or hidden with the direction type)
             if "magnitude" in opts:
                 field = _number_field(
-                    "magnitude", opts.get("magnitude", 0.0), unit_family, "The size of the load"
+                    "magnitude",
+                    opts.get("magnitude", 0.0),
+                    unit_family,
+                    "The size of the load",
+                    self.units.get(unit_family),
                 )
                 field.editingFinished.connect(self._value_typed)
                 self._row(form, "magnitude", "Magnitude", field)
@@ -552,7 +609,11 @@ class ItemPanel(pickpanel.PickPanel):
                 parts = score.components_of(opts.get("magnitude", 100.0), opts.get("vector"))
                 for axis, value in zip(("fx", "fy", "fz"), parts):
                     field = _number_field(
-                        axis, value, "force", "The force along %s" % axis[1].upper()
+                        axis,
+                        value,
+                        "force",
+                        "The force along %s" % axis[1].upper(),
+                        self.units.get("force"),
                     )
                     field.editingFinished.connect(self._value_typed)
                     self._row(form, axis, "F%s" % axis[1], field)
@@ -570,7 +631,9 @@ class ItemPanel(pickpanel.PickPanel):
             self._show_direction_rows()
             if "point" in opts:
                 for axis, value in zip(("x", "y", "z"), opts.get("point") or [0, 0, 0]):
-                    field = _number_field("p" + axis, value, "length")
+                    field = _number_field(
+                        "p" + axis, value, "length", shown=self.units.get("length")
+                    )
                     field.editingFinished.connect(self._value_typed)
                     form.addRow("Point %s" % axis.upper(), field)
                     self.fields["p" + axis] = field
@@ -604,7 +667,7 @@ class ItemPanel(pickpanel.PickPanel):
     def _slider_moved(self, value, field):
         try:
             size = self.global_size * value / 20.0
-            field.setText(score.format_quantity(round(size, 3), "length"))
+            _put(field, size, 4)
             self.schedule()
         except Exception as exc:
             warn("%s: %s" % (self.title, exc))
@@ -646,22 +709,19 @@ class ItemPanel(pickpanel.PickPanel):
             mode = self._vector_mode()
             if all(k in self.fields for k in ("fx", "fy", "fz", "magnitude")):
                 if mode == "vector":
-                    size = score.parse_quantity(self.fields["magnitude"].text(), "force")
+                    size = _value(self.fields["magnitude"])
                     vector = self.opts.get("vector") or [0.0, 0.0, -1.0]
                     if self.picks and self.opts.get("direction") == "normal":
                         normal = _pick_normal(self.picks)
                         if normal is not None:
                             vector = [-c for c in normal]
                     for key, value in zip(("fx", "fy", "fz"), score.components_of(size, vector)):
-                        self.fields[key].setText(score.format_quantity(round(value, 6), "force"))
+                        _put(self.fields[key], value)
                 else:
-                    parts = [
-                        score.parse_quantity(self.fields[k].text(), "force")
-                        for k in ("fx", "fy", "fz")
-                    ]
+                    parts = [_value(self.fields[k]) for k in ("fx", "fy", "fz")]
                     try:
                         size, _unit = score.force_from_components(*parts)
-                        self.fields["magnitude"].setText(score.format_quantity(size, "force"))
+                        _put(self.fields["magnitude"], size)
                     except core.SimulationError:
                         pass
             self.opts["direction"] = mode
@@ -687,35 +747,26 @@ class ItemPanel(pickpanel.PickPanel):
             if self.kind == "displacement":
                 for axis in ("x", "y", "z"):
                     tick, field = self.fields[axis]
-                    opts[axis] = (
-                        score.parse_quantity(field.text(), "length") if tick.isChecked() else None
-                    )
+                    opts[axis] = _value(field) if tick.isChecked() else None
             box = self.fields.get("direction")
             if box is not None:
                 opts["direction"] = box.currentData()
             components = all(k in self.fields for k in ("fx", "fy", "fz"))
             if components and opts.get("direction") == "vector":
-                parts = [
-                    score.parse_quantity(self.fields[k].text(), "force") for k in ("fx", "fy", "fz")
-                ]
+                parts = [_value(self.fields[k]) for k in ("fx", "fy", "fz")]
                 opts["magnitude"], opts["vector"] = score.force_from_components(*parts)
             elif "magnitude" in self.fields:
-                family = self.fields["magnitude"].property("family") or "force"
-                opts["magnitude"] = score.parse_quantity(self.fields["magnitude"].text(), family)
+                opts["magnitude"] = _value(self.fields["magnitude"])
             if all(("v" + a) in self.fields for a in "xyz") and opts.get("direction") != "normal":
-                opts["vector"] = [
-                    score.parse_quantity(self.fields["v" + a].text(), "number") for a in "xyz"
-                ]
+                opts["vector"] = [_value(self.fields["v" + a]) for a in "xyz"]
             if all(("p" + a) in self.fields for a in "xyz"):
-                opts["point"] = [
-                    score.parse_quantity(self.fields["p" + a].text(), "length") for a in "xyz"
-                ]
+                opts["point"] = [_value(self.fields["p" + a]) for a in "xyz"]
             if "flip" in self.fields:
                 opts["flip"] = bool(self.fields["flip"].isChecked())
             if "per_entity" in self.fields:
                 opts["per_entity"] = bool(self.fields["per_entity"].isChecked())
             if "size" in self.fields:
-                opts["size"] = score.parse_quantity(self.fields["size"].text(), "length")
+                opts["size"] = _value(self.fields["size"])
         except core.SimulationError as exc:
             if lenient:
                 return opts, str(exc)
@@ -902,8 +953,9 @@ class GravityPanel(pickpanel.PickPanel):
         self.flip = _toggle("gravity_flip", "Flip Direction", False)
         self.flip.toggled.connect(lambda _on: self.schedule())
         self.layout.addRow(self.flip)
-        self.magnitude = _number_field("g", gravity.get("g", 9806.65) / 1000.0, "number")
-        self.magnitude.setText("%s m/s^2" % core.fmt(gravity.get("g", 9806.65) / 1000.0))
+        self.magnitude = _number_field(
+            "g", gravity.get("g", 9806.65), "acceleration", shown=doc_units(doc)["acceleration"]
+        )
         self.layout.addRow("Magnitude", self.magnitude)
         note = QtWidgets.QLabel(
             "Every body of the study weighs on the model (its material's density)."
@@ -994,14 +1046,11 @@ class GravityPanel(pickpanel.PickPanel):
                     d = b - a
                 direction = [d.x, d.y, d.z]
             else:
-                direction = [score.parse_quantity(self.fields[a].text(), "number") for a in "xyz"]
+                direction = [_value(self.fields[a]) for a in "xyz"]
             direction = core.unit_vector(direction)
             if self.flip.isChecked():
                 direction = [-c for c in direction]
-            text = self.magnitude.text().strip()
-            g = score.parse_quantity(text, "acceleration")
-            if not any(ch.isalpha() for ch in text):
-                g *= 1000.0  # a bare number is in m/s^2, as the field shows
+            g = _value(self.magnitude)  # (mm/s^2; a bare number is in the unit shown)
             if g <= 0:
                 return None, "Gravity needs a magnitude above 0."
             return {"on": bool(self.on.isChecked()), "direction": direction, "g": g}, None

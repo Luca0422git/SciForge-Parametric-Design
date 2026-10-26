@@ -401,13 +401,17 @@ def loose_result(study):
         size = model_size(study)
         if moved is None or size <= 0 or moved <= 0.5 * size:
             return None
-        from . import simulation_core as core
+        from .simulation_panels import doc_units
 
+        length = doc_units(study.Document)["length"]
         return (
-            "Solved, but the model moved %s mm, more than half its own size (%s mm): it is not "
+            "Solved, but the model moved %s, more than half its own size (%s): it is not "
             "held enough (a part can still turn or slide about what holds it). Check the "
             "constraints (DOF View), then solve again: these results are not meaningful."
-            % (core.fmt(moved, 3), core.fmt(size, 3))
+            % (
+                score.format_quantity(moved, "length", 3, length),
+                score.format_quantity(size, "length", 3, length),
+            )
         )
     except Exception:
         return None

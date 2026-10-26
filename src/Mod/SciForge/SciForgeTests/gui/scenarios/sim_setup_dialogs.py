@@ -355,7 +355,23 @@ def i_fixed():
 
 
 def i_pick():
+    import FreeCADGui as Gui
+    from sciforge import simulation_ui
+
+    opened = s.item_panel() is not None
+    h.check(
+        "Structural Constraints opened",
+        opened,
+        {
+            "active": Gui.Command.get("SciForge_SimConstraints").isActive(),
+            "document": App.ActiveDocument.Name if App.ActiveDocument else None,
+            "in workspace": simulation_ui.in_workspace(),
+            "task dialog": bool(Gui.Control.activeDialog()),
+        },
+    )
     s.click_face(s.body(), s.plate_top(s.body()))
+    if opened:
+        h.check("the plate's top face picked", len(s.item_panel().picks) == 1, s.message())
     s.ok()
 
 

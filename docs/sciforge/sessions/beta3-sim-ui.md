@@ -32,8 +32,14 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 - **Glyphs** (`simulation_glyphs.py`), **browser** (`simulation_browser.py` + hooks in
   `browser_ui.py`), **ribbon** (the SETUP entries in `ribbon_config.py`, DISPLAY > Show Mesh,
   a big button in every group), **icons** (`tools/sciforge/icons_simulation.py`, 43 icons, also
-  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 30), eight GUI
+  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 35), nine GUI
   scenarios `sim_setup_*.py`.
+- **The design's units** (Fusion's Simulation follows the document's units, research 6): the
+  value fields, the browser's texts, Load Case Attributes, Study Materials' properties and the
+  mesh / contact lengths show N, MPa, N mm, mm in a metric design and lbf, psi, lbf in, in in an
+  inch design (`simulation_setup_core.unit_set`, `format_quantity(..., shown=)`); a bare number
+  is in the unit shown, a typed unit wins; the engine keeps N, MPa, mm. A field (or spin box)
+  left as it was shown gives back its exact value, so Edit + OK in inches changes nothing.
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
@@ -53,9 +59,10 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 | `sim_setup_workspace` | 43 | PASS |
 | `sim_setup_components` | 36 | PASS |
 | `sim_setup_glyphs` | 12 | PASS |
+| `sim_setup_units` | 39 | PASS |
 
 Shared files touched (`browser_ui.py`, `ribbon_config.py`): `timeline_browser`, `drawing_new`,
-`browser_opacity_hover` and `ribbon_sweep` pass; unit tests 2529 OK.
+`browser_opacity_hover` and `ribbon_sweep` pass; unit tests 2534 OK.
 
 ## Contract with sim-results (agreed by reading its branch)
 
@@ -109,5 +116,5 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`): `timeline_browser`, 
 ## Gaps
 
 See the parity doc's Known gaps (Simplify, several load cases, per-body safety basis, manual
-contacts / connectors / global loads / point mass, force Angle and Limit Target, document units,
-Repair and the Job Status history, the glyph look is SciForge's own).
+contacts / connectors / global loads / point mass, force Angle and Limit Target, Repair and the
+Job Status history, the glyph look is SciForge's own).

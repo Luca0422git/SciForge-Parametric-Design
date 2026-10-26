@@ -119,10 +119,11 @@ G = guess (the SciForge choice when the sources are silent).
 | S19 | Out of date when the design or study changed after the solve | "Results (out of date)" row, yellow; a setup change made during the solve also makes it out of date | F[85] A[65] |
 | S20 | MANAGE: Settings, Local Mesh Control, Load Case Attributes | Same; Load Case Attributes lists every load and constraint with place, size, direction and status (OK / lost / suppressed) | A[28] A[49] |
 | S21 | DISPLAY: DOF View | Selects the bodies nothing holds and says which | F[92] |
-| S25 | SETUP groups in workflow order (STUDY, SIMPLIFY, MATERIALS, CONSTRAINTS, LOADS, CONTACTS, DISPLAY, MANAGE, SOLVE, INSPECT, SELECT), each with its big button | Same order and members (research 9.2); every group shows a big button; the commands not built (Simplify, Linear / Angular Global Load, Point Mass, Manual Contacts, Bolt / Rigid Body Connector) are greyed with their sentence; original icons for every entry; on / off buttons (Ux, Uy, Uz, Flip Direction, Body Selection) look on when on | A[4]; G (mem) for the order |
 | S22 | Browser: Simulation Model, the study (Study Materials, Load Case with Constraints and Loads and Gravity, Contacts, Mesh, Results); Clone Study; Edit / Suppress / Delete; double-click | Same tree (bodies under the model, with Exclude from Study / Include in Study); Activate, Settings, Clone Study, Rename, Delete on a study; Edit (bold), Suppress / Unsuppress, Rename, Delete on an item; double-click: activate a study, edit an item, open Study Materials / Gravity / Contact Manager / Mesh settings / Results; Delete and F2 keys | A[28] A[46] A[45]; G (mem) |
 | S23 | Undo | Adding, editing, deleting, suppressing, renaming items; settings; materials; gravity; studies (new, clone, delete): one undo step each; Esc / Cancel leave nothing; a solve or a mesh is never in the undo history | outline 2.2 |
 | S24 | A model not held enough fails | CalculiX's "singular" error turns into the engine's sentence; a solve that "worked" with the model moving more than half its size (a mechanism) is not shown as results: the progress says it is not held enough | A[41]; outline 0.8 |
+| S25 | SETUP groups in workflow order (STUDY, SIMPLIFY, MATERIALS, CONSTRAINTS, LOADS, CONTACTS, DISPLAY, MANAGE, SOLVE, INSPECT, SELECT), each with its big button | Same order and members (research 9.2); every group shows a big button; the commands not built (Simplify, Linear / Angular Global Load, Point Mass, Manual Contacts, Bolt / Rigid Body Connector) are greyed with their sentence; original icons for every entry; on / off buttons (Ux, Uy, Uz, Flip Direction, Body Selection) look on when on | A[4]; G (mem) for the order |
+| S26 | Every value field takes a unit override; Simulation follows the document's units (Document Settings > Units) | Same: the fields, the browser's texts, Load Case Attributes, Study Materials' properties and the mesh / contact lengths show N, MPa, N mm and the design's length in a metric design (N m in metres), lbf, psi, lbf in and inches in an inch design (lbf ft and feet in feet); a bare number is in the unit shown, a typed unit wins; the engine keeps N, MPa, mm, and a field left unchanged keeps its exact value | A[23] A[67] F[99] |
 
 ### Scenarios (real clicks, `SciForgeTests/gui/scenarios/sim_setup_*.py`)
 
@@ -136,6 +137,7 @@ G = guess (the SciForge choice when the sources are silent).
 | `sim_setup_workspace` | entering with a sketch open, leaving with a dialog open, Esc, a second study, Solve dialog with two studies (one refused), undo while results show, leaving from RESULTS |
 | `sim_setup_components` | an empty design, moved components, a model held by one edge (not held enough) |
 | `sim_setup_glyphs` | the glyphs rendered off screen: drawn, hidden on request, same screen size after a zoom, gone in DESIGN |
+| `sim_setup_units` | Document Settings > Units: Inch from the SIMULATION browser; a force typed as 50 (lbf) kept as 222.4 N, the browser and Load Case Attributes in lbf, Edit + OK changes nothing, psi, inches for Local Mesh Control, the mesh size and the contact tolerance (0.1 mm kept exactly); back to Millimeter |
 
 ### Known gaps
 
@@ -152,8 +154,6 @@ G = guess (the SciForge choice when the sources are silent).
 - **Force direction by Angle** and **Limit Target** are not in the Structural Loads dialog
   (Normal and Vector only: the engine stores a direction as normal or a vector); Remote Moment,
   Hydrostatic Pressure and the Remote constraint are listed greyed with a sentence.
-- **Units follow the engine** (N, MPa, N mm, mm): a value typed with another unit (lbf, psi,
-  N m, in) is converted, but a design in inches still shows metric values.
 - **Repair** (Fusion's button for a study with serious input errors) and the Job Status
   history of earlier solves are not built.
 - **Glyph look**: SciForge's own (Fusion's are unknown here; research 3.12 is G). xvfb shows no

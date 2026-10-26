@@ -275,7 +275,7 @@ class NewStudyDialog(FocusBack, QtWidgets.QDialog):
 
     def _settings(self):
         try:
-            dialog = SettingsDialog(self, self.settings)
+            dialog = SettingsDialog(self, self.settings, design_units(self.doc)["length"])
             if dialog.exec_() == QtWidgets.QDialog.Accepted:
                 self.settings = dialog.values()
         except Exception as exc:
@@ -351,6 +351,43 @@ def _spin(name, low, high, value, decimals=1, suffix="", step=1.0, tip=""):
     return box
 
 
+def design_units(doc):
+    """{family: unit} the design shows (Fusion's Simulation follows the document's units)."""
+    from . import simulation_panels
+
+    return simulation_panels.doc_units(doc)
+
+
+class LengthSpin(QtWidgets.QDoubleSpinBox):
+    """A length in the design's unit (the engine keeps mm); left untouched it gives back the
+    exact value it was given (no rounding through the unit)."""
+
+    def __init__(self, name, low_mm, high_mm, value_mm, unit="mm", step_mm=1.0, tip=""):
+        super().__init__()
+        import math
+
+        self.setObjectName(name)
+        self.factor = score.unit_factor("length", unit) or 1.0  # mm per unit shown
+        decimals = 2 + max(0, int(round(math.log10(self.factor)))) if self.factor > 1 else 2
+        self.setDecimals(decimals + (1 if low_mm < 0.1 else 0))
+        self.setRange(low_mm / self.factor, high_mm / self.factor)
+        self.setSingleStep(step_mm / self.factor)
+        self.setSuffix(" " + unit)
+        self.set_mm(value_mm)
+        if tip:
+            self.setToolTip(tip)
+
+    def set_mm(self, value_mm):
+        self._exact = float(value_mm)
+        self.setValue(self._exact / self.factor)
+        self._shown = self.value()
+
+    def mm(self):
+        if abs(self.value() - self._shown) < 1e-12:
+            return self._exact
+        return float(self.value()) * self.factor
+
+
 # Adaptive refinement is wired in the engine when simulation_core says so (sim-core).
 def _adaptive_built():
     """True once the engine runs adaptive refinement (sim-core's Job._adapt)."""
@@ -372,9 +409,10 @@ class SettingsForm(QtWidgets.QTabWidget):
     """Fusion's Study Settings tabs (research 2.3): General, Mesh, Adaptive Mesh Refinement,
     Contacts. What SciForge's mesher or solver cannot do is shown greyed with the reason."""
 
-    def __init__(self, settings, parent=None):
+    def __init__(self, settings, parent=None, length_unit="mm"):
         super().__init__(parent)
         self.setObjectName("SciForgeSimSettingsTabs")
+        self.length_unit = length_unit or "mm"
         self.base = core.settings(settings)
         mesh = self.base["mesh"]
         # General
@@ -406,7 +444,7 @@ class SettingsForm(QtWidgets.QTabWidget):
         self.size_kind = QtWidgets.QComboBox()
         self.size_kind.setObjectName("SciForgeSimMeshSizeKind")
         self.size_kind.addItem("Model based (% of model size)", "pct")
-        self.size_kind.addItem("Absolute value (mm)", "mm")
+        self.size_kind.addItem("Absolute value (%s)" % self.length_unit, "mm")
         self.size_kind.setCurrentIndex(1 if float(mesh.get("size_mm") or 0) > 0 else 0)
         self.size_kind.currentIndexChanged.connect(self._size_kind_changed)
         form.addRow("Average Element Size", self.size_kind)
@@ -420,17 +458,16 @@ class SettingsForm(QtWidgets.QTabWidget):
             tip="The average element length as a share of the model's size (its diagonal)",
         )
         form.addRow("Size (% of model size)", self.size)
-        self.size_mm = _spin(
+        self.size_mm = LengthSpin(
             "SciForgeSimMeshSizeMM",
             0.05,
             10000.0,
             float(mesh.get("size_mm") or 0) or 2.0,
-            2,
-            " mm",
+            self.length_unit,
             0.5,
             "The average element length",
         )
-        form.addRow("Size (mm)", self.size_mm)
+        form.addRow("Size (%s)" % self.length_unit, self.size_mm)
         self.per_part = QtWidgets.QCheckBox("Scale Mesh Size Per Part")
         self.per_part.setObjectName("SciForgeSimMeshPerPart")
         self.per_part.setChecked(bool(mesh.get("scale_per_part")))
@@ -559,13 +596,12 @@ class SettingsForm(QtWidgets.QTabWidget):
                 item.setEnabled(False)
                 item.setToolTip(refused)
         form.addRow("Automatic Contacts", kind)
-        self.tolerance = _spin(
+        self.tolerance = LengthSpin(
             "SciForgeSimContactTolerance",
             0.0,
             10.0,
             self.base["contact_tolerance"],
-            3,
-            " mm",
+            self.length_unit,
             0.05,
         )
         form.addRow("Contact Detection Tolerance", self.tolerance)
@@ -624,12 +660,12 @@ class SettingsForm(QtWidgets.QTabWidget):
             }
         )
         if "size_mm" in out["mesh"]:
-            out["mesh"]["size_mm"] = float(self.size_mm.value()) if absolute else 0.0
+            out["mesh"]["size_mm"] = self.size_mm.mm() if absolute else 0.0
         if "adjacent_ratio" in out["mesh"]:
             out["mesh"]["adjacent_ratio"] = float(self.ratio.value())
         if "aspect_ratio" in out["mesh"]:
             out["mesh"]["aspect_ratio"] = float(self.aspect.value())
-        out["contact_tolerance"] = float(self.tolerance.value())
+        out["contact_tolerance"] = self.tolerance.mm()
         if "remove_rigid" in out:
             out["remove_rigid"] = bool(self.rigid.isChecked())
         if "keep_results" in out:
@@ -647,12 +683,12 @@ class SettingsForm(QtWidgets.QTabWidget):
 class SettingsDialog(FocusBack, QtWidgets.QDialog):
     """Study Settings opened from the New Study dialog's gear (before the study exists)."""
 
-    def __init__(self, parent, settings):
+    def __init__(self, parent, settings, length_unit="mm"):
         super().__init__(parent)
         self.setObjectName("SciForgeSimSettingsDialog")
         self.setWindowTitle("Study Settings")
         layout = QtWidgets.QVBoxLayout(self)
-        self.form = SettingsForm(settings, self)
+        self.form = SettingsForm(settings, self, length_unit)
         layout.addWidget(self.form)
         box = QtWidgets.QDialogButtonBox(
             QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
@@ -675,7 +711,7 @@ class SettingsPanel(_SimPanel):
         SettingsPanel.last = self
         self.study = study
         self.form.setObjectName("SciForgeSimSettings")
-        self.tabs = SettingsForm(_sim().settings(study))
+        self.tabs = SettingsForm(_sim().settings(study), length_unit=design_units(doc)["length"])
         self.layout.addRow(QtWidgets.QLabel(study.Label))
         self.layout.addRow(self.tabs)
         self.finish_layout()
@@ -736,23 +772,35 @@ def _material_rows():
     return rows
 
 
-def _props_text(name, props, basis):
-    """Lines of the properties a stress study uses, saying which ones SciForge filled in."""
+# kg/m^3 in the density unit of an inch or foot design
+DENSITY_UNITS = {"in": ("lb/in^3", 3.61273e-5), "ft": ("lb/ft^3", 0.0624280)}
+
+
+def _props_text(name, props, basis, units=None):
+    """Lines of the properties a stress study uses, saying which ones SciForge filled in (in
+    the design's units: MPa or psi)."""
+    units = units or score.unit_set("mm")
     filled = set(props.get("filled") or [])
     lines = ["Material: %s" % name]
+    stress = units.get("pressure", "MPa")
+    density_unit, density_factor = DENSITY_UNITS.get(units.get("length"), ("kg/m^3", 1.0))
     rows = (
-        ("youngs_mpa", "Young's Modulus", "MPa"),
+        ("youngs_mpa", "Young's Modulus", "pressure"),
         ("poisson", "Poisson's Ratio", ""),
-        ("density", "Density", "kg/m^3"),
-        ("yield_mpa", "Yield Strength", "MPa"),
-        ("ultimate_mpa", "Ultimate Tensile Strength", "MPa"),
+        ("density", "Density", "density"),
+        ("yield_mpa", "Yield Strength", "pressure"),
+        ("ultimate_mpa", "Ultimate Tensile Strength", "pressure"),
     )
-    for key, label, unit in rows:
+    for key, label, family in rows:
         value = props.get(key)
         if value is None or value != value:
             text = "%s: none" % label
+        elif family == "pressure":
+            text = "%s: %s" % (label, score.format_quantity(value, "pressure", 4, stress))
+        elif family == "density":
+            text = "%s: %s %s" % (label, core.fmt(value * density_factor), density_unit)
         else:
-            text = "%s: %s%s" % (label, core.fmt(value), (" " + unit) if unit else "")
+            text = "%s: %s" % (label, core.fmt(value))
         if key in filled:
             text += "  (FreeCAD's card has none: SciForge filled in a typical value)"
         lines.append(text)
@@ -877,7 +925,7 @@ class MaterialsPanel(_SimPanel):
                 name, props = sim.card(material.material_of(material.entry(key)))
             else:
                 name, props = sim.model_material(body)
-            text = _props_text(name, props, self.basis.currentData())
+            text = _props_text(name, props, self.basis.currentData(), design_units(self.doc))
             if not self.ticks[row].isChecked():
                 text = "%s is left out of this study.\n" % body.Label + text
             self.props.setText(text)
@@ -977,13 +1025,15 @@ class ContactsPanel(_SimPanel):
         self.study = study
         self.form.setObjectName("SciForgeSimContacts")
         settings = _sim().settings(study)
-        self.tolerance = QtWidgets.QDoubleSpinBox()
-        self.tolerance.setObjectName("SciForgeSimContactsTolerance")
-        self.tolerance.setRange(0.0, 10.0)
-        self.tolerance.setDecimals(3)
-        self.tolerance.setSingleStep(0.05)
-        self.tolerance.setSuffix(" mm")
-        self.tolerance.setValue(float(settings["contact_tolerance"]))
+        self.units = design_units(doc)
+        self.tolerance = LengthSpin(
+            "SciForgeSimContactsTolerance",
+            0.0,
+            10.0,
+            float(settings["contact_tolerance"]),
+            self.units["length"],
+            0.05,
+        )
         self.layout.addRow("Contact Detection Tolerance", self.tolerance)
         kind = QtWidgets.QComboBox()
         kind.setObjectName("SciForgeSimContactsType")
@@ -1014,10 +1064,11 @@ class ContactsPanel(_SimPanel):
 
     def _generate(self):
         try:
-            self.pairs = contact_pairs(self.study, float(self.tolerance.value()))
+            self.pairs = contact_pairs(self.study, self.tolerance.mm())
             self.table.setRowCount(len(self.pairs))
             for row, (a, b, gap) in enumerate(self.pairs):
-                for col, text in enumerate((a.Label, b.Label, "%s mm" % core.fmt(gap, 3))):
+                gap_text = score.format_quantity(gap, "length", 3, self.units["length"])
+                for col, text in enumerate((a.Label, b.Label, gap_text)):
                     item = QtWidgets.QTableWidgetItem(text)
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
                     self.table.setItem(row, col, item)
@@ -1033,7 +1084,7 @@ class ContactsPanel(_SimPanel):
     def apply(self):
         if not bodies.alive(self.study):
             return "The study is gone (undone or deleted)."
-        _sim().set_settings(self.study, {"contact_tolerance": float(self.tolerance.value())})
+        _sim().set_settings(self.study, {"contact_tolerance": self.tolerance.mm()})
         return None
 
 
@@ -1077,8 +1128,9 @@ def _table_dialog(name, title, headers, rows, note=""):
 
 def open_contact_manager(study):
     """Fusion's Contact Manager (research 3.6), read only: the bonded pairs by bodies."""
+    length = design_units(study.Document)["length"]
     rows = [
-        (a.Label, b.Label, "Bonded (automatic)", "%s mm" % core.fmt(gap, 3))
+        (a.Label, b.Label, "Bonded (automatic)", score.format_quantity(gap, "length", 3, length))
         for a, b, gap in contact_pairs(study)
     ]
     return _table_dialog(
@@ -1130,6 +1182,7 @@ def _direction_text(data):
 def attribute_rows(study):
     """[(name, type, location, size, direction, status)] of every constraint and load."""
     sim = _sim()
+    units = design_units(study.Document)
     lost = {i.Name for i in sim.lost_items(study)}
     rows = []
     for item in sim.items(study):
@@ -1139,7 +1192,7 @@ def attribute_rows(study):
         try:
             info = core.kind_info(data["category"], data["kind"])
             title = info["title"]
-            size = core.describe(data["category"], data["kind"], data["options"])
+            size = score.describe(data["category"], data["kind"], data["options"], units)
         except Exception:
             title, size = data["kind"], ""
         status = (
@@ -1162,7 +1215,7 @@ def attribute_rows(study):
                 "Gravity",
                 "Gravity",
                 "Every body",
-                "%s m/s^2" % core.fmt(gravity["g"] / 1000.0),
+                score.format_quantity(gravity["g"], "acceleration", 4, units["acceleration"]),
                 "(%s)" % ", ".join(core.fmt(c, 3) for c in gravity["direction"]),
                 "OK",
             )
