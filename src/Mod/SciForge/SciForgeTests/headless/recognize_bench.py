@@ -601,6 +601,35 @@ EXTRA_MODELS = {
             },
         ],
     },
+    "bench_link_rod": {
+        "title": "Link rod: a tube d20 (bore d12) 150 long along Y, ending in an eye d30 x 30 "
+        "along X with a d14 hole (the bore ends on the eye's round side)",
+        "steps": [
+            {
+                "op": "sketch",
+                "id": "s1",
+                "plane": "XZ",
+                "geometry": [{"circle": [0, 0, 10]}, {"circle": [0, 0, 6]}],
+            },
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 150},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "YZ",
+                "offset": -15,
+                "geometry": [{"circle": [0, 0, 15]}],
+            },
+            {"op": "extrude", "id": "e2", "profile": "s2", "distance": 30},
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "YZ",
+                "offset": 15,
+                "geometry": [{"circle": [0, 0, 7]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s3", "diameter": 14, "through_all": True},
+        ],
+    },
 }
 
 # What each model's steps made, for the "found" check. base: the kind describe() should
@@ -657,6 +686,7 @@ BENCH = [
     ("bench_chamfered_boss", {"base": "extrude", "holes": [], "chamfers": [1]}),
     ("bench_chamfered_shaft", {"holes": [], "chamfers": [1.5]}),
     ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
+    ("bench_link_rod", {"base": "extrude", "holes": [14]}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
 MESH_BENCH = [
@@ -985,15 +1015,19 @@ def bench_mesh(model_id, folder):
 
 
 # STEP files made by other programs that ship in the repository: they split a bore in two
-# half faces, their tangent arcs miss each other by 5e-7 mm, their parts sit anywhere. Each
-# solid (file, index among its distinct solids) is described, rebuilt from the plan, and checked
-# surface by surface (a face split in two in the file is one face in the rebuild) with the
-# volume within 0.1 %.
+# half faces, their tangent arcs miss each other by 5e-7 mm, their parts sit anywhere; and parts
+# of FreeCAD's example assembly, placed at angles. Each solid (file, index among its distinct
+# solids or a document object's name) is described, rebuilt from the plan, and checked face by
+# face, else surface by surface (a face split in two in the file is one face in the rebuild),
+# with the volume within 0.1 %.
 REAL_FILES = [
     ("docs/sciforge/examples/pi5-case/pi5_case.step", 0, "Raspberry Pi 5 case, base"),
     ("docs/sciforge/examples/pi5-case/pi5_case.step", 1, "Raspberry Pi 5 case, lid"),
     ("data/tests/Step/as1-ac-214.stp", 0, "AS1 test assembly: plate with six split bores"),
     ("src/Mod/Idf/Idflibs/EPL22_6_16.stp", 0, "an IDF part library body (chamfers, a pattern)"),
+    ("data/examples/AssemblyExample.FCStd", "Shape016", "a rod with an eye, placed at 45 degrees"),
+    ("data/examples/AssemblyExample.FCStd", "Shape020", "a tube whose bore ends on its eye"),
+    ("data/examples/AssemblyExample.FCStd", "Shape022", "a tube that ends inside its eye"),
 ]
 
 
@@ -1028,6 +1062,17 @@ def distinct_solids(path):
     return out
 
 
+def document_solid(path, name):
+    """The first solid of an object of a FreeCAD document (a part placed in an assembly)."""
+    import FreeCAD as App
+
+    doc = App.openDocument(path)
+    try:
+        return doc.getObject(name).Shape.copy().Solids[0]
+    finally:
+        App.closeDocument(doc.Name)
+
+
 def surfaces_match(reference, rebuilt):
     """Every surface of the reference carries the same area in the rebuild, and no other
     surface is there (faces split in two in a STEP file are one face in a rebuild)."""
@@ -1057,7 +1102,7 @@ def bench_real(rel, index, title):
     """One solid of a real STEP file: described, rebuilt, compared surface by surface."""
     from sciforge import recognize
 
-    name = "%s #%d" % (os.path.basename(rel), index)
+    name = "%s %s" % (os.path.basename(rel), index if isinstance(index, str) else "#%d" % index)
     row = {"id": name, "title": title, "status": "fail", "problems": []}
     start = time.time()
     try:
@@ -1067,7 +1112,10 @@ def bench_real(rel, index, title):
             row["status"] = "pass"
             row["skipped"] = "file not found (an installed copy without the repository)"
             return row
-        solid = distinct_solids(path)[index]
+        if isinstance(index, str):  # an object of a FreeCAD document
+            solid = document_solid(path, index)
+        else:
+            solid = distinct_solids(path)[index]
         row["faces"] = len(solid.Faces)
         t0 = time.time()
         result = recognize.describe(solid)
@@ -1078,7 +1126,7 @@ def bench_real(rel, index, title):
         row["confidence"] = result["confidence"]
         row["notes"] = result["notes"]
         row["plan"] = [{"tool": s["tool"], "args": s["args"]} for s in result["plan"]]
-        rebuilt, errors, _made = run_plan(result["plan"], "rbr_%d" % index)
+        rebuilt, errors, _made = run_plan(result["plan"], "rbr_%s" % index)
         for number, text in errors:
             row["problems"].append("plan step %d failed: %s" % (number, text))
         if rebuilt is None:

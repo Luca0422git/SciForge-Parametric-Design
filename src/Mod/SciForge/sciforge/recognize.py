@@ -93,6 +93,7 @@ DEFEATURE_BUDGET = 15.0  # seconds of defeaturing tries before the rest is left 
 DESCRIBE_BUDGET = 30.0  # seconds: past this, optional work (more readings, edges) is skipped
 MAX_SLABS = 60  # levels along one axis beyond which that axis is not read (a free-form part)
 MAX_PIECES = 400  # bosses + cuts beyond which a reading is dropped (it is not the part's)
+MAX_SPANS = 6  # where a lenient reading's base extrude may end (see _base_spans)
 SMOOTH = 0.9998  # cos of ~1.1 degrees: two faces meeting this smoothly are tangent
 
 
@@ -981,8 +982,8 @@ class _Reader:
                 for j in self.topo.edge_faces.get(key, []):
                     if j in idx or j in neighbours:
                         continue
-                    try:
-                        pts = self.topo.edges[key].discretize(12)
+                    try:  # (sampled as _rim_extent samples: the same top for a 3D rim)
+                        pts = self.topo.edges[key].discretize(24)
                     except Exception:
                         continue
                     ts = [core.dot(core.sub(_t(p), origin), axis) for p in pts]
@@ -1065,6 +1066,13 @@ class _Reader:
                     }
             elif beyond:
                 out = {"kind": "open", "t": t, "t_open": t, "face": j}
+            elif fj.axis is None or not core.parallel(fj.axis, axis, 1e-6):
+                # a face across the end that faces back into the bore: a round or slanted
+                # floor (a tube's bore that ends on the eye it was extruded up to); the
+                # Hole tool makes no such floor (an opening on a round face faces outward)
+                n = _normal_near(fj.face, core.add(origin, core.mul(axis, t)))
+                if n is not None and core.dot(n, axis) * sign < -0.5:
+                    return {"kind": "closed", "t": t, "t_open": t, "face": j}
         return out
 
     def _opening_face(self, j, exclude):
@@ -2834,6 +2842,16 @@ def _flat_normal(face):
         return None
 
 
+def _normal_near(face, point):
+    """The face's outward normal (its orientation counted) where its surface is nearest the
+    point, or None."""
+    try:
+        u, v = face.Surface.parameter(_vec(point))
+        return core.unit(_t(face.normalAt(u, v)))
+    except Exception:
+        return None
+
+
 def _caps_at(solid, plane, h):
     """The solid's flat faces square to the plane's normal at height h."""
     n = core.PLANES[plane]["n"]
@@ -3079,20 +3097,66 @@ def _prismatic(solid, axis_name, lenient=False):
             base_faces = _outline(base_faces)  # its openings lean: cuts of their own
     else:
         base_faces = _fill_copies(base_faces)  # copies of one opening: a cut and a pattern
+    cache = {"levels": {plane: hs}, "solid": solid}  # (moved copies of a piece read once)
     if drafted_base is not None:
-        first, prism = drafted_base
-        lo, hi = hs[0], hs[-1]
+        spans = [(hs[0], hs[-1])]
     else:
-        first = _op("base", base_faces, plane, lo, hi)
-        if first is None:
-            return None
-        prism = _extrude_faces(base_faces, plane, lo, hi)
-    ops = [first]
+        spans = _base_spans(slabs, run, ranges, touched)
+    for lo, hi in spans:
+        if drafted_base is not None:
+            first, prism = drafted_base
+        else:
+            first = _op("base", base_faces, plane, lo, hi)
+            if first is None:
+                return None
+            prism = _extrude_faces(base_faces, plane, lo, hi)
+        read = _base_pieces(solid, prism, plane, hs, lo, cache)
+        if read is None:
+            continue
+        ops = [first] + read[0]
+        _through_cuts(ops, solid)
+        _mark_shell(ops, solid)
+        result = _prismatic_result(first, ops, len(slabs), plane, axis_name, hs)
+        result["feature_volume"] = read[1]
+        return result
+    return None
+
+
+def _base_spans(slabs, run, ranges, touched):
+    """Where the base extrude starts and ends, best first: over the whole run of levels its
+    outline covers; then, when features along another axis pass through the run's end
+    levels (a lenient reading: `ranges`, `touched`), stopping inside those levels, at a
+    level or at the middle of such a feature (a rod that ends in an eye: the rod up to its
+    own end or the eye's centre, the eye a boss of its own along its axis)."""
+    lo, hi = slabs[run[0]]["lo"], slabs[run[-1]]["hi"]
+    spans = [(lo, hi)]
+    clean = [i for i in run if not touched(i)]
+    if not ranges or not clean:
+        return spans
+    c_lo, c_hi = slabs[clean[0]]["lo"], slabs[clean[-1]]["hi"]
+    stops = set()
+    for i in run:
+        if touched(i):
+            stops.update((slabs[i]["lo"], slabs[i]["hi"]))
+    stops.update(0.5 * (a + b) for a, b in ranges)
+    his = [hi] + sorted((h for h in stops if c_hi - 1e-6 <= h < hi - 1e-6), reverse=True)
+    los = [lo] + sorted(h for h in stops if lo + 1e-6 < h <= c_lo + 1e-6)
+    for a in los:
+        for b in his:
+            if (a, b) not in spans and b - a > 1e-6:
+                spans.append((a, b))
+    return spans[:MAX_SPANS]
+
+
+def _base_pieces(solid, prism, plane, hs, base_lo, cache):
+    """([ops], volume moved) of the bosses and cuts that make the solid from the base
+    extrude `prism` (the pieces of solid - prism joined, of prism - solid cut), or None
+    when a piece is not read."""
     extra = solid.cut(prism)
     missing = prism.cut(solid)
     if len(extra.Solids) + len(missing.Solids) > MAX_PIECES:
         return None
-    cache = {"levels": {plane: hs}, "solid": solid}  # (moved copies of a piece read once)
+    ops = []
     for piece_shape, operation in ((extra, "join"), (missing, "cut")):
         for piece in piece_shape.Solids:
             if piece.Volume < 1e-9:
@@ -3101,7 +3165,7 @@ def _prismatic(solid, axis_name, lenient=False):
             for other in _piece_planes(piece, prism, plane):
                 if other == plane:
                     got = _piece_ops(
-                        piece, plane, operation, hs[0], hs[-1], lo, (solid, prism), cache
+                        piece, plane, operation, hs[0], hs[-1], base_lo, (solid, prism), cache
                     )
                 else:  # a boss / cut along another axis (the holes in a channel's sides)
                     span = _span(solid, other)
@@ -3113,11 +3177,7 @@ def _prismatic(solid, axis_name, lenient=False):
             if got is None:
                 return None
             ops += got
-    _through_cuts(ops, solid)
-    _mark_shell(ops, solid)
-    result = _prismatic_result(first, ops, len(slabs), plane, axis_name, hs)
-    result["feature_volume"] = extra.Volume + missing.Volume
-    return result
+    return ops, extra.Volume + missing.Volume
 
 
 def _on_boundary(shape, face):
