@@ -153,7 +153,10 @@ class Results(unittest.TestCase):
 
 
 class Precheck(unittest.TestCase):
-    STEEL = ("Steel", {"youngs_mpa": 210000.0, "poisson": 0.3, "yield_mpa": 207.0})
+    STEEL = (
+        "Steel",
+        {"youngs_mpa": 210000.0, "poisson": 0.3, "yield_mpa": 207.0, "density": 7850.0},
+    )
 
     def summary(self, **extra):
         out = {
@@ -191,6 +194,276 @@ class Precheck(unittest.TestCase):
         )
         self.assertEqual(no_yield[0][0], "warning")
         self.assertIn("safety factor", no_yield[0][1])
+
+
+class NewKinds(unittest.TestCase):
+    def test_every_kind_is_built(self):
+        for table in (core.CONSTRAINTS, core.LOADS, core.MESH_CONTROLS):
+            for kind, info in table.items():
+                self.assertTrue(info["built"], kind)
+        self.assertEqual(core.kind_info("mesh", "local")["title"], "Local Mesh Control")
+        with self.assertRaises(core.SimulationError):
+            core.kind_info("contact", "bonded")
+
+    def test_checks_of_new_kinds(self):
+        face = ("faces", "plane")
+        round_face = ("faces", "cylinder")
+        self.assertEqual(core.check("constraint", "pin", {}, [round_face]), [])
+        self.assertTrue(
+            core.check(
+                "constraint", "pin", {"radial": False, "axial": False}, [round_face]
+            )  # holds nothing
+        )
+        self.assertEqual(core.check("constraint", "frictionless", {}, [round_face]), [])
+        self.assertEqual(core.check("constraint", "frictionless", {}, [face]), [])
+        self.assertTrue(core.check("constraint", "frictionless", {}, [("edges", None)]))
+        self.assertEqual(core.check("constraint", "displacement", {"x": 0.5}, [face]), [])
+        self.assertTrue(
+            core.check("constraint", "displacement", {"x": None, "y": None, "z": None}, [face])
+        )
+        self.assertTrue(core.check("constraint", "displacement", {"x": "a"}, [face]))
+        self.assertEqual(core.check("load", "moment", {}, [face]), [])
+        self.assertTrue(core.check("load", "bearing", {}, [face]))  # round faces only
+        self.assertEqual(core.check("load", "bearing", {}, [round_face]), [])
+        self.assertEqual(core.check("load", "remote_force", {"point": [1, 2, 3]}, [face]), [])
+        self.assertTrue(core.check("load", "remote_force", {"point": [1, 2]}, [face]))
+        self.assertTrue(core.check("load", "force", {"direction": "sideways"}, [face]))
+        self.assertEqual(core.check("mesh", "local", {"size": 2.0}, [("bodies", None)]), [])
+        self.assertTrue(core.check("mesh", "local", {"size": 0}, [face]))
+
+    def test_descriptions(self):
+        self.assertEqual(core.describe("constraint", "pin", {}), "Pin")
+        self.assertEqual(
+            core.describe("constraint", "pin", {"tangential": True}),
+            "Pin (radial, axial, tangential)",
+        )
+        self.assertEqual(core.describe("load", "moment", {"magnitude": 5000}), "Moment 5000 N mm")
+        self.assertEqual(core.describe("mesh", "local", {"size": 0.5}), "Local Mesh Control 0.5 mm")
+        self.assertEqual(
+            core.describe("constraint", "displacement", {"x": None, "z": -0.2}),
+            "Prescribed Displacement (Z -0.2 mm)",
+        )
+
+
+class MoreSettings(unittest.TestCase):
+    def test_new_defaults_and_clamps(self):
+        s = core.settings()
+        self.assertFalse(s["remove_rigid"])
+        self.assertTrue(s["keep_results"])
+        self.assertEqual(s["adaptive"]["level"], "none")
+        self.assertEqual(s["mesh"]["adjacent_ratio"], 1.5)
+        bad = core.settings(
+            {
+                "mesh": {"min_pct": 0, "max_turn": 500, "size_mm": -3},
+                "adaptive": {"level": "extreme", "passes": 99, "result": "colour"},
+                "contact_tolerance": 50,
+            }
+        )
+        self.assertEqual(bad["mesh"]["min_pct"], 1.0)
+        self.assertEqual(bad["mesh"]["max_turn"], 90.0)
+        self.assertEqual(bad["mesh"]["size_mm"], 0.0)
+        self.assertEqual(bad["adaptive"]["level"], "none")
+        self.assertEqual(bad["adaptive"]["passes"], 10)
+        self.assertEqual(bad["adaptive"]["result"], "von_mises")
+        self.assertEqual(bad["contact_tolerance"], 10.0)
+
+    def test_size_as_a_length(self):
+        bbox = (0, 0, 0, 100, 10, 10)
+        self.assertEqual(core.element_size(bbox, 10, 2.5), 2.5)
+        self.assertAlmostEqual(core.element_size(bbox, 10, 0.0), core.model_size(bbox) / 10)
+
+    def test_adaptive_plan(self):
+        self.assertIsNone(core.adaptive_plan({"level": "none"}))
+        self.assertEqual(core.adaptive_plan({"level": "medium"}), core.ADAPTIVE_LEVELS["medium"])
+        custom = {"level": "custom", "passes": 3, "tolerance": 2.0, "portion": 20.0}
+        self.assertEqual(core.adaptive_plan(custom), (3, 2.0, 20.0))
+        self.assertTrue(core.converged(100.0, 101.0, 2.0))
+        self.assertFalse(core.converged(100.0, 110.0, 2.0))
+        self.assertFalse(core.converged(None, 1.0, 2.0))
+
+
+class NodeConstraints(unittest.TestCase):
+    def test_fixed_and_conflict(self):
+        rows = [(1, "Fixed 1", "spc", (d, 0.0)) for d in range(3)]
+        rows.append((1, "Prescribed 1", "spc", (2, 0.5)))
+        out = core.node_constraints(rows)
+        self.assertEqual(out["spc"], {1: {0: 0.0, 1: 0.0, 2: 0.0}})
+        self.assertEqual(out["equations"], [])
+        self.assertEqual(out["conflicts"], [(1, "Prescribed 1", "Fixed 1")])
+
+    def test_frictionless_tilted(self):
+        n = (1.0, 1.0, 0.0)
+        out = core.node_constraints([(7, "F", "eq", n)])
+        self.assertEqual(out["spc"], {})
+        ((node, terms),) = out["equations"]
+        self.assertEqual(node, 7)
+        self.assertEqual(terms[0][1], 1.0)  # the dependent term first, coefficient 1
+        dofs = sorted(d for d, _c in terms)
+        self.assertEqual(dofs, [0, 1])
+        self.assertAlmostEqual(dict(terms)[0] if terms[0][0] == 0 else dict(terms)[1], 1.0)
+
+    def test_three_planes_hold_a_corner(self):
+        rows = [(3, "a", "eq", (1, 0, 0)), (3, "b", "eq", (0, 1, 0)), (3, "c", "eq", (0, 0, 1))]
+        out = core.node_constraints(rows)
+        self.assertEqual(out["equations"], [])
+        self.assertEqual(out["spc"], {3: {0: 0.0, 1: 0.0, 2: 0.0}})
+
+    def test_axis_plane_becomes_a_value(self):
+        # z prescribed 0.2 and a frictionless plane x + z = 0: x must be -0.2
+        rows = [(5, "d", "spc", (2, 0.2)), (5, "f", "eq", (1.0, 0.0, 1.0))]
+        out = core.node_constraints(rows)
+        self.assertAlmostEqual(out["spc"][5][0], -0.2)
+        self.assertAlmostEqual(out["spc"][5][2], 0.2)
+        self.assertEqual(out["equations"], [])
+
+    def test_pivots_are_distinct_and_free(self):
+        # a pin's radial and axial directions on one node plus Fixed in Y
+        radial = (0.6, 0.0, 0.8)
+        axial = (0.0, 1.0, 0.0)
+        rows = [(9, "pin", "eq", radial), (9, "pin", "eq", axial), (9, "fix", "spc", (1, 0.0))]
+        out = core.node_constraints(rows)
+        dependents = [terms[0][0] for _n, terms in out["equations"]]
+        self.assertEqual(len(dependents), len(set(dependents)))
+        for d in dependents:
+            self.assertNotIn(d, out["spc"].get(9, {}))
+        # every equation still holds for a movement that obeys them
+        self.assertEqual(out["spc"][9][1], 0.0)
+
+    def test_impossible_request_is_a_conflict(self):
+        rows = [(2, "d", "spc", (0, 0.5)), (2, "f", "eq", (1.0, 0.0, 0.0))]
+        out = core.node_constraints(rows)
+        self.assertEqual(len(out["conflicts"]), 1)
+
+    def test_inp_lines(self):
+        self.assertEqual(core.inp_boundaries({4: {0: 0.0, 2: 0.25}}), ["4,1,1,0", "4,3,3,0.25"])
+        eq = core.inp_equations([(4, [(0, 1.0), (1, -0.5)])])
+        self.assertEqual(eq, ["*EQUATION", "2", "4,1,1,4,2,-0.5"])
+        self.assertEqual(core.inp_loads({3: [0.0, -2.5, 0.0]}), ["3,2,-2.5"])
+
+
+class Distributions(unittest.TestCase):
+    PTS = [(1.0, 0.0, 0.0), (-1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, -1.0, 0.0)]
+
+    def sums(self, points, forces):
+        total = [sum(f[i] for f in forces) for i in range(3)]
+        middle = core.weighted_middle(points, [1.0] * len(points))
+        moment = [0.0, 0.0, 0.0]
+        for p, f in zip(points, forces):
+            r = [p[i] - middle[i] for i in range(3)]
+            m = core._cross(r, f)
+            moment = [moment[i] + m[i] for i in range(3)]
+        return total, moment
+
+    def test_force_and_moment_add_up(self):
+        forces = core.distribute(self.PTS, [1.0] * 4, (0.0, 0.0, -8.0), (0.0, 0.0, 6.0))
+        total, moment = self.sums(self.PTS, forces)
+        for got, want in zip(total + moment, [0, 0, -8, 0, 0, 6]):
+            self.assertAlmostEqual(got, want)
+
+    def test_bending_moment_on_a_flat_face(self):
+        forces = core.distribute(self.PTS, [1.0] * 4, (0, 0, 0), (2.0, 0.0, 0.0))
+        total, moment = self.sums(self.PTS, forces)
+        self.assertAlmostEqual(moment[0], 2.0)
+        self.assertAlmostEqual(sum(abs(c) for c in total), 0.0)
+
+    def test_a_line_cannot_carry_a_moment_about_itself(self):
+        line = [(0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (2.0, 0.0, 0.0)]
+        with self.assertRaises(core.SimulationError):
+            core.distribute(line, [1.0, 1.0, 1.0], (0, 0, 0), (1.0, 0.0, 0.0))
+
+    def test_remote_force_lever(self):
+        moment = core.remote_moment(self.PTS, [1.0] * 4, (0.0, 0.0, -10.0), (5.0, 0.0, 0.0))
+        self.assertEqual([round(c, 9) for c in moment], [0.0, 50.0, 0.0])
+
+    def test_bearing_pushes_only_into_the_loaded_half(self):
+        pts, inward = [], []
+        for i in range(36):
+            a = 2 * math.pi * i / 36
+            pts.append((math.cos(a), math.sin(a), 0.0))
+            inward.append((math.cos(a), math.sin(a), 0.0))  # a hole: into the material
+        forces = core.bearing_forces(pts, [1.0] * 36, inward, (0.0, 1.0, 0.0), 100.0)
+        total = [sum(f[i] for f in forces) for i in range(3)]
+        self.assertAlmostEqual(total[1], 100.0)
+        self.assertAlmostEqual(total[0], 0.0)
+        for p, f in zip(pts, forces):
+            if p[1] <= 1e-9:
+                self.assertEqual(f, [0.0, 0.0, 0.0])
+            else:
+                self.assertGreaterEqual(core._dot(f, p), 0.0)  # pushes, never pulls
+        with self.assertRaises(core.SimulationError):
+            core.bearing_forces(pts[:1], [1.0], [(0.0, -1.0, 0.0)], (0.0, 1.0, 0.0), 1.0)
+
+    def test_three_two_one(self):
+        nodes = [(1, (0.0, 0.0, 0.0)), (2, (10.0, 0.0, 0.0)), (3, (0.0, 5.0, 0.0)), (4, (5, 2, 1))]
+        rows = core.three_two_one(nodes)
+        self.assertEqual(len(rows), 6)
+        merged = core.node_constraints(rows)
+        count = sum(len(v) for v in merged["spc"].values()) + len(merged["equations"])
+        self.assertEqual(count, 6)
+        with self.assertRaises(core.SimulationError):
+            core.three_two_one([(1, (0, 0, 0)), (2, (1, 0, 0)), (3, (2, 0, 0))])
+
+
+class SolverText(unittest.TestCase):
+    def test_reactions_from_dat(self):
+        text = (
+            "\n total force (fx,fy,fz) for set SFR1 and time  0.1000000E+01\n\n"
+            "       -4.2E-10  8.5E-10  1.007686E+02\n"
+        )
+        self.assertEqual(core.reactions_from_dat(text), {"SFR1": [-4.2e-10, 8.5e-10, 100.7686]})
+        self.assertEqual(core.reactions_from_dat(""), {})
+
+    def test_mesh_quality(self):
+        regular = core.tetra_aspect((1, 1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, 1))
+        self.assertAlmostEqual(regular, 1.0)
+        flat = core.tetra_aspect((0, 0, 0), (10, 0, 0), (0, 10, 0), (3, 3, 0.1))
+        self.assertGreater(flat, 10)
+        q = core.mesh_quality([1.0, 2.0, 0.5], [1.2, 30.0], 10.0)
+        self.assertEqual((q["smallest"], q["largest"], q["worst_aspect"]), (0.5, 2.0, 30.0))
+        self.assertEqual(q["over_limit"], 1)
+
+
+class MorePrecheck(unittest.TestCase):
+    STEEL = (
+        "Steel",
+        {"youngs_mpa": 210000.0, "poisson": 0.3, "yield_mpa": 207.0, "density": 7850.0},
+    )
+
+    def summary(self, **extra):
+        out = {
+            "bodies": ["Body"],
+            "materials": {"Body": self.STEEL},
+            "constraints": [("fixed", 1, False)],
+            "loads": [("force", 1, False)],
+            "gravity": False,
+        }
+        out.update(extra)
+        return out
+
+    def test_gravity_needs_density(self):
+        odd = ("Odd", {"youngs_mpa": 1000.0, "poisson": 0.3, "yield_mpa": 10.0})
+        checks = core.precheck(self.summary(materials={"Body": odd}, gravity=True))
+        self.assertFalse(core.can_solve(checks))
+        self.assertIn("density", checks[0][1])
+
+    def test_remove_rigid_body_modes(self):
+        free = core.precheck(self.summary(constraints=[], remove_rigid=True))
+        self.assertTrue(core.can_solve(free))
+        self.assertIn("balance", free[0][1])
+        both = core.precheck(self.summary(remove_rigid=True))
+        self.assertTrue(core.can_solve(both))
+        self.assertIn("reactions may be wrong", both[0][1])
+        loose = core.precheck(self.summary(loose=["Body2"], remove_rigid=True))
+        self.assertTrue(core.can_solve(loose))
+
+    def test_loose_overlaps_twice(self):
+        checks = core.precheck(self.summary(loose=["Body2"]))
+        self.assertFalse(core.can_solve(checks))
+        self.assertIn("Body2", checks[0][1])
+        checks = core.precheck(self.summary(overlaps=[("A", "B", 12.5)], twice=[("F1", "F2")]))
+        self.assertTrue(core.can_solve(checks))
+        self.assertIn("A and B overlap", checks[0][1])
+        self.assertIn("F1 and F2", checks[1][1])
 
 
 if __name__ == "__main__":
