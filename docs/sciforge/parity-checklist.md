@@ -311,7 +311,7 @@ not cover, or a name the alias file should map. Greyed entries are left out.
 - `tab:mesh`: Delete Faces, User Coordinate System, Environmental Map Analysis
 - `tab:sheet_metal`: Lofted Flange, Join by Bend, Corner Closure, User Coordinate System, Environmental Map Analysis, Insert Component, Insert STEP
 - `tab:plastic`: Assign Plastic Rule, User Coordinate System, Environmental Map Analysis, Design Advice, Insert Component, Insert STEP
-- `tab:utilities`: Export, Export Everything, Add-on Manager, AI, Add an AI App, AI Chat, AI Activity, FreeCAD Tools, Project and Recovery Settings, Version History, Recover Documents, Save As, SciForge Diagnostics, Report a Problem, Command Search
+- `tab:utilities`: Export, Export Everything, Add-on Manager, AI, Add an AI App, AI Chat, AI Activity, Rebuild with Timeline (AI)..., Compare with Reference, Finish Rebuild, FreeCAD Tools, Project and Recovery Settings, Version History, Recover Documents, Save As, SciForge Diagnostics, Report a Problem, Command Search
 - `tab:sketch`: Isoparametric Curve, Environmental Map Analysis, Insert Component, Insert STEP, Toggle Construction
 - `tab:drawing`: Bend Note, Bend Table
 - `tab:flat_pattern`: Environmental Map Analysis
@@ -326,7 +326,7 @@ not cover, or a name the alias file should map. Greyed entries are left out.
 - `browser:view`: Go to View
 - `browser:origin`: Create Sketch
 - `browser:component`: Move to Component
-- `browser:body`: Activate Body, Ground, Paste, Move to Component
+- `browser:body`: Activate Body, Rebuild with Timeline (AI)..., Ground, Paste, Move to Component
 - `browser:joint`: Rename
 - `browser:rigid_group`: Rename
 - `browser:motion_link`: Edit Motion Link, Suppress, Find in Timeline, Rename, Delete
@@ -334,7 +334,7 @@ not cover, or a name the alias file should map. Greyed entries are left out.
 - `browser:motion_study`: Edit Motion Study, Rename, Delete
 - `browser:joint_origin`: Rename
 - `browser:sketch_curves`: Show/Hide, Find in Window, Delete
-- `browser:mesh_body`: Edit Feature, Opacity Control, Find in Timeline, Rename
+- `browser:mesh_body`: Rebuild with Timeline (AI)..., Edit Feature, Opacity Control, Find in Timeline, Rename
 - `browser:canvas`: Rename
 - `browser:analysis`: Rename
 - `browser:decal`: Find in Window, Rename
