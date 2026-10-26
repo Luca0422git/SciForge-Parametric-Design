@@ -177,3 +177,19 @@ sections Engine and Benchmarks.
   refuses. The study's bodies share their faces through the general fuse, so the mesh needs no
   merging: it is off now (every benchmark gives the same nodes and numbers; the plate solves,
   its tip between beam and plate theory: engine check "a thin plate at a fine mesh").
+- 22:35-23:00 awkward shapes (scratch "torture" run: a 1 mm-wall tube, an L bracket with a
+  1 mm fillet, a sphere, a box with a 0.01 mm step):
+  - The tube fixed at its end ring was refused as "not held enough: it could still turn about
+    an axis along X": the held-enough check sampled the ring with a grid over its parameter
+    square, which missed the 1 mm ring entirely, leaving its two seam corners on one line.
+    Faces are now also sampled along their edges.
+  - The L bracket's L-shaped end face "lost what it was on" at the solve: every probe spot
+    and the centre of mass of the L lay outside it. More spots, then points along its edges.
+  - The tube at the default size (20 mm elements, 1 mm wall) failed in Gmsh ("a segment and a
+    facet intersect": the two walls' coarse triangles crossed) and in Netgen. SciForge now
+    meshes again with elements half as big (at most twice) when Gmsh's surface mesh crosses
+    itself, with a note; the failure sentence says thin walls need smaller elements (it said
+    "larger"); Gmsh's error summary lines are no longer quoted as the reason.
+  - A note when many elements are stretched far past the aspect ratio limit (the tube: 789 of
+    2192, the worst 131:1; its axial stiffness is then 11 % too high).
+  Engine checks "a thin tube at the default mesh"; unit tests for the new rules.

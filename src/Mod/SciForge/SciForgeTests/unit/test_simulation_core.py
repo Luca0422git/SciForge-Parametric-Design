@@ -477,6 +477,17 @@ class ProgramText(unittest.TestCase):
         self.assertIn("something odd", other)
         self.assertNotIn("a b", other)  # the last four lines only
 
+    def test_mesh_quality_note(self):
+        fine = {"worst_aspect": 15.2, "over_limit": 6, "elements": 73561}
+        self.assertIsNone(core.mesh_quality_note(fine, 10))
+        thin = {"worst_aspect": 131.3, "over_limit": 40, "elements": 2400}
+        note = core.mesh_quality_note(thin, 10)
+        self.assertIn("40 of the 2400", note)
+        self.assertIn("131", note)
+        many = {"worst_aspect": 20.0, "over_limit": 50, "elements": 1000}
+        self.assertIsNotNone(core.mesh_quality_note(many, 10))
+        self.assertIsNone(core.mesh_quality_note({}, 10))
+
     def test_gmsh_errors(self):
         out = (
             "Info    : Meshing 2D...\n"
@@ -488,6 +499,19 @@ class ProgramText(unittest.TestCase):
         self.assertEqual(len(errors), 2)
         self.assertEqual(numbers, [12, 15])
         self.assertEqual(core.gmsh_errors(""), ([], []))
+        summary = (
+            "Error   : PLC Error:  A segment and a facet intersect at point\n"
+            "Error   : Invalid boundary mesh (segment-facet intersection) on surface 4\n"
+            "Error   : ------------------------------\n"
+            "Error   : Mesh generation error summary\n"
+            "Error   :     2 errors\n"
+            "Error   : Check the full log for details\n"
+        )
+        errors, numbers = core.gmsh_errors(summary)
+        self.assertEqual(len(errors), 2)  # (the summary lines are no reasons)
+        self.assertEqual(numbers, [4])
+        self.assertTrue(core.mesh_crossed_itself(summary))
+        self.assertFalse(core.mesh_crossed_itself("Error   : No elements in volume 1"))
 
     def test_contact_types(self):
         self.assertTrue(core.contact_type_available("bonded"))

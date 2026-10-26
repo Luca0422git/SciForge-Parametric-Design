@@ -1173,6 +1173,37 @@ def check_thin_plate(doc, out):
     )
 
 
+@engine_check("a thin tube at the default mesh")
+def check_thin_tube(doc, out):
+    """A steel tube 50 mm across with a 1 mm wall, 200 mm long, pushed along its axis: at the
+    default element size (20 mm) Gmsh's surface mesh of the two walls crossed itself and the
+    solve failed. SciForge meshes again with smaller elements and says so, and says that the
+    elements across the wall are stretched (the result is a guide: 11 % stiff here)."""
+    import Part
+
+    from sciforge import simulation as sim
+
+    tube = Part.makeCylinder(25, 200).cut(Part.makeCylinder(24, 200))
+    body = make_body(doc, tube, "Tube")
+    study = sim.create_study(doc)
+    sim.add_item(
+        study, "constraint", "fixed", [(body, one_face(body, lambda f: near(f.CenterOfMass.z, 0)))]
+    )
+    sim.add_item(
+        study,
+        "load",
+        "force",
+        [(body, one_face(body, lambda f: near(f.CenterOfMass.z, 200)))],
+        {"direction": "vector", "vector": [0, 0, -1], "magnitude": 100.0},
+    )
+    job = sim.Job(study)
+    job.wait(600)
+    out.append(("solved", job.state == "done", job.message))
+    notes = " ".join(job.notes)
+    out.append(("a note: the elements were made smaller", "times smaller" in notes, job.notes))
+    out.append(("a note: stretched elements across the wall", "stretched" in notes, job.notes))
+
+
 @engine_check("a change while it solves")
 def check_change_during(doc, out):
     """The results are of the study as the solve started: a load changed while CalculiX runs
