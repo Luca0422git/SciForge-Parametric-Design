@@ -344,6 +344,29 @@ def _verdict(stats, bodies_out, target):
     return low, body, at, text
 
 
+def _window_alive():
+    """With the window up: a function that lets it repaint and run its timers while a solve
+    runs from the AI (no mouse or keys, so nothing can change the design under the solve);
+    None without a window."""
+    try:
+        import FreeCAD as App
+
+        if not App.GuiUp:
+            return None
+        from PySide import QtCore
+    except Exception:
+        return None
+    loop = QtCore.QEventLoop
+    flags = getattr(loop, "ExcludeUserInputEvents", None)
+    if flags is None:
+        flags = loop.ProcessEventsFlag.ExcludeUserInputEvents
+
+    def idle():
+        QtCore.QCoreApplication.processEvents(flags, 30)
+
+    return idle
+
+
 @action("solve_study")
 def solve_study(ctx, args):
     sim = _sim()
@@ -351,7 +374,7 @@ def solve_study(ctx, args):
     study = _study(ctx, args.get("study"))
     timeout = float(args.get("timeout", 600))
     job = sim.Job(study)
-    state = job.wait(timeout)
+    state = job.wait(timeout, idle=_window_alive())
     if state != "done":
         raise UserError("Not solved: %s" % job.message)
     summary = job.summary

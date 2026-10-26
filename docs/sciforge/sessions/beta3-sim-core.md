@@ -158,3 +158,7 @@ sections Engine and Benchmarks.
   without the change).
 - 22:00 a study material later deleted from the materials made the study fall back to the
   body's own material without a word; the pre-check now warns (engine check).
+- 22:05 solve_study from the AI froze the window for the whole solve (the AI's tools run on the
+  window's thread). It now lets the window repaint and run its timers while the solve's
+  programs work (`Job.wait(timeout, idle=...)`; no mouse or keys meanwhile, so nothing changes
+  the design under it). GUI scenario sim_core_job step F: 38 timer ticks during a 5.8 s solve.

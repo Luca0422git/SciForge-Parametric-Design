@@ -2496,14 +2496,21 @@ class Job:
             return self._stop("failed", "The solve failed: %s" % exc)
         return self.state
 
-    def wait(self, timeout=None):
-        """Run to the end on this thread (scripts, tests, the AI)."""
+    def wait(self, timeout=None, idle=None):
+        """Run to the end on this thread (scripts, tests, the AI). idle(): called between the
+        turns while the background thread works (the AI's solve keeps the window painted
+        with it)."""
         end = None if timeout is None else time.time() + timeout
         while self.poll() == "running":
             if end is not None and time.time() > end:
                 self.cancel()
                 self.poll()
                 return self._stop("failed", "The solve took longer than %d s." % timeout)
+            if idle is not None:
+                try:
+                    idle()
+                except Exception:
+                    pass
             if self._thread is not None:
                 self._thread.join(0.05)
         return self.state
