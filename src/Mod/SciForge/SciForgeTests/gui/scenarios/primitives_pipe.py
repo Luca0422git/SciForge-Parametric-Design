@@ -103,7 +103,7 @@ def after_finish():
     h.fit()
 
 
-# -- Pipe, nothing selected ------------------------------------------------------------------------
+# -- Pipe, nothing selected --------------------------------------------------------------------------
 def pipe_start():
     h.check("nothing selected", not Gui.Selection.getSelectionEx())
     pi.menu("Pipe")
@@ -311,7 +311,7 @@ def pipe_edited():
     h.fit()
 
 
-# -- second use: along a model edge, from a selection ----------------------------------------------
+# -- second use: along a model edge, from a selection --------------------------------------------------
 def box_start():
     h.click_empty()
     pi.menu("Box")
@@ -389,7 +389,7 @@ def pipe2_kept():
     s["count"] = len(App.ActiveDocument.Objects)
 
 
-# -- Cancel and Esc --------------------------------------------------------------------------------
+# -- Cancel and Esc ------------------------------------------------------------------------------------------
 def cancel_start():
     h.click_empty()
     pi.menu("Pipe")
@@ -440,7 +440,7 @@ def formula_follows():
     )
 
 
-# -- Delete shows the path sketch again (Fusion) ---------------------------------------------------
+# -- Delete shows the path sketch again (Fusion) ----------------------------------------------------
 def delete_pipe1():
     h.check("the path sketch is hidden (used)", not s["sketch"].ViewObject.Visibility)
     hs.timeline_menu("Pipe 1", "Delete")

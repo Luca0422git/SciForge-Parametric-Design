@@ -325,7 +325,7 @@ def redone():
     h.fit()
 
 
-# -- 3. a construction line, Join impossible, New Body ---------------------------------------------
+# -- 3. a construction line, Join impossible, New Body ------------------------------------------------
 def sketch_ring():
     h.click_empty()
     h.ribbon("Create Sketch")

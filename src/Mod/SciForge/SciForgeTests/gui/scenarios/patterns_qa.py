@@ -119,7 +119,7 @@ def after_undo_inside():
     )
 
 
-# -- 4. pattern type changed after a preview -------------------------------------------------------
+# -- 4. pattern type changed after a preview ----------------------------------------------------------
 def switch_start():
     start_rect()
 
@@ -172,7 +172,7 @@ def after_switch_cancel():
     h.check("Cancel: one hole, no pattern", ps.close(h.solid_volume(), ONE) and not ps.patterns())
 
 
-# -- 5. a pattern, a pattern of the body, deleted from the timeline --------------------------------
+# -- 5. a pattern, a pattern of the body, deleted from the timeline --------------------------------------
 def make_start():
     start_rect()
 

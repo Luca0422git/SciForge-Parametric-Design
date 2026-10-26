@@ -46,7 +46,7 @@ def panel():
     return st.panel("sweep")
 
 
-# -- the box ---------------------------------------------------------------------------------------
+# -- the box -----------------------------------------------------------------------------------------
 def new_design():
     Gui.activateWorkbench("SciForgeWorkbench")
     App.newDocument("SweepCut")
@@ -99,7 +99,7 @@ def box_made():
     h.ribbon("Create Sketch")
 
 
-# -- the profile on YZ and the path on XZ ----------------------------------------------------------
+# -- the profile on YZ and the path on XZ -------------------------------------------------------------
 def pick_yz():
     pl.click_square("YZ_Plane")  # where the square shows (was 0, 12, 22)
 

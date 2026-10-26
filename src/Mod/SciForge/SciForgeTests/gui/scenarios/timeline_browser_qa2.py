@@ -205,7 +205,7 @@ def p7_back():
     h.check("nothing red or yellow", all(v[1] == "ok" for v in st.values()), st)
 
 
-# -- Path 8: rename with command letters -----------------------------------------------------------
+# -- Path 8: rename with command letters ----------------------------------------------------------------
 def p8_rename():
     t.click("Fillet 1")
     w.key(t.button("Fillet 1"), QtCore.Qt.Key_F2)
@@ -252,7 +252,7 @@ def p8_esc_kept():
     h.check("Esc did not close anything else", not t.dialog_open())
 
 
-# -- Path 9: delete two steps with the Delete key --------------------------------------------------
+# -- Path 9: delete two steps with the Delete key ---------------------------------------------------------
 def p9_select():
     t.click("Sketch 2")
     t.click("Extrude 2", QtCore.Qt.ControlModifier)
@@ -289,7 +289,7 @@ def p9_restored():
     h.check("nothing red or yellow", all(v[1] == "ok" for v in st.values()), st)
 
 
-# -- Path 10: a visible sketch after the marker ----------------------------------------------------
+# -- Path 10: a visible sketch after the marker ---------------------------------------------------------
 def p10_show_sketch():
     t.click_eye(t.obj("Sketch 2").Label)
 
@@ -315,7 +315,7 @@ def p10_end():
     t.click_eye(t.obj("Sketch 2").Label)
 
 
-# -- Path 11: save, close, reopen ------------------------------------------------------------------
+# -- Path 11: save, close, reopen ----------------------------------------------------------------------------
 def p11_save():
     s["path"] = os.path.join(tempfile.mkdtemp(), "timeline_qa2.FCStd")
     s["titles"] = t.titles()

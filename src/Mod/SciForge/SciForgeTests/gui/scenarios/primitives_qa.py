@@ -55,7 +55,7 @@ def doc():
     return App.ActiveDocument
 
 
-# -- A: a parameter in a field, Enter --------------------------------------------------------------
+# -- A: a parameter in a field, Enter ---------------------------------------------------------------
 def new_design():
     from sciforge import parameters
 
@@ -154,7 +154,7 @@ def b_undone():
     h.check("the box is still there", s["box"].Document.getObject(s["box"].Name) is not None)
 
 
-# -- C: a cylinder on the box, edits ---------------------------------------------------------------
+# -- C: a cylinder on the box, edits ------------------------------------------------------------------
 def c_select_top():
     h.click(V(20, 5, 10))
 
@@ -273,7 +273,7 @@ def c_kept():
     h.fit()
 
 
-# -- D: intersect pipe, coil in a new body, save / reopen, delete ----------------------------------
+# -- D: intersect pipe, coil in a new body, save / reopen, delete ------------------------------------
 def d_edge():
     h.click_edge(V(20, 0, 20))
 

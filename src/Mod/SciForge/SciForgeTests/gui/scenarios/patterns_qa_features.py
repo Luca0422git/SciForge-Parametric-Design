@@ -50,7 +50,7 @@ def broken():
     return [o.Label for o in doc().Objects if set(o.State) & {"Invalid", "Error"}]
 
 
-# -- the boss with its hole ------------------------------------------------------------------------
+# -- the boss with its hole --------------------------------------------------------------------------
 def boss_hole_sketch():
     h.fit()
     h.ribbon("Create Sketch")
@@ -91,7 +91,7 @@ def boss_hole_made():
     s["v"] = h.solid_volume()
 
 
-# -- Path 14: two steps patterned together ---------------------------------------------------------
+# -- Path 14: two steps patterned together --------------------------------------------------------------
 def p14_start():
     Gui.Selection.clearSelection()
     h.ribbon("Rectangular Pattern")
@@ -155,7 +155,7 @@ def p14_done():
     s["v"] = h.solid_volume()
 
 
-# -- Path 15: a Faces pattern follows the hole it copies -------------------------------------------
+# -- Path 15: a Faces pattern follows the hole it copies ------------------------------------------------
 def p15_wall():
     Gui.Selection.clearSelection()
     h.fit()
@@ -215,7 +215,7 @@ def p15_followed():
     s["v"] = h.solid_volume()
 
 
-# -- Path 16: a fillet's round face as Faces -------------------------------------------------------
+# -- Path 16: a fillet's round face as Faces ------------------------------------------------------------
 def p16_fillet():
     Gui.Selection.clearSelection()
     h.ribbon("Fillet")
@@ -283,7 +283,7 @@ def p16_cancelled():
     )
 
 
-# -- Path 17: a pattern of the body, the body deleted ----------------------------------------------
+# -- Path 17: a pattern of the body, the body deleted -----------------------------------------------------
 def p17_start():
     Gui.Selection.clearSelection()
     h.ribbon("Rectangular Pattern")

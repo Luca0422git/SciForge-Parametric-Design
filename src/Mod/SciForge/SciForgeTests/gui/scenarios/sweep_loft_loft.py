@@ -146,7 +146,7 @@ def plane_hidden():
     h.check("the plane is hidden", not s["plane"].ViewObject.Visibility)
 
 
-# -- the loft --------------------------------------------------------------------------------------
+# -- the loft ----------------------------------------------------------------------------------------
 def loft_start():
     h.fit()
     h.click_empty()

@@ -374,7 +374,7 @@ def tat_made():
     s.eye("Plane7")
 
 
-# -- Plane Along Path ------------------------------------------------------------------------------
+# -- Plane Along Path --------------------------------------------------------------------------------
 def path_start():
     h.click_empty()
     s.menu("CONSTRUCT", "Plane Along Path")

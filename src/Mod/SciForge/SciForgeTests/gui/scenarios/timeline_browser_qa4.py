@@ -168,7 +168,7 @@ def p19_end():
     h.check("box and boss", t.near(t.volume(), BOX + BOSS), t.volume())
 
 
-# -- Path 20: double-click a feature while a sketch is open ----------------------------------------
+# -- Path 20: double-click a feature while a sketch is open ------------------------------------------
 def p20_open_sketch():
     t.double_click("Sketch 1")
 
@@ -190,7 +190,7 @@ def p20_cancelled():
     h.check("no dialog", not t.dialog_open())
 
 
-# -- Path 21: rename, Ctrl+Z, Ctrl+Y ---------------------------------------------------------------
+# -- Path 21: rename, Ctrl+Z, Ctrl+Y --------------------------------------------------------------------
 def p21_rename():
     t.menu("Extrude 2", "Rename")
 
@@ -219,7 +219,7 @@ def p21_redone():
     h.check("Ctrl+Y: Boss again", t.titles()[-1] == "Boss", t.titles())
 
 
-# -- Path 22: Roll History Marker Here on a sketch, then new steps ---------------------------------
+# -- Path 22: Roll History Marker Here on a sketch, then new steps -----------------------------------------
 def p22_roll_here():
     t.menu("Sketch 2", "Roll History Marker Here")
 
@@ -274,7 +274,7 @@ def p22_end():
     h.check("box and boss", t.near(t.volume(), BOX + BOSS), t.volume())
 
 
-# -- Path 23: delete the first extrude -------------------------------------------------------------
+# -- Path 23: delete the first extrude ----------------------------------------------------------------------
 def p23_delete():
     t.menu("Extrude 1", "Delete")
 
@@ -301,7 +301,7 @@ def p23_undone():
     h.check("nothing yellow or red", all(v[1] == "ok" for v in st.values()), st)
 
 
-# -- Path 25: hover a step -------------------------------------------------------------------------
+# -- Path 25: hover a step ------------------------------------------------------------------------------------
 def hover_nodes():
     """Names of the highlight nodes in the 3D view's scene (looked up fresh)."""
     sg = Gui.ActiveDocument.ActiveView.getSceneGraph()
@@ -347,7 +347,7 @@ def p25_sketch():
     w.move(h.gl_widget(), QtCore.QPoint(200, 200))
 
 
-# -- Path 24: a long design ------------------------------------------------------------------------
+# -- Path 24: a long design -----------------------------------------------------------------------------------
 def p24_many_steps():
     """60 more steps (posts on the box), made in code: what is tested is the timeline."""
     from sciforge import commands, extrude, sketch_ui

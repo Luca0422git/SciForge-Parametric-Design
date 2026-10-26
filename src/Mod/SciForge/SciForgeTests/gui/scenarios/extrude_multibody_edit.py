@@ -359,7 +359,7 @@ def b_kept():
     check_volumes("B: 9 deep, Body2 kept its cut while hidden", 3100, 1636)
 
 
-# -- D: a body wholly inside the cut is used up ----------------------------------------------------
+# -- D: a body wholly inside the cut is used up -----------------------------------------------------
 def d_sketch():
     h.click_empty()
     h.fit()
@@ -474,7 +474,7 @@ def d_box2_title():
     h.check("D: Body2's box step found", state["box2"] is not None, titles)
 
 
-# -- E: speed on a detailed part -------------------------------------------------------------------
+# -- E: speed on a detailed part ---------------------------------------------------------------------
 def e_setup():
     import FreeCADGui as Gui
 
