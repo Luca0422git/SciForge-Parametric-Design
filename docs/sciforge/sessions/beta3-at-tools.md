@@ -135,7 +135,8 @@ at-recognize's (0.06 to 6.5 s).
   parts, smoke 79, journey 25, restart 8 + 9.
 - After the merge: the whole unit suite 2537 OK (11 skipped without FreeCAD); rebuild e2e 68,
   through MCP 14; the runner's rebuild session 32 results; docs runner on the recipe (32
-  calls), troubleshooting (59), the four tools' examples: all pass; scenarios below.
+  calls), troubleshooting (59), the four tools' examples: all pass; `run_tests.sh --only
+  recognize` (at-recognize's bench) 48 parts, 0 failed; scenarios below.
 - Scenarios of the areas touched (run alone or in small groups): ai_bridge 44, ai_chat 20,
   ai_docs_gui 18, ai_panel 27, ai_tools_gui 38, browser_opacity_hover 46,
   marking_menu_command 31, timeline_browser 92: PASS; rebuild_start 70,
