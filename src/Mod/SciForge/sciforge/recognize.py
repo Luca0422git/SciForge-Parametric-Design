@@ -261,12 +261,6 @@ def summary(shape):
     """Volume, area, box, counts and the census of surface kinds."""
     from .ai.ops import selectors
 
-    try:
-        box = shape.optimalBoundingBox(False, False)
-        if not box.isValid():
-            box = shape.BoundBox
-    except Exception:
-        box = shape.BoundBox
     surfaces = {}
     for face in shape.Faces:
         try:
@@ -274,6 +268,14 @@ def summary(shape):
         except Exception:
             kind = "other"
         surfaces[kind] = surfaces.get(kind, 0) + 1
+    box = shape.BoundBox
+    if set(surfaces) - {"plane", "cylinder", "cone", "sphere", "torus"}:
+        try:  # (FreeCAD's quick box holds a free-form face's control points: measure it)
+            tight = shape.optimalBoundingBox(False, False)
+            if tight.isValid():
+                box = tight
+        except Exception:
+            pass
     try:
         volume = shape.Volume
     except Exception:
@@ -1803,9 +1805,18 @@ class _Reader:
             by_radius.setdefault(b["radius"], []).append(b)
         radii = sorted(by_radius, key=lambda r: -r)
         groups = [by_radius[r] for r in radii]
+        first_shape = None
         for k, group in enumerate(groups):
             later = [b for g in groups[k:] for b in g]
-            shape = self._defeature(later)
+            earlier = [b for g in groups[:k] for b in g]
+            if k and first_shape is not None and not self._touch(group, earlier):
+                # the earlier fillets do not touch these: their edges are the same on the
+                # part without any fillet (one defeaturing less: ~0.1 s per face)
+                shape = first_shape
+            else:
+                shape = self._defeature(later)
+            if k == 0:
+                first_shape = shape
             edges = self._sharp_edges(shape, group) if shape is not None else []
             sel = self._edge_selector(shape, edges) if edges else None
             fids = [b["id"] for b in group]
@@ -1848,6 +1859,43 @@ class _Reader:
                     }
                 )
 
+    def _touch(self, groups_a, groups_b):
+        """Whether a face of one set of blends shares a corner with a face of the other."""
+        corners = set()
+        for g in groups_b:
+            for i in g["_faces"]:
+                for v in self.facts[i].face.Vertexes:
+                    corners.add(v.hashCode())
+        for g in groups_a:
+            for i in g["_faces"]:
+                for v in self.facts[i].face.Vertexes:
+                    if v.hashCode() in corners:
+                        return True
+        return False
+
+    def _shape_index(self, shape):
+        """(faces, coarse surface keys, edge hash -> face indexes) of a shape, made once."""
+        cache = self.__dict__.setdefault("_indexes", {})
+        found = cache.get(id(shape))
+        if found is not None and found[0] is shape:
+            return found[1]
+        faces = shape.Faces
+        keys = [_coarse_key(f) for f in faces]
+        owners = {}
+        for fi, face in enumerate(faces):
+            for e in face.Edges:
+                lst = owners.setdefault(e.hashCode(), [])
+                if fi not in lst:
+                    lst.append(fi)
+        cache[id(shape)] = (shape, (faces, keys, owners))
+        return faces, keys, owners
+
+    def _key_of(self, i):
+        f = self.facts[i]
+        if not hasattr(f, "_coarse"):
+            f._coarse = _coarse_key(f.face)
+        return f._coarse
+
     def _sharp_edges(self, shape, group):
         """Names of the edges of `shape` (the part without these blends) where the blends
         were: for each blend face, the edge between the two faces it joined (the faces it is
@@ -1863,25 +1911,28 @@ class _Reader:
                 joined = [j for j in self.topo.tangent_neighbours(i) if j not in g["_faces"]]
                 if len(joined) >= 2:
                     pairs.append((i, joined, reach))
-        edge_owner = {}
-        for fi, face in enumerate(shape.Faces):
-            for e in face.Edges:
-                owners = edge_owner.setdefault(e.hashCode(), [])
-                if fi not in owners:
-                    owners.append(fi)
+        faces, keys, owners = self._shape_index(shape)
+        by_key = {}  # coarse key -> [(pair number, joined face)]
+        for n, (_i, joined, _reach) in enumerate(pairs):
+            for j in joined:
+                by_key.setdefault(self._key_of(j), []).append((n, j))
         names = []
         for ei, edge in enumerate(shape.Edges, start=1):
-            owners = edge_owner.get(edge.hashCode(), [])
-            if len(owners) != 2:
+            own = owners.get(edge.hashCode(), [])
+            if len(own) != 2:
                 continue
-            fa, fb = shape.Faces[owners[0]], shape.Faces[owners[1]]
+            a, b = own
+            on_a = by_key.get(keys[a])
+            on_b = by_key.get(keys[b])
+            if not on_a or not on_b:
+                continue
+            both = sorted({n for n, _j in on_a} & {n for n, _j in on_b})
             mid = None
-            for i, joined, reach in pairs:
-                sa = any(_same_surface(self.facts[j].face, fa) for j in joined)
-                if not sa:
+            for n in both:
+                i, _joined, reach = pairs[n]
+                if not any(_same_surface(self.facts[j].face, faces[a]) for m, j in on_a if m == n):
                     continue
-                sb = any(_same_surface(self.facts[j].face, fb) for j in joined)
-                if not sb:
+                if not any(_same_surface(self.facts[j].face, faces[b]) for m, j in on_b if m == n):
                     continue
                 if mid is None:
                     try:
@@ -2034,6 +2085,34 @@ def _inner_uv(face):
     except Exception:
         u0, u1, v0, v1 = face.ParameterRange
         return 0.5 * (u0 + u1), 0.5 * (v0 + v1)
+
+
+def _coarse_key(face):
+    """A coarse key of a face's surface (kind, direction and size at 2 decimals): faces on
+    one surface share it (checked exactly afterwards with _same_surface)."""
+    kind = _face_kind(face)
+    try:
+        if kind == "bspline":
+            flat = _flat_normal(face)
+            if flat is None:
+                return ("bspline", id(face))
+            d = core.canonical_direction(flat)
+            h = core.dot(_t(face.Vertexes[0].Point), d)
+            return ("plane",) + tuple(round(c, 2) + 0.0 for c in d) + (round(h, 1) + 0.0,)
+        s = face.Surface
+        if kind == "plane":
+            d = core.canonical_direction(_t(s.Axis))
+            h = core.dot(_t(s.Position), d)
+            return ("plane",) + tuple(round(c, 2) + 0.0 for c in d) + (round(h, 1) + 0.0,)
+        if kind in ("cylinder", "cone", "torus"):
+            d = core.canonical_direction(_t(s.Axis))
+            size = s.Radius if kind == "cylinder" else (s.MajorRadius if kind == "torus" else 0.0)
+            return (kind,) + tuple(round(c, 2) + 0.0 for c in d) + (round(size, 1) + 0.0,)
+        if kind == "sphere":
+            return ("sphere", round(s.Radius, 1) + 0.0)
+    except Exception:
+        pass
+    return (kind, id(face))
 
 
 def _surface_key(face):

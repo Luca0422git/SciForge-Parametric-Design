@@ -638,6 +638,76 @@ def bench_mesh(model_id, folder):
     return row
 
 
+def bench_contract():
+    """The contract's promises: only a missing shape is an error; anything else answers the
+    dict (what cannot be read in notes / unrecognized); the options work."""
+    import FreeCAD as App
+    import Mesh
+    import Part
+
+    from sciforge import recognize, recognize_mesh
+    from sciforge.ai import catalog
+
+    row = {"id": "contract and odd shapes", "status": "fail", "problems": [], "checks": 0}
+    start = time.time()
+    keys = ("summary", "base", "features", "plan", "unrecognized", "confidence", "notes")
+
+    def check(condition, words):
+        row["checks"] += 1
+        if not condition:
+            row["problems"].append(words)
+
+    def answers(shape, options=None):
+        try:
+            out = recognize.describe(shape, options)
+        except Exception as exc:
+            row["problems"].append("describe raised %s: %s" % (type(exc).__name__, exc))
+            return None
+        check(all(k in out for k in keys), "a key is missing: %s" % sorted(out))
+        for step in out.get("plan", []):
+            for sentence in catalog.validate(step["tool"], step["args"]):
+                row["problems"].append("plan step %s: %s" % (step["step"], sentence))
+        return out
+
+    try:
+        for bad in (None, Part.Shape()):
+            try:
+                recognize.describe(bad)
+                check(False, "describe(%r) did not refuse" % (bad,))
+            except recognize.RecognizeError:
+                check(True, "")
+        box = Part.makeBox(40, 20, 10)
+        out = answers(Part.makeShell(box.Faces))  # faces, no solid
+        check(out is not None and out["base"]["kind"] == "none", "a shell has a base")
+        check(out is not None and out["notes"], "a shell without notes")
+        two = Part.makeCompound([box, Part.makeBox(5, 5, 5, App.Vector(100, 0, 0))])
+        out = answers(two)
+        check(out is not None and "2 solids" in " ".join(out["notes"]), "two solids not said")
+        check(out is not None and out["base"]["kind"] == "extrude", "two solids: no base")
+        out = answers(Part.makeSphere(10))
+        check(out is not None and out["base"]["kind"] in ("revolve", "none"), "sphere misread")
+        out = answers(box, {"detail": "summary"})
+        check(out is not None and out["plan"] == [] and out["summary"]["faces"] == 6, "summary")
+        out = answers(box, {"max_features": 0})
+        check(out is not None and out["features"] == [], "max_features 0")
+        out = answers(box, {"taken_ids": ["Sketch1", "Extrude1"]})
+        ids = [st.get("id") for st in (out or {}).get("plan", [])]
+        check(ids[:2] == ["Sketch2", "Extrude2"], "taken_ids not used: %s" % ids)
+        open_mesh = Mesh.Mesh(box.tessellate(0.1))
+        open_mesh.removeFacets([0])  # (a hole in the mesh: no solid)
+        try:
+            out = recognize_mesh.describe_mesh(open_mesh)
+            check(out["base"]["kind"] == "none" and out["notes"], "an open mesh was read")
+        except Exception as exc:
+            check(False, "describe_mesh raised %s: %s" % (type(exc).__name__, exc))
+    except Exception as exc:
+        row["problems"].append("%s: %s" % (type(exc).__name__, exc))
+        row["traceback"] = traceback.format_exc()
+    row["seconds"] = round(time.time() - start, 3)
+    row["status"] = "pass" if not row["problems"] else "fail"
+    return row
+
+
 def markdown(report):
     lines = [
         "# Auto Timeline recognition benchmark",
@@ -735,6 +805,14 @@ def main():
         App.Console.PrintMessage(
             "[SciForge] recognize %s %s %s\n"
             % (row["status"].upper(), model_id, "; ".join(row["problems"])[:600])
+        )
+    if not text_filter or text_filter in "contract":
+        row = bench_contract()
+        report["results"].append(row)
+        _write(report, out_dir)
+        App.Console.PrintMessage(
+            "[SciForge] recognize %s %s %s\n"
+            % (row["status"].upper(), row["id"], "; ".join(row["problems"])[:600])
         )
     for model_id in MESH_BENCH:
         if text_filter and text_filter not in model_id and text_filter != "mesh":

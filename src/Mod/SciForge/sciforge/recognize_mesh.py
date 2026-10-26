@@ -47,7 +47,19 @@ def describe_mesh(mesh, options=None):
     from . import insert
 
     try:
+        closed = mesh.isSolid()
+    except Exception:
+        closed = True
+    if not closed:
+        return _empty(
+            mesh,
+            "The mesh is not closed (it has holes or loose triangles), so it is no solid and "
+            "cannot be read: repair it first (MESH tab > Repair), then try again.",
+        )
+    try:
         faceted = insert.solid_from_mesh(mesh, "Prismatic")
+        if not faceted.isValid() or not all(sh.isClosed() for sh in faceted.Shells):
+            raise ValueError("the triangles do not close into a valid solid")
     except Exception as exc:
         out = _empty(mesh, "The mesh could not become a solid: %s" % exc)
         return out
