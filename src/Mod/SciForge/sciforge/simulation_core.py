@@ -1078,7 +1078,11 @@ def solver_failure(output):
             "Remove rigid body modes if the loads balance each other."
         )
     if "nonpositive jacobian" in text or "negative jacobian" in text:
-        return "The mesh has distorted elements: make the Average Element Size smaller."
+        return (
+            "The mesh has distorted elements CalculiX cannot use (large elements at thin walls "
+            "or tight curves): try a smaller Average Element Size, or a Local Mesh Control on "
+            "the thin or curved faces."
+        )
     if (
         "dependent dof" in text
         or "is used as dependent" in text
@@ -1280,7 +1284,7 @@ def precheck(summary):
     "constraints": [(kind, picks count, suppressed)], "loads": [...], "gravity": bool,
     "safety_basis", "lost": [item labels whose picks are gone], "loose": [bodies held by
     nothing], "overlaps": [(body, body, volume mm3)], "twice": [(item, item)] constrained on
-    the same face, "remove_rigid": bool}"""
+    the same face, "remove_rigid": bool, "order": "parabolic" | "linear"}"""
     out = []
     bodies = summary.get("bodies") or []
     remove_rigid = bool(summary.get("remove_rigid"))
@@ -1360,6 +1364,17 @@ def precheck(summary):
                 "warning",
                 "%s and %s constrain the same face: where they ask for different things, "
                 "%s wins." % (a, b, a),
+            )
+        )
+    if summary.get("order") == "linear" and bodies:
+        # (measured: a cantilever bends 0.082 mm instead of 0.200 at the default size, 0.161
+        # at 3 %; parabolic: 0.1995)
+        out.append(
+            (
+                "warning",
+                "Linear elements are much too stiff where a part bends: a beam bends about half "
+                "as much as it should at the default mesh size. Use Parabolic (the default) "
+                "unless the mesh is very fine.",
             )
         )
     return out

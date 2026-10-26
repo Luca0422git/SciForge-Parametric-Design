@@ -141,3 +141,39 @@ sections Engine and Benchmarks.
   the general fuse's own history says which body each piece came from (exact and instant), and
   the model stage is two turns (pre-check, then the model). The same stack at the default mesh
   needs over 6 GB in CalculiX (stopped after 9 minutes): a big model is still big.
+- 21:20-21:40 integration check (nothing merged): `sf/sim-results` (which holds sim-ui's work
+  too) exported to a scratch folder with this branch's `simulation.py` / `simulation_core.py`
+  on top: the simulation unit tests (129) and eight of their GUI scenarios pass
+  (sim_setup_bracket 74, sim_setup_components 36, sim_setup_kinds 52, simres_cantilever 80,
+  simres_out_of_date 32, simres_reopen 21, simres_adaptive 16, simres_inspect 93 checks).
+- 21:40-21:50 a design saved while a solve ran kept that solve's half-made run (its mesh too)
+  in the file for good: nothing linked it, nothing removed it. A solve now removes such left
+  overs first (objects of a solve that no study links and no running job is making; engine
+  check "a design saved while it solves").
+- 21:50-22:00 an undo step someone opened between two turns of a solve (a command run between
+  the timer's ticks) took in what the next turn made (the result objects, the mesh): undoing it
+  took the results away. Every turn now closes such a step first (keeping it), except when a
+  cancel removes a run (a dialog's own step must stay open for its Cancel; sim-ui does not
+  poll while a dialog is open). Engine check "undo steps opened while it solves" (fails
+  without the change).
+- 22:00 a study material later deleted from the materials made the study fall back to the
+  body's own material without a word; the pre-check now warns (engine check).
+- 22:05 solve_study from the AI froze the window for the whole solve (the AI's tools run on the
+  window's thread). It now lets the window repaint and run its timers while the solve's
+  programs work (`Job.wait(timeout, idle=...)`; no mouse or keys meanwhile, so nothing changes
+  the design under it). GUI scenario sim_core_job step F: 38 timer ticks during a 5.8 s solve.
+- 22:10 the model turn of the plate fixed at its 120 holes took 7.6 s: mapping each pick onto
+  the model asked every model face for its box (120 x 366 times). The model's faces and boxes
+  are now listed once per solve: 3.3 s.
+- 22:15 linear elements: the steel cantilever bends 0.082 mm at the default mesh (beam theory
+  0.200; 0.161 at 3 %): linear tetrahedra lock in bending, as everywhere. The pre-check now
+  warns when a study uses them (Fusion's help says parabolic is the accurate choice).
+  Integration again with the latest engine: sim_setup_dialogs 76, sim_setup_workspace 43,
+  simres_linear 27 checks pass.
+- 22:20-22:35 a 3 mm plate (200 x 100 mm) at 2 % mesh failed: "distorted elements". Gmsh left
+  a flat sliver element (corners nearly in one plane, 0.0002 mm3), and FreeCAD's "Coherence
+  Mesh" (merge nodes closer than a millionth of the model's size, 0.0002 mm here) made its two
+  diagonals' middles (0.00006 mm apart) one node: an element with a node twice, which CalculiX
+  refuses. The study's bodies share their faces through the general fuse, so the mesh needs no
+  merging: it is off now (every benchmark gives the same nodes and numbers; the plate solves,
+  its tip between beam and plate theory: engine check "a thin plate at a fine mesh").

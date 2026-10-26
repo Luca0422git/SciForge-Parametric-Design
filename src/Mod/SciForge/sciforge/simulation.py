@@ -1107,6 +1107,7 @@ def precheck(study):
         "lost": [i.Label for i in lost_items(study)],
         "remove_rigid": bool(opts["remove_rigid"]),
         "twice": _twice(study),
+        "order": opts["mesh"]["order"],
     }
     for body in found:
         name, props, _source = study_material(study, body)
@@ -1173,6 +1174,23 @@ def precheck(study):
         warn("simulation pre-check (held enough): %s" % exc)
     for label in summary.get("unbuilt", []):
         checks.append(("error", "%s is not in SciForge yet: suppress or delete it." % label))
+    try:
+        from . import material
+
+        for body in found:
+            key = data["materials"].get(body.Name)
+            if key and material.entry(key) is None:
+                name = summary["materials"][body.Label][0]
+                checks.append(
+                    (
+                        "warning",
+                        "%s's study material %r is no longer in the materials: the study uses "
+                        "%s's own material (%s). Choose one in Study Materials."
+                        % (body.Label, key, body.Label, name),
+                    )
+                )
+    except Exception as exc:
+        warn("simulation pre-check (materials): %s" % exc)
     return checks
 
 
@@ -1261,10 +1279,6 @@ def _owner_by_geometry(solid, pieces):
     return min(pieces, key=lambda p: p[1].distToShape(Part.Vertex(point))[0])[0]
 
 
-def _element(obj, sub):
-    return bodies.global_shape(obj, copy=False).getElement(sub.split(".")[-1])
-
-
 def _model_element(model, sub):
     """A sub-element of the model shape by name, solids too ("Solid2")."""
     if sub.startswith("Solid"):
@@ -1291,15 +1305,32 @@ def _probe_points(face):
     return pts
 
 
-def map_picks(item, model, owners=None):
+def _model_index(model):
+    """The model's faces and edges with their boxes (made once for all the picks of a solve:
+    120 picked holes on a 366-face part asked for every face's box 120 times, 3.4 s)."""
+    faces, edges = list(model.Faces), list(model.Edges)
+    return {
+        "faces": faces,
+        "face_boxes": [f.BoundBox for f in faces],
+        "edges": edges,
+        "edge_boxes": [e.BoundBox for e in edges],
+        "vertexes": list(model.Vertexes),
+    }
+
+
+def map_picks(item, model, owners=None, index=None):
     """The model's sub-elements ("Face12", "Edge3", "Vertex5", "Solid2") that lie on the
-    item's picks (a whole-body pick: the model solids that body owns)."""
+    item's picks (a whole-body pick: the model solids that body owns). index: _model_index of
+    the model, when several items are mapped onto it."""
     import Part
 
+    if index is None:
+        index = _model_index(model)
     names = []
     picked = []
     for obj, found, _moved in resolve_picks(item):
         picked += [(obj, n) for n in found]
+    shapes = {}
     for obj, sub in picked:
         if not sub:
             body = obj if bodies.is_body(obj) else bodies.body_of(obj)
@@ -1308,7 +1339,9 @@ def map_picks(item, model, owners=None):
                     names.append("Solid%d" % i)
             continue
         try:
-            element = _element(obj, sub)
+            if obj.Name not in shapes:  # (once per object: a moved body's shape is a copy)
+                shapes[obj.Name] = bodies.global_shape(obj, copy=False)
+            element = shapes[obj.Name].getElement(sub.split(".")[-1])
         except Exception:
             continue
         if element is None or element.isNull():
@@ -1317,8 +1350,8 @@ def map_picks(item, model, owners=None):
         box = element.BoundBox
         box.enlarge(GEOMETRY_TOL * 10)
         if kind == "faces":
-            for i, face in enumerate(model.Faces, 1):
-                if not box.intersect(face.BoundBox):
+            for i, (face, face_box) in enumerate(zip(index["faces"], index["face_boxes"]), 1):
+                if not box.intersect(face_box):
                     continue
                 ok = True
                 for p in _probe_points(face):
@@ -1328,8 +1361,8 @@ def map_picks(item, model, owners=None):
                 if ok:
                     names.append("Face%d" % i)
         elif kind == "edges":
-            for i, edge in enumerate(model.Edges, 1):
-                if not box.intersect(edge.BoundBox):
+            for i, (edge, edge_box) in enumerate(zip(index["edges"], index["edge_boxes"]), 1):
+                if not box.intersect(edge_box):
                     continue
                 mid = edge.valueAt((edge.FirstParameter + edge.LastParameter) / 2.0)
                 ends = [v.Point for v in edge.Vertexes]
@@ -1338,7 +1371,7 @@ def map_picks(item, model, owners=None):
                 ):
                     names.append("Edge%d" % i)
         elif kind == "vertices":
-            for i, vertex in enumerate(model.Vertexes, 1):
+            for i, vertex in enumerate(index["vertexes"], 1):
                 if (vertex.Point - element.Point).Length <= GEOMETRY_TOL:
                     names.append("Vertex%d" % i)
     out = []
@@ -1390,6 +1423,34 @@ def _remove_run(study, link="SimRun"):
     _remove_objects(study.Document, list(reversed(_run_members(run))))
 
 
+# (document name, run name) of the runs a job is still making: not linked to their study yet
+_LIVE_RUNS = set()
+
+
+def _orphans(doc):
+    """The objects of solves that no study links and no job is still making: a design saved
+    while a solve ran keeps that solve's half-made run (its mesh too), which nothing else would
+    ever remove."""
+    kept = set()
+    for study in studies(doc):
+        for link in ("SimRun", "SimMeshRun"):
+            run = run_of(study, link)
+            if run is not None:
+                kept.update(o.Name for o in _run_members(run))
+    for doc_name, name in list(_LIVE_RUNS):
+        run = doc.getObject(name) if doc_name == doc.Name else None
+        if run is not None:
+            kept.update(o.Name for o in _run_members(run))
+    found = [o for o in doc.Objects if _type(o) in (RUN, MODEL, HELPER) and o.Name not in kept]
+    # (a run's members with it)
+    out = []
+    for obj in found:
+        for member in _run_members(obj) if _type(obj) == RUN else [obj]:
+            if member.Name not in kept and member not in out:
+                out.append(member)
+    return out
+
+
 def _hide(obj):
     try:
         obj.Visibility = False
@@ -1438,10 +1499,13 @@ def _make_run(study, model_shape, owners, mesh_only=False, straight=False):
         analysis.addObject(model)
 
         subs = {}
+        index = None
         for item in items(study, "mesh" if mesh_only else None):
             if item.Suppressed:
                 continue
-            found = map_picks(item, model_shape, owners)
+            if index is None:
+                index = _model_index(model_shape)
+            found = map_picks(item, model_shape, owners, index)
             if not found:
                 raise SimulationError(
                     "%s lost what it was on: edit it and pick again." % item.Label
@@ -1468,7 +1532,11 @@ def _make_run(study, model_shape, owners, mesh_only=False, straight=False):
             turn = max(float(opts["mesh"]["max_turn"]), 5.0)
             mesh.MeshSizeFromCurvature = int(round(360.0 / turn))
         if "CoherenceMesh" in mesh.PropertiesList:
-            mesh.CoherenceMesh = True
+            # Gmsh's "Coherence Mesh" merges nodes closer than a millionth of the model's size:
+            # the two diagonals' middles of a flat sliver element became one node and CalculiX
+            # refused the element (a 3 mm plate at 2 %). The model's bodies share their faces
+            # (the general fuse), so the mesh needs no merging to be glued.
+            mesh.CoherenceMesh = False
         if straight and "SecondOrderLinear" in mesh.PropertiesList:
             mesh.SecondOrderLinear = True
         # (curved elements that turn inside out at a tight curve are made straight-sided
@@ -2418,6 +2486,7 @@ class Job:
         self._checked = False  # the pre-check passed (the model is built on the next turn)
         self._getter = None  # FreeCAD's mesh tables for the input (made a turn earlier)
         self._results_step = None  # the next turn of reading the results
+        self._made = set()  # (document name, run name) of the runs this job made
         self._solid_nodes = {}  # model solid index -> its mesh nodes (from Gmsh's groups)
         self._groups = {}  # Gmsh's groups: model faces / edges / solids -> elements, nodes
         self._previous_run = None  # adaptive refinement: the last pass's run, until the next
@@ -2436,10 +2505,12 @@ class Job:
                 self._thread = None
                 if self._cancel:
                     return self._stop("cancelled", "Cancelled.")
+                _close_open_transaction(self.doc)  # (what a turn changes is no undo step)
                 self._after_background()
                 return self.state
             if self._cancel:
                 return self._stop("cancelled", "Cancelled.")
+            _close_open_transaction(self.doc)
             getattr(self, "_stage_" + self.stage)()
         except SimulationError as exc:
             return self._stop("failed", str(exc))
@@ -2448,14 +2519,21 @@ class Job:
             return self._stop("failed", "The solve failed: %s" % exc)
         return self.state
 
-    def wait(self, timeout=None):
-        """Run to the end on this thread (scripts, tests, the AI)."""
+    def wait(self, timeout=None, idle=None):
+        """Run to the end on this thread (scripts, tests, the AI). idle(): called between the
+        turns while the background thread works (the AI's solve keeps the window painted
+        with it)."""
         end = None if timeout is None else time.time() + timeout
         while self.poll() == "running":
             if end is not None and time.time() > end:
                 self.cancel()
                 self.poll()
                 return self._stop("failed", "The solve took longer than %d s." % timeout)
+            if idle is not None:
+                try:
+                    idle()
+                except Exception:
+                    pass
             if self._thread is not None:
                 self._thread.join(0.05)
         return self.state
@@ -2487,6 +2565,13 @@ class Job:
         _close_open_transaction(self.doc)
         if self._checked:
             return self._build_model()
+        try:
+            left = _orphans(self.doc)
+            if left:
+                _remove_objects(self.doc, list(reversed(left)))
+                log("simulation: removed %d objects of an unfinished solve" % len(left))
+        except Exception as exc:
+            warn("simulation: tidying up: %s" % exc)
         try:
             repaired = repair_picks(self.study)
         except Exception as exc:
@@ -2527,6 +2612,9 @@ class Job:
         self._analysis, self._model, self._mesh, self._subs = _make_run(
             self.study, shape, self._owners, self.mesh_only, self._straight
         )
+        made = (self.doc.Name, self._analysis.Name)
+        self._made.add(made)
+        _LIVE_RUNS.add(made)
         self.timings["model"] = time.time() - t
         self.stage, self.message = "mesh", "Meshing"
         self._start_mesh()
@@ -3051,6 +3139,8 @@ class Job:
         self._mesh_tools = None
         if state != "done":
             log("simulation %s: %s" % (state, message))
+        # (no undo step is closed here: a cancel can come while a dialog of the person has
+        # its own open, which its Cancel must still be able to undo)
         for run in (self._analysis, self._previous_run):
             if run is not None:  # a run that did not make it: nothing left behind
                 try:
@@ -3059,6 +3149,8 @@ class Job:
                     pass
         self._analysis = self._previous_run = None
         self._getter = self._results_step = None
+        for doc_name, name in list(self._made):
+            _LIVE_RUNS.discard((doc_name, name))
         shutil.rmtree(self.work, ignore_errors=True)
         return state
 

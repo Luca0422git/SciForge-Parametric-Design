@@ -1025,6 +1025,154 @@ def check_hollow_owners(doc, out):
     )
 
 
+@engine_check("a design saved while it solves")
+def check_saved_mid_solve(doc, out):
+    """Saved while CalculiX runs, the design holds that solve's half-made run (its mesh too);
+    the next solve removes it, and nothing of a running job is ever removed."""
+    import tempfile
+
+    import FreeCAD as App
+
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc, size_pct=3.0)
+    sim.solve(study, timeout=600)
+    job = sim.Job(study)
+    tries = 0
+    while job.state == "running" and job.stage != "solve" and tries < 20000:
+        tries += 1
+        if job._thread is not None and job._thread.is_alive():
+            job._thread.join(0.002)
+            continue
+        job.poll()
+    out.append(
+        (
+            "a running job's run is not taken for left over",
+            not [o.Name for o in sim._orphans(doc)],
+            [o.Name for o in sim._orphans(doc)],
+        )
+    )
+    path = os.path.join(tempfile.mkdtemp(prefix="sciforge-bench-"), "mid.FCStd")
+    doc.saveAs(path)
+    job.cancel()
+    job.wait(60)
+    App.closeDocument(doc.Name)
+    again = App.openDocument(path)
+    try:
+        st = sim.studies(again)[0]
+        left = [o.Name for o in sim._orphans(again)]
+        out.append(("reopened: the half-made run is in the file", bool(left), left))
+        sim.solve(st, timeout=600)
+        out.append(
+            (
+                "the next solve removes it and solves",
+                not sim._orphans(again) and sim.results(st) is not None,
+                [o.Name for o in sim._orphans(again)],
+            )
+        )
+    finally:
+        App.closeDocument(again.Name)
+
+
+@engine_check("undo steps opened while it solves")
+def check_steps_between_turns(doc, out):
+    """Someone opens an undo step before every turn of the solve (a command running between
+    the timer's ticks): the step is closed before the turn changes anything, so undoing them
+    all leaves the solve's results."""
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc)
+    doc.UndoMode = 1
+    job = sim.Job(study)
+    turns = 0
+    while job.state == "running" and turns < 20000:
+        if job._thread is not None and job._thread.is_alive():
+            job._thread.join(0.002)
+            continue
+        doc.openTransaction("Someone's step %d" % turns)
+        turns += 1
+        job.poll()
+    if getattr(doc, "HasPendingTransaction", False):
+        doc.commitTransaction()
+    out.append(("solved", job.state == "done", job.message))
+    for _ in range(int(doc.UndoCount)):
+        doc.undo()
+    out.append(
+        (
+            "every step undone: the results stay (%d turns)" % turns,
+            sim.results(study) is not None and sim.result_object(study) is not None,
+            list(doc.UndoNames),
+        )
+    )
+
+
+@engine_check("a study material that is gone")
+def check_gone_material(doc, out):
+    """A study material chosen from the materials and later deleted there: the study falls back
+    to the body's own material, and the pre-check says so (never silently)."""
+    from sciforge import bodies
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc)
+    sim.set_study_material(study, body, "aluminium")
+    data = sim.study_data(study)
+    data["materials"][body.Name] = "a material deleted since"
+    bodies.save_meta(study, sim.STUDY_PROP, data)
+    name, _props, source = sim.study_material(study, body)
+    checks = sim.precheck(study)
+    out.append(
+        (
+            "the body's own material is used, and the pre-check warns",
+            source == "model"
+            and any(l == "warning" and "no longer in the materials" in t for l, t in checks),
+            (name, source, checks),
+        )
+    )
+
+
+@engine_check("a thin plate at a fine mesh")
+def check_thin_plate(doc, out):
+    """A 3 mm steel plate, 200 x 100 mm, cantilevered, 50 N at its free edge, at 2 % mesh: Gmsh
+    leaves a flat sliver element there, whose two diagonals' middles its node merging once
+    made one node (CalculiX then refused the mesh). The tip lies between beam theory and
+    plate theory (a wide plate is stiffer by 1 / (1 - nu^2))."""
+    import Part
+
+    from sciforge import simulation as sim
+
+    L, W, T, F = 200.0, 100.0, 3.0, 50.0
+    body = make_body(doc, Part.makeBox(L, W, T), "Plate")
+    study = sim.create_study(doc)
+    sim.set_settings(study, {"mesh": {"size_pct": 2.0}})
+    sim.add_item(
+        study, "constraint", "fixed", [(body, one_face(body, lambda f: near(f.CenterOfMass.x, 0)))]
+    )
+    sim.add_item(
+        study,
+        "load",
+        "force",
+        [(body, one_face(body, lambda f: near(f.CenterOfMass.x, L)))],
+        {"direction": "vector", "vector": [0, 0, -1], "magnitude": F},
+    )
+    job = sim.Job(study)
+    job.wait(600)
+    out.append(("solved", job.state == "done", job.message))
+    if job.state != "done":
+        return
+    props = material(study, body)
+    beam = F * L**3 / (3 * props["youngs_mpa"] * W * T**3 / 12.0)
+    plate = beam * (1 - props["poisson"] ** 2)
+    tip = job.summary["stats"]["displacement"]["max"]
+    out.append(
+        (
+            "the tip bends between plate and beam theory (%.3f .. %.3f mm): %.3f mm"
+            % (plate, beam, tip),
+            plate * 0.99 <= tip <= beam * 1.01,
+            (plate, tip, beam),
+        )
+    )
+
+
 @engine_check("a change while it solves")
 def check_change_during(doc, out):
     """The results are of the study as the solve started: a load changed while CalculiX runs
