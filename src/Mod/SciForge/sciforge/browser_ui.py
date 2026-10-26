@@ -25,6 +25,34 @@ META_VIEW = "SciForge.NamedView."
 # the rows they can be dropped on.
 DRAGGABLE = ("body", "component")
 DROP_TARGETS = ("component", "document")
+# The SIMULATION workspace's rows (simulation_browser.py, beta 3) that can be renamed.
+SIM_RENAMABLE = ("sim_study", "sim_item", "sim_document")
+
+
+def _simulation_tree(doc):
+    """The study tree while the design is in the SIMULATION workspace, else None."""
+    try:
+        from . import simulation_ui
+
+        if not simulation_ui.in_workspace(doc):
+            return None
+        from . import simulation_browser
+
+        return simulation_browser.tree(doc)
+    except Exception as exc:
+        warn("simulation browser: %s" % exc)
+        return None
+
+
+def _simulation_call(name, *args):
+    """simulation_browser.<name>(*args), never raising."""
+    try:
+        from . import simulation_browser
+
+        return getattr(simulation_browser, name)(*args)
+    except Exception as exc:
+        warn("simulation browser: %s" % exc)
+        return None
 
 
 def _rename_mesh_body(doc, obj, text):
@@ -802,6 +830,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             return True
         if key in self._collapsed:
             return False
+        if key.startswith("sim_"):  # SIMULATION workspace (simulation_browser)
+            return _simulation_call("starts_open", key) is True
         return key.startswith(("component:", "bodies:", "sketches:", "decals:"))
 
     def tree(self):
@@ -809,6 +839,9 @@ class BrowserWidget(QtWidgets.QTreeWidget):
         self._doc = doc
         if doc is None:
             return core._node("document", "(no design open)", "document", "document")
+        sim = _simulation_tree(doc)  # SIMULATION workspace: the study tree (beta 3, sim-ui)
+        if sim is not None:
+            return sim
         body = commands.active_body()
         component = components.active_component(doc)
         return core.build(
@@ -1037,6 +1070,13 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             Gui.Selection.clearSelection()
             for item in self.selectedItems():
                 node = item.data(1, ROLE_NODE)
+                if str(node["kind"]).startswith("sim_"):  # SIMULATION workspace
+                    for obj, subs in _simulation_call("selection", self._doc, node) or []:
+                        if subs:
+                            Gui.Selection.addSelection(obj, subs)
+                        else:
+                            Gui.Selection.addSelection(self._doc.Name, obj.Name)
+                    continue
                 if node["kind"] == "drawing":
                     # (not in the 3D view; FreeCAD would bring the drawing's tab to the
                     # front when it is selected, even for a right-click > Delete)
@@ -1199,6 +1239,9 @@ class BrowserWidget(QtWidgets.QTreeWidget):
     def _double_clicked(self, item, column):
         node = item.data(1, ROLE_NODE)
         try:
+            if str(node["kind"]).startswith("sim_"):  # SIMULATION workspace (simulation_browser)
+                _simulation_call("double_clicked", self, node)
+                return
             obj = self._object(node)
             if node["kind"] == "body" and obj is not None:
                 self._activate(obj)
@@ -1326,7 +1369,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
     def rename(self, item):
         """The name becomes editable in place (Enter keeps it, Esc cancels)."""
         node = item.data(1, ROLE_NODE)
-        if node["kind"] not in self.RENAMABLE:
+        if node["kind"] not in self.RENAMABLE + SIM_RENAMABLE:
             return
         if node["kind"] not in ("document", "saved_view") and not commands.finish_open_dialog():
             return  # a rename is an undo step: never inside a command's own step
@@ -1346,7 +1389,9 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             self._refresh_soon()
             return
         try:
-            if node["kind"] == "document" and self._doc is not None:
+            if str(node["kind"]).startswith("sim_"):  # SIMULATION workspace
+                _simulation_call("rename", self, node, text)
+            elif node["kind"] == "document" and self._doc is not None:
                 self._doc.Label = text
             elif node["kind"] == "saved_view":
                 self._rename_view(node["object"], text)
@@ -1376,6 +1421,11 @@ class BrowserWidget(QtWidgets.QTreeWidget):
 
     def delete(self, nodes):
         doc = self._doc
+        sim = [n for n in nodes if str(n["kind"]).startswith("sim_")]
+        if sim:  # SIMULATION workspace: studies, constraints, loads (simulation_browser)
+            _simulation_call("delete", self, sim)
+            self.refresh(force=True)
+            return
         if doc is None or not commands.finish_open_dialog():
             return
         step_kinds = (
@@ -1524,6 +1574,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
 
     def build_menu(self, item):
         node = item.data(1, ROLE_NODE)
+        if str(node["kind"]).startswith("sim_"):  # SIMULATION workspace (simulation_browser)
+            return _simulation_call("build_menu", self, item, node)
         obj = self._object(node)
         menu = QtWidgets.QMenu(self)
         menu.setObjectName("SciForgeBrowserMenu")

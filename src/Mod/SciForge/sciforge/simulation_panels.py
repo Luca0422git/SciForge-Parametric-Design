@@ -1,0 +1,853 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""The SETUP dialogs that pick on the model: Fusion's Structural Constraints and Structural
+Loads (one dialog each, a Type drop-down, research 3.4 and 3.5), Edit Gravity, and Local Mesh
+Control when the engine has it.
+
+Picking works like in every SciForge command (pickpanel.PickPanel): a click on a face, edge or
+corner of a body of the study adds it, a click on a picked one drops it, and only what the
+chosen type can take lights up under the mouse (Pin: round faces; Frictionless and Pressure:
+faces; Fixed and Force: faces, edges and corners). The glyphs of what the dialog would make are
+drawn while picking (simulation_glyphs.preview). Types Fusion has that SciForge cannot solve
+yet are listed greyed, with the reason. OK keeps the constraint or load as one undo step,
+Cancel / Esc leave nothing, Ctrl+Z cancels the dialog.
+"""
+
+import FreeCADGui as Gui
+
+from . import bodies, commands, hole_common, log, pickpanel, warn
+from . import simulation_core as core
+from . import simulation_setup_core as score
+from .compat import QtWidgets
+
+ERROR_STYLE = "color: #ff8a80;"
+HINT_STYLE = "color: #b8c4d0;"
+
+
+def _sim():
+    from . import simulation
+
+    return simulation
+
+
+def _ui():
+    from . import simulation_ui
+
+    return simulation_ui
+
+
+def _glyphs():
+    from . import simulation_glyphs
+
+    return simulation_glyphs
+
+
+class _Gate:
+    """FreeCAD names the top object and a path ("Body.Pad.Face6"): the panel is asked about
+    the element itself."""
+
+    def __init__(self, panel):
+        self.panel = panel
+
+    def allow(self, doc, obj, sub):
+        try:
+            panel = self.panel
+            if panel is None or panel._closed or obj is None:
+                return True
+            from .construct_ui import _resolve_gate
+
+            leaf, short = _resolve_gate(obj, sub)
+            return bool(panel.allow(leaf, short))
+        except Exception:
+            return False
+
+
+def element_kind(short):
+    name = (short or "").split(".")[-1]
+    for prefix, kind in (("Face", "faces"), ("Edge", "edges"), ("Vertex", "vertices")):
+        if name.startswith(prefix):
+            return kind
+    return None
+
+
+def surface_kind(obj, short):
+    """ "plane" / "cylinder" / ... of a face (None when it is not one)."""
+    try:
+        face = obj.Shape.getElement(short)
+        return face.Surface.TypeId.split("::")[-1].lower().replace("geom", "")
+    except Exception:
+        return None
+
+
+def body_pick(obj, short):
+    """(body, element name of the body's own shape) for what was clicked on `obj` (a step of
+    the body, usually its Tip), or None."""
+    body = bodies.body_of(obj)
+    if body is None or not short:
+        return None
+    tip = getattr(body, "Tip", None)
+    if obj is body or obj is tip:
+        return body, short
+    try:
+        item = obj.Shape.getElement(short)
+        shape = body.Shape
+    except Exception:
+        return None
+    kind = element_kind(short)
+    if kind == "faces":
+        name = pickpanel.match_face(tip, obj, short) if tip is not None else None
+        return (body, name) if name else None
+    elements = shape.Edges if kind == "edges" else shape.Vertexes
+    prefix = "Edge" if kind == "edges" else "Vertex"
+    for i, other in enumerate(elements, 1):
+        try:
+            if other.isSame(item):
+                return body, "%s%d" % (prefix, i)
+            if kind == "vertices" and (other.Point - item.Point).Length < 1e-6:
+                return body, "%s%d" % (prefix, i)
+            if kind == "edges" and abs(other.Length - item.Length) < 1e-6:
+                if (other.CenterOfMass - item.CenterOfMass).Length < 1e-6:
+                    return body, "%s%d" % (prefix, i)
+        except Exception:
+            continue
+    return None
+
+
+def _number_field(name, value, family, tip=""):
+    field = QtWidgets.QLineEdit(score.format_quantity(value, family))
+    field.setObjectName("SciForgeSim_" + name)
+    field.setProperty("family", family)
+    if tip:
+        field.setToolTip(tip)
+    return field
+
+
+def _toggle(name, text, on, tip=""):
+    button = QtWidgets.QPushButton(text)
+    button.setObjectName("SciForgeSim_" + name)
+    button.setCheckable(True)
+    button.setChecked(bool(on))
+    if tip:
+        button.setToolTip(tip)
+    return button
+
+
+TOGGLE_TEXT = {
+    "x": ("Ux", "Hold the movement along X"),
+    "y": ("Uy", "Hold the movement along Y"),
+    "z": ("Uz", "Hold the movement along Z"),
+    "radial": ("Radial", "The hole keeps its size and place across the axis"),
+    "axial": ("Axial", "No sliding along the axis"),
+    "tangential": ("Tangential", "No turning about the axis (off: the part may turn)"),
+}
+KIND_NOTES = {
+    "frictionless": "The faces cannot move through themselves; they may slide along their own "
+    "plane (a support without friction).",
+    "pin": "Round faces only. Fusion's default holds Radial and Axial and lets the part turn "
+    "(Tangential off).",
+    "fixed": "Faces, edges or corners. Untick directions to let it slide that way (a roller).",
+    "displacement": "Moves the picks by the given lengths (a direction left off is free).",
+    "force": "On several faces the force is shared by their area, unless Force Per Entity.",
+    "pressure": "Always at right angles to the faces; positive pushes into them.",
+    "moment": "Turns the picked faces about the axis (right-hand rule).",
+    "bearing": "Pushes on the round face like a shaft in a hole, only on the side it presses.",
+    "remote_force": "A force acting at a point away from the model, carried to the faces.",
+}
+
+
+class ItemPanel(pickpanel.PickPanel):
+    """Fusion's Structural Constraints / Structural Loads dialog (and Edit of one)."""
+
+    simulation_dialog = True
+    last = None
+
+    def __init__(self, doc, study, category, item=None, kind=None, initial=()):
+        self.title = "Structural Constraints" if category == "constraint" else "Structural Loads"
+        self.icon = "sim_constraints" if category == "constraint" else "sim_loads"
+        transaction = ("Edit %s" % item.Label) if item is not None else self.title
+        super().__init__(doc, transaction)
+        ItemPanel.last = self
+        sim = _sim()
+        self.study = study
+        self.category = category
+        self.item = item
+        self.editing = item is not None
+        self.made = None
+        table = core.CONSTRAINTS if category == "constraint" else core.LOADS
+        if item is not None:
+            data = sim.item_data(item)
+            self.kind = data["kind"]
+            self.opts = core.options(category, self.kind, data["options"])
+            self.picks = [(o, s) for o, s in sim._picks(item.References) if s]
+        else:
+            built = [k for k, info in table.items() if info.get("built")]
+            self.kind = kind if kind in table and table[kind].get("built") else built[0]
+            self.opts = core.options(category, self.kind)
+            self.picks = []
+        self.study_names = {b.Name for b in sim.study_bodies(study)}
+        self.form.setObjectName("SciForgeSimItemPanel")
+        rows = []
+        for key, info in table.items():
+            tip = "" if info.get("built") else "%s is not in SciForge yet." % info["title"]
+            rows.append((info["title"], key, bool(info.get("built")), tip))
+        self.type_box = pickpanel.combo(rows, self.kind)
+        self.type_box.setObjectName("SciForgeSimItemType")
+        self.type_box.setEnabled(not self.editing)
+        if self.editing:
+            self.type_box.setToolTip(
+                "The type of an existing one stays; delete it and make a new one"
+            )
+        self.type_box.currentIndexChanged.connect(self._type_changed)
+        self.layout.addRow("Type", self.type_box)
+        self.select = hole_common.SelectionField(self, 0, "Select")
+        self.select.button.setObjectName("SciForgeSimItemSelect")
+        self.select.clear.setObjectName("SciForgeSimItemClear")
+        self.layout.addRow("Targets", self.select.widget)
+        self.options_box = QtWidgets.QWidget()
+        self.options_layout = QtWidgets.QFormLayout(self.options_box)
+        self.options_layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.addRow(self.options_box)
+        self.fields = {}
+        self.finish_layout()
+        self._build_options()
+        self.start_picking()
+        self.select.set_active(True)
+        for obj, short, _point in initial or ():
+            if self.allow(obj, short):
+                found = body_pick(obj, short)
+                if found is not None and found not in self.picks:
+                    self.picks.append(found)
+        self._sync()
+        self._update_text()
+        self.schedule()
+
+    # -- picking -------------------------------------------------------------------------------
+    def start_picking(self):
+        super().start_picking()
+        try:
+            if self.gate is not None:
+                hole_common.remove_gate(self.gate)
+            self.gate = _Gate(self)
+            Gui.Selection.addSelectionGate(self.gate)
+        except Exception as exc:
+            warn("%s: selection filter unavailable: %s" % (self.title, exc))
+
+    def info(self):
+        return core.kind_info(self.category, self.kind)
+
+    def allow(self, obj, short):
+        if obj is None or not short:
+            return False
+        body = bodies.body_of(obj)
+        if body is None or body.Name not in self.study_names:
+            return False
+        kind = element_kind(short)
+        info = self.info()
+        if kind is None or kind not in info["targets"]:
+            return False
+        if kind == "faces" and info.get("faces") in ("round", "flat"):
+            want = "cylinder" if info["faces"] == "round" else "plane"
+            if surface_kind(obj, short) != want:
+                return False
+        return True
+
+    def picks_changed(self, added, dropped):
+        changed = False
+        for obj, short, _point in dropped:
+            found = body_pick(obj, short)
+            if found is not None and found in self.picks:
+                self.picks.remove(found)
+                changed = True
+        for obj, short, _point in added:
+            if not self.allow(obj, short):
+                continue
+            found = body_pick(obj, short)
+            if found is None:
+                continue
+            if found in self.picks:
+                self.picks.remove(found)
+            else:
+                self.picks.append(found)
+            changed = True
+        if changed:
+            self._update_text()
+        return changed
+
+    def shown(self):
+        grouped = {}
+        order = []
+        for body, sub in self.picks:
+            if not bodies.alive(body):
+                continue
+            target = getattr(body, "Tip", None) or body
+            if target.Name not in grouped:
+                grouped[target.Name] = (target, [])
+                order.append(target.Name)
+            grouped[target.Name][1].append(sub)
+        return [grouped[n] for n in order]
+
+    def activate(self, _index):
+        self.select.set_active(True)
+
+    def clear_field(self, _index):
+        try:
+            self.picks = []
+            self._sync()
+            self._update_text()
+            self.schedule()
+        except Exception as exc:
+            warn("%s: %s" % (self.title, exc))
+
+    def _update_text(self):
+        counts = {}
+        for _body, sub in self.picks:
+            kind = element_kind(sub) or "faces"
+            counts[kind] = counts.get(kind, 0) + 1
+        if not counts:
+            self.select.set_text(None)
+        else:
+            words = {"faces": "face", "edges": "edge", "vertices": "corner"}
+            self.select.set_text(
+                ", ".join(
+                    "%d %s%s" % (n, words[k], "" if n == 1 else "s") for k, n in counts.items()
+                )
+            )
+        per = self.fields.get("per_entity")
+        if per is not None:
+            per.setEnabled(len(self.picks) > 1)
+
+    # -- the type and its options --------------------------------------------------------------
+    def _type_changed(self, *_a):
+        try:
+            key = self.type_box.currentData()
+            info = core.kind_info(self.category, key)
+            if not info.get("built"):
+                return
+            self.kind = key
+            self.opts = core.options(self.category, key)
+            # picks the new type cannot take are dropped (Fusion keeps what still fits)
+            keep = []
+            for body, sub in self.picks:
+                tip = getattr(body, "Tip", None) or body
+                if self.allow(tip, sub):
+                    keep.append((body, sub))
+            self.picks = keep
+            self._build_options()
+            self._sync()
+            self._update_text()
+            self.schedule()
+        except Exception as exc:
+            warn("%s: %s" % (self.title, exc))
+
+    def _clear_options(self):
+        while self.options_layout.count():
+            child = self.options_layout.takeAt(0)
+            widget = child.widget()
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+        self.fields = {}
+
+    def _build_options(self):
+        self._clear_options()
+        opts = self.opts
+        kind = self.kind
+        form = self.options_layout
+        unit_family = {"pressure": "pressure", "moment": "moment"}.get(kind, "force")
+        if self.category == "constraint":
+            toggles = [k for k in ("x", "y", "z", "radial", "axial", "tangential") if k in opts]
+            if kind == "displacement":
+                for axis in ("x", "y", "z"):
+                    value = opts.get(axis)
+                    tick = QtWidgets.QCheckBox("U%s" % axis)
+                    tick.setObjectName("SciForgeSim_%s_on" % axis)
+                    tick.setChecked(value is not None)
+                    field = _number_field(axis, value or 0.0, "length")
+                    field.setEnabled(value is not None)
+                    tick.toggled.connect(lambda on, f=field: (f.setEnabled(on), self.schedule()))
+                    field.editingFinished.connect(self._value_typed)
+                    row = QtWidgets.QHBoxLayout()
+                    row.addWidget(tick)
+                    row.addWidget(field, 1)
+                    holder = QtWidgets.QWidget()
+                    holder.setLayout(row)
+                    form.addRow(holder)
+                    self.fields[axis] = (tick, field)
+            elif toggles:
+                holder = QtWidgets.QWidget()
+                row = QtWidgets.QHBoxLayout(holder)
+                row.setContentsMargins(0, 0, 0, 0)
+                for key in toggles:
+                    text, tip = TOGGLE_TEXT.get(key, (key.title(), ""))
+                    button = _toggle(key, text, opts.get(key), tip)
+                    button.toggled.connect(lambda _on: self.schedule())
+                    row.addWidget(button)
+                    self.fields[key] = button
+                form.addRow("Directions" if kind == "fixed" else "Hold", holder)
+        else:
+            if "direction" in opts:
+                box = QtWidgets.QComboBox()
+                box.setObjectName("SciForgeSim_direction")
+                box.addItem("Normal", "normal")
+                box.addItem("Vector", "vector")
+                box.setCurrentIndex(0 if opts.get("direction") == "normal" else 1)
+                box.currentIndexChanged.connect(self._direction_changed)
+                form.addRow("Direction Type", box)
+                self.fields["direction"] = box
+            vector_force = kind == "force" and opts.get("direction") == "vector"
+            if vector_force:
+                parts = score.components_of(opts.get("magnitude", 100.0), opts.get("vector"))
+                for axis, value in zip(("fx", "fy", "fz"), parts):
+                    field = _number_field(
+                        axis, value, "force", "The force along %s" % axis[1].upper()
+                    )
+                    field.editingFinished.connect(self._value_typed)
+                    form.addRow("F%s" % axis[1], field)
+                    self.fields[axis] = field
+            elif "magnitude" in opts:
+                field = _number_field(
+                    "magnitude", opts.get("magnitude", 0.0), unit_family, "The size of the load"
+                )
+                field.editingFinished.connect(self._value_typed)
+                form.addRow("Magnitude", field)
+                self.fields["magnitude"] = field
+            if (
+                "vector" in opts
+                and not vector_force
+                and opts.get("direction", "vector") != "normal"
+            ):
+                vector = opts.get("vector") or [0.0, 0.0, -1.0]
+                for axis, value in zip(("x", "y", "z"), vector):
+                    field = _number_field("v" + axis, value, "number")
+                    field.editingFinished.connect(self._value_typed)
+                    form.addRow(
+                        ("Axis %s" if kind == "moment" else "Direction %s") % axis.upper(), field
+                    )
+                    self.fields["v" + axis] = field
+            if "point" in opts:
+                for axis, value in zip(("x", "y", "z"), opts.get("point") or [0, 0, 0]):
+                    field = _number_field("p" + axis, value, "length")
+                    field.editingFinished.connect(self._value_typed)
+                    form.addRow("Point %s" % axis.upper(), field)
+                    self.fields["p" + axis] = field
+            if "flip" in opts:
+                flip = _toggle(
+                    "flip", "Flip Direction", opts.get("flip"), "Turn the load the other way round"
+                )
+                flip.toggled.connect(lambda _on: self.schedule())
+                form.addRow(flip)
+                self.fields["flip"] = flip
+            if "per_entity" in opts:
+                what = "Force" if kind == "force" else self.info()["title"]
+                per = QtWidgets.QCheckBox("%s Per Entity" % what)
+                per.setObjectName("SciForgeSim_per_entity")
+                per.setChecked(bool(opts.get("per_entity")))
+                per.setToolTip(
+                    "Off: the value is shared by the picks (by face area or edge length). On: "
+                    "every pick gets the whole value (3 faces at 100 N make 300 N)."
+                )
+                per.toggled.connect(lambda _on: self.schedule())
+                form.addRow(per)
+                self.fields["per_entity"] = per
+        note = KIND_NOTES.get(kind)
+        if note:
+            label = QtWidgets.QLabel(note)
+            label.setWordWrap(True)
+            label.setStyleSheet(HINT_STYLE)
+            form.addRow(label)
+        self._update_text()
+
+    def _direction_changed(self, *_a):
+        try:
+            opts, _problem = self.read_options(lenient=True)
+            box = self.fields.get("direction")
+            opts["direction"] = box.currentData() if box is not None else "normal"
+            self.opts = core.options(self.category, self.kind, opts)
+            self._build_options()
+            self.schedule()
+        except Exception as exc:
+            warn("%s: %s" % (self.title, exc))
+
+    def _value_typed(self):
+        """A value was typed (Enter or Tab): the preview follows."""
+        self.schedule()
+
+    def read_options(self, lenient=False):
+        """(options, sentence or None) from the fields."""
+        opts = dict(self.opts)
+        try:
+            for key in ("x", "y", "z", "radial", "axial", "tangential"):
+                widget = self.fields.get(key)
+                if isinstance(widget, QtWidgets.QPushButton):
+                    opts[key] = bool(widget.isChecked())
+            if self.kind == "displacement":
+                for axis in ("x", "y", "z"):
+                    tick, field = self.fields[axis]
+                    opts[axis] = (
+                        score.parse_quantity(field.text(), "length") if tick.isChecked() else None
+                    )
+            box = self.fields.get("direction")
+            if box is not None:
+                opts["direction"] = box.currentData()
+            if all(k in self.fields for k in ("fx", "fy", "fz")):
+                parts = [
+                    score.parse_quantity(self.fields[k].text(), "force") for k in ("fx", "fy", "fz")
+                ]
+                opts["magnitude"], opts["vector"] = score.force_from_components(*parts)
+            elif "magnitude" in self.fields:
+                family = self.fields["magnitude"].property("family") or "force"
+                opts["magnitude"] = score.parse_quantity(self.fields["magnitude"].text(), family)
+            if all(("v" + a) in self.fields for a in "xyz"):
+                opts["vector"] = [
+                    score.parse_quantity(self.fields["v" + a].text(), "number") for a in "xyz"
+                ]
+            if all(("p" + a) in self.fields for a in "xyz"):
+                opts["point"] = [
+                    score.parse_quantity(self.fields["p" + a].text(), "length") for a in "xyz"
+                ]
+            if "flip" in self.fields:
+                opts["flip"] = bool(self.fields["flip"].isChecked())
+            if "per_entity" in self.fields:
+                opts["per_entity"] = bool(self.fields["per_entity"].isChecked())
+        except core.SimulationError as exc:
+            if lenient:
+                return opts, str(exc)
+            return opts, str(exc)
+        return core.options(self.category, self.kind, opts), None
+
+    # -- preview and checks --------------------------------------------------------------------
+    def _preview(self):
+        opts, problem = self.read_options(lenient=True)
+        count = _glyphs().preview(self.doc, self.category, self.kind, opts, self.picks)
+        if problem:
+            self.say(problem, error=True)
+            return
+        problems = (
+            core.check(self.category, self.kind, opts, _sim().describe_picks(self.picks))
+            if self.picks
+            else []
+        )
+        if problems:
+            self.say(" ".join(problems), error=True)
+        elif not self.picks:
+            words = " / ".join(
+                {"faces": "faces", "edges": "edges", "vertices": "corners"}[t]
+                for t in self.info()["targets"]
+            )
+            self.say("Click the %s to put the %s on." % (words, self.info()["title"]))
+        else:
+            self.say("")
+        return count
+
+    def say(self, text, error=False):
+        try:
+            self.message.setStyleSheet(ERROR_STYLE if error else HINT_STYLE)
+            self.message.setText(text)
+        except RuntimeError:
+            pass
+
+    def feature(self):
+        return None
+
+    # -- OK / Cancel ---------------------------------------------------------------------------
+    def accept(self):
+        if self._closed:
+            return True
+        try:
+            if not bodies.alive(self.study):
+                self.say("The study is gone (undone or deleted).", error=True)
+                return False
+            opts, problem = self.read_options()
+            if problem:
+                self.say(problem, error=True)
+                return False
+            sim = _sim()
+            problems = core.check(self.category, self.kind, opts, sim.describe_picks(self.picks))
+            if problems:
+                self.say(" ".join(problems), error=True)
+                return False
+            if self.editing:
+                if not bodies.alive(self.item):
+                    self.say("It is gone (undone or deleted).", error=True)
+                    return False
+                sim.update_item(self.item, refs=list(self.picks), opts=opts)
+                self.made = self.item
+            else:
+                self.made = sim.add_item(
+                    self.study, self.category, self.kind, list(self.picks), opts
+                )
+        except core.SimulationError as exc:
+            self.say(str(exc), error=True)
+            return False
+        except Exception as exc:
+            warn("%s: %s" % (self.title, exc))
+            self.say("It could not be kept: %s" % exc, error=True)
+            return False
+        label = self.made.Label
+        self.finish_ok()
+        log("%s %s" % ("edited" if self.editing else "added", label))
+        _ui().refresh()
+        return True
+
+    def reject(self):
+        done = super().reject()
+        _ui().refresh()
+        return done
+
+    def cleanup(self):
+        try:
+            _glyphs().clear_preview()
+        except Exception:
+            pass
+        super().cleanup()
+
+
+def _initial_picks(doc):
+    try:
+        return [p for p in hole_common.picks(doc) if p[1]]
+    except Exception:
+        return []
+
+
+def open_item(study, category, item=None, kind=None):
+    """Structural Constraints / Structural Loads for `study` (Edit when `item` is given)."""
+    from . import simulation_dialogs
+
+    doc = study.Document
+    initial = _initial_picks(doc) if item is None else ()
+    if not commands.finish_open_dialog() or simulation_dialogs._busy(study):
+        return None
+    try:
+        panel = ItemPanel(doc, study, category, item=item, kind=kind, initial=initial)
+    except Exception as exc:
+        warn("%s: %s" % (category, exc))
+        return None
+    Gui.Control.showDialog(panel)
+    return panel
+
+
+def edit_item(item):
+    """Edit a constraint or load (browser: double-click or Edit)."""
+    sim = _sim()
+    study = sim.study_of(item)
+    if study is None:
+        return None
+    data = sim.item_data(item)
+    info = core.kind_info(data["category"], data["kind"])
+    if not info.get("built"):
+        commands.tell("%s is not in SciForge yet: suppress or delete it." % info["title"])
+        return None
+    return open_item(study, data["category"], item=item)
+
+
+# -- Edit Gravity -------------------------------------------------------------------------------
+class GravityPanel(pickpanel.PickPanel):
+    """Fusion's Edit Gravity (research 3.5): on or off, the direction by Normal (a picked flat
+    face or straight edge, Flip) or by Vector, and the magnitude (standard gravity)."""
+
+    simulation_dialog = True
+    title = "Edit Gravity"
+    icon = "sim_gravity"
+    last = None
+
+    def __init__(self, doc, study):
+        super().__init__(doc, "Edit Gravity")
+        GravityPanel.last = self
+        self.study = study
+        sim = _sim()
+        gravity = sim.settings(study)["gravity"]
+        self.direction = list(gravity.get("direction") or [0.0, 0.0, -1.0])
+        self.pick = None  # (obj, short) of the face or edge giving the direction
+        self.study_names = {b.Name for b in sim.study_bodies(study)}
+        self.form.setObjectName("SciForgeSimGravity")
+        self.on = QtWidgets.QCheckBox("Gravity")
+        self.on.setObjectName("SciForgeSim_gravity_on")
+        self.on.setChecked(bool(gravity.get("on")))
+        self.layout.addRow(self.on)
+        self.kind = QtWidgets.QComboBox()
+        self.kind.setObjectName("SciForgeSim_gravity_direction")
+        self.kind.addItem("Vector", "vector")
+        self.kind.addItem("Normal", "normal")
+        self.kind.currentIndexChanged.connect(self._kind_changed)
+        self.layout.addRow("Direction Type", self.kind)
+        self.select = hole_common.SelectionField(self, 0, "Select a flat face or straight edge")
+        self.select.button.setObjectName("SciForgeSimGravitySelect")
+        self.layout.addRow("Direction", self.select.widget)
+        self.fields = {}
+        for axis, value in zip("xyz", self.direction):
+            field = _number_field("g" + axis, value, "number")
+            field.editingFinished.connect(lambda: self.schedule())
+            self.layout.addRow(axis.upper(), field)
+            self.fields[axis] = field
+        self.flip = _toggle("gravity_flip", "Flip Direction", False)
+        self.flip.toggled.connect(lambda _on: self.schedule())
+        self.layout.addRow(self.flip)
+        self.magnitude = _number_field("g", gravity.get("g", 9806.65) / 1000.0, "number")
+        self.magnitude.setText("%s m/s^2" % core.fmt(gravity.get("g", 9806.65) / 1000.0))
+        self.layout.addRow("Magnitude", self.magnitude)
+        note = QtWidgets.QLabel(
+            "Every body of the study weighs on the model (its material's density)."
+        )
+        note.setWordWrap(True)
+        note.setStyleSheet(HINT_STYLE)
+        self.layout.addRow(note)
+        self.finish_layout()
+        self.start_picking()
+        self._kind_changed()
+
+    def start_picking(self):
+        super().start_picking()
+        try:
+            if self.gate is not None:
+                hole_common.remove_gate(self.gate)
+            self.gate = _Gate(self)
+            Gui.Selection.addSelectionGate(self.gate)
+        except Exception as exc:
+            warn("%s: selection filter unavailable: %s" % (self.title, exc))
+
+    def _kind_changed(self, *_a):
+        normal = self.kind.currentData() == "normal"
+        self.select.widget.setEnabled(normal)
+        self.select.set_active(normal)
+        for field in self.fields.values():
+            field.setEnabled(not normal)
+        self.schedule()
+
+    def allow(self, obj, short):
+        if self.kind.currentData() != "normal" or obj is None or not short:
+            return False
+        body = bodies.body_of(obj)
+        if body is None:
+            return False
+        kind = element_kind(short)
+        if kind == "faces":
+            return surface_kind(obj, short) == "plane"
+        if kind == "edges":
+            try:
+                return "Line" in obj.Shape.getElement(short).Curve.TypeId
+            except Exception:
+                return False
+        return False
+
+    def picks_changed(self, added, dropped):
+        if added:
+            obj, short, _point = added[-1]
+            if self.allow(obj, short):
+                self.pick = (obj, short)
+                self.select.set_text("%s %s" % (obj.Label, short))
+                return True
+        if dropped and self.pick is not None:
+            for obj, short, _p in dropped:
+                if (obj, short) == self.pick:
+                    self.pick = None
+                    self.select.set_text(None)
+                    return True
+        return False
+
+    def shown(self):
+        if self.pick is None:
+            return []
+        return [(self.pick[0], [self.pick[1]])]
+
+    def activate(self, _index):
+        self.select.set_active(True)
+
+    def clear_field(self, _index):
+        self.pick = None
+        self.select.set_text(None)
+        self._sync()
+        self.schedule()
+
+    def read(self):
+        """(settings for "gravity", sentence or None)."""
+        try:
+            if self.kind.currentData() == "normal":
+                if self.pick is None:
+                    return None, "Pick a flat face or a straight edge for the direction."
+                obj, short = self.pick
+                element = bodies.global_shape(obj, copy=False).getElement(short)
+                if short.startswith("Face"):
+                    u0, u1, v0, v1 = element.ParameterRange
+                    d = element.normalAt((u0 + u1) / 2.0, (v0 + v1) / 2.0) * -1.0
+                else:
+                    a, b = element.Vertexes[0].Point, element.Vertexes[-1].Point
+                    d = b - a
+                direction = [d.x, d.y, d.z]
+            else:
+                direction = [score.parse_quantity(self.fields[a].text(), "number") for a in "xyz"]
+            direction = core.unit_vector(direction)
+            if self.flip.isChecked():
+                direction = [-c for c in direction]
+            text = self.magnitude.text().strip()
+            g = score.parse_quantity(text, "acceleration")
+            if not any(ch.isalpha() for ch in text):
+                g *= 1000.0  # a bare number is in m/s^2, as the field shows
+            if g <= 0:
+                return None, "Gravity needs a magnitude above 0."
+            return {"on": bool(self.on.isChecked()), "direction": direction, "g": g}, None
+        except core.SimulationError as exc:
+            return None, str(exc)
+
+    def _preview(self):
+        values, problem = self.read()
+        self.message.setStyleSheet(ERROR_STYLE if problem else HINT_STYLE)
+        self.message.setText(problem or "")
+
+    def feature(self):
+        return None
+
+    def accept(self):
+        if self._closed:
+            return True
+        values, problem = self.read()
+        if problem:
+            self.message.setStyleSheet(ERROR_STYLE)
+            self.message.setText(problem)
+            return False
+        if not bodies.alive(self.study):
+            self.message.setText("The study is gone (undone or deleted).")
+            return False
+        _sim().set_settings(self.study, {"gravity": values})
+        self.finish_ok()
+        _ui().refresh()
+        return True
+
+    def reject(self):
+        done = super().reject()
+        _ui().refresh()
+        return done
+
+
+def open_gravity(study):
+    from . import simulation_dialogs
+
+    if not commands.finish_open_dialog() or simulation_dialogs._busy(study):
+        return None
+    panel = GravityPanel(study.Document, study)
+    Gui.Control.showDialog(panel)
+    return panel
+
+
+# -- Local Mesh Control -------------------------------------------------------------------------
+def local_mesh_api():
+    """The engine's local mesh functions (builder sim-core), or None while it has none."""
+    sim = _sim()
+    for name in ("add_mesh_control", "add_local_mesh", "add_mesh_region"):
+        fn = getattr(sim, name, None)
+        if fn is not None:
+            return fn
+    return None
+
+
+def open_local_mesh(study):
+    if local_mesh_api() is None:
+        commands.tell(
+            "Local Mesh Control is not in SciForge yet: make the Average Element Size smaller "
+            "in Settings > Mesh."
+        )
+        return None
+    from . import simulation_dialogs
+
+    if not commands.finish_open_dialog() or simulation_dialogs._busy(study):
+        return None
+    commands.tell("Local Mesh Control: pick faces or edges, then OK.")
+    return None
