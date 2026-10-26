@@ -27,6 +27,12 @@
   round edges (narrow cones), holes with a rounded rim, arcs that miss each other by noise,
   idempotent snapping, a volume check on defeaturing, free-form parts not defeatured, a time
   budget, guarded curve / surface types, each plan stage on its own.
+- Last: rods and tubes that end in an eye (FreeCAD's example assembly has four, placed at
+  angles): in a reading where a feature along another axis crosses the base's end levels, the
+  base extrude may stop inside it, at a level or at the feature's middle, and the eye is a boss
+  of its own along its axis; a bore that ends on a round face inside the part (a tube's bore
+  that stops at its eye) is no hole: it stays in the base's profile. When no base is read, a
+  note names the axis most of the part fits and lists the faces that do not.
 - Not mine but touching my file: the QA builder (`sf/autotimeline-qa`) added modelled-thread
   handling and two speed-ups to `recognize.py` on its branch and merges mine regularly; `git
   merge-tree` of the two branches shows no conflict (checked at the end).
@@ -101,6 +107,12 @@
   what such a feature holds. `_hole_void` counted both halves of a split bore as whole bores.
 - OpenCASCADE's defeaturing of 98 fillet faces: 14.4 s at once; in chunks of 49, 11 s for the
   first chunk alone (and the faces of the rest must be found again): at once is fastest.
+- `edge.discretize(n)` with two different n gives two different "tops" of a 3D curve (the rim of
+  a bore that meets a round face): the hole reader found the bore's end with 24 samples and
+  looked for the faces at that end with 12, found none and called the end open. Both use 24 now.
+- `face.normalAt(u, v)` counts the face's orientation (the outward normal of the solid), and
+  `face.Surface.parameter(point)` gives the (u, v) of the surface point nearest any point: that
+  tells a floor that faces back into a bore from an opening that faces out.
 
 ## Tests
 
