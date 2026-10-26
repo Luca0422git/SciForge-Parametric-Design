@@ -103,6 +103,32 @@ class Regions(unittest.TestCase):
         self.assertIn("counterbore", found["looks_like"])
         self.assertIn("10 mm across 3 deep", found["looks_like"])
 
+    def test_a_drill_point_and_a_chamfered_rim(self):
+        # (beta 3 QA: a hole with a chamfered rim was "a round hole ... with a pointed
+        # (drilled) end")
+        def cone(r_min, r_max):
+            return {
+                "type": "cone",
+                "area": 5.0,
+                "axis": [0, 0, -1],
+                "point": [10, 10, 0],
+                "convex": True,
+                "r_min": r_min,
+                "r_max": r_max,
+            }
+
+        pointed = hole_region()
+        pointed["faces"].append(cone(0.0, 3.0))
+        pointed["volume"] += math.pi * 9 * 1.0 / 3
+        found = core.classify_region(pointed, "extra")
+        self.assertIn("with a pointed (drilled) end", found["looks_like"])
+        rim = hole_region()
+        rim["faces"].append(cone(3.0, 3.5))
+        rim["volume"] += 0.5
+        found = core.classify_region(rim, "extra")
+        self.assertIn("with a widened rim (a countersink or a chamfer)", found["looks_like"])
+        self.assertNotIn("pointed", found["looks_like"])
+
     def test_a_hole_of_a_mesh(self):
         n, r, depth = 32, 4.0, 8.0
         area = n / 2.0 * r * r * math.sin(2 * math.pi / n)

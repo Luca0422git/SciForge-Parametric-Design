@@ -1216,6 +1216,20 @@ def _round_facts(face, surface, kind, centre):
         row["span"] = face.Area / (surface.Radius * length) if length > 1e-12 else 0.0
         if ts:
             row["ends"] = [_xyz(point + axis * min(ts)), _xyz(point + axis * max(ts))]
+    elif kind == "cone":
+        # how far from the axis it goes: a drill point narrows to (almost) nothing, a
+        # countersink or a chamfered rim widens the hole (beta 3 QA: a chamfered rim was
+        # called "a pointed (drilled) end")
+        rs = []
+        for edge in face.Edges:
+            try:
+                for q in edge.discretize(12):
+                    w = q - point
+                    rs.append((w - axis * w.dot(axis)).Length)
+            except Exception:
+                continue
+        if rs:
+            row["r_min"], row["r_max"] = min(rs), max(rs)
     elif kind == "torus":
         row["major"] = surface.MajorRadius
         row["minor"] = surface.MinorRadius

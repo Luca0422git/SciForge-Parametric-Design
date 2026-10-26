@@ -18,6 +18,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * deleted reference: the reference deleted with delete_step: the original is shown again.
 * driven: the jointed arm turned while it is rebuilt: the reference turns with it (compare
   said match 0.16 and the plan came out turned).
+* chamfered rim: compare called holes with a chamfered rim "a round hole ... with a pointed
+  (drilled) end".
 * midway: check_design while a rebuild goes on took the hidden original under its rebuild for
   an overlap (NOT OK).
 * follower: a body whose extrude also cuts another body: Finish deleted it and the other
@@ -706,6 +708,44 @@ def checked_midway(agent, folder):
     )
 
 
+# -- holes with a chamfered rim, the base built only ---------------------------------------------
+def chamfered_rim(agent, folder):
+    path = _golden(
+        agent,
+        "QaRim",
+        [
+            ("create_sketch", {"plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]}),
+            ("extrude", {"profile": "Sketch1", "distance": 10}),
+            (
+                "create_sketch",
+                {
+                    "plane": "XY",
+                    "offset": 10,
+                    "geometry": [{"circle": [10, 15, 2.5]}, {"circle": [30, 15, 2.5]}],
+                },
+            ),
+            ("hole", {"sketch": "Sketch2", "diameter": 5, "through_all": True}),
+            (
+                "chamfer",
+                {"edges": {"type": "circle", "at": {"axis": "z", "value": "max"}}, "distance": 0.5},
+            ),
+        ],
+        folder,
+    )
+    agent.call("new_design", {"name": "QaRimRebuild"})
+    agent.call("import_file", {"path": path})
+    agent.call("start_rebuild", {"body": "Body001"})
+    agent.call("create_sketch", {"plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]})
+    agent.call("extrude", {"profile": "Sketch1", "distance": 10})
+    text, error = agent.call("compare_to_reference", {})
+    agent.check(
+        "chamfered rim: compare calls the holes' chamfered rims what they are (it said 'with a "
+        "pointed (drilled) end')",
+        not error and "widened rim" in text and "pointed" not in text,
+        text[:400],
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -718,6 +758,7 @@ CHECKS = (
     component_id,
     follower,
     checked_midway,
+    chamfered_rim,
 )
 
 

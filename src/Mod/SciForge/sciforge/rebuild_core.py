@@ -211,7 +211,7 @@ def _cylinder(region, volume, side):
             else "a stepped round boss: %s" % words
         )
         return out
-    end = " with a pointed (drilled) end" if cones else ""
+    end = _hole_end(cones, main["radius"])
     if side == "extra":
         out["looks_like"] = "a round hole about %s mm across, %s deep%s" % (
             across,
@@ -225,6 +225,21 @@ def _cylinder(region, volume, side):
             end,
         )
     return out
+
+
+def _hole_end(cones, radius):
+    """Words for the cone faces of a hole: a point drilled at its end (the cone narrows to
+    almost nothing) or a widened rim (it widens past the bore: a countersink or a chamfer)."""
+    if not cones:
+        return ""
+    measured = [c for c in cones if c.get("r_min") is not None and c.get("r_max") is not None]
+    if not measured:
+        return " with a pointed (drilled) end"
+    if any(c["r_min"] < 0.25 * radius for c in measured):
+        return " with a pointed (drilled) end"
+    if any(c["r_max"] > radius * (1 + 1e-6) for c in measured):
+        return " with a widened rim (a countersink or a chamfer)"
+    return " with a cone at its end"
 
 
 def _faceted_cylinder(region, volume, dims, side):
