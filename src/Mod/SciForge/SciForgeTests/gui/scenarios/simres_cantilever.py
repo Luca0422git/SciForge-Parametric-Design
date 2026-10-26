@@ -12,7 +12,9 @@ B  A click on the RESULTS tab: the safety factor shows first (Fusion), red-ish a
 C  Legend > Stress (Von Mises, then 1st Principal) and Displacement: the colours change, the
    legend's values are the solve's; the unit drop-down (in) converts them. Legend Min/Max (not
    for the safety factor): the colours run from 0 to 100 MPa, values above take the top colour,
-   the legend says so; Reset from RESULT TOOLS.
+   the legend says so; Reset from RESULT TOOLS. Dragging the colour bar's top handle half way
+   down ends the colours at the middle of the stress; legend options > Grey Outside the Range
+   draws the stress above it grey; a double-click on the bar: the result's own range again.
 D  The legend's Results Details button: the lowest safety factor against the targets in a
    sentence, one row per body with its material; Close.
 E  Finish Results: back to SETUP, the beam shows again, nothing of the results is left on the
@@ -219,6 +221,64 @@ def c_range_reset_check():
     vm = s.stats("von_mises")
     h.check("Reset: the result's own range again", not sess.legend_info["custom"])
     h.check("up to the max von Mises", abs(sess.legend_info["hi"] - vm["max"]) < 1e-9)
+
+
+def c_drag_top():
+    from PySide import QtCore
+
+    bar = s.legend().bar
+    top, bottom = bar.MARGIN, bar.height() - bar.MARGIN
+    state["drag_span"] = (s.session().legend_info["lo"], s.session().legend_info["hi"])
+    middle = bar.mapToGlobal(QtCore.QPoint(3, (top + bottom) // 2))
+    w.drag(bar, QtCore.QPoint(3, top), middle)
+
+
+def c_drag_top_check():
+    sess = s.session()
+    info = sess.legend_info
+    lo, hi = state["drag_span"]
+    middle = lo + 0.5 * (hi - lo)
+    h.check("dragging the top handle sets the range", info["custom"], info)
+    h.check(
+        "the colours end half way up the stress",
+        abs(info["hi"] - middle) < 0.04 * (hi - lo) and abs(info["lo"] - lo) < 1e-9,
+        (info["lo"], info["hi"], middle),
+    )
+    button = s.legend().findChild(QtWidgets.QToolButton, "SciForgeSimLegendOptions")
+    h.check(
+        "legend options: Grey Outside the Range",
+        w.click_menu(button, "Grey Outside the Range"),
+    )
+
+
+def c_grey_check():
+    sess = s.session()
+    top = sess.legend_info["hi"]
+    vm = sess.data.values("von_mises")
+    positions = sess.display.node_positions()
+    above = [n for n in positions if vm[n] > top * 1.001]
+    below = [n for n in positions if vm[n] < top * 0.999]
+    h.check(
+        "the stress above the range drawn grey",
+        above and all(positions[n] is None for n in above),
+        len(above),
+    )
+    h.check("the rest in colour", below and all(positions[n] is not None for n in below))
+    h.check("ticked in the menu", s.legend().grey_action.isChecked())
+    w.double_click(s.legend().bar)
+
+
+def c_double_click_check():
+    sess = s.session()
+    vm = s.stats("von_mises")
+    h.check("a double-click: the result's own range again", not sess.legend_info["custom"])
+    h.check("up to the max again", abs(sess.legend_info["hi"] - vm["max"]) < 1e-9)
+    h.check(
+        "nothing grey within the result's own range",
+        all(p is not None for p in sess.display.node_positions().values()),
+    )
+    button = s.legend().findChild(QtWidgets.QToolButton, "SciForgeSimLegendOptions")
+    w.click_menu(button, "Grey Outside the Range")  # (off again)
     s.choose_result("Displacement")
 
 
@@ -309,6 +369,10 @@ h.run(
         c_range_reset,
         c_range_reset_click,
         c_range_reset_check,
+        c_drag_top,
+        c_drag_top_check,
+        c_grey_check,
+        c_double_click_check,
         d_details,
         d_check,
         d_close,

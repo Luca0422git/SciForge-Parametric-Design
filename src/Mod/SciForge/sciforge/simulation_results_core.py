@@ -354,6 +354,21 @@ def legend(result, stats, unit=None, count=9, banded=False, targets=None, span=N
     return out
 
 
+def dragged_span(lo, hi, end, fraction, least=0.01):
+    """The colour range after dragging one end of the legend's bar: `end` "hi" or "lo",
+    `fraction` where it was let go (0 = the bottom of the bar, 1 = the top, of the range shown
+    now); the two ends stay at least `least` of the range apart."""
+    lo, hi = float(lo), float(hi)
+    span = hi - lo
+    if span <= 0:
+        return lo, hi
+    fraction = min(max(float(fraction), 0.0), 1.0)
+    value = lo + fraction * span
+    if end == "hi":
+        return lo, max(value, lo + least * span)
+    return min(value, hi - least * span), hi
+
+
 def span_ok(span, lo=None, hi=None):
     """A valid colour range (lo < hi) from a set one, else the result's own (lo, hi)."""
     try:

@@ -429,6 +429,7 @@ class Session:
         self.banded = False
         self.bands = False  # the safety factor target bands
         self.ranges = {}  # result key -> (lo, hi) set in Legend Min/Max (base unit)
+        self.grey_outside = False  # values beyond the legend's range drawn grey
         self.targets = core.DEFAULT_TARGETS
         self.probes = []  # {"node": index} or {"point": (x, y, z), "values": {...}}
         self.points = []  # Point Probes: {"at": (x, y, z) on the unloaded part, "where": ...}
@@ -504,6 +505,9 @@ class Session:
                     "solve": solve_again,
                     "banded": lambda on: self.set_option("banded", on),
                     "range": open_range,
+                    "span": lambda lo, hi: self.set_range((lo, hi)),
+                    "span_reset": lambda: self.set_range(None),
+                    "grey": lambda on: self.set_option("grey_outside", on),
                 },
             )
             self.tags = view_mod.TagLayer(gl, self.view)
@@ -670,7 +674,7 @@ class Session:
         stats = self.data.stats(self.result)
         lo, hi, reverse = self.scale()
         surface_values = values[self.display.nodes]
-        self.display.set_positions(_positions(np, surface_values, lo, hi, reverse))
+        self.display.set_positions(_positions(np, surface_values, lo, hi, reverse, self._grey()))
         bands = self.result == "safety" and self.bands
         self.display.set_texture(
             core.texture_rows(targets=self.targets) if bands else core.texture_rows(self.banded)
@@ -690,6 +694,7 @@ class Session:
             span=self.ranges.get(self.result),
         )
         info["targets"] = self.targets
+        info["grey"] = self._grey()
         if self.result == "safety":
             info["verdict"] = core.short_verdict(
                 results_data.min_safety(self.study), self.targets[0], self.targets[1]
@@ -700,6 +705,10 @@ class Session:
         self.update_tags()
         self._glyphs()
         self._redraw()
+
+    def _grey(self):
+        """Values beyond the legend's range grey (not for the safety factor)."""
+        return bool(self.grey_outside) and self.result != "safety"
 
     def scale(self, result=None):
         """(lo, hi, reverse) of the colours of a result as drawn: its own min .. max (the
@@ -1022,7 +1031,9 @@ class Session:
             carry=data.points,
         )
         flat_vals = vals.ravel()
-        positions = _positions(np, flat_vals, lo, hi, reverse) if len(flat_vals) else []
+        positions = (
+            _positions(np, flat_vals, lo, hi, reverse, self._grey()) if len(flat_vals) else []
+        )
         self.display.set_cap(tris, flat_vals, positions, normal, rest=rest)
 
     # -- iso-surface
@@ -1383,15 +1394,25 @@ def glyphs_available():
     return _glyph_module() is not None
 
 
-def _positions(np, values, lo, hi, reverse):
-    """Colour map positions (None for no value) of an array of values."""
+def _positions(np, values, lo, hi, reverse, grey_outside=False):
+    """Colour map positions (None for no value, drawn grey) of an array of values; with
+    `grey_outside` the values beyond lo .. hi have none either."""
     values = np.asarray(values, dtype=float)
     if lo is None or hi is None or hi - lo <= 1e-300:
         t = np.zeros(len(values))
+        grey_outside = False
     else:
-        t = np.clip((values - lo) / (hi - lo), 0.0, 1.0)
+        raw = (values - lo) / (hi - lo)
+        t = np.clip(raw, 0.0, 1.0)
     if reverse:
         t = 1.0 - t
+    if grey_outside:
+        with np.errstate(invalid="ignore"):
+            outside = (raw < -1e-9) | (raw > 1.0 + 1e-9)
+        return [
+            None if v != v or out else float(p)
+            for v, p, out in zip(values.tolist(), t.tolist(), outside.tolist())
+        ]
     return [None if v != v else float(p) for v, p in zip(values.tolist(), t.tolist())]
 
 

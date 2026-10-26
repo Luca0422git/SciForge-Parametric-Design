@@ -671,18 +671,112 @@ LEGEND_STYLE = """
 
 
 class ColourBar(QtWidgets.QWidget):
-    """The legend's vertical colour bar with its values (top = high)."""
+    """The legend's vertical colour bar with its values (top = high). Its two ends have handles
+    (Fusion: drag the top or the bottom of the legend to narrow the range): dragging one and
+    letting go sets the colours' range (`on_range(lo, hi)`, base unit); a double-click goes
+    back to the result's own range (`on_reset()`). Not for the safety factor."""
 
-    def __init__(self, parent=None):
+    MARGIN = 8
+
+    def __init__(self, parent=None, on_range=None, on_reset=None):
         super().__init__(parent)
         self.setObjectName("SciForgeSimColourBar")
         self.info = None
+        self.on_range = on_range
+        self.on_reset = on_reset
+        self.dragging = None  # "hi" | "lo" while an end is dragged
+        self.drag_y = None
         self.setMinimumHeight(190)
         self.setMinimumWidth(150)
+        self.setMouseTracking(True)
 
     def set_info(self, info):
         self.info = info
         self.update()
+
+    def draggable(self):
+        info = self.info
+        return (
+            self.on_range is not None
+            and bool(info)
+            and info.get("result") != "safety"
+            and not info.get("bands")
+        )
+
+    def _ends(self):
+        return self.MARGIN, self.height() - self.MARGIN
+
+    def end_at(self, y):
+        """ "hi" or "lo" when the pixel row y is on one of the bar's handles, else None."""
+        if not self.draggable():
+            return None
+        top, bottom = self._ends()
+        if abs(y - top) <= 7:
+            return "hi"
+        if abs(y - bottom) <= 7:
+            return "lo"
+        return None
+
+    def end_y(self, end):
+        top, bottom = self._ends()
+        return top if end == "hi" else bottom
+
+    def fraction_at(self, y):
+        top, bottom = self._ends()
+        return (bottom - float(y)) / max(bottom - top, 1)
+
+    def mousePressEvent(self, event):
+        try:
+            y = event.position().y() if hasattr(event, "position") else event.y()
+            end = self.end_at(y)
+            if end is not None and event.button() == QtCore.Qt.LeftButton:
+                self.dragging, self.drag_y = end, y
+                self.update()
+                event.accept()
+                return
+        except Exception as exc:
+            warn("results legend: %s" % exc)
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        try:
+            y = event.position().y() if hasattr(event, "position") else event.y()
+            if self.dragging is not None:
+                top, bottom = self._ends()
+                self.drag_y = min(max(y, top), bottom)
+                self.update()
+            else:
+                hot = self.end_at(y) is not None
+                self.setCursor(QtCore.Qt.SizeVerCursor if hot else QtCore.Qt.ArrowCursor)
+        except Exception as exc:
+            warn("results legend: %s" % exc)
+
+    def mouseReleaseEvent(self, event):
+        try:
+            end, self.dragging = self.dragging, None
+            if end is not None and self.info and self.on_range is not None:
+                y = event.position().y() if hasattr(event, "position") else event.y()
+                top, bottom = self._ends()
+                y = min(max(y, top), bottom)
+                lo, hi = core.dragged_span(
+                    self.info["lo"], self.info["hi"], end, self.fraction_at(y)
+                )
+                self.drag_y = None
+                self.update()
+                self.on_range(lo, hi)
+                return
+        except Exception as exc:
+            warn("results legend: %s" % exc)
+        self.drag_y = None
+
+    def mouseDoubleClickEvent(self, event):
+        try:
+            if self.draggable() and self.info.get("custom") and self.on_reset is not None:
+                self.on_reset()
+                return
+        except Exception as exc:
+            warn("results legend: %s" % exc)
+        super().mouseDoubleClickEvent(event)
 
     def paintEvent(self, _event):
         info = self.info
@@ -723,6 +817,27 @@ class ColourBar(QtWidgets.QWidget):
             painter.setPen(QtGui.QPen(QtGui.QColor("#56606f"), 1))
             painter.setBrush(QtCore.Qt.NoBrush)
             painter.drawRect(bar)
+            if self.draggable():  # the two handles: small arrows at the ends of the bar
+                for end in ("hi", "lo"):
+                    y = self.end_y(end)
+                    if self.dragging == end and self.drag_y is not None:
+                        y = self.drag_y
+                        painter.setPen(QtGui.QPen(QtGui.QColor("#f5f5f5"), 1, QtCore.Qt.DashLine))
+                        painter.drawLine(
+                            QtCore.QPointF(bar.left(), y), QtCore.QPointF(bar.right(), y)
+                        )
+                    painter.setPen(QtGui.QPen(QtGui.QColor("#1f2329"), 1))
+                    painter.setBrush(QtGui.QBrush(QtGui.QColor("#f5f5f5")))
+                    painter.drawPolygon(
+                        QtGui.QPolygonF(
+                            [
+                                QtCore.QPointF(0.0, y - 5.0),
+                                QtCore.QPointF(6.0, y),
+                                QtCore.QPointF(0.0, y + 5.0),
+                            ]
+                        )
+                    )
+                painter.setBrush(QtCore.Qt.NoBrush)
             painter.setPen(QtGui.QColor(self.palette().color(QtGui.QPalette.WindowText)))
             text_colour = QtGui.QColor("#f5f5f5")
             try:
@@ -797,6 +912,13 @@ class Legend(QtWidgets.QFrame):
         menu.addSeparator()
         self.range_action = menu.addAction("Legend Min/Max...")
         self.range_action.triggered.connect(lambda: self._call("range"))
+        self.grey_action = menu.addAction("Grey Outside the Range")
+        self.grey_action.setObjectName("SciForgeSimLegendGrey")
+        self.grey_action.setCheckable(True)
+        self.grey_action.setToolTip(
+            "Values beyond the legend's range drawn grey instead of in the end colours"
+        )
+        self.grey_action.toggled.connect(lambda on: self._call("grey", on))
         self.options_button.setMenu(menu)
         row.addWidget(self.options_button)
         box.addLayout(row)
@@ -813,7 +935,10 @@ class Legend(QtWidgets.QFrame):
         self.max_label = QtWidgets.QLabel("")
         self.max_label.setObjectName("SciForgeSimLegendMax")
         box.addWidget(self.max_label)
-        self.bar = ColourBar()
+        self.bar = ColourBar(  # (Compare has no range: no handles there)
+            on_range=(lambda lo, hi: self._call("span", lo, hi)) if "span" in callbacks else None,
+            on_reset=(lambda: self._call("span_reset")) if "span" in callbacks else None,
+        )
         box.addWidget(self.bar)
         self.min_label = QtWidgets.QLabel("")
         self.min_label.setObjectName("SciForgeSimLegendMin")
@@ -922,6 +1047,10 @@ class Legend(QtWidgets.QFrame):
             self.range_label.setText(info.get("span_text", ""))
             self.range_label.setVisible(bool(info.get("custom")))
             self.range_action.setEnabled(info["result"] != "safety")
+            self.grey_action.blockSignals(True)
+            self.grey_action.setChecked(bool(info.get("grey")))
+            self.grey_action.setEnabled(info["result"] != "safety")
+            self.grey_action.blockSignals(False)
             self.bar.set_info(info)
             self.study_label.setText(study_label)
             self.deform_label.setText(deformation_text)

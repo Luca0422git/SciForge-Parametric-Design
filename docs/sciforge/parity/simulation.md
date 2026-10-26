@@ -214,7 +214,7 @@ surface: a Value slider over the result, an opacity).
 | A vertical colour bar with min and max | Max above, Min below the bar, 9 values (the safety factor every 1.5); colours blue - cyan - green - yellow - red drawn with a colour map texture, so the colours between two nodes follow the map | G (mem) |
 | Safety factor capped at 15; no legend min / max for it | Scale 0 .. 15, red low, blue high | F[89] F[90] T[107] |
 | Legend options: colour transitions (bands) | "..." > Smooth Colours / Colour Bands (9 bands) | Autodesk legend help |
-| Legend Min/Max (legacy viewer: RESULT TOOLS > Legend Min/Max; not for the safety factor) | RESULT TOOLS > Legend Min/Max and the legend's "..." menu: Min and Max in the legend's unit, Reset; values beyond take the end colours (G); the legend shows the result's own min / max and says the colours' range; refused for the safety factor | A[53] F[90], web excerpt |
+| Legend Min/Max (legacy viewer: RESULT TOOLS > Legend Min/Max; not for the safety factor); the colour bar's sliders: drag the top or the bottom of the legend to narrow the range, hiding what is beyond | RESULT TOOLS > Legend Min/Max and the legend's "..." menu: Min and Max in the legend's unit, Reset; **the colour bar's two ends have handles**: drag one and let go to narrow the range, double-click the bar for the result's own range; values beyond take the end colours, or are **drawn grey** with "..." > Grey Outside the Range (SciForge's grey for Fusion's hiding); the legend shows the result's own min / max and says the colours' range; none of it for the safety factor | A[53] F[90], web excerpts (Fusion blog, AU handout) |
 | Results Details button next to the Load Case selector | The "i" button in the legend (one load case per study: no selector) | A[61] |
 
 ### RESULTS tab commands
@@ -246,8 +246,8 @@ surface: a Value slider over the result, an opacity).
   (FreeCAD's bundle has Pillow but no video encoder); browsers and chat apps play both.
 - **Slice plane on a construction plane** (a document plane), the **Vectors** and **Mesh Lines**
   slice styles: the plane is across X, Y or Z or parallel to a face of the result.
-- **The online viewer's threshold sliders** (a range of interest dragged on the legend): Legend
-  Min/Max (typed values) covers the same need.
+- **The online viewer's threshold sliders**: the legend's handles narrow the range and Grey
+  Outside the Range greys what is beyond; Fusion hides it (a grey part keeps the shape readable).
 - **Contact pressure / force results**: bodies are bonded (glued), which has no contact pressure;
   CalculiX's contact output is not requested.
 - **Shear strain components**: CalculiX's shear strains are tensor values (half the engineering

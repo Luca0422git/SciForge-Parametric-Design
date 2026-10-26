@@ -111,6 +111,15 @@ class LegendTests(unittest.TestCase):
         self.assertEqual(core.span_ok((5, 5), 1, 2), (1, 2))
         self.assertEqual(core.span_ok(None, 1, 2), (1, 2))
 
+    def test_dragged_legend_ends(self):
+        # the top dragged half way down: the colours end at the middle of the range shown
+        self.assertEqual(core.dragged_span(0.0, 200.0, "hi", 0.5), (0.0, 100.0))
+        self.assertEqual(core.dragged_span(0.0, 200.0, "lo", 0.25), (50.0, 200.0))
+        # dragged past the other end: they stay 1 % of the range apart
+        self.assertEqual(core.dragged_span(0.0, 200.0, "hi", -1.0), (0.0, 2.0))
+        self.assertEqual(core.dragged_span(0.0, 200.0, "lo", 2.0), (198.0, 200.0))
+        self.assertEqual(core.dragged_span(5.0, 5.0, "hi", 0.5), (5.0, 5.0))
+
     def test_target_bands_in_the_legend(self):
         leg = core.legend("safety", {"min": 2, "max": 15}, targets=(3.0, 6.0))
         self.assertEqual([b[0] for b in leg["bands"]], ["above", "meets", "below"])
