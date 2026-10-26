@@ -154,13 +154,17 @@ def target_of(ref):
 
 
 def reference_for(obj):
-    """The reference made from `obj` or rebuilt into it (a body or mesh), or None."""
+    """The reference made from `obj` or rebuilt into it (a body or mesh), or None: a rebuild
+    going on first, else one finished and kept (hidden)."""
     if obj is None:
         return None
-    for ref in references(obj.Document):
-        if obj.Name in (getattr(ref, "SourceName", ""), getattr(ref, "TargetName", "")):
-            return ref
-    return None
+    found = [
+        ref
+        for ref in references(obj.Document)
+        if obj.Name in (getattr(ref, "SourceName", ""), getattr(ref, "TargetName", ""))
+    ]
+    going = [ref for ref in found if getattr(ref, "Shown", True)]
+    return (going or found or [None])[0]
 
 
 def active_references(doc):
@@ -310,6 +314,8 @@ def start(doc, source, label=None):
         raise RebuildError("%s is a rebuild reference itself; pick a body." % source.Label)
     kind, source = _original(source)
     ref = reference_for(source)
+    if ref is not None and not getattr(ref, "Shown", True):
+        ref = None  # a finished rebuild whose reference was kept: this is a new one
     if ref is not None:
         if getattr(ref, "TargetName", "") == source.Name:
             raise RebuildError(
@@ -569,9 +575,10 @@ def compare(ref, target=None, options=None):
     result["seconds"] = round(time.perf_counter() - began, 3)
     if method == "sampled":
         result["note"] = (
-            "OpenCASCADE's boolean failed on these solids, so the volumes were measured by "
-            "sampling points (about 1 % exact) and the regions are not listed."
+            "OpenCASCADE could not split these two solids by each other, so the volumes were "
+            "measured by sampling points (about 1 % exact) and the regions are not listed."
         )
+        result["verdict"] = "(Volumes sampled, about 1 % exact: see note.) " + result["verdict"]
     if opts.get("show", True):
         _notify(
             "compare",
@@ -1546,7 +1553,7 @@ def _face_list(shape, rows, limit, opts):
 
 
 # -- deviation ------------------------------------------------------------------------------------
-def _deviation(rows, budget=120):
+def _deviation(rows, budget=160):
     """How far the surfaces are apart: sample points of the unmatched faces of each part,
     their exact distance to the other part (matched faces count 0). max and an
     area-weighted mean, mm."""
@@ -1556,7 +1563,7 @@ def _deviation(rows, budget=120):
     total_area = sum(r.area for r in rows_a) + sum(r.area for r in rows_b)
     if not open_a and not open_b:
         return {"max": 0.0, "mean": 0.0}
-    per_face = max(1, min(4, budget // max(1, len(open_a) + len(open_b))))
+    per_face = max(1, min(9, budget // max(1, len(open_a) + len(open_b))))
     worst = 0.0
     weighted = 0.0
     for rows_open, other in ((open_a, rows_b), (open_b, rows_a)):
@@ -1585,6 +1592,11 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
 
     if not is_reference(ref) or not bodies.alive(ref):
         raise RebuildError("There is no rebuild to finish (start_rebuild makes one).")
+    if not getattr(ref, "Shown", True):
+        raise RebuildError(
+            "The rebuild of %s is finished already (its reference was kept, hidden, to compare "
+            "with later)." % (getattr(ref, "SourceLabel", "") or ref.Label)
+        )
     doc = ref.Document
     target = target if target is not None else target_of(ref)
     if target is not None and not bodies.is_body(target):
