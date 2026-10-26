@@ -909,6 +909,93 @@ def check_component(doc, out):
     )
 
 
+@engine_check("two components' bodies with the same name")
+def check_same_labels(doc, out):
+    """Fusion numbers bodies per component: two components can each have a "Body1". The
+    result summary keeps them apart (sim-ui's report)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    params = App.ParamGet("User parameter:BaseApp/Preferences/Document")
+    allowed = params.GetBool("DuplicateLabels", False)
+    params.SetBool("DuplicateLabels", True)  # (SciForge's own setting, theme.py)
+    try:
+        first = doc.addObject("App::Part", "CompA")
+        second = doc.addObject("App::Part", "CompB")
+        first.Label, second.Label = "Bracket", "Plate"
+        a = make_body(doc, Part.makeBox(100, 10, 10), "SameA")
+        b = make_body(doc, Part.makeBox(100, 10, 10, App.Vector(0, 50, 0)), "SameB")
+        first.addObject(a)
+        second.addObject(b)
+        a.Label = "Body1"
+        b.Label = "Body1"
+        doc.recompute()
+        study = sim.create_study(doc, study_bodies=[a, b])
+        sim.add_item(
+            study,
+            "constraint",
+            "fixed",
+            [(body, one_face(body, lambda f: near(f.CenterOfMass.x, 0))) for body in (a, b)],
+        )
+        sim.add_item(
+            study,
+            "load",
+            "force",
+            [(body, one_face(body, lambda f: near(f.CenterOfMass.x, 100))) for body in (a, b)],
+            {"direction": "vector", "vector": [0, 0, -1], "magnitude": 100.0, "per_entity": True},
+        )
+        summary = sim.solve(study, timeout=600)
+        rows = summary.get("bodies", {})
+        keys = (sim.body_key(study, a), sim.body_key(study, b))
+        out.append(
+            (
+                "both named Body1, two rows: %s" % ", ".join(sorted(rows)),
+                a.Label == b.Label == "Body1" and len(rows) == 2 and keys[0] != keys[1],
+                (a.Label, b.Label, sorted(rows), keys),
+            )
+        )
+        out.append(
+            (
+                "each row is its own body (bends 0.2 mm, as one cantilever)",
+                all(
+                    k in rows
+                    and rows[k].get("name") == body.Name
+                    and abs(rows[k]["displacement_max"] - 0.2) <= 0.006
+                    for k, body in zip(keys, (a, b))
+                ),
+                rows,
+            )
+        )
+    finally:
+        params.SetBool("DuplicateLabels", allowed)
+
+
+@engine_check("a change while it solves")
+def check_change_during(doc, out):
+    """The results are of the study as the solve started: a load changed while CalculiX runs
+    leaves them out of date (sim-ui's report)."""
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc, size_pct=3.0)
+    job = sim.Job(study)
+    tries = 0
+    while job.state == "running" and job.stage != "solve" and tries < 20000:
+        tries += 1
+        if job._thread is not None and job._thread.is_alive():
+            job._thread.join(0.002)
+            continue
+        job.poll()
+    load = sim.items(study, "load")[0]
+    sim.update_item(load, opts={"magnitude": 200.0})
+    job.wait(600)
+    out.append(("solved", job.state == "done", job.message))
+    out.append(("out of date: the load changed while it solved", sim.out_of_date(study), ""))
+    sim.solve(study, timeout=600)
+    out.append(("solved again: up to date", not sim.out_of_date(study), ""))
+
+
 @engine_check("a deleted body")
 def check_deleted_body(doc, out):
     import FreeCAD as App

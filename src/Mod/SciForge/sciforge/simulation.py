@@ -2284,6 +2284,7 @@ class Job:
         self._straight = False  # mesh again with straight-sided elements (bad curved ones)
         self._curved = None  # (made straight, still bad, error) of the check before a solve
         self._curved_text = None  # its note
+        self._fingerprints = None  # (signature, mesh signature) when the solve started
         self._getter = None  # FreeCAD's mesh tables for the input (made a turn earlier)
         self._results_step = None  # the next turn of reading the results
         self._solid_nodes = {}  # model solid index -> its mesh nodes (from Gmsh's groups)
@@ -2367,6 +2368,10 @@ class Job:
             refresh_signatures(self.study)
         except Exception as exc:
             warn("simulation: remembering picks: %s" % exc)
+        if self._fingerprints is None:
+            # what the results and the mesh are of: the study as the solve starts (a design
+            # changed while it runs leaves them out of date)
+            self._fingerprints = (signature(self.study), mesh_signature(self.study))
         checks = precheck(self.study)
         if self.mesh_only:
             errors = [
@@ -2548,7 +2553,9 @@ class Job:
                 "mesher": self.mesher,
                 "size": _global_size(self.study, self._model_shape),
                 "order": settings(self.study)["mesh"]["order"],
-                "signature": mesh_signature(self.study),
+                "signature": (
+                    self._fingerprints[1] if self._fingerprints else mesh_signature(self.study)
+                ),
                 "made": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
         )
@@ -3295,6 +3302,42 @@ def out_of_date(study):
     return bool(done) and done.get("signature") != signature(study)
 
 
+def body_key(study, body):
+    """The key of `body` in the result summary's "bodies": its label, with its component's
+    label (or its name) added when another body of the study has the same label (two
+    components' "Body1")."""
+    return _body_keys(study_bodies(study)).get(body.Name, body.Label)
+
+
+def _body_keys(found):
+    """{body name: summary key} for the bodies `found` (see body_key)."""
+    unique = []
+    for b in found:
+        if b not in unique:
+            unique.append(b)
+    count = {}
+    for b in unique:
+        count[b.Label] = count.get(b.Label, 0) + 1
+    out = {}
+    for b in unique:
+        if count[b.Label] == 1:
+            out[b.Name] = b.Label
+            continue
+        try:
+            parent = b.getParentGeoFeatureGroup()
+        except Exception:
+            parent = None
+        out[b.Name] = "%s (%s)" % (b.Label, parent.Label if parent is not None else b.Name)
+    seen = {}
+    for name, key in out.items():
+        seen.setdefault(key, []).append(name)
+    for key, names in seen.items():
+        if len(names) > 1:  # (the same label in components of the same label)
+            for name in names:
+                out[name] = "%s (%s)" % (key, name)
+    return out
+
+
 def _finish(study, result, mesh_obj, owners, job, reactions=None):
     """Safety factors into the result, and the study's result summary."""
     data = study_data(study)
@@ -3306,6 +3349,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
     strengths = [None] * len(node_ids)
     per_body = {}
     grouped = getattr(job, "_solid_nodes", None) or {}
+    keys = _body_keys(owners)
     if model is not None:
         for index, (solid, body) in enumerate(zip(model.Solids, owners)):
             name, props, _source = study_material(study, body)
@@ -3319,8 +3363,11 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
                         nodes = mesh.getNodesBySolid(solid)
                     except Exception:
                         nodes = []
-            per_body.setdefault(body.Label, {"nodes": set(), "strength": s, "material": name})
-            per_body[body.Label]["nodes"].update(nodes)
+            key = keys.get(body.Name, body.Label)
+            per_body.setdefault(
+                key, {"nodes": set(), "strength": s, "material": name, "name": body.Name}
+            )
+            per_body[key]["nodes"].update(nodes)
             for n in nodes:
                 i = position.get(n)
                 if i is None:
@@ -3357,6 +3404,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
             continue
         sf = [safety[i] for i in idx if safety[i] == safety[i]]
         bodies_out[label] = {
+            "name": entry["name"],
             "material": entry["material"],
             "von_mises_max": max(vm[i] for i in idx),
             "displacement_max": max(lengths[i] for i in idx),
@@ -3364,7 +3412,10 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
         }
     out = {
         "solved": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "signature": signature(study),
+        # (taken when the solve started: a design changed while it ran is out of date)
+        "signature": (
+            job._fingerprints[0] if getattr(job, "_fingerprints", None) else signature(study)
+        ),
         "mesh": {
             "nodes": mesh.NodeCount,
             "elements": mesh.VolumeCount,

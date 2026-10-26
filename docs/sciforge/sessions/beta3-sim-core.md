@@ -58,6 +58,13 @@ sections Engine and Benchmarks.
   the numbers; solve again to see them.
 - **Contacts**: `simulation_core.CONTACT_TYPES` (key, Fusion's name, available) and
   `CONTACT_NOT_AVAILABLE` (the sentence for the greyed types).
+- **Per-body results** (`summary["bodies"]`): keyed by the body's label, or "Body1 (Bracket)"
+  (its component's label added) when two bodies of the study share a label; each row has
+  `"name"` (the body's object name). `body_key(study, body)` gives a body's key. (sim-ui's
+  report: two components' "Body1" shared one row.)
+- **Out of date**: the fingerprints (results and mesh) are taken when the solve starts, so a
+  design changed while it runs leaves the results out of date (sim-ui's report;
+  `simulation_solve_dialog._keep_out_of_date` is no longer needed but harmless).
 - **No VTK pipeline** is made with the results any more (`Pipeline_SimResults` is gone): draw
   from `results(study)` / the result object.
 
@@ -108,3 +115,9 @@ sections Engine and Benchmarks.
 - Fixed in review: a mesh made again after a failed solve looked for Netgen's old mesh when
   Netgen had been used (Gmsh is tried first again now); switching Keep results in the file made
   the results out of date (it changes nothing they say).
+- 20:35-20:50 the window's longest pause on the 131 000-node part: 2.7 s (was 6.8-11.6 s): the
+  input is written over two turns (FreeCAD's mesh tables first), the results read over three
+  (FreeCAD's import with the renumbering of its result mesh moved to a turn of its own, then
+  the summary); displacement lengths and the result statistics with numpy. sim-ui's two open
+  engine issues fixed (per-body rows of same-named bodies, fingerprints from the solve's
+  start), each with an engine check.
