@@ -1049,12 +1049,23 @@ class BrowserWidget(QtWidgets.QTreeWidget):
                 names.add(sel.ObjectName)
         except Exception:
             return
+        # SIMULATION workspace: a constraint's or load's row selects the faces it is on, not an
+        # object; its row stays selected while the view's selection is just what the selected
+        # rows lit up (several rows picked with Ctrl stay picked for Delete)
+        sim_rows = [
+            item.data(1, ROLE_NODE)
+            for item in self.selectedItems()
+            if item.data(1, ROLE_NODE)["kind"] == "sim_item"
+        ]
+        keep = (_simulation_call("keep_selected", self._doc, sim_rows) or set()) if sim_rows else ()
         self._syncing = True
         self.blockSignals(True)
         try:
             for item in self._items():
                 node = item.data(1, ROLE_NODE)
                 want = node["object"] in names and node["kind"] not in ("view", "saved_view")
+                if node["kind"] == "sim_item":
+                    want = node["key"] in keep
                 if item.isSelected() != want:
                     item.setSelected(want)
         finally:

@@ -207,6 +207,7 @@ def repair_info(study):
         "bodies": len(found),
         "lost": [i.Label for i in sim.lost_items(study)],
         "held": len([i for i in sim.items(study, "constraint") if not i.Suppressed]),
+        "suppressed": [i.Label for i in sim.items(study, "constraint") if i.Suppressed],
         "remove_rigid": bool(settings.get("remove_rigid")),
         "loose": [],
         "materials": [],

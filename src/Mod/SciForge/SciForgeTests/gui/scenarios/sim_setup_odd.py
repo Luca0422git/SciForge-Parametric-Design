@@ -17,6 +17,9 @@ H  Structural Loads open with a face picked, and the design closed: the dialog e
    step of it is left open. A new design (made by script, Workspace > Simulation): it has no
    undo step of the closed dialog; Settings open and that design closed too: no error. A third
    design: Generate Mesh runs to its end (it did not wait for a closed design's dialog).
+I  Fixed 1 and Force 1 selected together in the browser (Ctrl+click), Delete: both gone in one
+   undo step; Undo: both back. Fixed 1 suppressed: red; the Pre-check list's Repair opens
+   Structural Constraints and says Fixed 1 is suppressed; Esc; Unsuppress: not red.
 """
 
 import FreeCAD as App
@@ -285,6 +288,55 @@ def h_meshed():
     s.close_popup("SciForgeSimJobStatus")
 
 
+# -- I ------------------------------------------------------------------------------------------
+def i_select_two():
+    s.click_row("Fixed 1")
+    tree, pos = s._row_pos("Force 1")
+    if h.check("Force 1's row", pos is not None):
+        w.click(tree.viewport(), pos, QtCore.Qt.ControlModifier)
+    state["undo"] = len(App.ActiveDocument.UndoNames)
+    w.key(s.browser(), QtCore.Qt.Key_Delete)
+
+
+def i_deleted():
+    h.check("both deleted", not s.items(), [i.Label for i in s.items()])
+    h.check("in one undo step", len(App.ActiveDocument.UndoNames) == state["undo"] + 1)
+    s.undo()
+
+
+def i_back():
+    labels = sorted(i.Label for i in s.items())
+    h.check("Undo: both back", labels == ["Fixed 1", "Force 1"], labels)
+    s.right_click_row("Fixed 1", "Suppress")
+
+
+def i_red():
+    h.check("Fixed 1 suppressed: red", s.light() == "red", s.light())
+    h.ribbon("Pre-check")
+
+
+def i_repair():
+    dialog = s.popup_named("SciForgeSimPrecheck")
+    if h.check("Pre-check list with Repair", dialog is not None and dialog.repair is not None):
+        s.click_widget(dialog.repair)
+
+
+def i_constraints():
+    p = s.item_panel()
+    h.check("Structural Constraints opened", p is not None and p.category == "constraint")
+    h.check("it says Fixed 1 is suppressed", "Fixed 1 is suppressed" in s.told(), s.told())
+    s.esc()
+
+
+def i_unsuppress():
+    h.check("Esc closed it", s.item_panel() is None)
+    s.right_click_row("Fixed 1", "Unsuppress")
+
+
+def i_check():
+    h.check("not red again", s.light() in ("green", "yellow"), s.light())
+
+
 h.run(
     "sim_setup_odd",
     [
@@ -327,5 +379,13 @@ h.run(
         h_mesh,
         s.wait_solved("wait_mesh_three", 60),
         h_meshed,
+        i_select_two,
+        i_deleted,
+        i_back,
+        i_red,
+        i_repair,
+        i_constraints,
+        i_unsuppress,
+        i_check,
     ],
 )

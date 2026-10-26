@@ -207,6 +207,31 @@ def selection(doc, node):
     return found
 
 
+def keep_selected(doc, nodes):
+    """The keys of the selected constraint / load rows that stay selected when the 3D view's
+    selection changes: all of them while the view's selection is just what they lit up, none
+    once something else is picked or the selection is cleared."""
+    if doc is None or not nodes:
+        return set()
+    picked = set()
+    for sel in Gui.Selection.getSelectionEx():
+        try:
+            if sel.Object.Document.Name != doc.Name:
+                continue
+        except Exception:
+            continue
+        for sub in sel.SubElementNames or [""]:
+            picked.add((sel.ObjectName, sub.split(".")[-1]))
+    if not picked:
+        return set()
+    lit = set()
+    for node in nodes:
+        for obj, subs in _references(doc, node):
+            for sub in subs or [""]:
+                lit.add((obj.Name, sub))
+    return {node["key"] for node in nodes} if picked <= lit else set()
+
+
 def only_highlight(doc, picks):
     """True when `picks` [(object, element, ...)] are just what a click on a constraint's or
     load's row lit up, not something the person picked in the view."""

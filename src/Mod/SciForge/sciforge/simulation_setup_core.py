@@ -160,7 +160,8 @@ def repair_step(info):
     person first, as (what, name, sentence). `info`: {"lost": [item labels that lost their
     picks], "held": count of constraints not suppressed, "remove_rigid": bool, "loose": [body
     labels nothing holds], "materials": [body labels whose study material lacks what the solve
-    needs], "outside": [(item label, body label) of items on bodies the study leaves out]}.
+    needs], "outside": [(item label, body label) of items on bodies the study leaves out],
+    "suppressed": [labels of suppressed constraints]}.
     what: "edit" (the item's dialog), "constraints" (Structural Constraints), "dof" (DOF View
     shows how the bodies move), "materials" (Study Materials) or "precheck" (the list). A
     study without a solid body ("bodies": 0) goes to the list: nothing in it can be picked."""
@@ -178,6 +179,15 @@ def repair_step(info):
             "%s lost what it was on (the design changed): pick it again and press OK." % lost[0],
         )
     if not info.get("held") and not info.get("remove_rigid"):
+        off = info.get("suppressed") or []
+        if off:
+            return (
+                "constraints",
+                None,
+                "Nothing holds the model: %s %s suppressed (right-click > Unsuppress), or pick "
+                "where it is held for a new one and press OK."
+                % (", ".join(off), "is" if len(off) == 1 else "are"),
+            )
         return (
             "constraints",
             None,
