@@ -143,6 +143,8 @@ def hover(point, modifiers=QtCore.Qt.NoModifier):
     h.uncover(point)
     widget = h.gl_widget()
     pixel = h.screen_point(point)
+    # (a mouse already on that pixel sends no move: come from the next pixel, as a hand does)
+    h.move(pixel + QtCore.QPoint(2, 1))
     if modifiers == QtCore.Qt.NoModifier:
         h.move(pixel)
     else:
@@ -161,6 +163,7 @@ def hover(point, modifiers=QtCore.Qt.NoModifier):
 
 
 def hover_pixel(pixel):
+    h.move(pixel + QtCore.QPoint(2, 1))
     h.move(pixel)
     for _ in range(6):
         QtTest.QTest.qWait(40)

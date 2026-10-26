@@ -39,6 +39,9 @@ class Made:
         self.built = {}  # file key -> component
         self.notes = {}  # what the file had that did not come in (export_report.cad_items)
         self.occurrence = False  # the file was in the design already: `top` is an instance
+        self.path = ""
+        self.name = ""
+        self.finished = False
 
 
 # -- reading -----------------------------------------------------------------------------------
@@ -259,14 +262,18 @@ def read(path):
     return read_tree(path, notes), notes
 
 
-def import_file(doc, path, mode=core.OPEN, parent=None, label=None, reuse=True, tree=None):
+def import_file(
+    doc, path, mode=core.OPEN, parent=None, label=None, reuse=True, tree=None, finish=True
+):
     """Bring a STEP / IGES file into `doc` with its structure. mode OPEN: the file's top
     product is the design (File > Open into a new design); INSERT: the whole file becomes
     one component (named `label`, else after the file) inside `parent` (None: the root);
     a file this design already holds (inserted before, unchanged since) comes in as another
     occurrence of that component ("Screw:2", linked: Fusion's second insert of a design),
-    unless `reuse` is False. `tree`: the file as read() gave it (else it is read here). No
-    undo step of its own (the caller's). Returns a Made."""
+    unless `reuse` is False. `tree`: the file as read() gave it (else it is read here).
+    `finish` False: no recompute and no colours yet (several files in one go: the caller
+    recomputes once, then calls finish_made for each). No undo step of its own (the
+    caller's). Returns a Made."""
     made = Made()
     if mode == core.INSERT and reuse and label is None:
         source = inserted_from(doc, path)
@@ -277,7 +284,9 @@ def import_file(doc, path, mode=core.OPEN, parent=None, label=None, reuse=True, 
                 made.top = inst
                 made.instances.append(inst)
                 made.occurrence = True
-                doc.recompute()
+                made.path = path
+                if finish:
+                    doc.recompute()
                 log("inserted %s again: another occurrence, %s" % (source.Label, inst.Label))
                 return made
             except Exception as exc:
@@ -301,8 +310,11 @@ def import_file(doc, path, mode=core.OPEN, parent=None, label=None, reuse=True, 
     _bodies(doc, container, level["pieces"], App.Placement(), at_root, part_name, made)
     for child in level["children"]:
         _component(doc, child, container, App.Placement(), origin, made)
-    doc.recompute()
-    _finish_bodies(made, path)
+    made.path = path
+    made.name = name
+    if finish:
+        doc.recompute()
+        finish_made(made)
     log(
         "%s %s"
         % (
@@ -316,6 +328,16 @@ def import_file(doc, path, mode=core.OPEN, parent=None, label=None, reuse=True, 
         )
     )
     return made
+
+
+def finish_made(made):
+    """What an import does once its bodies have their shapes (after a recompute): the
+    steps' marks and source file, the colours. Done once per Made."""
+    if made.finished or made.occurrence:
+        made.finished = True
+        return
+    made.finished = True
+    _finish_bodies(made, made.path)
 
 
 def _component_label(doc, name):
@@ -365,11 +387,22 @@ def _bodies(doc, container, pieces, frame, at_root, part_name, made):
         body = components.new_body_in(doc, container, label)
         base = doc.addObject("Part::Feature", "ImportedShape")
         base.Label = body.Label + " (imported)"
+        _hide(base)  # hidden before the first recompute: never drawn (its body is)
         base.Shape = local
         if container is not None:
             container.addObject(base)  # FreeCAD's link scope: the base sits in the component
         body.BaseFeature = base
         made.bodies.append((body, colours, base))
+
+
+def _hide(obj):
+    """Hide a helper at once: FreeCAD does not work out the triangles of a hidden object, so
+    an imported part is not drawn twice (its base and its body) while it comes in."""
+    try:
+        if App.GuiUp and obj.ViewObject is not None:
+            obj.ViewObject.Visibility = False
+    except Exception:
+        pass
 
 
 def _finish_bodies(made, path):

@@ -198,6 +198,8 @@ def _objects(doc):
         if obj.Name in used_up:
             continue
         try:
+            if _never_a_row(obj):
+                continue
             if marker_hidden and _in_hidden(obj, marker_hidden):
                 continue  # a component made after the history marker does not exist yet
             parent = obj.getParentGeoFeatureGroup()
@@ -269,6 +271,30 @@ def _objects(doc):
     return rows
 
 
+ORIGIN_FEATURE_TYPES = ("App::Origin", "App::Line", "App::Plane", "App::Point")
+
+
+def _never_a_row(obj):
+    """Objects the browser never lists, passed over before their row is read (speed: a VEX
+    robot of 300 parts has 6000 objects, most of them its occurrences' origins and copy
+    steps; browser_core drops these rows anyway): a body's first step (FeatureBase), an
+    occurrence's copy step, the origin planes / axes of a body inside a component (the
+    component's own origin is listed, the root's shows a body's)."""
+    tid = obj.TypeId
+    if tid == "PartDesign::FeatureBase":
+        return True
+    if tid == "Part::FeaturePython":
+        return getattr(obj, "SciForgeType", "") == "InstanceCopy"
+    if tid in ORIGIN_FEATURE_TYPES:
+        owner = obj.getParentGeoFeatureGroup()
+        return (
+            owner is not None
+            and owner.TypeId == "PartDesign::Body"
+            and owner.getParentGeoFeatureGroup() is not None
+        )
+    return False
+
+
 def _component_rename(obj, text):
     """Renaming an occurrence renames the component (Fusion: all its occurrences take the
     new name); the ":n" after the name is the occurrence number, not part of the name."""
@@ -317,17 +343,28 @@ def _instance_names(doc, rows):
         from . import instances
     except Exception:
         return
+    # one pass over the occurrences (not one per component: hundreds of occurrences)
+    named = set()
+    for part in doc.Objects:
+        try:
+            if part.TypeId != "App::Part" or not instances.is_instance(part):
+                continue
+            # copies the history marker hides do not exist at the marker (a pattern after it)
+            if ops.hidden_by_marker(part):
+                continue
+            source = instances.source_of(part)
+            if source is not None:
+                named.add(source.Name)
+        except Exception:
+            continue
     for row in rows:
-        if row["type_id"] != "App::Part":
+        if row["type_id"] != "App::Part" or row["name"] not in named:
             continue
         obj = doc.getObject(row["name"])
         try:
             if obj is None or instances.is_instance(obj):
                 continue
-            # copies the history marker hides do not exist at the marker (a pattern after it)
-            shown = [p for p in instances.instances_of(obj) if not ops.hidden_by_marker(p)]
-            if shown:
-                row["display"] = "%s:1" % obj.Label
+            row["display"] = "%s:1" % obj.Label
         except Exception:
             continue
 

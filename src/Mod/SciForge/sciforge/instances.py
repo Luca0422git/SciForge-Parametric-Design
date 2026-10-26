@@ -82,7 +82,9 @@ def instances_of(source):
     if source is None:
         return []
     doc = source.Document
-    found = [o for o in doc.Objects if is_instance(o) and source_of(o) is source]
+    found = [
+        o for o in components.of_type(doc, "App::Part") if is_instance(o) and source_of(o) is source
+    ]
     return sorted(found, key=lambda o: o.ID)
 
 
@@ -316,7 +318,7 @@ def sync(doc):
     changed = False
     if doc is None:
         return False
-    for part in [o for o in doc.Objects if is_instance(o)]:
+    for part in [o for o in components.of_type(doc, "App::Part") if is_instance(o)]:
         try:
             changed = _sync_one(part) or changed
         except Exception as exc:
@@ -455,7 +457,7 @@ class _Watch:
 
 def _any_instance(doc):
     try:
-        return any(is_instance(o) for o in doc.Objects)
+        return any(is_instance(o) for o in components.of_type(doc, "App::Part"))
     except Exception:
         return False
 

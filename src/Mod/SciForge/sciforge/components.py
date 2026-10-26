@@ -73,10 +73,24 @@ def alive(obj):
         return False
 
 
+def of_type(doc, type_id):
+    """The objects of exactly this FreeCAD type, from FreeCAD's own filter (a VEX robot of
+    300 parts has 6000 objects; walking them all in Python on every question made opening,
+    inserting and driving slow: speed, beta 3). Exact: the hidden assembly (an App::Part
+    underneath) is not a component."""
+    if doc is None:
+        return []
+    try:
+        found = doc.findObjects(type_id)
+    except Exception:
+        found = doc.Objects
+    return [o for o in found if o.TypeId == type_id]
+
+
 def list_components(doc):
     if doc is None:
         return []
-    return sorted([o for o in doc.Objects if o.TypeId == PART], key=lambda o: o.ID)
+    return sorted(of_type(doc, PART), key=lambda o: o.ID)
 
 
 def _parent_group(obj):
@@ -127,13 +141,14 @@ def members(doc, component):
     """Objects directly in a component (None: the root level of the document)."""
     if component is not None:
         return list(component.Group)
-    return [o for o in doc.Objects if o.TypeId in (PART, BODY) and _parent_group(o) is None]
+    units = of_type(doc, PART) + of_type(doc, BODY)
+    return [o for o in sorted(units, key=lambda o: o.ID) if _parent_group(o) is None]
 
 
 def bodies_in(doc, component, recursive=False):
     """Bodies in a component (None: at the root), in the order they were made."""
     if recursive and component is not None:
-        found = [o for o in doc.Objects if o.TypeId == BODY and is_inside(o, component)]
+        found = [o for o in of_type(doc, BODY) if is_inside(o, component)]
     else:
         found = [o for o in members(doc, component) if o.TypeId == BODY]
     return sorted(found, key=lambda o: o.ID)

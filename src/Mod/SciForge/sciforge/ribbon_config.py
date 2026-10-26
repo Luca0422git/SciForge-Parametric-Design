@@ -307,6 +307,13 @@ ASSEMBLE = group(
         item("As-built Joint", "SciForge_AsBuiltJoint", "joint_asbuilt"),
         item("Joint Origin", "SciForge_JointOrigin", "joint_origin"),
         item("Rigid Group", "SciForge_RigidGroup", "rigid_group"),
+        # owner: vex (beta 3): Fusion's Duplicate With Joints (a jointed screw into more holes)
+        item(
+            "Duplicate With Joints",
+            "SciForge_DuplicateWithJoints",
+            "duplicate_joints",
+            note="Copy a jointed component (a screw and its nut) to new places, joined there.",
+        ),
         SEP,
         item("Drive Joints", "SciForge_DriveJoints", "drive_joints"),
         item(

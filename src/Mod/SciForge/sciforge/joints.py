@@ -127,10 +127,14 @@ def assembly(doc, create=False):
     """The design's hidden assembly root (made when `create`), or None."""
     if doc is None:
         return None
-    for obj in doc.Objects:
-        if obj.TypeId == _ASSEMBLY_TYPE and obj.Name == ASSEMBLY_NAME:
-            return obj
-    for obj in doc.Objects:  # a file whose assembly got another name
+    obj = doc.getObject(ASSEMBLY_NAME)  # (by name first: a robot has 6000 objects)
+    if obj is not None and obj.TypeId == _ASSEMBLY_TYPE:
+        return obj
+    try:
+        found = doc.findObjects(_ASSEMBLY_TYPE)
+    except Exception:
+        found = doc.Objects
+    for obj in found:  # a file whose assembly got another name
         if obj.TypeId == _ASSEMBLY_TYPE and getattr(obj, TYPE_PROP, "") == "Assembly":
             return obj
     if not create:
@@ -1042,16 +1046,26 @@ def is_helper(obj):
         return False
 
 
+def _python_objects(doc):
+    """The App::FeaturePython objects of a design (joints, their helpers and grounds are),
+    from FreeCAD's own filter instead of every object: a VEX robot of 300 parts has 6000
+    objects, and a drive step looked at all of them a dozen times (speed, beta 3)."""
+    try:
+        return doc.findObjects("App::FeaturePython")
+    except Exception:
+        return doc.Objects
+
+
 def joints(doc):
     """The joints a person made, oldest first."""
-    return sorted((o for o in doc.Objects if is_joint(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_joint(o)), key=lambda o: o.ID)
 
 
 def helpers_of(parent):
     try:
         return [
             o
-            for o in parent.Document.Objects
+            for o in _python_objects(parent.Document)
             if is_helper(o) and getattr(o, PROPS["parent"], None) is parent
         ]
     except Exception:
@@ -1261,11 +1275,11 @@ def is_auto_ground(o):
 
 def grounds(doc):
     """The grounds a person made (Ground on a component's menu)."""
-    return [o for o in doc.Objects if _is_ground_object(o) and not is_auto_ground(o)]
+    return [o for o in _python_objects(doc) if _is_ground_object(o) and not is_auto_ground(o)]
 
 
 def auto_grounds(doc):
-    return sorted((o for o in doc.Objects if is_auto_ground(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_auto_ground(o)), key=lambda o: o.ID)
 
 
 def ground_of(part):
@@ -1332,7 +1346,7 @@ def _joints_between(doc, excluding=None):
     and its helpers."""
     pairs = []
     skipped = _with_helpers(excluding)
-    for obj in doc.Objects:
+    for obj in _python_objects(doc):
         if any(obj is s for s in skipped) or not (is_joint(obj) or is_helper(obj)):
             continue
         if getattr(obj, "Suppressed", False):
@@ -1509,7 +1523,7 @@ def satisfied(joint, tol=1e-4):
 def active_links(doc):
     """The joints and helpers the solver works on (not suppressed, both sides there)."""
     out = []
-    for obj in doc.Objects:
+    for obj in _python_objects(doc):
         if not (is_joint(obj) or is_helper(obj)) or getattr(obj, "Suppressed", False):
             continue
         p1, p2 = part1(obj), part2(obj)
@@ -1754,7 +1768,7 @@ def _nested_solver_parts(doc):
         for p in (part1(j), part2(j)):
             if p is not None and container_of(p) is not None:
                 found[p.Name] = p
-    for g in doc.Objects:
+    for g in _python_objects(doc):
         if _is_ground_object(g):
             target = getattr(g, "ObjectToGround", None)
             if target is not None and container_of(target) is not None:

@@ -227,11 +227,13 @@ def insert_cad_files(paths, parent=None, place=True):
                 continue
             try:
                 tree = trees.get(path) if step_import.inserted_from(doc, path) is None else None
-                made.append(
-                    (path, step_import.import_file(doc, path, core.INSERT, parent, tree=tree))
-                )
+                m = step_import.import_file(doc, path, core.INSERT, parent, tree=tree, finish=False)
+                made.append((path, m))
             except core.ExchangeError as exc:
                 failed.append((path, str(exc)))
+        doc.recompute()  # once for all the files (each file's own cost ~0.4 s on a big design)
+        for _path, m in made:
+            step_import.finish_made(m)
         if len(made) > 1:
             lay_side_by_side([m.top for _p, m in made if m.top is not None])
     except Exception:
