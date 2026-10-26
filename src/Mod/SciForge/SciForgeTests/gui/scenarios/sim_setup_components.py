@@ -13,8 +13,9 @@ D  Structural Loads: a click on the post's top face (inside the other component)
 E  Solve: done; both bodies have results (glued where the post stands on the plate); the
    glyphs stand where the components are (moved).
 F  Clone Study; in the clone the Fixed holds only one straight edge of the plate (the model
-   can still turn about it). Solve: no meaningless numbers are shown as results: the progress
-   says the model is not held enough, and the RESULTS tab does not take over.
+   can still turn about it). Solve: no meaningless numbers are shown as results: the pre-check
+   refuses it (or the progress says) that the model is not held enough, the RESULTS tab does
+   not take over, the study keeps no results.
 """
 
 import FreeCAD as App
@@ -266,14 +267,28 @@ def f_solve():
 def f_go():
     dialog = s.solve_dialog()
     if h.check("Solve dialog", dialog is not None):
+        state["light"] = s.light()
         s.click_widget(dialog.go)
+        # the pre-check may refuse it before it solves (the dialog stays open and says why)
+        state["refused"] = dialog.message.text() if dialog.isVisible() else ""
+        if dialog.isVisible():
+            s.close_popup("SciForgeSimSolve")
 
 
 def f_check():
     status = s.status_dialog()
-    text = status.message.text() if status is not None else ""
+    if state.get("refused"):
+        text = state["refused"]
+        h.check(
+            "refused before solving (pre-check red)",
+            state.get("light") == "red",
+            state.get("light"),
+        )
+    else:
+        text = status.message.text() if status is not None else ""
     h.check("it says the model is not held enough", "not held enough" in text, text)
     h.check("the RESULTS tab did not take over", s.current_tab() == "sim_setup", s.current_tab())
+    h.check("no results for the loose study", not s.sim().summary(s.active_study()))
     s.close_popup("SciForgeSimJobStatus")
 
 

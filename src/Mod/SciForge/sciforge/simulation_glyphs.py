@@ -123,7 +123,26 @@ def visible():
 
 
 # -- the size on the screen ----------------------------------------------------------------------
+_CENTRE = {"key": None, "value": None}
+
+
 def _model_centre(doc):
+    """(centre, diagonal) of the design's shown solids, read again only after a change."""
+    try:
+        from . import doc_epoch
+
+        epoch = doc_epoch.key()
+        key = (doc.Name, epoch) if epoch is not None else None
+    except Exception:
+        key = None
+    if key is not None and _CENTRE["key"] == key:
+        return _CENTRE["value"]
+    value = _measure_centre(doc)
+    _CENTRE["key"], _CENTRE["value"] = key, value
+    return value
+
+
+def _measure_centre(doc):
     try:
         box = None
         for body in bodies.solid_bodies(doc, visible_only=True):

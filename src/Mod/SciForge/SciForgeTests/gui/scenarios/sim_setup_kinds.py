@@ -2,10 +2,12 @@
 """Every constraint and load type of the SETUP dialogs, Local Mesh Control, Generate Mesh and a
 cancelled solve, with real clicks (builder sim-ui). The bracket's study is made by script.
 
-A  Structural Constraints lists Fixed, Pin, Frictionless and Prescribed Displacement. Pin: only
+A  Structural Constraints lists Fixed, Pin, Frictionless and Prescribed Displacement (Remote
+   greyed, not in SciForge yet). Pin: only
    round faces can be picked (a click on the flat plate picks nothing, a hole wall is picked);
    Fusion's default holds Radial and Axial and leaves Tangential free; OK keeps "Pin 1".
-B  Structural Loads lists Force, Pressure, Moment, Bearing Load and Remote Force. Moment,
+B  Structural Loads lists Force, Pressure, Moment, Bearing Load and Remote Force (Remote Moment
+   and Hydrostatic Pressure greyed). Moment,
    Normal, on the arm's top face, "2 N m" typed (a unit override: 2000 N mm); OK; its curved
    arrow is drawn.
 C  Force with Direction Type Vector: Fx 0, Fy 100, Fz 0 typed: a force of 100 N along +Y; Force
@@ -61,13 +63,14 @@ def a_pin():
         return
     listed = types(p)
     h.check(
-        "the four constraint types, all built",
+        "the four constraint types built, Remote listed greyed",
         listed
         == [
             ("Fixed", True),
             ("Pin", True),
             ("Frictionless", True),
             ("Prescribed Displacement", True),
+            ("Remote", False),
         ],
         listed,
     )
@@ -118,9 +121,17 @@ def b_moment():
         return
     listed = types(p)
     h.check(
-        "the five load types, all built",
-        [t for t, _on in listed] == ["Force", "Pressure", "Moment", "Bearing Load", "Remote Force"]
-        and all(on for _t, on in listed),
+        "the five load types built, Remote Moment and Hydrostatic Pressure greyed",
+        listed
+        == [
+            ("Force", True),
+            ("Pressure", True),
+            ("Moment", True),
+            ("Bearing Load", True),
+            ("Remote Force", True),
+            ("Remote Moment", False),
+            ("Hydrostatic Pressure", False),
+        ],
         listed,
     )
     s.choose("SciForgeSimItemType", "Moment")

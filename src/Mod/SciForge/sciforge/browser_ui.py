@@ -1097,6 +1097,12 @@ class BrowserWidget(QtWidgets.QTreeWidget):
                 return
             Gui.Selection.clearPreselection()
             self._hover = obj
+            node = item.data(1, ROLE_NODE)
+            if str(node["kind"]).startswith("sim_"):  # SIMULATION workspace: the item's face
+                target = _simulation_call("hover", self._doc, node)
+                if target:
+                    Gui.Selection.setPreselection(*target)
+                return
             if obj is not None and obj.ViewObject is not None and obj.ViewObject.Visibility:
                 Gui.Selection.setPreselection(obj, "")
         except Exception:

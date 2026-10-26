@@ -146,6 +146,29 @@ def _toggle(name, text, on, tip=""):
     return button
 
 
+# Types Fusion lists that SciForge does not build (research 9.2): shown greyed in the Type list.
+LATER = {
+    "constraint": (
+        (
+            "Remote",
+            "remote",
+            "Not in SciForge yet: hold the faces themselves (Fixed, Pin or Frictionless).",
+        ),
+    ),
+    "load": (
+        (
+            "Remote Moment",
+            "remote_moment",
+            "Not in SciForge yet: a Moment on the faces, or a Remote Force at a point.",
+        ),
+        (
+            "Hydrostatic Pressure",
+            "hydrostatic",
+            "Not in SciForge yet: a Pressure is the same everywhere on its faces.",
+        ),
+    ),
+}
+
 TITLES = {
     "constraint": "Structural Constraints",
     "load": "Structural Loads",
@@ -246,6 +269,9 @@ class ItemPanel(pickpanel.PickPanel):
         for key, info in table.items():
             tip = "" if info.get("built") else "%s is not in SciForge yet." % info["title"]
             rows.append((info["title"], key, bool(info.get("built")), tip))
+        for title, key, tip in LATER.get(category, ()):
+            if key not in table:  # Fusion lists them; greyed, with the reason (research 9.2)
+                rows.append((title, key, False, tip))
         self.type_box = pickpanel.combo(rows, self.kind)
         self.type_box.setObjectName("SciForgeSimItemType")
         self.type_box.setEnabled(not self.editing)
