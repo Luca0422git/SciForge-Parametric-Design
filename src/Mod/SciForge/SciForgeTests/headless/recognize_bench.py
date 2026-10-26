@@ -630,6 +630,24 @@ EXTRA_MODELS = {
             {"op": "hole", "id": "h1", "sketch": "s3", "diameter": 14, "through_all": True},
         ],
     },
+    "bench_domed_block": {
+        "title": "Block 40 x 30 x 10 with a dome on its top: a sphere d12 centred on the top face "
+        "at (28, 15), joined (a turned boss about a line away from the origin)",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 10},
+            {
+                "op": "sf_primitive",
+                "id": "d1",
+                "kind": "sphere",
+                "plane": {"face": {"normal": [0, 0, 1], "count": 1}},
+                "x": 28,
+                "y": 15,
+                "diameter": 12,
+                "operation": "join",
+            },
+        ],
+    },
 }
 
 # What each model's steps made, for the "found" check. base: the kind describe() should
@@ -667,6 +685,8 @@ BENCH = [
     ("sf_revolve_cone", {"base": "revolve", "holes": []}),
     ("sf_torus_new_body", {"base": "revolve", "holes": []}),
     ("sf_sphere_intersect", {"base": "revolve", "holes": []}),
+    ("sf_torus_inside_cut", {"base": "extrude", "holes": []}),
+    ("bench_domed_block", {"base": "extrude", "holes": []}),
     ("bench_stepped_shaft", {"base": "revolve", "holes": []}),
     ("bench_knob", {"base": "revolve", "holes": [6]}),
     ("bench_bracket_holes", {"base": "extrude", "holes": [5, 5, 6], "fillets": [3]}),

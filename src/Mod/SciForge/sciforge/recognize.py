@@ -1802,6 +1802,9 @@ class _Reader:
             return
         first = True
         for op in _group_ops(base["ops"], self._pattern_args):
+            if op.get("revolve") and not first:
+                steps += self._plan_revolve_piece(op, plan, features)
+                continue
             plane, offset = op["plane"], op["offset"]
             kind = op["kind"]
             if op.get("shell") and not first:
@@ -1913,6 +1916,60 @@ class _Reader:
                         f["steps"] = made
             first = False
         public["steps"] = steps
+
+    def _plan_revolve_piece(self, op, plan, features):
+        """A boss or cut that is itself turned (a dome, a torus groove): its half profile
+        and a revolve about its axis line, joined to the part or cut from it."""
+        rev = op["revolve"]
+        line = rev.get("axis_line")
+        cut = op["kind"] == "cut"
+        where = " through (%s)" % ", ".join(core.fmt(c) for c in rev["axis_at"]) if line else ""
+        sketch = plan.add(
+            "create_sketch",
+            core.sketch_args(
+                rev["plane"],
+                rev.get("offset", 0.0),
+                core.name_items(op["geometry"], "groove" if cut else "boss"),
+            ),
+            "The half profile of the turned %s (%s), on the %s plane, on one side of the %s "
+            "axis%s." % ("cut" if cut else "boss", op["words"], rev["plane"], rev["axis"], where),
+        )
+        uses = {"profile": plan.step_of(sketch)}
+        axis = rev["axis"]
+        if line:
+            axis = {"sketch": sketch, "construction": line}
+            uses["axis.sketch"] = plan.step_of(sketch)
+        fid = self.new_id()
+        step = plan.add(
+            "revolve",
+            {"profile": sketch, "axis": axis, "operation": "cut" if cut else "join"},
+            "Revolve it a full turn about the %s axis%s, %s."
+            % (
+                rev["axis"],
+                " line" + where if line else "",
+                "cut from the part" if cut else "joined to the part",
+            ),
+            [fid],
+            uses=uses,
+        )
+        made = [plan.step_of(sketch), plan.step_of(step)]
+        features.append(
+            {
+                "id": fid,
+                "kind": "pocket" if cut else "boss",
+                "revolved": True,
+                "plane": rev["plane"],
+                "axis": rev["axis"],
+                "profile": op["loops_public"],
+                "profile_words": op["words"],
+                "steps": made,
+                "faces": [],
+                "_faces": [],
+            }
+        )
+        if line:
+            features[-1]["axis_at"] = rev["axis_at"]
+        return made
 
     def _plan_shell(self, op, base, plan, features):
         """The shell tool for a cut marked as a shell: the open face(s) of the base picked
@@ -2944,6 +3001,13 @@ def _walls(solid, axis_name, allow_taper=False, lenient=False, ranges=None):
                 continue
         except Exception:
             pass
+        if lenient and kind in ("torus", "sphere"):  # (a turned boss or groove: a piece)
+            span = _range_along(face, d)
+            heights += span
+            skipped += face.Area
+            if ranges is not None and span:
+                ranges.append(span)
+            continue
         return None
     if skipped > 0.25 * solid.Area:
         return None
@@ -3315,6 +3379,8 @@ def _base_pieces(solid, prism, plane, hs, base_lo, cache):
                     )
                 if got is not None:
                     break
+            if got is None:  # (a dome on a block, a torus groove in its top)
+                got = _revolve_piece(piece, operation)
             if got is None:
                 return None
             ops += got
@@ -3358,6 +3424,8 @@ def _through_cuts(ops, solid):
     part's outer side: equal through cuts then go in one sketch (deduplicated)."""
     for op in ops[1:]:
         if op["kind"] != "cut" or op["extrude"].get("through_all") or op.get("taper"):
+            continue
+        if op.get("revolve"):
             continue
         lo, hi = _span(solid, op["plane"])
         if op["lo"] <= lo + 1e-6 and op["hi"] >= hi - 1e-6:
@@ -3410,6 +3478,8 @@ def _mark_shell(ops, solid):
     side (or both) and t thick at the other, is Fusion's Shell: mark the cut so the plan
     makes it with the shell tool (the face(s) taken away, the thickness)."""
     if len(ops) != 2 or ops[1]["kind"] != "cut" or ops[1].get("taper") or ops[0].get("taper"):
+        return
+    if ops[1].get("revolve"):
         return
     base, cut = ops
     lo, hi = base["lo"], base["hi"]
@@ -3896,6 +3966,36 @@ def _open_piece_op(piece, solid, region, plane, operation, part_lo, part_hi, cac
     return [op]
 
 
+def _revolve_piece(piece, operation):
+    """A boss or cut piece that is itself turned about a line along X, Y or Z (a dome on a
+    block, a torus groove in its top): [op] revolving its half profile, or None."""
+    try:
+        found = _revolved(piece)
+    except Exception:
+        return None
+    if found is None:
+        return None
+    rev = found["public"]
+    return [
+        {
+            "kind": operation,
+            "plane": rev["plane"],
+            "offset": rev.get("offset", 0.0),
+            "geometry": rev["geometry"],
+            "loops_public": rev["profile"],
+            "words": rev["profile_words"],
+            # (the grouping key: one revolve per axis line)
+            "extrude": {"revolve": rev["axis"], "line": repr(rev.get("axis_line"))},
+            "revolve": rev,
+            "solid": found["solid_check"],
+            "height": 0.0,
+            "lo": 0.0,
+            "hi": 0.0,
+            "faces": [],
+        }
+    ]
+
+
 def _same_region(a, b):
     """Two lists of flat faces (parallel planes) cover the same region seen along the
     normal."""
@@ -3925,6 +4025,9 @@ def _group_ops(ops, pattern_args=None):
         buckets.setdefault(key, []).append(op)
     out = [ops[0]]
     for members in buckets.values():
+        if members[0].get("revolve"):
+            out += members  # (each revolve on its own: no pattern, no shared sketch)
+            continue
         unique = []  # (the same cut through all twice: a hole in each flange of a channel)
         for op in members:
             if not any(core.same_items(op["geometry"], u["geometry"], 1e-6) for u in unique):
