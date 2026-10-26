@@ -1053,3 +1053,72 @@ def _close(a, b, tol):
     if isinstance(a, (int, float)) and isinstance(b, (int, float)):
         return abs(a - b) <= tol
     return a == b
+
+
+# -- parts turned away from the origin planes ------------------------------------------------
+def closest_frame(d1, d2):
+    """The rotation (3 x 3, rows; world from local: R * local = world) whose local axes run
+    along d1, d2 and d1 x d2 (in some order and sense), closest to no turn at all."""
+    import itertools
+
+    a = unit(d1)
+    b = unit(sub(d2, mul(a, dot(d2, a))))
+    c = cross(a, b)
+    best = None
+    for perm in itertools.permutations((a, b, c)):
+        for signs in itertools.product((1.0, -1.0), repeat=3):
+            cols = [mul(v, s) for v, s in zip(perm, signs)]
+            if dot(cross(cols[0], cols[1]), cols[2]) < 0:
+                continue  # (a mirror, not a turn)
+            trace = cols[0][0] + cols[1][1] + cols[2][2]
+            if best is None or trace > best[0] + 1e-12:
+                best = (trace, cols)
+    cols = best[1]
+    return [[cols[j][i] for j in range(3)] for i in range(3)]
+
+
+def euler_xyz(rot):
+    """(rx, ry, rz) in degrees with rot = Rz(rz) * Ry(ry) * Rx(rx) (turned about X first,
+    then Y, then Z: SciForge's free Move)."""
+    r20 = max(-1.0, min(1.0, rot[2][0]))
+    ry = math.asin(-r20)
+    if abs(r20) < 1 - 1e-9:
+        rx = math.atan2(rot[2][1], rot[2][2])
+        rz = math.atan2(rot[1][0], rot[0][0])
+    else:  # (straight up or down: X and Z turn about one line)
+        rz = 0.0
+        rx = math.atan2(-rot[1][2], rot[1][1])
+    return tuple(snap(math.degrees(v), 1e-9) for v in (rx, ry, rz))
+
+
+def rotation_xyz(rx, ry, rz):
+    """The matrix (rows) of Rz(rz) * Ry(ry) * Rx(rx), angles in degrees."""
+    a, b, c = (math.radians(v) for v in (rx, ry, rz))
+    ca, sa, cb, sb, cc, sc = (
+        math.cos(a),
+        math.sin(a),
+        math.cos(b),
+        math.sin(b),
+        math.cos(c),
+        math.sin(c),
+    )
+    return [
+        [cb * cc, sa * sb * cc - ca * sc, ca * sb * cc + sa * sc],
+        [cb * sc, sa * sb * sc + ca * cc, ca * sb * sc - sa * cc],
+        [-sb, sa * cb, ca * cb],
+    ]
+
+
+def name_items(items, prefix):
+    """Name the rectangles and circles of a sketch's geometry so their dimensions read as a
+    person would name them (base.width, hole.x, boss2.diameter): the first gets the prefix,
+    the next ones prefix2, prefix3..."""
+    out = []
+    k = 0
+    for item in items:
+        item = dict(item)
+        if any(key in item for key in ("rect", "circle", "center_rect")) and "name" not in item:
+            k += 1
+            item["name"] = prefix if k == 1 else "%s%d" % (prefix, k)
+        out.append(item)
+    return out

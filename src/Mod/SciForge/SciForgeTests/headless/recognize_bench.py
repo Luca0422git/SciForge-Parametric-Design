@@ -183,6 +183,127 @@ EXTRA_MODELS = {
             },
         ],
     },
+    "bench_shaft_cross_hole": {
+        "title": "Shaft d20 x 50 along Z with a d4 hole across it (along X) at height 25",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"circle": [0, 0, 10]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 50},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "YZ",
+                "offset": 15,
+                "geometry": [{"circle": [0, 25, 2]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s2", "diameter": 4, "through_all": True},
+        ],
+    },
+    "bench_offset_flange": {
+        "title": "Flange d60 x 8 centred at (40, 30) with a d20 bore and 5 holes d6 on a d44 "
+        "circle around it (not around the origin)",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"circle": [40, 30, 30]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 8},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 8,
+                "geometry": [{"circle": [40, 30, 10]}],
+            },
+            {"op": "hole", "id": "h0", "sketch": "s2", "diameter": 20, "through_all": True},
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "XY",
+                "offset": 8,
+                "geometry": [{"circle": [62, 30, 3]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s3", "diameter": 6, "through_all": True},
+            {
+                "op": "circular_pattern",
+                "id": "p1",
+                "features": ["h1"],
+                "axis": {"face": {"type": "cylinder", "radius": 10, "count": 1}},
+                "quantity": 5,
+            },
+        ],
+    },
+    "bench_vex_channel": {
+        "title": "VEX-like C-channel 25.4 x 12.7 x 63.5, 1.016 thick, 4.6 mm square holes on "
+        "a 12.7 mm pitch in the web and through both flanges",
+        "steps": [
+            {
+                "op": "sketch",
+                "id": "s1",
+                "plane": "YZ",
+                "geometry": [
+                    {
+                        "polyline": [
+                            [0, 0],
+                            [25.4, 0],
+                            [25.4, 12.7],
+                            [24.384, 12.7],
+                            [24.384, 1.016],
+                            [1.016, 1.016],
+                            [1.016, 12.7],
+                            [0, 12.7],
+                        ]
+                    }
+                ],
+            },
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 63.5},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 1.016,
+                "geometry": [{"center_rect": [6.35 + 12.7 * k, 12.7, 4.6, 4.6]} for k in range(5)],
+            },
+            {
+                "op": "extrude",
+                "id": "c1",
+                "profile": "s2",
+                "operation": "cut",
+                "extent": "through_all",
+                "flip": True,
+            },
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "XZ",
+                "geometry": [{"center_rect": [6.35 + 12.7 * k, 6.858, 4.6, 4.6]} for k in range(5)],
+            },
+            {
+                "op": "extrude",
+                "id": "c2",
+                "profile": "s3",
+                "operation": "cut",
+                "extent": "through_all",
+                "flip": True,
+            },
+        ],
+    },
+    "bench_side_boss": {
+        "title": "Block 40 x 30 x 10 with a boss d10 x 8 sticking out of its +X side",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 10},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "YZ",
+                "offset": 40,
+                "geometry": [{"circle": [15, 5, 5]}],
+            },
+            {"op": "extrude", "id": "e2", "profile": "s2", "distance": 8},
+        ],
+    },
+    "bench_turned_bracket": {
+        "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
+        "placed in an assembly)",
+        "steps": [],  # (the steps of bench_bracket_holes, then the turn: see _load)
+    },
     "bench_part_300": {
         "title": "Speed part: plate 330 x 220 x 8 with a 21 x 14 grid of d6 holes (300 faces)",
         "steps": [
@@ -245,8 +366,8 @@ BENCH = [
     ("sf_cylinder_boss", {"base": "extrude", "holes": []}),
     ("mirror_boss", {"base": "extrude", "holes": []}),
     ("pattern_rect_symmetric_bosses", {"base": "extrude", "holes": []}),
-    ("shell_open_box", {"base": "extrude", "holes": []}),
-    ("shell_filleted_box", {"base": "extrude", "fillets": [5, 3]}),
+    ("shell_open_box", {"base": "extrude", "holes": [], "shells": 1}),
+    ("shell_filleted_box", {"base": "extrude", "fillets": [], "shells": 1}),
     ("revolve_washer", {"holes": [20]}),
     ("groove_ring", {"holes": []}),
     ("sf_revolve_cone", {"base": "revolve", "holes": []}),
@@ -254,12 +375,42 @@ BENCH = [
     ("bench_knob", {"base": "revolve", "holes": [6]}),
     ("bench_bracket_holes", {"base": "extrude", "holes": [5, 5, 6], "fillets": [3]}),
     ("bench_mount_plate", {"base": "extrude", "holes": [5] * 4, "fillets": [6]}),
+    ("extrude_taper_cut", {"base": "extrude", "holes": []}),
+    ("extrude_taper_join_all", {"base": "extrude", "holes": []}),
+    ("sf_draft_four_sides", {"base": "extrude", "holes": []}),
+    ("bench_turned_bracket", {"base": "extrude", "holes": [5, 5, 6], "fillets": [3]}),
+    ("bench_shaft_cross_hole", {"base": "extrude", "holes": [4]}),
+    ("bench_vex_channel", {"base": "extrude", "holes": []}),
+    ("bench_side_boss", {"base": "extrude", "holes": []}),
+    ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
-MESH_BENCH = ["plate_through_hole_cut", "flange_polar_holes", "l_bracket_profile"]
+MESH_BENCH = [
+    "plate_through_hole_cut",
+    "flange_polar_holes",
+    "l_bracket_profile",
+    "bench_knob",
+    "bench_mount_plate",
+]
 
 
 def _load(model_id):
+    if model_id == "bench_turned_bracket":
+        model = copy.deepcopy(EXTRA_MODELS["bench_bracket_holes"])
+        model["steps"].append(
+            {
+                "op": "move_bodies",
+                "id": "m1",
+                "bodies": ["e1"],
+                "move_type": "free",
+                "rx": 30,
+                "rz": 20,
+                "pivot": [0, 0, 0],
+            }
+        )
+        model["id"] = model_id
+        model["title"] = EXTRA_MODELS[model_id]["title"]
+        return model
     if model_id in EXTRA_MODELS:
         model = copy.deepcopy(EXTRA_MODELS[model_id])
         model["id"] = model_id
@@ -368,13 +519,17 @@ def run_plan(plan, name):
 def match_faces(reference, rebuilt):
     """How many faces of the reference have a face of the rebuild of the same kind, area and
     place (and the other way round)."""
+    from sciforge import recognize
     from sciforge.ai.ops import selectors
 
     def facts(shape):
         out = []
         for f in shape.Faces:
             c = f.CenterOfMass
-            out.append((selectors.face_type(f), f.Area, (c.x, c.y, c.z)))
+            kind = selectors.face_type(f)
+            if kind == "bspline" and recognize._flat_normal(f) is not None:
+                kind = "plane"  # (a flat face SciForge's tapered extrude makes as a spline)
+            out.append((kind, f.Area, (c.x, c.y, c.z)))
         return out
 
     a, b = facts(reference), facts(rebuilt)
@@ -408,12 +563,14 @@ def _found(result):
     fillets = sorted({f["radius"] for f in result["features"] if f["kind"] == "fillet"})
     chamfers = sorted({f["distance"] for f in result["features"] if f["kind"] == "chamfer"})
     patterns = len([f for f in result["features"] if f["kind"] == "pattern"])
+    shells = len([f for f in result["features"] if f["kind"] == "shell"])
     return {
         "base": result["base"].get("kind"),
         "holes": holes,
         "fillets": fillets,
         "chamfers": chamfers,
         "patterns": patterns,
+        "shells": shells,
     }
 
 
@@ -427,8 +584,9 @@ def _check_found(expect, found):
     for key in ("fillets", "chamfers"):
         if key in expect and sorted(set(expect[key])) != found[key]:
             problems.append("%s %s, expected %s" % (key, found[key], sorted(set(expect[key]))))
-    if "patterns" in expect and found["patterns"] != expect["patterns"]:
-        problems.append("patterns %d, expected %d" % (found["patterns"], expect["patterns"]))
+    for key in ("patterns", "shells"):
+        if key in expect and found[key] != expect[key]:
+            problems.append("%s %d, expected %d" % (key, found[key], expect[key]))
     return problems
 
 
@@ -552,6 +710,76 @@ def bench_mesh(model_id, folder):
     return row
 
 
+def bench_contract():
+    """The contract's promises: only a missing shape is an error; anything else answers the
+    dict (what cannot be read in notes / unrecognized); the options work."""
+    import FreeCAD as App
+    import Mesh
+    import Part
+
+    from sciforge import recognize, recognize_mesh
+    from sciforge.ai import catalog
+
+    row = {"id": "contract and odd shapes", "status": "fail", "problems": [], "checks": 0}
+    start = time.time()
+    keys = ("summary", "base", "features", "plan", "unrecognized", "confidence", "notes")
+
+    def check(condition, words):
+        row["checks"] += 1
+        if not condition:
+            row["problems"].append(words)
+
+    def answers(shape, options=None):
+        try:
+            out = recognize.describe(shape, options)
+        except Exception as exc:
+            row["problems"].append("describe raised %s: %s" % (type(exc).__name__, exc))
+            return None
+        check(all(k in out for k in keys), "a key is missing: %s" % sorted(out))
+        for step in out.get("plan", []):
+            for sentence in catalog.validate(step["tool"], step["args"]):
+                row["problems"].append("plan step %s: %s" % (step["step"], sentence))
+        return out
+
+    try:
+        for bad in (None, Part.Shape()):
+            try:
+                recognize.describe(bad)
+                check(False, "describe(%r) did not refuse" % (bad,))
+            except recognize.RecognizeError:
+                check(True, "")
+        box = Part.makeBox(40, 20, 10)
+        out = answers(Part.makeShell(box.Faces))  # faces, no solid
+        check(out is not None and out["base"]["kind"] == "none", "a shell has a base")
+        check(out is not None and out["notes"], "a shell without notes")
+        two = Part.makeCompound([box, Part.makeBox(5, 5, 5, App.Vector(100, 0, 0))])
+        out = answers(two)
+        check(out is not None and "2 solids" in " ".join(out["notes"]), "two solids not said")
+        check(out is not None and out["base"]["kind"] == "extrude", "two solids: no base")
+        out = answers(Part.makeSphere(10))
+        check(out is not None and out["base"]["kind"] in ("revolve", "none"), "sphere misread")
+        out = answers(box, {"detail": "summary"})
+        check(out is not None and out["plan"] == [] and out["summary"]["faces"] == 6, "summary")
+        out = answers(box, {"max_features": 0})
+        check(out is not None and out["features"] == [], "max_features 0")
+        out = answers(box, {"taken_ids": ["Sketch1", "Extrude1"]})
+        ids = [st.get("id") for st in (out or {}).get("plan", [])]
+        check(ids[:2] == ["Sketch2", "Extrude2"], "taken_ids not used: %s" % ids)
+        open_mesh = Mesh.Mesh(box.tessellate(0.1))
+        open_mesh.removeFacets([0])  # (a hole in the mesh: no solid)
+        try:
+            out = recognize_mesh.describe_mesh(open_mesh)
+            check(out["base"]["kind"] == "none" and out["notes"], "an open mesh was read")
+        except Exception as exc:
+            check(False, "describe_mesh raised %s: %s" % (type(exc).__name__, exc))
+    except Exception as exc:
+        row["problems"].append("%s: %s" % (type(exc).__name__, exc))
+        row["traceback"] = traceback.format_exc()
+    row["seconds"] = round(time.time() - start, 3)
+    row["status"] = "pass" if not row["problems"] else "fail"
+    return row
+
+
 def markdown(report):
     lines = [
         "# Auto Timeline recognition benchmark",
@@ -649,6 +877,14 @@ def main():
         App.Console.PrintMessage(
             "[SciForge] recognize %s %s %s\n"
             % (row["status"].upper(), model_id, "; ".join(row["problems"])[:600])
+        )
+    if not text_filter or text_filter in "contract":
+        row = bench_contract()
+        report["results"].append(row)
+        _write(report, out_dir)
+        App.Console.PrintMessage(
+            "[SciForge] recognize %s %s %s\n"
+            % (row["status"].upper(), row["id"], "; ".join(row["problems"])[:600])
         )
     for model_id in MESH_BENCH:
         if text_filter and text_filter not in model_id and text_filter != "mesh":

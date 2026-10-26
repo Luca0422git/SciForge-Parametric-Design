@@ -47,7 +47,19 @@ def describe_mesh(mesh, options=None):
     from . import insert
 
     try:
+        closed = mesh.isSolid()
+    except Exception:
+        closed = True
+    if not closed:
+        return _empty(
+            mesh,
+            "The mesh is not closed (it has holes or loose triangles), so it is no solid and "
+            "cannot be read: repair it first (MESH tab > Repair), then try again.",
+        )
+    try:
         faceted = insert.solid_from_mesh(mesh, "Prismatic")
+        if not faceted.isValid() or not all(sh.isClosed() for sh in faceted.Shells):
+            raise ValueError("the triangles do not close into a valid solid")
     except Exception as exc:
         out = _empty(mesh, "The mesh could not become a solid: %s" % exc)
         return out
@@ -160,13 +172,45 @@ def strips(solid):
                     todo.append(j)
         if len(group) < 3:
             continue
-        axis = dirs[0]
-        if any(not core.parallel(axis, d, 2e-3) for d in dirs):
-            continue  # not a cylinder (a cone, a sphere...): left as it is
-        fitted = _fit(solid, group, axis, normals)
-        if fitted is not None:
-            found.append(fitted)
+        for part in _split_group(solid, group, soft):
+            part_dirs = [d for k in part for j, d in soft.get(k, []) if j in part]
+            if len(part) < 3 or not part_dirs:
+                continue
+            axis = part_dirs[0]
+            if any(not core.parallel(axis, d, 2e-3) for d in part_dirs):
+                continue  # not a cylinder (a cone, a sphere...): left as it is
+            fitted = _fit(solid, part, axis, normals)
+            if fitted is not None:
+                found.append(fitted)
     return found
+
+
+def _split_group(solid, group, soft):
+    """The round strips of a group of faces met at small angles: a big flat face that runs
+    on smoothly from a strip (the side of a plate after its rounded corner) is no part of
+    it; without such faces the group falls apart into its strips."""
+    faces = solid.Faces
+    areas = sorted(faces[i].Area for i in group)
+    typical = areas[len(areas) // 2]
+    small = {i for i in group if faces[i].Area <= 4.0 * typical}
+    if len(small) == len(group):
+        return [group]
+    parts = []
+    seen = set()
+    for start in sorted(small):
+        if start in seen:
+            continue
+        part, todo = [], [start]
+        seen.add(start)
+        while todo:
+            k = todo.pop()
+            part.append(k)
+            for j, _d in soft.get(k, []):
+                if j in small and j not in seen:
+                    seen.add(j)
+                    todo.append(j)
+        parts.append(sorted(part))
+    return parts
 
 
 def _fit(solid, group, axis, normals):
@@ -231,6 +275,13 @@ def rebuild_exact(faceted):
     others = [s for s in found if s not in holes]
     _regularize(holes)
     exact = _exact_prism(closed, others)
+    if exact is None:
+        exact = _exact_revolve(closed)
+        if exact is not None:
+            notes.append(
+                "Read as a turned part: its half profile was taken through a row of the "
+                "mesh's corners and its lines and arcs fitted."
+            )
     if exact is None:
         return None, [], notes
     measured = []
@@ -445,6 +496,129 @@ def _exact_prism(solid, rounds):
     if not shape.isValid() or len(shape.Solids) != 1:
         return None
     return shape.Solids[0]
+
+
+def _exact_revolve(solid):
+    """The faceted solid rebuilt as a profile turned about an origin axis (a turned part
+    with cones, spheres or tori, which no prism reads), or None. The mesh's corners lie on
+    rings about the axis; a half plane through one corner's row (a meridian) cuts the facets
+    along their edges, so the section's corners lie exactly on the profile."""
+    import Part
+
+    verts = [_t(v.Point) for v in solid.Vertexes]
+    if len(verts) < 6:
+        return None
+    for axis_name in ("Z", "X", "Y"):
+        d = core.AXES[axis_name]
+        plane = {"Z": "XZ", "X": "XY", "Y": "XY"}[axis_name]
+        rings = {}
+        for p in verts:
+            t = core.dot(p, d)
+            off = core.sub(p, core.mul(d, t))
+            rings.setdefault((round(t, 3), round(core.norm(off), 3)), 0)
+            rings[(round(t, 3), round(core.norm(off), 3))] += 1
+        if len(rings) > 0.4 * len(verts):
+            continue  # its corners are not on rings about this axis (through the origin)
+        u = _meridian(verts, d)
+        if u is None:
+            continue
+        box = solid.BoundBox
+        reach = box.DiagonalLength + 10.0
+        ts = [core.dot(p, d) for p in verts]
+        lo, hi = min(ts) - 5.0, max(ts) + 5.0
+        pts = [
+            core.mul(d, lo),
+            core.add(core.mul(d, lo), core.mul(u, reach)),
+            core.add(core.mul(d, hi), core.mul(u, reach)),
+            core.mul(d, hi),
+        ]
+        half = Part.Face(Part.makePolygon([_vec(p) for p in pts + pts[:1]]))
+        try:
+            faces = [f for f in solid.common(half).Faces if f.Area > 1e-9]
+        except Exception:
+            continue
+        if len(faces) != 1:
+            continue
+        face = faces[0]
+        wires = [face.OuterWire] + [w for w in face.Wires if not w.isSame(face.OuterWire)]
+        made = []
+        for w in wires:
+            # the profile in (radius, height), drawn in the sketch plane's x / y
+            loop_pts = []
+            for v in w.OrderedVertexes:
+                q = _t(v.Point)
+                t = core.dot(q, d)
+                r = core.dot(q, u)
+                loop_pts.append((r, t) if axis_name != "X" else (t, r))
+            loop = core.fit_arcs(loop_pts, _circles_on(loop_pts), tol=1e-3)
+            if not loop:
+                return None
+            loop = core.clean_loop(loop, 1e-9)
+            loop = _round_loop(loop)
+            made.append(_wire(loop, plane, 0.0))
+        try:
+            profile = Part.makeFace(made, "Part::FaceMakerBullseye")
+            turned = profile.revolve(_vec((0, 0, 0)), _vec(d), 360)
+            turned = Part.makeSolid(turned) if not turned.Solids else turned.Solids[0]
+            turned = turned.removeSplitter()
+        except Exception:
+            continue
+        if not turned.isValid() or not turned.Solids:
+            continue
+        turned = turned.Solids[0]
+        if abs(turned.Volume - solid.Volume) > 0.003 * solid.Volume:
+            continue  # (a profile that does not fit the mesh is refused, never used)
+        return turned
+    return None
+
+
+def _meridian(verts, d):
+    """The direction (square to d) of the half plane through the most mesh corners: a
+    meridian every ring of the turned part has a corner on, so the section's corners lie on
+    the true profile."""
+    ex = core.unit(core.cross(d, (1.0, 0.0, 0.0) if abs(d[0]) < 0.9 else (0.0, 1.0, 0.0)))
+    ey = core.cross(d, ex)
+    counts = {}
+    for p in verts:
+        x, y = core.dot(p, ex), core.dot(p, ey)
+        if math.hypot(x, y) < 1e-6:
+            continue  # (on the axis)
+        key = round(math.degrees(math.atan2(y, x)), 2)
+        counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return None
+    best = max(counts, key=lambda k: counts[k])
+    a = math.radians(best)
+    return core.add(core.mul(ex, math.cos(a)), core.mul(ey, math.sin(a)))
+
+
+def _circles_on(points, tol=1e-3):
+    """Circles through runs of points that turn gently (an arc of a sphere or a torus in a
+    turned part's profile): [(cx, cy, r)]."""
+    n = len(points)
+    out = []
+    i = 0
+    while i < n:
+        j = i + 2
+        best = None
+        while j < n:
+            run = points[i : j + 1]
+            fit = core.fit_circle(run)
+            if fit is None:
+                break
+            cx, cy, r = fit
+            if any(abs(math.hypot(x - cx, y - cy) - r) > tol for x, y in run):
+                break
+            if r > 1e4:
+                break  # (a straight run)
+            best = fit
+            j += 1
+        if best is not None and j - i >= 3:
+            out.append(best)
+            i = j
+        else:
+            i += 1
+    return out
 
 
 def _points(wire, frame):
