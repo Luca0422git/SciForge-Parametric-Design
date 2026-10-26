@@ -236,6 +236,16 @@ def current_tab():
     return ribbon_ui().current_tab()
 
 
+def click_tab(tab_id):
+    """Click a ribbon tab (SETUP: "sim_setup", RESULTS: "sim_results") with the mouse."""
+    button = ribbon_ui().tab_buttons.get(tab_id)
+    if button is None or not button.isVisible():
+        h.check("tab %s shown" % tab_id, False)
+        return False
+    w.click(button)
+    return True
+
+
 def workspace_text():
     return ribbon_ui().workspace.text()
 
