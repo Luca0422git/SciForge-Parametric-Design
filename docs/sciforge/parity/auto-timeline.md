@@ -100,10 +100,11 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
   Plus the same loop through the real MCP server (`--mcp`, 14 checks), and every rebuild
   tool in the headless runner (`RUNNER_SESSION`: the refusals, a ready hole call, finish
   keeping the original).
-- Scenarios (real clicks): `rebuild_start` (57 checks: the browser's right-click, the
+- Scenarios (real clicks): `rebuild_start` (70 checks: the browser's right-click, the
   reference and its picture, the window for AI apps and the clipboard, undo / redo, the same
   body again, the chat with a fake Claude key, the 3D view's right-click on a body, an empty
-  spot and a rebuild), `rebuild_compare_finish` (66: the numbers, the verdict in a person's
+  spot and a rebuild; three rebuilds and none chosen, a rebuilt body deleted while Compare
+  is open, Undo), `rebuild_compare_finish` (66: the numbers, the verdict in a person's
   words, the 8 green regions, the AI's compare drawing too, done, Finish from Compare, Esc,
   Finish with one undo and redo, keep the original and the reference), `rebuild_mesh_reopen`
   (39: a broken mesh refused in a window, a mesh rebuilt, Compare and Esc, save / close /

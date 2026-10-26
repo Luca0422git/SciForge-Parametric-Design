@@ -50,13 +50,15 @@ and documentation", "The command a person uses", the at-tools tests and known ga
   browser, on the 3D view's right-click list when a body is under the mouse
   (`marking_menu.CONTEXT_ITEMS`, a small hook), UTILITIES > AI; the chat with the ready
   message (not sent) or the window for AI apps (message copied); **Compare with Reference**
-  and **Finish Rebuild** dialogs.
+  and **Finish Rebuild** dialogs (the verdict and refusals in a person's words, the wait
+  cursor while a mesh becomes a solid or a big part is compared; with several rebuilds going
+  on and none chosen, they say to select the rebuilt body, naming them).
 - The proof: `SciForgeTests/headless/rebuild_e2e.py`: six parts (bracket, hole grid, flange,
   knob, block with pocket and boss, plate from an STL) rebuilt only through the tools, then
   the timeline, check_design and an early edit checked, plus compare's fallback (68 checks),
   and the same loop through the real MCP server (14 checks); `run_tests.sh --only headless /
   base` runs both.
-- Scenarios: `rebuild_start` (57 checks), `rebuild_compare_finish` (66), `rebuild_mesh_reopen`
+- Scenarios: `rebuild_start` (70 checks), `rebuild_compare_finish` (66), `rebuild_mesh_reopen`
   (39), `rebuild_chat` (20: a fake local model rebuilds the plate through SciForge's own chat,
   from the right-click to Finish).
 

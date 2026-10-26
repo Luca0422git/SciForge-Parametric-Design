@@ -19,6 +19,10 @@ D  With a chat AI set up (a Claude key kept): a second plate selected, UTILITIES
 E  The 3D view's right-click on a third plate: its list has Rebuild with Timeline (AI)...
    and it starts that plate's rebuild; on an empty spot the entry is not there; on a
    rebuilt body the list has Compare with Reference and Finish Rebuild instead.
+F  Three rebuilds going on and none chosen: Compare with Reference says to select the
+   rebuilt body (naming them); with the third one active it opens; that body deleted,
+   Compare Again says why it cannot compare, in a person's words; Undo brings the body back
+   and Compare Again compares again.
 """
 
 import FreeCAD as App
@@ -361,6 +365,102 @@ def e_menu_rebuilt():
     r.esc(menu)
 
 
+# -- F ------------------------------------------------------------------------------------------
+def f_many():
+    from sciforge import bodies, commands
+
+    r.close_dialogs()
+    Gui.Selection.clearSelection()
+    bodies.set_active_body(App.ActiveDocument.getObject("Body"))  # (the design's own body)
+    commands._TOLD["msg"] = None
+    r.utilities_menu("Compare with Reference")
+
+
+f_many.wait_ms = 1500
+
+
+def f_many_said():
+    from sciforge import commands
+
+    told = commands._TOLD["msg"] or ""
+    h.check(
+        "three rebuilds going on, none chosen: Compare opens no window",
+        r.dialog("SciForgeRebuildCompare") is None,
+        h.popups(),
+    )
+    h.check(
+        "... it says to select the rebuilt body, naming the three",
+        told.startswith("3 rebuilds are going on") and told.count("(rebuilt)") == 3,
+        told,
+    )
+
+
+def f_one():
+    from sciforge import bodies, rebuild
+
+    ref = s.get("third_ref")
+    target = rebuild.target_of(ref) if ref is not None else None
+    s["third_target"] = target.Name if target is not None else None
+    if target is not None:
+        bodies.set_active_body(target)
+    r.utilities_menu("Compare with Reference")
+
+
+f_one.wait_ms = 2000
+
+
+def f_open():
+    box = r.dialog("SciForgeRebuildCompare")
+    h.check("with the third rebuilt body active, Compare opens", box is not None, h.popups())
+    if box is not None:
+        h.check("... and compares", box.headline.text().startswith("Match"), box.headline.text())
+    if s.get("third_target"):
+        r.tool("delete_bodies", bodies=[s["third_target"]])  # (an AI deletes the rebuilt body)
+
+
+f_open.wait_ms = 1500
+
+
+def f_gone():
+    box = r.dialog("SciForgeRebuildCompare")
+    if box is None:
+        h.check("the Compare window stays open", False, h.popups())
+        return
+    r.click_button(box, "SciForgeRebuildCompareAgain")
+    words = box.verdict.text()
+    h.check(
+        "its rebuilt body deleted, Compare Again says it cannot compare",
+        box.headline.text() == "Cannot compare",
+        box.headline.text(),
+    )
+    h.check(
+        "... why and what to do, in a person's words",
+        "is gone" in words and "Rebuild with Timeline (AI)..." in words and "_" not in words,
+        words,
+    )
+    count = r.overlay_count(s["third_ref"]) if s.get("third_ref") else None
+    h.check("... and the differences drawn before are cleared", count == 0, count)
+    App.ActiveDocument.undo()
+    App.ActiveDocument.recompute()
+
+
+f_gone.wait_ms = 1500
+
+
+def f_back():
+    box = r.dialog("SciForgeRebuildCompare")
+    if box is None:
+        h.check("the Compare window stays open", False, h.popups())
+        return
+    r.click_button(box, "SciForgeRebuildCompareAgain")
+    h.check(
+        "Undo brings the body back: Compare Again compares again",
+        box.headline.text().startswith("Match"),
+        box.headline.text(),
+    )
+    r.click_button(box, "SciForgeRebuildCompareClose")
+
+
 def finish():
     r.close_dialogs()
     h.expect_no_errors("the rebuild start scenario")
@@ -390,6 +490,12 @@ h.run(
         e_started,
         e_on_rebuilt,
         e_menu_rebuilt,
+        f_many,
+        f_many_said,
+        f_one,
+        f_open,
+        f_gone,
+        f_back,
         finish,
     ],
 )

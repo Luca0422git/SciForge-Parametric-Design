@@ -292,7 +292,15 @@ def current_reference(doc=None, quiet=False):
         ref = rebuild.find(doc, body)
     except rebuild.RebuildError as exc:
         if not quiet:
-            commands.tell(rebuild_core.person_words(str(exc)))
+            going = rebuild.active_references(doc)
+            if len(going) > 1:  # (the AI's words name ids; a person picks a body)
+                targets = [rebuild.target_of(r) for r in going]
+                commands.tell(
+                    "%d rebuilds are going on (%s): select the rebuilt body you mean first."
+                    % (len(going), ", ".join(t.Label for t in targets if t is not None))
+                )
+            else:
+                commands.tell(rebuild_core.person_words(str(exc)))
         return None
     if ref is None and not quiet:
         commands.tell(
@@ -315,7 +323,7 @@ def start_for(source):
         return existing
     doc.openTransaction("Rebuild with Timeline")
     try:
-        ref = rebuild.start(doc, source)
+        ref = _busy(rebuild.start, doc, source)
     except rebuild.RebuildError as exc:
         doc.abortTransaction()
         _say_refused(rebuild_core.person_words(str(exc)))
@@ -331,6 +339,22 @@ def start_for(source):
 
 
 _LAST = {"refused": None, "message": None, "dialog": None}
+
+
+def _busy(fn, *args):
+    """fn(*args) under the wait cursor: a mesh made into a solid, or a compare of a big part,
+    takes seconds."""
+    shown = False
+    try:
+        QtWidgets.QApplication.setOverrideCursor(QtCore.Qt.WaitCursor)
+        shown = True
+    except Exception:
+        pass
+    try:
+        return fn(*args)
+    finally:
+        if shown:
+            QtWidgets.QApplication.restoreOverrideCursor()
 
 
 def _say_refused(text):
@@ -526,12 +550,13 @@ class CompareDialog(QtWidgets.QDialog):
 
     def refresh(self):
         try:
-            self.data = rebuild.compare(self.ref, None, {"show": True})
+            self.data = _busy(rebuild.compare, self.ref, None, {"show": True})
         except rebuild.RebuildError as exc:
             self.data = None
             self.headline.setText("Cannot compare")
             self.verdict.setText(rebuild_core.person_words(str(exc)))
             self.table.clear()
+            self._closed()  # (the last differences drawn no longer stand)
             return
         except Exception as exc:
             warn("Compare with Reference: %s" % exc)
@@ -615,8 +640,11 @@ class FinishDialog(QtWidgets.QDialog):
         self.state.setWordWrap(True)
         column.addWidget(self.state)
         try:
-            data = rebuild.compare(
-                ref, None, {"selectors": False, "deviation": False, "show": False}
+            data = _busy(
+                rebuild.compare,
+                ref,
+                None,
+                {"selectors": False, "deviation": False, "show": False},
             )
             if data.get("empty"):
                 words = "%s is still empty: build the part first." % (
@@ -700,7 +728,11 @@ def finish(ref, keep_original=False, keep_reference=False):
         return None
     doc.openTransaction("Finish Rebuild")
     try:
-        body = rebuild.finish(ref, None, keep_reference=keep_reference, keep_original=keep_original)
+        body = _busy(
+            lambda: rebuild.finish(
+                ref, None, keep_reference=keep_reference, keep_original=keep_original
+            )
+        )
     except rebuild.RebuildError as exc:
         doc.abortTransaction()
         commands.tell(rebuild_core.person_words(str(exc)))

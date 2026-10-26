@@ -313,3 +313,9 @@ rebuilt; a body already being rebuilt is not started twice (carry on in its rebu
 - **The match stays just under 1 on a mesh**: a mesh is flat facets, so a round hole of the
   mesh is a polygon; the faces are matched within the mesh's tolerance and `done` comes when
   every face is within it. Build round holes anyway (the person wants a real part).
+- **The verdict starts "(Volumes sampled, ...)"**: OpenCASCADE could not split the two parts
+  by each other (a flaw in the imported solid, or faces that almost but not quite lie on each
+  other), so compare measured the volumes along rays (about 1 % exact) and lists no regions.
+  The faces not matched yet still say where the parts differ; `check_design` on the rebuild
+  finds a step that left a sliver. Once the rebuild is right, its faces match the original's
+  and compare needs no split at all.
