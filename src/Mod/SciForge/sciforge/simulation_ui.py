@@ -278,9 +278,10 @@ def _apply(on, tab=None):
 
 
 # Keys that change the design (Fusion's design shortcuts do nothing in Simulation): Press
-# Pull, Extrude, Fillet, Hole, Move, Joint, copy / paste, Compute All, Delete and the sketch
-# tools. Delete made a Delete Face step from a face picked in the view (or deleted a body DOF
-# View had selected); the browser takes Del itself, so a study item is still deleted there.
+# Pull, Extrude, Fillet, Hole, Move, Joint, Appearance, copy / paste, Compute All, Delete and
+# the sketch tools. Delete made a Delete Face step from a face picked in the view (or deleted
+# a body DOF View had selected); the browser takes Del itself, so a study item is still
+# deleted there.
 DESIGN_KEYS = (
     "Del",
     "Backspace",
@@ -290,6 +291,7 @@ DESIGN_KEYS = (
     "H",
     "M",
     "J",
+    "A",
     "Ctrl+C",
     "Ctrl+V",
     "Ctrl+B",
