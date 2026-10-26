@@ -18,6 +18,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * deleted reference: the reference deleted with delete_step: the original is shown again.
 * driven: the jointed arm turned while it is rebuilt: the reference turns with it (compare
   said match 0.16 and the plan came out turned).
+* midway: check_design while a rebuild goes on took the hidden original under its rebuild for
+  an overlap (NOT OK).
 * follower: a body whose extrude also cuts another body: Finish deleted it and the other
   body lost the cut; now the original is kept (hidden) for it.
 * component id: start_rebuild given the component's id (what import_file answers) rebuilds
@@ -674,6 +676,22 @@ def follower(agent, folder):
     )
 
 
+# -- check_design while a rebuild goes on ----------------------------------------------------------
+def checked_midway(agent, folder):
+    path = _golden(agent, "QaArm4", ARM, folder)
+    agent.call("new_design", {"name": "QaMidway"})
+    agent.call("import_file", {"path": path})
+    rebuild_through_tools(agent, "Body001")
+    text, error = agent.call("check_design", {})
+    report = _json(text) or {}
+    agent.check(
+        "midway: check_design does not take the original under its rebuild for an overlap (it "
+        "said NOT OK: 'Bodies Body001 and Body001 (rebuilt) overlap')",
+        not error and report.get("ok") is True and "being rebuilt" in text,
+        text[:500],
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -685,6 +703,7 @@ CHECKS = (
     vex_plate,
     component_id,
     follower,
+    checked_midway,
 )
 
 

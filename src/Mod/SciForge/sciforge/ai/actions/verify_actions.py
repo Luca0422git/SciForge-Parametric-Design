@@ -596,6 +596,20 @@ def query_geometry(ctx, args):
 
 
 # -- check_design -----------------------------------------------------------------------------
+def _being_rebuilt(doc):
+    """Names of the originals of the rebuilds going on (beta 3 QA)."""
+    try:
+        from ... import rebuild
+
+        return {
+            getattr(r, "SourceName", "")
+            for r in rebuild.active_references(doc)
+            if rebuild.target_of(r) is not None
+        }
+    except Exception:
+        return set()
+
+
 @action("check_design")
 def check_design(ctx, args):
     from ... import analysis, bodies
@@ -661,6 +675,15 @@ def check_design(ctx, args):
     overlap = []
     if args.get("interference", True):
         solid = [b for b in chosen if bodies.has_solid(b)]
+        # (beta 3 QA) the original of a rebuild going on lies under its rebuild on purpose
+        # (hidden, the rebuild's reference): it is no overlap of the design
+        rebuilt = _being_rebuilt(doc)
+        if rebuilt and any(b.Name in rebuilt for b in solid):
+            warnings.append(
+                "Left out of the interference check: %s (being rebuilt, hidden under the "
+                "rebuild)." % ", ".join(b.Label for b in solid if b.Name in rebuilt)
+            )
+            solid = [b for b in solid if b.Name not in rebuilt]
         if len(solid) >= 2:
             try:
                 pairs = analysis.interference([(b.Label, bodies.global_shape(b)) for b in solid])
