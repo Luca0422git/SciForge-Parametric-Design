@@ -21,6 +21,7 @@ from . import simulation_results_core as core
 
 SimulationError = sim.SimulationError
 _CACHE = {}  # (document, study) -> ResultData of its last solve
+_STRAIN = ("strain_1", "strain_3", "exx", "eyy", "ezz")
 
 
 class ResultData:
@@ -81,9 +82,14 @@ class ResultData:
 
         if key not in self._values:
             try:
-                raw = self.results.values(key)
+                if key in _STRAIN:
+                    raw = self._strain(key)
+                else:
+                    raw = self.results.values(key)
             except Exception as exc:
-                raise SimulationError("No %s in these results: %s" % (sim.result_title(key), exc))
+                raise SimulationError(
+                    "No %s in these results: %s" % (core.result_name(key), exc)
+                )
             out = np.asarray([float("nan") if v is None else float(v) for v in raw], dtype=float)
             if len(out) != len(self.points):
                 raise SimulationError(
@@ -92,6 +98,25 @@ class ResultData:
                 )
             self._values[key] = out
         return self._values[key]
+
+    def _strain(self, key):
+        """Strain components and principal strains from the solve's strain tensor (CalculiX's
+        E, as FreeCAD reads it): normal strains as they are, principal ones its eigenvalues."""
+        import numpy as np
+
+        r = self.result
+        comps = [
+            np.asarray(list(getattr(r, "NodeStrain" + c)), dtype=float)
+            for c in ("XX", "YY", "ZZ", "XY", "YZ", "XZ")
+        ]
+        if key == "exx":
+            return comps[0].tolist()
+        if key == "eyy":
+            return comps[1].tolist()
+        if key == "ezz":
+            return comps[2].tolist()
+        largest, smallest = core.principal(*comps)
+        return (largest if key == "strain_1" else smallest).tolist()
 
     def stats(self, key):
         """{"min", "max", "min_index", "max_index", "min_at", "max_at"} of a result: the

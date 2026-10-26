@@ -806,9 +806,15 @@ def _draw_legend(path, info):
         painter.drawText(QtCore.QPointF(left, top - 12), title)
         for i in range(height):
             t = 1.0 - (i + 0.5) / height
-            if info.get("reverse"):
-                t = 1.0 - t
-            colour = core.map_colour(t, info.get("banded"))
+            if info.get("bands"):  # the safety factor target bands
+                value = (i + 0.5) / height * (info.get("hi") or sim.SAFETY_CAP)
+                value = (info.get("hi") or sim.SAFETY_CAP) - value
+                lower, upper = info.get("targets") or core.DEFAULT_TARGETS
+                colour = core.BAND_COLOURS[core.target_band(value, lower, upper)]
+            else:
+                if info.get("reverse"):
+                    t = 1.0 - t
+                colour = core.map_colour(t, info.get("banded"))
             painter.fillRect(QtCore.QRectF(left, top + i, 16, 1.2), QtGui.QColor.fromRgbF(*colour))
         for _value, text, pos in info.get("ticks", []):
             y = top + height - pos * height

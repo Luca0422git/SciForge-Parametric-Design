@@ -165,8 +165,15 @@ class ResultDisplay:
         self.cap_switch = coin.SoSwitch()
         cap = coin.SoSeparator()
         cap_hints = coin.SoShapeHints()
-        cap_hints.vertexOrdering = coin.SoShapeHints.UNKNOWN_ORDERING
+        cap_hints.vertexOrdering = coin.SoShapeHints.COUNTERCLOCKWISE
+        cap_hints.shapeType = coin.SoShapeHints.UNKNOWN_SHAPE_TYPE  # (lit from both sides)
         cap.addChild(cap_hints)
+        self.cap_normal = coin.SoNormal()  # one normal: the flat cut face takes the light evenly
+        self.cap_normal.vector.setValue(0.0, 0.0, 1.0)
+        cap.addChild(self.cap_normal)
+        cap_normal_binding = coin.SoNormalBinding()
+        cap_normal_binding.value = coin.SoNormalBinding.OVERALL
+        cap.addChild(cap_normal_binding)
         cap_material = coin.SoMaterial()  # (opaque even when the part is see-through)
         cap_material.diffuseColor.setValue(0.92, 0.92, 0.92)
         cap_material.ambientColor.setValue(0.45, 0.45, 0.45)
@@ -321,9 +328,10 @@ class ResultDisplay:
     def clipped(self):
         return self.clip_switch.whichChild.getValue() != self.coin.SO_SWITCH_NONE
 
-    def set_cap(self, triangles, values, positions):
+    def set_cap(self, triangles, values, positions, normal=None):
         """The slice's cut face: triangles [(p0, p1, p2)], their values and colour map
-        positions (flat lists, three per triangle). Empty hides it."""
+        positions (flat lists, three per triangle), `normal` the plane's (the triangles face
+        against it). Empty hides it."""
         np = _np()
         coin = self.coin
         if not len(triangles):
@@ -334,6 +342,11 @@ class ResultDisplay:
             self.cap_faces.numVertices.setNum(0)
             return
         pts = np.asarray(triangles, dtype=float).reshape((-1, 3))
+        if normal is not None:
+            n = App.Vector(*normal)
+            if n.Length > 1e-12:
+                n.normalize()
+                self.cap_normal.vector.setValue(-n.x, -n.y, -n.z)
         self.cap_points = pts
         self.cap_values = np.asarray(values, dtype=float).ravel()
         self.cap_positions = np.asarray(
@@ -381,6 +394,24 @@ def gl_widget_of(doc_name):
     except Exception:
         return None
     return None
+
+
+def overlay_parent(gl):
+    """The widget the overlays live in: the 3D view widget that holds the OpenGL widget (a
+    child of the OpenGL widget itself crashed Qt when it was grabbed or drawn off screen)."""
+    try:
+        parent = gl.parentWidget()
+        return parent if parent is not None else gl
+    except Exception:
+        return gl
+
+
+def in_parent(gl, x, y):
+    """A point of the OpenGL widget in its overlay parent's coordinates."""
+    parent = overlay_parent(gl)
+    if parent is gl:
+        return QtCore.QPoint(int(x), int(y))
+    return gl.mapTo(parent, QtCore.QPoint(int(x), int(y)))
 
 
 def project(view, gl, point):
@@ -452,18 +483,23 @@ class TagLayer(QtWidgets.QWidget):
     (r, g, b)}]; `placed` holds where each tag was last drawn (the scenarios read it)."""
 
     def __init__(self, gl, view):
-        super().__init__(gl)
+        super().__init__(overlay_parent(gl))
         self.setObjectName("SciForgeSimTags")
         self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
         self.setAttribute(QtCore.Qt.WA_NoSystemBackground, True)
-        self.setAttribute(QtCore.Qt.WA_TranslucentBackground, True)
         self.gl = gl
         self.view = view
         self.tags = []
         self.placed = []
-        self.setGeometry(0, 0, gl.width(), gl.height())
+        self.setGeometry(self._area())
         self.show()
         self.raise_()
+
+    def _area(self):
+        """The OpenGL widget's rectangle in this layer's parent (tags are placed in the OpenGL
+        widget's coordinates, so the layer covers it exactly)."""
+        corner = in_parent(self.gl, 0, 0)
+        return QtCore.QRect(corner.x(), corner.y(), self.gl.width(), self.gl.height())
 
     def set_tags(self, tags):
         self.tags = list(tags)
@@ -472,8 +508,9 @@ class TagLayer(QtWidgets.QWidget):
     def relayout(self):
         if not _alive(self.gl):
             return
-        if self.geometry() != QtCore.QRect(0, 0, self.gl.width(), self.gl.height()):
-            self.setGeometry(0, 0, self.gl.width(), self.gl.height())
+        area = self._area()
+        if self.geometry() != area:
+            self.setGeometry(area)
         placed = []
         for tag in self.tags:
             pos = project(self.view, self.gl, tag["point"])
@@ -482,8 +519,8 @@ class TagLayer(QtWidgets.QWidget):
         self.update()
 
     def paintEvent(self, _event):
+        painter = QtGui.QPainter(self)
         try:
-            painter = QtGui.QPainter(self)
             painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
             font = painter.font()
             font.setPointSizeF(max(font.pointSizeF(), 9.0))
@@ -493,9 +530,10 @@ class TagLayer(QtWidgets.QWidget):
                 if pos is None:
                     continue
                 self._paint_tag(painter, metrics, tag, pos)
-            painter.end()
         except Exception as exc:
             warn("results tags: %s" % exc)
+        finally:
+            painter.end()
 
     def _paint_tag(self, painter, metrics, tag, pos):
         kind = tag.get("kind", "probe")
@@ -561,8 +599,8 @@ class ColourBar(QtWidgets.QWidget):
         info = self.info
         if not info:
             return
+        painter = QtGui.QPainter(self)
         try:
-            painter = QtGui.QPainter(self)
             painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
             top, bottom = 8, self.height() - 8
             bar = QtCore.QRectF(4, top, 18, bottom - top)
@@ -612,9 +650,10 @@ class ColourBar(QtWidgets.QWidget):
                 painter.drawLine(QtCore.QPointF(bar.right(), y), QtCore.QPointF(bar.right() + 4, y))
                 label = text + (" " + info["unit"] if info.get("unit") else "")
                 painter.drawText(QtCore.QPointF(bar.right() + 8, y + metrics.ascent() / 2.5), label)
-            painter.end()
         except Exception as exc:
             warn("results legend: %s" % exc)
+        finally:
+            painter.end()
 
 
 class Legend(QtWidgets.QFrame):
@@ -623,7 +662,7 @@ class Legend(QtWidgets.QFrame):
     Results Details button, the deformation drawn, and the out-of-date warning with Solve."""
 
     def __init__(self, gl, callbacks):
-        super().__init__(gl)
+        super().__init__(overlay_parent(gl))
         self.setObjectName("SciForgeSimLegend")
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
         self.gl = gl
@@ -649,6 +688,25 @@ class Legend(QtWidgets.QFrame):
         self.details_button.setToolTip("Results Details: what the results mean")
         self.details_button.clicked.connect(lambda: self._call("details"))
         row.addWidget(self.details_button)
+        # Fusion's legend options: smooth colours or colour bands
+        self.options_button = QtWidgets.QToolButton()
+        self.options_button.setObjectName("SciForgeSimLegendOptions")
+        self.options_button.setText("...")
+        self.options_button.setToolTip("Legend options")
+        self.options_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        menu = QtWidgets.QMenu(self.options_button)
+        group = QtGui.QActionGroup(menu)
+        group.setExclusive(True)
+        self.smooth_action = menu.addAction("Smooth Colours")
+        self.bands_action = menu.addAction("Colour Bands")
+        for action in (self.smooth_action, self.bands_action):
+            action.setCheckable(True)
+            group.addAction(action)
+        self.smooth_action.setChecked(True)
+        self.smooth_action.triggered.connect(lambda: self._call("banded", False))
+        self.bands_action.triggered.connect(lambda: self._call("banded", True))
+        self.options_button.setMenu(menu)
+        row.addWidget(self.options_button)
         box.addLayout(row)
         row2 = QtWidgets.QHBoxLayout()
         self.part_box = QtWidgets.QComboBox()
@@ -709,7 +767,7 @@ class Legend(QtWidgets.QFrame):
         if not _alive(self) or not _alive(self.gl):
             return
         self.adjustSize()
-        self.move(12, 12)
+        self.move(in_parent(self.gl, 12, 12))
         self.raise_()
 
     def fill(self, info, study_label, out_of_date, deformation_text):
@@ -733,6 +791,8 @@ class Legend(QtWidgets.QFrame):
                 self.unit_box.addItem(unit, unit)
             self.unit_box.setCurrentIndex(max(0, self.unit_box.findData(info["unit"])))
             self.unit_box.setVisible(units != [""])
+            self.bands_action.setChecked(bool(info.get("banded")))
+            self.smooth_action.setChecked(not info.get("banded"))
             self.max_label.setText("Max: %s" % info["max_text"])
             self.min_label.setText("Min: %s" % info["min_text"])
             self.bar.set_info(info)
@@ -797,7 +857,7 @@ class AnimationBar(QtWidgets.QFrame):
     newer Fusion viewer puts its animation bar at the bottom of the canvas)."""
 
     def __init__(self, gl, callbacks, speed=1.0, frames=20, mode="loop"):
-        super().__init__(gl)
+        super().__init__(overlay_parent(gl))
         self.setObjectName("SciForgeSimAnimation")
         self.setAttribute(QtCore.Qt.WA_StyledBackground, True)
         self.setStyleSheet(BAR_STYLE)
@@ -872,7 +932,7 @@ class AnimationBar(QtWidgets.QFrame):
         if not _alive(self) or not _alive(self.gl):
             return
         self.adjustSize()
-        self.move(12, max(0, self.gl.height() - self.height() - 64))
+        self.move(in_parent(self.gl, 12, max(0, self.gl.height() - self.height() - 64)))
         self.raise_()
 
     def remove(self):

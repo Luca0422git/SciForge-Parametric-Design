@@ -453,6 +453,7 @@ class Session:
                     "unit": self.set_unit,
                     "details": open_details,
                     "solve": solve_again,
+                    "banded": lambda on: self.set_option("banded", on),
                 },
             )
             self.tags = view_mod.TagLayer(gl, self.view)
@@ -868,7 +869,7 @@ class Session:
         )
         flat_vals = np.asarray(vals, dtype=float).ravel() if vals else np.zeros(0)
         positions = _positions(np, flat_vals, lo, hi, reverse) if len(flat_vals) else []
-        self.display.set_cap(tris, flat_vals, positions)
+        self.display.set_cap(tris, flat_vals, positions, normal)
 
     # -- animation
     def toggle_animation(self):

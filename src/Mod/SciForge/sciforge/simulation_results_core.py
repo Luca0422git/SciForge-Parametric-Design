@@ -43,7 +43,27 @@ LEGEND = (
         "Displacement",
         (("displacement", "Total"), ("dx", "X"), ("dy", "Y"), ("dz", "Z")),
     ),
-    ("strain", "Strain", (("strain", "Equivalent"),)),
+    (
+        "strain",
+        "Strain",
+        (
+            ("strain", "Equivalent"),
+            ("strain_1", "1st Principal"),
+            ("strain_3", "3rd Principal"),
+            ("exx", "Normal XX"),
+            ("eyy", "Normal YY"),
+            ("ezz", "Normal ZZ"),
+        ),
+    ),
+)
+# results SciForge works out itself from the solve's strain tensor at each node (the engine lists
+# the equivalent strain): (key, Fusion's name)
+EXTRA_RESULTS = (
+    ("strain_1", "Strain: 1st Principal"),
+    ("strain_3", "Strain: 3rd Principal"),
+    ("exx", "Strain: Normal XX"),
+    ("eyy", "Strain: Normal YY"),
+    ("ezz", "Strain: Normal ZZ"),
 )
 DEFAULT_RESULT = "safety"  # Fusion opens a Static Stress study's results on Safety Factor
 
@@ -82,7 +102,24 @@ def result_keys():
 
 def result_name(result):
     """Fusion's full name of a result: "Stress: Von Mises", "Displacement: X", "Safety Factor"."""
+    for key, name in EXTRA_RESULTS:
+        if key == result:
+            return name
     return sim.result_title(result)
+
+
+def principal(xx, yy, zz, xy, yz, zx):
+    """(largest, smallest) principal value of a symmetric tensor at every node (numpy arrays
+    of its components)."""
+    np = _np()
+    n = len(xx)
+    t = np.empty((n, 3, 3))
+    t[:, 0, 0], t[:, 1, 1], t[:, 2, 2] = xx, yy, zz
+    t[:, 0, 1] = t[:, 1, 0] = xy
+    t[:, 1, 2] = t[:, 2, 1] = yz
+    t[:, 0, 2] = t[:, 2, 0] = zx
+    w = np.linalg.eigvalsh(t)  # ascending
+    return w[:, 2], w[:, 0]
 
 
 # -- units -----------------------------------------------------------------------------------------
@@ -261,6 +298,8 @@ def legend(result, stats, unit=None, count=9, banded=False, targets=None):
     lo_v = stats.get("min") if stats else None
     hi_v = stats.get("max") if stats else None
     lo, hi, reverse = scale(result, lo_v, hi_v)
+    if result == "safety":
+        count = 11  # 0, 1.5, 3 ... 15: round numbers on the capped scale
     ticks = []
     for value in sim.legend_ticks(lo, hi, count):
         pos = 0.0 if hi is None or lo is None or hi == lo else (value - lo) / (hi - lo)
@@ -619,7 +658,8 @@ def straight_tets(tets):
 def cut(points, values, tets, origin, normal):
     """Where the plane (origin, normal) cuts a mesh of straight tetrahedra (straight_tets): a
     list of triangles [(p0, p1, p2), ...] with their values [(v0, v1, v2), ...] interpolated
-    along the cut edges. values: one per point (NaN allowed)."""
+    along the cut edges, each wound to face against the normal. values: one per point (NaN
+    allowed)."""
     np = _np()
     points = np.asarray(points, dtype=float)
     values = np.asarray(values, dtype=float)
@@ -655,6 +695,13 @@ def cut(points, values, tets, origin, normal):
             vals.append((quad[0][1], quad[1][1], quad[2][1]))
             tris.append((quad[0][0], quad[2][0], quad[3][0]))
             vals.append((quad[0][1], quad[2][1], quad[3][1]))
+    # every triangle wound to face against the normal (out of the half that is kept), so they
+    # all take the light the same way
+    for k, (p0, p1, p2) in enumerate(tris):
+        if float(np.dot(np.cross(p1 - p0, p2 - p0), n)) > 0:
+            tris[k] = (p0, p2, p1)
+            v0, v1, v2 = vals[k]
+            vals[k] = (v0, v2, v1)
     return tris, vals
 
 

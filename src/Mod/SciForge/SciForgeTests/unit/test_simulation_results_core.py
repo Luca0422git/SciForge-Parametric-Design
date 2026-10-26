@@ -21,9 +21,25 @@ except ImportError:  # (FreeCAD and the CI's Python have numpy)
 
 
 class ResultListTests(unittest.TestCase):
-    def test_every_result_is_an_engine_result(self):
+    def test_every_engine_result_is_listed(self):
         engine = [k for k, _t, _u in sim.RESULTS]
-        self.assertEqual(sorted(core.result_keys()), sorted(engine))
+        extra = [k for k, _n in core.EXTRA_RESULTS]
+        self.assertEqual(sorted(core.result_keys()), sorted(engine + extra))
+        self.assertEqual(core.result_name("strain_1"), "Strain: 1st Principal")
+        self.assertEqual(core.result_name("von_mises"), "Stress: Von Mises")
+
+    @unittest.skipUnless(HAVE_NUMPY, "numpy not installed")
+    def test_principal_values(self):
+        import numpy as np
+
+        big, small = core.principal(
+            np.array([1.0, 2.0]), np.array([0.0, 2.0]), np.array([0.0, 2.0]),
+            np.array([0.0, 1.0]), np.array([0.0, 0.0]), np.array([0.0, 0.0]),
+        )
+        self.assertAlmostEqual(big[0], 1.0)
+        self.assertAlmostEqual(small[0], 0.0)
+        self.assertAlmostEqual(big[1], 3.0)  # [[2,1,0],[1,2,0],[0,0,2]]: 3, 2, 1
+        self.assertAlmostEqual(small[1], 1.0)
 
     def test_groups_follow_fusion(self):
         self.assertEqual(
@@ -56,8 +72,9 @@ class LegendTests(unittest.TestCase):
     def test_safety_factor_scale_is_capped(self):
         leg = core.legend("safety", {"min": 3.5, "max": 15.0})
         self.assertEqual((leg["lo"], leg["hi"], leg["reverse"]), (0.0, sim.SAFETY_CAP, True))
-        self.assertEqual(len(leg["ticks"]), 9)
+        self.assertEqual(len(leg["ticks"]), 11)  # every 1.5
         self.assertEqual(leg["ticks"][0][1], "15")
+        self.assertEqual(leg["ticks"][1][1], "13.5")
         self.assertEqual(leg["ticks"][-1][1], "0")
         self.assertEqual(leg["min_text"], "3.5")
         self.assertEqual(leg["unit"], "")
@@ -248,6 +265,8 @@ class MeshTests(unittest.TestCase):
             for p in (a, b, c):
                 self.assertAlmostEqual(p[0], 0.5)
         self.assertAlmostEqual(area, 1.0)
+        for a, b, c in tris:  # each faces against the normal (+X)
+            self.assertLess(np.dot(np.cross(np.subtract(b, a), np.subtract(c, a)), (1, 0, 0)), 0)
         for v in vals:
             for x in v:
                 self.assertAlmostEqual(x, 0.5)
