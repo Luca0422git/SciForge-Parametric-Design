@@ -20,6 +20,8 @@ F  When the view cannot be split (Viewports refuses), Compare puts the studies s
    each tag at its own beam; Finish Compare.
 G  Compare again; a solve ends meanwhile (sim-ui's Solve dialog shows its study's results):
    Compare ends, one view with that study's results.
+H  The beam made 120 mm long and only the 300 N study solved again: Compare of all three says
+   which ones are out of date on their tags.
 """
 
 import FreeCAD as App
@@ -403,6 +405,62 @@ def g_check():
     )
 
 
+def h_change():
+    doc = s.doc()
+    box = [o for o in doc.Objects if o.TypeId == "PartDesign::AdditiveBox"][0]
+    box.Length = 120.0
+    doc.recompute()
+    s.solve(doc.getObject(state["third"]))
+
+
+h_change.wait_ms = 1500
+
+
+def h_compare():
+    s.menu("RESULT TOOLS", "Compare")
+
+
+def h_tick_all():
+    from PySide6 import QtTest
+
+    dialog = s.dialog("SciForgeSimCompare")
+    h.check("Compare dialog open", dialog is not None)
+    if dialog is None:
+        return
+    listing = dialog.findChild(QtWidgets.QListWidget, "SciForgeSimCompareStudies")
+    for i in range(listing.count()):
+        item = listing.item(i)
+        if item.checkState() != QtCore.Qt.Checked:
+            rect = listing.visualItemRect(item)
+            QtTest.QTest.mouseClick(
+                listing.viewport(),
+                QtCore.Qt.LeftButton,
+                QtCore.Qt.NoModifier,
+                QtCore.QPoint(rect.left() + 10, rect.center().y()),
+            )
+    s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimCompareGo"))
+
+
+h_tick_all.wait_ms = 1500
+
+
+def h_check():
+    cmp = _compare()
+    h.check("comparing three", cmp is not None and len(cmp.items) == 3)
+    if cmp is None:
+        return
+    texts = {t["study"]: t["text"] for t in cmp.tag_list}
+    third = texts.get(state["third"], "")
+    h.check("the study solved again: no warning", "out of date" not in third, third)
+    others = [texts.get(state[k], "") for k in ("first", "second")]
+    h.check(
+        "the two others say they are out of date",
+        all("(out of date)" in t for t in others),
+        others,
+    )
+    s.click_widget(cmp.legend.compare_button)
+
+
 h.run(
     "simres_compare",
     [
@@ -439,5 +497,9 @@ h.run(
         g_go,
         g_solved,
         g_check,
+        h_change,
+        h_compare,
+        h_tick_all,
+        h_check,
     ],
 )

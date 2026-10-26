@@ -1866,7 +1866,13 @@ class CompareSession:
             display = view_mod.ResultDisplay(data)
             pts = data.points
             boxes.append(tuple(pts.min(axis=0)) + tuple(pts.max(axis=0)))
-            self.items.append({"study": study, "data": data, "display": display, "pane": None})
+            try:
+                stale = bool(results_data.out_of_date(study))
+            except Exception:
+                stale = False
+            self.items.append(
+                {"study": study, "data": data, "display": display, "pane": None, "stale": stale}
+            )
         try:
             camera = gui.ActiveView.getCamera()  # (the panes start from the view's camera)
         except Exception:
@@ -2142,10 +2148,11 @@ class CompareSession:
                 float(centre[1]) + shift[1],
                 float(top) + shift[2],
             )
-            text = "%s   min %s   max %s" % (
+            text = "%s   min %s   max %s%s" % (
                 item["study"].Label,
                 core.with_unit(core.convert(st.get("min"), unit), unit),
                 core.with_unit(core.convert(st.get("max"), unit), unit),
+                "   (out of date)" if item.get("stale") else "",
             )
             tags.append(
                 {
