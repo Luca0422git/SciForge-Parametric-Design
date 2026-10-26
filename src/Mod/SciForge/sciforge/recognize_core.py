@@ -297,11 +297,7 @@ def clean_loop(loop, tol=TOL):
 
 def _deg(rad):
     d = math.degrees(rad)
-    return snap(d, 1e-7)
-
-
-def _line_item(s):
-    return {"line": [s["a"][0], s["a"][1], s["b"][0], s["b"][1]]}
+    return snap(d, 1e-9)
 
 
 def _arc_item(s):
@@ -312,7 +308,42 @@ def _arc_item(s):
     a1 = _deg(_angle(s["c"], end))
     while a1 <= a0:
         a1 += 360.0
-    return {"arc": [s["c"][0], s["c"][1], s["r"], a0, snap(a1, 1e-7)]}
+    return {"arc": [s["c"][0], s["c"][1], s["r"], a0, snap(a1, 1e-9)]}
+
+
+def _arc_ends(item):
+    """Where SciForge's sketch puts the ends of an {"arc": [cx, cy, r, a0, a1]} item (the
+    same arithmetic, so a line drawn to them meets the arc exactly)."""
+    cx, cy, r, a0, a1 = item["arc"]
+    return (
+        (cx + r * math.cos(math.radians(a0)), cy + r * math.sin(math.radians(a0))),
+        (cx + r * math.cos(math.radians(a1)), cy + r * math.sin(math.radians(a1))),
+    )
+
+
+def _segments(loop):
+    """A loop as create_sketch "segments": arcs counter-clockwise, every line's ends taken
+    from the arcs beside it, so the chain closes within FreeCAD's 1e-7 mm."""
+    pieces = []
+    for s in loop:
+        if s["kind"] == "arc":
+            item = _arc_item(s)
+            p0, p1 = _arc_ends(item)
+            pieces.append([item, p0, p1] if s["ccw"] else [item, p1, p0])
+        else:
+            pieces.append([None, s["a"], s["b"]])
+    n = len(pieces)
+    for i, piece in enumerate(pieces):
+        if piece[0] is None:
+            before, after = pieces[i - 1], pieces[(i + 1) % n]
+            if before[0] is not None:
+                piece[1] = before[2]
+            if after[0] is not None:
+                piece[2] = after[1]
+    out = []
+    for item, a, b in pieces:
+        out.append(item if item is not None else {"line": [a[0], a[1], b[0], b[1]]})
+    return out
 
 
 def _rect_of(loop, tol):
@@ -365,7 +396,7 @@ def loop_geometry(loop, name=None, tol=TOL):
     elif all(s["kind"] == "line" for s in loop) and len(loop) >= 3:
         item = {"polyline": [[s["a"][0], s["a"][1]] for s in loop]}
     elif len(loop) >= 2 and all(s["kind"] in ("line", "arc") for s in loop):
-        item = {"segments": [_line_item(s) if s["kind"] == "line" else _arc_item(s) for s in loop]}
+        item = {"segments": _segments(loop)}
     if item is not None and name and ("rect" in item or "circle" in item):
         item["name"] = name
     return item
@@ -959,3 +990,66 @@ def ideal_points(points, pattern, tol):
         free.remove(q)
         out.append(q)
     return out
+
+
+def shift_item(item, dx, dy):
+    """A create_sketch geometry item moved by (dx, dy)."""
+    out = dict(item)
+    if "circle" in out:
+        cx, cy, r = out["circle"]
+        out["circle"] = [cx + dx, cy + dy, r]
+    elif "rect" in out:
+        x0, y0, x1, y1 = out["rect"]
+        out["rect"] = [x0 + dx, y0 + dy, x1 + dx, y1 + dy]
+    elif "center_rect" in out:
+        cx, cy, w, h = out["center_rect"]
+        out["center_rect"] = [cx + dx, cy + dy, w, h]
+    elif "slot" in out:
+        x1, y1, x2, y2, w = out["slot"]
+        out["slot"] = [x1 + dx, y1 + dy, x2 + dx, y2 + dy, w]
+    elif "polyline" in out:
+        out["polyline"] = [[x + dx, y + dy] for x, y in out["polyline"]]
+    elif "polygon" in out:
+        spec = dict(out["polygon"])
+        spec["center"] = [spec["center"][0] + dx, spec["center"][1] + dy]
+        out["polygon"] = spec
+    elif "segments" in out:
+        segs = []
+        for seg in out["segments"]:
+            if "line" in seg:
+                x0, y0, x1, y1 = seg["line"]
+                segs.append({"line": [x0 + dx, y0 + dy, x1 + dx, y1 + dy]})
+            elif "arc" in seg:
+                cx, cy, r, a0, a1 = seg["arc"]
+                segs.append({"arc": [cx + dx, cy + dy, r, a0, a1]})
+            else:
+                segs.append(dict(seg))
+        out["segments"] = segs
+    return out
+
+
+def same_items(a, b, tol=1e-6):
+    """Two geometry item lists alike (same kinds, numbers within tol), in any order."""
+    if len(a) != len(b):
+        return False
+    left = list(b)
+    for item in a:
+        for k, other in enumerate(left):
+            if _close(item, other, tol):
+                del left[k]
+                break
+        else:
+            return False
+    return True
+
+
+def _close(a, b, tol):
+    if isinstance(a, dict) and isinstance(b, dict):
+        if set(a) - {"name"} != set(b) - {"name"}:
+            return False
+        return all(_close(a[k], b[k], tol) for k in a if k != "name")
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        return len(a) == len(b) and all(_close(x, y, tol) for x, y in zip(a, b))
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return abs(a - b) <= tol
+    return a == b

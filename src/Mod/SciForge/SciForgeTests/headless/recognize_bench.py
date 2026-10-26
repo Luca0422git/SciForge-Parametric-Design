@@ -354,6 +354,8 @@ def run_plan(plan, name):
         from sciforge import bodies
 
         found = [b for b in bodies.solid_bodies(doc)] if doc is not None else []
+        if len(found) > 1:
+            errors.append((-1, "the plan made %d bodies, not one" % len(found)))
         if found:
             shape = found[0].Shape.copy()
     except Exception as exc:
