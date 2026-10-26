@@ -451,6 +451,84 @@ EXTRA_MODELS = {
             },
         ],
     },
+    "bench_vex_angle": {
+        "title": "VEX-like angle: L of 1.016 sheet bent with radii 0.5 / 1.516, 25.4 x 25.4 x "
+        "63.5, a row of 5 square holes 4.6 in each flange",
+        "steps": [
+            {
+                "op": "sketch",
+                "id": "s1",
+                "plane": "XZ",
+                "geometry": [
+                    {
+                        "segments": [
+                            {"line": [25.4, 0, 1.516, 0]},
+                            {"arc": [1.516, 1.516, 1.516, 180, 270]},
+                            {"line": [0, 1.516, 0, 25.4]},
+                            {"line": [0, 25.4, 1.016, 25.4]},
+                            {"line": [1.016, 25.4, 1.016, 1.516]},
+                            {"arc": [1.516, 1.516, 0.5, 180, 270]},
+                            {"line": [1.516, 1.016, 25.4, 1.016]},
+                            {"line": [25.4, 1.016, 25.4, 0]},
+                        ]
+                    }
+                ],
+            },
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 63.5, "flip": True},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 1.016,
+                "geometry": [{"center_rect": [13.97, 6.35 + 12.7 * k, 4.6, 4.6]} for k in range(5)],
+            },
+            {
+                "op": "extrude",
+                "id": "c1",
+                "profile": "s2",
+                "operation": "cut",
+                "extent": "through_all",
+                "flip": True,
+            },
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "YZ",
+                "geometry": [{"center_rect": [6.35 + 12.7 * k, 13.97, 4.6, 4.6]} for k in range(5)],
+            },
+            {
+                "op": "extrude",
+                "id": "c2",
+                "profile": "s3",
+                "operation": "cut",
+                "extent": "through_all",
+            },
+        ],
+    },
+    "bench_shaft_collar": {
+        "title": "Shaft collar d20 x 8 with a d8 bore and a d3 set-screw hole from its side into "
+        "the bore (not through the far side)",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"circle": [0, 0, 10]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 8},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 8,
+                "geometry": [{"circle": [0, 0, 4]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s2", "diameter": 8, "through_all": True},
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "YZ",
+                "offset": 10,
+                "geometry": [{"circle": [0, 4, 1.5]}],
+            },
+            {"op": "hole", "id": "h2", "sketch": "s3", "diameter": 3, "depth": 8},
+        ],
+    },
     "bench_turned_bracket": {
         "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
         "placed in an assembly)",
@@ -539,6 +617,8 @@ BENCH = [
     ("bench_clevis", {"base": "extrude", "holes": [8]}),
     ("bench_opposed_holes", {"base": "extrude", "holes": [6, 6]}),
     ("bench_vex_plate", {"base": "extrude", "holes": [], "patterns": 1}),
+    ("bench_vex_angle", {"base": "extrude", "holes": [], "patterns": 2}),
+    ("bench_shaft_collar", {"base": "extrude", "holes": [3, 8]}),
     ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]

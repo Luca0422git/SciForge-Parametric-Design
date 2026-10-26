@@ -61,6 +61,14 @@ class Numbers(unittest.TestCase):
         self.assertEqual(core.fmt(0.125), "0.125")
         self.assertEqual(core.fmt(5.9999999999), "6")
 
+    def test_snap_twice_is_snap_once(self):
+        # (an offset snapped in base_extrude_args and again in sketch_args: the base's end
+        # must stay where the boss on it starts)
+        for v in (-3.459988868, -2.659988868, 0.30000000004, 12.7000005, 1e-7, -0.0):
+            once = core.snap(v)
+            self.assertEqual(core.snap(once), once)
+        self.assertEqual(core.snap(-3.459988868), -3.459989)
+
     def test_rounder_values_beyond_a_value(self):
         # a boss on a pipe may start anywhere inside it: the origin plane first
         self.assertEqual(core.rounder_values(13.75, True), [0.0, 10.0, 13.0, 13.75])

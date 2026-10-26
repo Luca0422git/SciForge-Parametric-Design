@@ -66,12 +66,25 @@ listed as not recognized.
 
 ### Speed
 
-describe() of a 300-face plate (294 holes on a grid) takes about 1.3 s on the sandbox (4 CPUs
+describe() of a 300-face plate (294 holes on a grid) takes about 1.5 s on the sandbox (4 CPUs
 shared with five other builders); the limit was 5 s. Closing holes by their rims instead of
 defeaturing them took it from minutes (OpenCASCADE's defeaturing costs about 75 ms per hole
 face) to milliseconds.
 
+Other parts (SPEED_TABLE: filled in from the final runs).
+
+What keeps it fast: copies of one cut-out or boss are read once (a moved copy takes the first
+one's reading, moved); an axis with many more levels than a simple reading already found is not
+read; parts with free-form faces are not defeatured (their base cannot be read: the forged
+lever `Schenkel.stp`, 409 faces, went from 26 s to under 2 s); after 30 s (`DESCRIBE_BUDGET`)
+the optional work is skipped and the notes say so. One OpenCASCADE defeaturing call cannot be
+interrupted: a 434-face connector with 26 chamfers and fillets spends about 40 s in it.
+
 ### Benchmark
+
+(filled in from the final run, see Tests)
+
+### Real files from other programs
 
 (filled in from the final run, see Tests)
 
