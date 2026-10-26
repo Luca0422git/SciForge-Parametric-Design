@@ -419,6 +419,22 @@ def verdict(min_safety, lower, upper):
     )
 
 
+def short_verdict(min_safety, lower, upper):
+    """(state, text) for the legend: the lowest safety factor against the targets in a few
+    words (Results Details has the whole sentence)."""
+    if min_safety is None or min_safety != min_safety:
+        return "none", "No safety factor (no strength)"
+    state = target_band(min_safety, lower, upper)
+    value = fmt(min_safety)
+    if state == "below":
+        if min_safety < 1.0:
+            return state, "Lowest %s: below 1, the part yields" % value
+        return state, "Lowest %s: below the target %s" % (value, fmt(lower))
+    if state == "above":
+        return state, "Lowest %s: above %s, very strong" % (value, fmt(upper))
+    return state, "Lowest %s: meets the target %s to %s" % (value, fmt(lower), fmt(upper))
+
+
 LIMITS = (
     "Linear static stress: small deflections, the material stays elastic and the same in every "
     "direction (3D-printed parts are not), loads do not change. Results are a guide, not a "

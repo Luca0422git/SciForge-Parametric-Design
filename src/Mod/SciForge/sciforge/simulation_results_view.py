@@ -734,6 +734,10 @@ class Legend(QtWidgets.QFrame):
         self.range_label.setProperty("role", "dim")
         self.range_label.setWordWrap(True)
         box.addWidget(self.range_label)
+        self.verdict_label = QtWidgets.QLabel("")
+        self.verdict_label.setObjectName("SciForgeSimLegendVerdict")
+        self.verdict_label.setWordWrap(True)
+        box.addWidget(self.verdict_label)
         self.deform_label = QtWidgets.QLabel("")
         self.deform_label.setProperty("role", "dim")
         self.deform_label.setWordWrap(True)
@@ -803,6 +807,15 @@ class Legend(QtWidgets.QFrame):
             self.smooth_action.setChecked(not info.get("banded"))
             self.max_label.setText("Max: %s" % info["max_text"])
             self.min_label.setText("Min: %s" % info["min_text"])
+            verdict = info.get("verdict")
+            self.verdict_label.setVisible(bool(verdict))
+            if verdict:
+                state, text = verdict
+                colour = {"below": "#ff8a80", "meets": "#ffd666", "above": "#8cc4ff"}.get(
+                    state, "#c3cad4"
+                )
+                self.verdict_label.setText(text)
+                self.verdict_label.setStyleSheet("QLabel { color: %s; }" % colour)
             self.range_label.setText(info.get("span_text", ""))
             self.range_label.setVisible(bool(info.get("custom")))
             self.range_action.setEnabled(info["result"] != "safety")

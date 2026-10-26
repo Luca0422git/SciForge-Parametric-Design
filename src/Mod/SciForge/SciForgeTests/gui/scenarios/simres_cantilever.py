@@ -88,6 +88,12 @@ def b_check():
             max(abs(a - b) for a, b in zip(tags["min"]["point"], drawn)) < 1e-6,
         )
     h.check("Adjusted deformation", sess.deformation == "adjusted" and sess.display.factor > 1.0)
+    verdict = s.legend_text("SciForgeSimLegendVerdict")
+    h.check(
+        "the legend says how the lowest safety factor does",
+        verdict.startswith("Lowest %s" % s.results_core().fmt(sf["min"])) and "target" in verdict,
+        verdict,
+    )
 
 
 def c_stress():

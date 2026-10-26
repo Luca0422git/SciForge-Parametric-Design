@@ -111,6 +111,14 @@ def show(study):
             commands.tell(results_data.DROPPED if dropped else core.NO_RESULTS)
             return False
         doc = study.Document
+        if App.ActiveDocument is not doc:
+            # another design is in front (its solve ended meanwhile): its RESULTS tab shows them
+            # when it is in front again
+            session = SESSIONS.get(doc.Name)
+            if session is not None and session.study_name != study.Name:
+                session.deactivate()
+                SESSIONS.pop(doc.Name, None)
+            return False
         if _ui_active_study(doc) is not study:
             try:
                 from . import simulation_ui
@@ -542,8 +550,9 @@ class Session:
         for obj in doc.Objects:
             try:
                 vo = obj.ViewObject
-                if vo is None or simulation.is_simulation_object(obj):
+                if vo is None:
                     continue
+                # (a simulation object shown on SETUP too: the mesh sim-ui's Show Mesh draws)
                 switch = vo.SwitchNode
                 which = switch.whichChild.getValue()
                 if which != -1:
@@ -633,6 +642,10 @@ class Session:
             span=self.ranges.get(self.result),
         )
         info["targets"] = self.targets
+        if self.result == "safety":
+            info["verdict"] = core.short_verdict(
+                results_data.min_safety(self.study), self.targets[0], self.targets[1]
+            )
         self.legend_info = info
         if self.legend is not None and view_mod._alive(self.legend):
             self.legend.fill(info, self._study_text(), self.out_of_date, self._deform_text())

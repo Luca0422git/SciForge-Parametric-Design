@@ -165,6 +165,13 @@ class TargetTests(unittest.TestCase):
         self.assertEqual(core.targets(5, 2), (5.0, 5.0))
         self.assertEqual(core.targets(-1, 99), (0.01, sim.SAFETY_CAP))
 
+    def test_short_verdicts(self):
+        self.assertEqual(core.short_verdict(0.5, 3, 6)[1], "Lowest 0.5: below 1, the part yields")
+        self.assertEqual(core.short_verdict(2.0, 3, 6), ("below", "Lowest 2: below the target 3"))
+        self.assertEqual(core.short_verdict(4.0, 3, 6)[0], "meets")
+        self.assertEqual(core.short_verdict(9.0, 3, 6)[0], "above")
+        self.assertEqual(core.short_verdict(None, 3, 6)[0], "none")
+
     def test_verdicts(self):
         state, head, advice = core.verdict(0.8, 3, 6)
         self.assertEqual(state, "below")

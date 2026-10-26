@@ -4,8 +4,8 @@ sim-results).
 
 A  A component moved 20 mm up holds two bodies glued end to end (steel 0..50, aluminium 50..100),
    fixed at the steel end, 100 N down at the aluminium end. Its results are drawn where the
-   component is (design coordinates); both bodies and the component are hidden on the view
-   only while they show.
+   component is (design coordinates); both bodies, the component and the mesh SETUP's Show
+   Mesh drew are hidden on the view only while they show.
 B  Results Details: one row per body, each with its own material and strength.
 C  INSPECT > Reaction Force: the fixed end takes the whole 100 N.
 D  DISPLAY > Loads and Constraints shows the setup's glyphs on the results, and hides them again.
@@ -65,8 +65,18 @@ def a_enter():
     s.workspace("Simulation")
 
 
-def a_results():
+def a_mesh():
     s.close_new_study_dialog()
+    # SETUP > DISPLAY > Show Mesh (sim-ui): the solve's mesh drawn on the model
+    s.menu("DISPLAY", "Show Mesh")
+
+
+def a_results():
+    from sciforge import simulation_solve_dialog as solve_dialog
+
+    h.check("the mesh shows on SETUP", solve_dialog.mesh_shown())
+    mesh = solve_dialog.mesh_object(s.study())
+    state["mesh"] = mesh.Name if mesh is not None else None
     s.click_tab("sim_results")
 
 
@@ -83,6 +93,9 @@ def a_check():
         (zmin, zmax),
     )
     doc = s.doc()
+    if state.get("mesh"):
+        vo = doc.getObject(state["mesh"]).ViewObject
+        h.check("the SETUP mesh hidden on the view too", vo.SwitchNode.whichChild.getValue() == -1)
     for name in (state["steel"], state["alu"], state["part"]):
         vo = doc.getObject(name).ViewObject
         h.check(
@@ -276,6 +289,7 @@ h.run(
     [
         setup,
         a_enter,
+        a_mesh,
         a_results,
         a_check,
         b_details,
