@@ -513,6 +513,7 @@ class _Reader:
         t0 = time.time()
         timing = {}
         holes = self.find_holes()
+        threads = self.thread_walls(holes)  # (beta 3 QA)
         timing["holes"] = time.time() - t0
         t = time.time()
         blends = self.find_fillets(holes)
@@ -549,6 +550,8 @@ class _Reader:
         for f in features:
             explained.update(f.get("_faces", []))
         explained.update(base.get("faces", []))
+        threaded = self._thread_notes(threads, removed["ok"])  # (beta 3 QA)
+        explained.update(threaded)
         for f in features:
             f.pop("_faces", None)
         missing = [f.index for f in self.facts if f.index not in explained]
@@ -562,7 +565,9 @@ class _Reader:
                 }
             )
         out["unrecognized"] = self.unrecognized
-        area_ok = sum(f.area for f in self.facts if f.index in explained)
+        area_ok = sum(
+            f.area for f in self.facts if f.index in explained and f.index not in threaded
+        )
         out["confidence"] = core.confidence(
             area_ok,
             self.shape.Area,
@@ -1106,6 +1111,79 @@ class _Reader:
         attempt(list(groups))
         return accepted[len(start) :], rejected
 
+    # -- threads (beta 3 QA) ----------------------------------------------------------------------
+    def thread_walls(self, holes):
+        """A modeled thread: free-form faces (B-splines) wound round a hole's bore, within a
+        little of its radius. They are kept with their hole (h["_thread"]): closed with it, so
+        the base is read without them, and listed as not read (never guessed: the plan drills
+        the bore and says a thread is cut into it). Returns the holes that have one."""
+        free = {f.index for f in self.facts if f.kind not in _ANALYTIC}
+        found = []
+        if not free:
+            return found
+        for h in holes:
+            region, todo = set(), list(h["_faces"])
+            seen = set(todo)
+            while todo:
+                i = todo.pop()
+                for j in self.topo.neighbours(i):
+                    if j not in seen:
+                        seen.add(j)
+                        if j in free:
+                            region.add(j)
+                            todo.append(j)
+            if not region:
+                continue
+            axis, origin = h["_axis"], h["_origin"]
+            radius = max(
+                (
+                    self.facts[i].radius or 0.0
+                    for i in h["_faces"]
+                    if self.facts[i].kind == "cylinder"
+                ),
+                default=0.0,
+            )
+            if radius <= 0:
+                continue
+            reach = 0.0
+            ends = []
+            for i in region:
+                for v in self.facts[i].face.Vertexes:
+                    w = core.sub(_t(v.Point), origin)
+                    t = core.dot(w, axis)
+                    reach = max(reach, core.norm(core.sub(w, core.mul(axis, t))))
+                    ends.append(t)
+            if reach > 1.5 * radius:
+                continue  # (free-form faces round a hole, but no thread: a blend, a boss)
+            length = (max(ends) - min(ends)) if ends else 0.0
+            h["_thread"] = sorted(region)
+            h["_thread_void"] = math.pi * max(0.0, reach * reach - radius * radius) * length
+            free -= region
+            found.append(h)
+        return found
+
+    def _thread_notes(self, threads, planned):
+        """The threads of planned holes said in unrecognized; their faces (counted as said,
+        not as read)."""
+        out = set()
+        for h in threads:
+            faces = h.get("_thread") or []
+            if not faces or h["id"] not in planned:
+                continue
+            out.update(faces)
+            centre = ", ".join(core.fmt(self.value(c)) for c in h["start"])
+            self.unrecognized.append(
+                {
+                    "faces": self.face_refs(faces),
+                    "why": "a thread (%d free-form faces) in hole %s (%s mm across at (%s)): "
+                    "not read. The plan drills the plain hole; if it is a standard thread, "
+                    "add it with the thread tool (modeled: true) and compare again, else "
+                    "finish with even_if_different."
+                    % (len(faces), h["id"], core.fmt(h["diameter"]), centre),
+                }
+            )
+        return out
+
     def _drop_holes(self, holes):
         """(solid, holes taken off, holes left): the original solid with the holes closed by
         rebuilding the faces that carry their rims without those rims and leaving the holes'
@@ -1118,10 +1196,10 @@ class _Reader:
             return self.shape, [], []
         owner = {}  # edge key -> hole ids
         for h in holes:
-            for i in h["_faces"]:
+            for i in _wall(h):
                 for key in self.topo.face_edges[i]:
                     owner.setdefault(key, set()).add(h["id"])
-        in_hole = {i: h["id"] for h in holes for i in h["_faces"]}
+        in_hole = {i: h["id"] for h in holes for i in _wall(h)}
         bad = set()
         rims = {}  # face index -> [(wire, hole id)]
         for f in self.facts:
@@ -1146,7 +1224,7 @@ class _Reader:
             for wire, hid in items:
                 dropped_keys.update(e.hashCode() for e in wire.Edges)
         for h in holes:
-            for i in h["_faces"]:
+            for i in _wall(h):
                 for key in self.topo.face_edges[i]:
                     others = [j for j in self.topo.edge_faces.get(key, []) if j not in in_hole]
                     if others and key not in dropped_keys:
@@ -1179,7 +1257,11 @@ class _Reader:
             if solid.isNull() or not solid.isValid():
                 raise ValueError("not a valid solid")
             expected = self.shape.Volume + sum(_hole_void(self, h) for h in good)
-            if abs(solid.Volume - expected) > 1e-6 * max(1.0, expected):
+            # a thread's grooves add a little void its bore's cylinder does not count: at most
+            # the ring out to the thread's widest point (beta 3 QA)
+            grooves = sum(h.get("_thread_void", 0.0) for h in good)
+            tol = 1e-6 * max(1.0, expected)
+            if not (expected - tol <= solid.Volume <= expected + grooves + tol):
                 raise ValueError("%.6g mm3, %.6g expected" % (solid.Volume, expected))
         except Exception as exc:
             warn("recognize: holes not closed by their rims (%s)" % exc)
@@ -1224,6 +1306,13 @@ class _Reader:
         once, else by halves). The ones that cannot be taken off stay in the base and are
         listed as such. Returns {"base": shape, "ok": {feature ids}, "accepted": [features]}."""
         start, holes_ok, left = self._drop_holes(holes)
+        threaded = [h for h in left if h.get("_thread")]
+        left = [h for h in left if not h.get("_thread")]
+        for h in threaded:  # (beta 3 QA: 210 s on one M6 thread, then no base anyway)
+            self.notes.append(
+                "Hole %s has a thread that could not be taken off the base shape: it is left "
+                "in the base and not in the plan." % h["id"]
+            )
         groups = left + chamfers + blends
         ok, rejected = self._accept(groups, shape=start)
         base = self._defeature(ok, start) if ok else start
@@ -2098,6 +2187,14 @@ class _Reader:
             return parts[0]
         spec = {"any_of": parts, "count": len(parts)}
         return spec if picks(spec) else None
+
+
+_ANALYTIC = ("plane", "cylinder", "cone", "sphere", "torus")
+
+
+def _wall(h):
+    """A hole's faces with its thread's (beta 3 QA)."""
+    return list(h["_faces"]) + list(h.get("_thread") or [])
 
 
 def _hole_void(reader, h):

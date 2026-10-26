@@ -16,6 +16,9 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * reopened: a design saved half way through a rebuild and opened again: the next plan step
   goes into the rebuilt body (it went into the design's first body).
 * deleted reference: the reference deleted with delete_step: the original is shown again.
+* threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
+  defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
+  seconds and the thread is listed as not read.
 
 Each check takes `agent` (rebuild_e2e.Agent: call / check) and runs in-process.
 """
@@ -415,7 +418,66 @@ def deleted_reference(agent, folder):
     )
 
 
-CHECKS = (jointed, dependents, kept, reopened, deleted_reference)
+# -- a threaded hole (recognition cannot read a thread: it must say so, quickly) ---------------
+def threaded(agent, folder):
+    import time
+
+    path = _golden(
+        agent,
+        "QaThread",
+        [
+            ("create_sketch", {"plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]}),
+            ("extrude", {"profile": "Sketch1", "distance": 10}),
+            ("create_sketch", {"plane": "XY", "offset": 10, "geometry": [{"circle": [20, 15, 3]}]}),
+            ("hole", {"sketch": "Sketch2", "diameter": 6, "through_all": True}),
+            (
+                "thread",
+                {"faces": {"type": "cylinder", "count": 1}, "designation": "M6x1", "modeled": True},
+            ),
+        ],
+        folder,
+    )
+    agent.call("new_design", {"name": "QaThreaded"})
+    agent.call("import_file", {"path": path})
+    agent.call("start_rebuild", {"body": "Body001"})
+    began = time.time()
+    text, error = agent.call("describe_reference", {})
+    took = time.time() - began
+    data = _json(text) or {}
+    plan = data.get("plan") or []
+    tools = [s["tool"] for s in plan]
+    why = " ".join(u.get("why", "") for u in data.get("unrecognized") or [])
+    agent.check(
+        "threaded: describe_reference reads the plate and the hole in seconds (it took 210 s "
+        "in OpenCASCADE's defeaturing, then read nothing) (%.1f s)" % took,
+        not error and took < 20 and "extrude" in tools and "hole" in tools,
+        (took, tools, data.get("notes")),
+    )
+    agent.check(
+        "threaded: the thread is said, not guessed (unrecognized, with what to do)",
+        "thread" in why and "not read" in why and "thread tool" in why,
+        why,
+    )
+    made, failed = {}, []
+    from . import rebuild_e2e as e2e
+
+    for step in plan:
+        args = agent._with_ids(step, made, plan)
+        text, error = agent.call(step["tool"], args)
+        if error:
+            failed.append((step["tool"], text[:200]))
+        elif e2e.made_id(text):
+            made[step.get("step")] = e2e.made_id(text)
+    text, error = agent.call("compare_to_reference", {})
+    result = _json(text) or {}
+    agent.check(
+        "threaded: every plan step runs and the plain plate matches but for the thread",
+        not failed and result.get("match", 0) > 0.999 and not result.get("done"),
+        (failed, result.get("verdict")),
+    )
+
+
+CHECKS = (jointed, dependents, kept, reopened, deleted_reference, threaded)
 
 
 def run(agent):
