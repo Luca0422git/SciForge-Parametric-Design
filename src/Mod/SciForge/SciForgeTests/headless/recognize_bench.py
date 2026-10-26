@@ -183,6 +183,11 @@ EXTRA_MODELS = {
             },
         ],
     },
+    "bench_turned_bracket": {
+        "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
+        "placed in an assembly)",
+        "steps": [],  # (the steps of bench_bracket_holes, then the turn: see _load)
+    },
     "bench_part_300": {
         "title": "Speed part: plate 330 x 220 x 8 with a 21 x 14 grid of d6 holes (300 faces)",
         "steps": [
@@ -245,8 +250,8 @@ BENCH = [
     ("sf_cylinder_boss", {"base": "extrude", "holes": []}),
     ("mirror_boss", {"base": "extrude", "holes": []}),
     ("pattern_rect_symmetric_bosses", {"base": "extrude", "holes": []}),
-    ("shell_open_box", {"base": "extrude", "holes": []}),
-    ("shell_filleted_box", {"base": "extrude", "fillets": [5, 3]}),
+    ("shell_open_box", {"base": "extrude", "holes": [], "shells": 1}),
+    ("shell_filleted_box", {"base": "extrude", "fillets": [], "shells": 1}),
     ("revolve_washer", {"holes": [20]}),
     ("groove_ring", {"holes": []}),
     ("sf_revolve_cone", {"base": "revolve", "holes": []}),
@@ -254,12 +259,32 @@ BENCH = [
     ("bench_knob", {"base": "revolve", "holes": [6]}),
     ("bench_bracket_holes", {"base": "extrude", "holes": [5, 5, 6], "fillets": [3]}),
     ("bench_mount_plate", {"base": "extrude", "holes": [5] * 4, "fillets": [6]}),
+    ("extrude_taper_cut", {"base": "extrude", "holes": []}),
+    ("extrude_taper_join_all", {"base": "extrude", "holes": []}),
+    ("sf_draft_four_sides", {"base": "extrude", "holes": []}),
+    ("bench_turned_bracket", {"base": "extrude", "holes": [5, 5, 6], "fillets": [3]}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
 MESH_BENCH = ["plate_through_hole_cut", "flange_polar_holes", "l_bracket_profile"]
 
 
 def _load(model_id):
+    if model_id == "bench_turned_bracket":
+        model = copy.deepcopy(EXTRA_MODELS["bench_bracket_holes"])
+        model["steps"].append(
+            {
+                "op": "move_bodies",
+                "id": "m1",
+                "bodies": ["e1"],
+                "move_type": "free",
+                "rx": 30,
+                "rz": 20,
+                "pivot": [0, 0, 0],
+            }
+        )
+        model["id"] = model_id
+        model["title"] = EXTRA_MODELS[model_id]["title"]
+        return model
     if model_id in EXTRA_MODELS:
         model = copy.deepcopy(EXTRA_MODELS[model_id])
         model["id"] = model_id
@@ -368,13 +393,17 @@ def run_plan(plan, name):
 def match_faces(reference, rebuilt):
     """How many faces of the reference have a face of the rebuild of the same kind, area and
     place (and the other way round)."""
+    from sciforge import recognize
     from sciforge.ai.ops import selectors
 
     def facts(shape):
         out = []
         for f in shape.Faces:
             c = f.CenterOfMass
-            out.append((selectors.face_type(f), f.Area, (c.x, c.y, c.z)))
+            kind = selectors.face_type(f)
+            if kind == "bspline" and recognize._flat_normal(f) is not None:
+                kind = "plane"  # (a flat face SciForge's tapered extrude makes as a spline)
+            out.append((kind, f.Area, (c.x, c.y, c.z)))
         return out
 
     a, b = facts(reference), facts(rebuilt)
@@ -408,12 +437,14 @@ def _found(result):
     fillets = sorted({f["radius"] for f in result["features"] if f["kind"] == "fillet"})
     chamfers = sorted({f["distance"] for f in result["features"] if f["kind"] == "chamfer"})
     patterns = len([f for f in result["features"] if f["kind"] == "pattern"])
+    shells = len([f for f in result["features"] if f["kind"] == "shell"])
     return {
         "base": result["base"].get("kind"),
         "holes": holes,
         "fillets": fillets,
         "chamfers": chamfers,
         "patterns": patterns,
+        "shells": shells,
     }
 
 
@@ -427,8 +458,9 @@ def _check_found(expect, found):
     for key in ("fillets", "chamfers"):
         if key in expect and sorted(set(expect[key])) != found[key]:
             problems.append("%s %s, expected %s" % (key, found[key], sorted(set(expect[key]))))
-    if "patterns" in expect and found["patterns"] != expect["patterns"]:
-        problems.append("patterns %d, expected %d" % (found["patterns"], expect["patterns"]))
+    for key in ("patterns", "shells"):
+        if key in expect and found[key] != expect[key]:
+            problems.append("%s %d, expected %d" % (key, found[key], expect[key]))
     return problems
 
 

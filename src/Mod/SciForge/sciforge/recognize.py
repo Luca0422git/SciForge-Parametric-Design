@@ -85,6 +85,7 @@ class RecognizeError(ValueError):
 
 
 LIN = 1e-6  # mm: two B-rep values this close are the same
+DEFEATURE_BUDGET = 15.0  # seconds of defeaturing tries before the rest is left in the base
 SMOOTH = 0.9998  # cos of ~1.1 degrees: two faces meeting this smoothly are tangent
 
 
@@ -114,6 +115,14 @@ def describe(shape, options=None):
         out["notes"].append("Summary only (detail: summary).")
         out["timing"] = round(time.time() - started, 3)
         return out
+    if not options.get("_in_frame"):
+        try:
+            frame = turned_frame(shape)
+        except Exception as exc:
+            warn("recognize: the part's own frame not found (%s)" % exc)
+            frame = None
+        if frame is not None:
+            return _describe_turned(shape, options, frame, started)
     try:
         _Reader(shape, options).read(out)
     except Exception as exc:  # never raise for a shape it does not understand
@@ -142,6 +151,108 @@ def describe(shape, options=None):
             out["timing"],
         )
     )
+    return out
+
+
+def turned_frame(shape):
+    """The rotation (3 x 3 rows, world from local) of the frame a part turned away from the
+    origin planes is drawn in; None when the part lines up with the origin's X, Y and Z
+    (most of its flat and round faces square to or along them)."""
+    from .ai.ops import selectors
+
+    dirs = []  # [direction, area]
+    for face in shape.Faces:
+        kind = selectors.face_type(face)
+        try:
+            if kind == "plane":
+                d = selectors.face_normal(face)
+            elif kind in ("cylinder", "cone", "torus"):
+                d = _t(face.Surface.Axis)
+            else:
+                continue
+            d = core.canonical_direction(d)
+        except Exception:
+            continue
+        for item in dirs:
+            if core.parallel(item[0], d, 1e-6):
+                item[1] += face.Area
+                break
+        else:
+            dirs.append([d, face.Area])
+    if not dirs:
+        return None
+    total = sum(w for _d, w in dirs)
+    lined_up = sum(w for d, w in dirs if core.origin_axis(d, 1e-6))
+    if lined_up >= 0.5 * total:
+        return None  # (its slanted faces are features: a chamfer, a wedge...)
+    dirs.sort(key=lambda item: -item[1])
+    d1 = dirs[0][0]
+    d2 = next((d for d, _w in dirs[1:] if core.square(d, d1, 1e-6)), None)
+    if d2 is None:
+        world = min(core.AXES.values(), key=lambda a: abs(core.dot(a, d1)))
+        d2 = core.sub(world, core.mul(d1, core.dot(world, d1)))
+    rot = core.closest_frame(d1, d2)
+    if all(abs(rot[i][j] - (1.0 if i == j else 0.0)) < 1e-9 for i in range(3) for j in range(3)):
+        return None
+    return rot
+
+
+def _describe_turned(shape, options, rot, started):
+    """describe() of a part turned away from the origin planes: read in its own frame (the
+    plan builds it there, lined up with the origin), then a last step turns it into place."""
+    import FreeCAD as App
+
+    m = App.Matrix()
+    for i in range(3):
+        for j in range(3):
+            setattr(m, "A%d%d" % (i + 1, j + 1), rot[j][i])  # the inverse turn (transpose)
+    local = shape.copy()
+    local.transformShape(m)
+    out = describe(local, dict(options, _in_frame=True))
+    rx, ry, rz = core.euler_xyz(rot)
+    out["summary"] = summary(shape)
+    out["frame"] = {
+        "rotation": [[core.snap(v, 1e-12) for v in row] for row in rot],
+        "rx": rx,
+        "ry": ry,
+        "rz": rz,
+    }
+    first = next(
+        (step for step in out["plan"] if step["tool"] in ("extrude", "revolve") and "id" in step),
+        None,
+    )
+    if first is not None:
+        taken = set(options.get("taken_ids") or ()) | {st.get("id") for st in out["plan"]}
+        plan = core.Plan(taken)
+        ident = plan.new_id("move_copy")
+        out["plan"].append(
+            {
+                "step": len(out["plan"]) + 1,
+                "tool": "move_copy",
+                "args": {
+                    "bodies": [first["id"]],
+                    "move_type": "free",
+                    "rx": rx,
+                    "ry": ry,
+                    "rz": rz,
+                    "pivot": [0, 0, 0],
+                },
+                "why": "Turn the finished part into its place (it was built lined up with the "
+                "origin planes): about X %s, then Y %s, then Z %s degrees, about the origin."
+                % (core.fmt(rx), core.fmt(ry), core.fmt(rz)),
+                "features": [],
+                "id": ident,
+                "uses": {"bodies[0]": first["step"]},
+            }
+        )
+    out["notes"].insert(
+        0,
+        "The part is turned away from the origin planes: the plan builds it lined up with "
+        "them (the base's and the features' numbers are in that frame) and its last step "
+        "turns it into place (Move, free: X %s, Y %s, Z %s degrees about the origin); compare "
+        "with the original after that step." % (core.fmt(rx), core.fmt(ry), core.fmt(rz)),
+    )
+    out["timing"] = round(time.time() - started, 3)
     return out
 
 
@@ -737,15 +848,9 @@ class _Reader:
                     }
                 )
                 break
-        # bends in one direction are rounded corners a fillet makes well (Fusion's habit:
-        # fillet, then shell); bends in two directions or more meet at corners where
-        # OpenCASCADE's fillet can fail (or crash): those stay in the base as bends
-        axes = []
-        for b in self.bends:
-            if not any(core.parallel(b["axis"], a, 1e-6) for a in axes):
-                axes.append(b["axis"])
-        if len(axes) < 2:
-            self.bends = []
+        # a thin wall's bends stay in the base: they become arcs of its profile (exact and
+        # quick); as fillets, OpenCASCADE's defeaturing took 40 s on a 14-face sheet and its
+        # fillet builder crashed on bends meeting at a corner
         for b in self.bends:
             b["id"] = self.new_id()
             for k in b["_faces"]:
@@ -894,9 +999,13 @@ class _Reader:
         (all at once, else by halves)."""
         accepted = list(start)
         rejected = []
+        began = time.time()
 
         def attempt(candidates):
             if not candidates:
+                return
+            if time.time() - began > DEFEATURE_BUDGET:  # (a pathological shape: stop trying)
+                rejected.extend(candidates)
                 return
             if self._defeature(accepted + candidates, shape) is not None:
                 accepted.extend(candidates)
@@ -1097,7 +1206,8 @@ class _Reader:
             if best is None or score < best[0]:
                 best = (score, found)
         revolved = None
-        if best is None or len(best[1]["ops"]) >= 3:
+        drafted = best is not None and any(op.get("taper") for op in best[1]["ops"])
+        if best is None or len(best[1]["ops"]) >= 3 or drafted:
             try:
                 revolved = _revolved(solid)
             except Exception as exc:
@@ -1176,6 +1286,11 @@ class _Reader:
         for op in _group_ops(base["ops"], self._pattern_args):
             plane, offset = op["plane"], op["offset"]
             kind = op["kind"]
+            if op.get("shell") and not first:
+                made = self._plan_shell(op, base, plan, features)
+                if made:
+                    steps += made
+                    continue
             where = (" at %s mm" % core.fmt(offset)) if offset else ""
             if first:
                 why_sketch = "The base profile (%s) on the %s plane%s." % (
@@ -1195,8 +1310,11 @@ class _Reader:
             )
             args = {"profile": sketch}
             args.update(op["extrude"])
+            draft = (
+                " with a %s degree draft" % core.fmt(abs(op["taper"])) if op.get("taper") else ""
+            )
             if first:
-                why = "Extrude it %s mm: the base shape." % core.fmt(op["height"])
+                why = "Extrude it %s mm%s: the base shape." % (core.fmt(op["height"]), draft)
                 fids = []
             else:
                 fid = self.new_id()
@@ -1218,9 +1336,14 @@ class _Reader:
                 if op["extrude"].get("through_all"):
                     why = "Cut it through the whole part."
                 elif kind == "cut":
-                    why = "Cut it %s mm into the part." % core.fmt(op["height"])
+                    why = "Cut it %s mm into the part%s." % (core.fmt(op["height"]), draft)
                 else:
-                    why = "Extrude it %s mm, joined to the part: a boss." % core.fmt(op["height"])
+                    why = "Extrude it %s mm%s, joined to the part: a boss." % (
+                        core.fmt(op["height"]),
+                        draft,
+                    )
+                if op.get("taper"):
+                    features[-1]["draft"] = abs(op["taper"])
             if op.get("count", 1) > 1 and not op.get("pattern"):
                 why = why[:-1] + " (%d of them, drawn in one sketch)." % op["count"]
             ext = plan.add("extrude", args, why, fids, uses={"profile": plan.step_of(sketch)})
@@ -1255,6 +1378,53 @@ class _Reader:
                         f["steps"] = made
             first = False
         public["steps"] = steps
+
+    def _plan_shell(self, op, base, plan, features):
+        """The shell tool for a cut marked as a shell: the open face(s) of the base picked
+        on the base as built (its top / bottom along the extrude), the thickness."""
+        shell = op["shell"]
+        n = core.PLANES[op["plane"]]["n"]
+        axis_name = core.origin_axis(n)
+        sign = 1 if core.dot(n, core.AXES[axis_name]) > 0 else -1
+        picks = []
+        for side in ("top", "bottom"):
+            if shell["open"] not in (side, "both"):
+                continue
+            outward = n if side == "top" else core.mul(n, -1.0)
+            value = "max" if (side == "top") == (sign > 0) else "min"
+            picks.append(
+                {
+                    "normal": [core.snap(c) for c in outward],
+                    "at": {"axis": axis_name.lower(), "value": value},
+                    "count": 1,
+                }
+            )
+        faces = picks[0] if len(picks) == 1 else {"any_of": picks, "count": len(picks)}
+        fid = self.new_id()
+        plan.add(
+            "shell",
+            {"faces": faces, "thickness": shell["thickness"]},
+            "Shell it %s mm inside, the %s face%s taken away (an open %s)."
+            % (
+                core.fmt(shell["thickness"]),
+                "top and bottom" if shell["open"] == "both" else shell["open"],
+                "s" if shell["open"] == "both" else "",
+                "tube" if shell["open"] == "both" else "box",
+            ),
+            [fid],
+        )
+        features.append(
+            {
+                "id": fid,
+                "kind": "shell",
+                "thickness": shell["thickness"],
+                "open": shell["open"],
+                "steps": [len(plan.steps)],
+                "faces": [],
+                "_faces": [],
+            }
+        )
+        return [len(plan.steps)]
 
     def plan_holes(self, holes, plan, features):
         """One hole step per group of equal holes on one plane: a pattern step when they make
@@ -1851,6 +2021,11 @@ def _surface_key(face):
     """A coarse key of a face's surface (kind and direction) to bucket faces by."""
     kind = _face_kind(face)
     try:
+        if kind == "bspline":
+            flat = _flat_normal(face)
+            if flat is not None:
+                d = core.canonical_direction(flat)
+                return ("plane",) + tuple(round(c, 3) + 0.0 for c in d)
         if kind in ("plane", "cylinder", "cone", "torus"):
             d = core.canonical_direction(_t(face.Surface.Axis))
             return (kind,) + tuple(round(c, 3) + 0.0 for c in d)
@@ -1878,6 +2053,13 @@ def _same_surface(a, b, tol=1e-6):
     from .ai.ops import selectors
 
     ka, kb = selectors.face_type(a), selectors.face_type(b)
+    if "bspline" in (ka, kb) and {ka, kb} <= {"bspline", "plane"}:
+        na = _flat_normal(a) if ka == "bspline" else core.unit(_t(a.Surface.Axis))
+        nb = _flat_normal(b) if kb == "bspline" else core.unit(_t(b.Surface.Axis))
+        if na is None or nb is None or not core.parallel(na, nb, 1e-7):
+            return False
+        gap = core.sub(_t(a.Vertexes[0].Point), _t(b.Vertexes[0].Point))
+        return abs(core.dot(gap, na)) < tol
     if ka != kb:
         return False
     sa, sb = a.Surface, b.Surface
@@ -1966,30 +2148,56 @@ def _face_kind(face):
     return selectors.face_type(face)
 
 
-def _levels(solid, axis_name):
+def _levels(solid, axis_name, allow_taper=False):
     """The heights (along the axis) of the flat faces square to it, or None when some face
-    is neither square to the axis nor running along it."""
+    is neither square to the axis nor running along it (nor, with allow_taper, leaning
+    from it by a draft angle: a flat face at an angle, a cone about a line along it)."""
+    got = _walls(solid, axis_name, allow_taper)
+    return None if got is None else got[0]
+
+
+def _walls(solid, axis_name, allow_taper=False):
+    """(levels, [taper angles in degrees, one per leaning wall]) or None."""
     from . import draft_walls
     from .ai.ops import selectors
 
     d = core.AXES[axis_name]
     heights = []
+    tapers = []
+    straight = 0
     for face in solid.Faces:
         kind = _face_kind(face)
+        flat = _flat_normal(face) if kind == "bspline" else None
+        if flat is not None:
+            kind = "plane"
         if kind == "plane":
-            n = core.unit(selectors.face_normal(face))
+            n = flat if flat is not None else core.unit(selectors.face_normal(face))
             if core.parallel(n, d, 1e-7):
                 heights.append(core.dot(_t(face.Vertexes[0].Point), d))
                 continue
             if core.square(n, d, 1e-7):
+                straight += 1
+                continue
+            c = abs(core.dot(n, d))
+            if allow_taper and c < math.sin(math.radians(60)):
+                tapers.append(math.degrees(math.asin(c)))
+                ts = [core.dot(_t(v.Point), d) for v in face.Vertexes]
+                heights += [min(ts), max(ts)]  # (a draft may start where no flat face is)
                 continue
             return None
         if kind == "cylinder":
             if core.parallel(_t(face.Surface.Axis), d, 1e-7):
+                straight += 1
+                continue
+            return None
+        if kind == "cone" and allow_taper:
+            if core.parallel(_t(face.Surface.Axis), d, 1e-7):
+                tapers.append(math.degrees(abs(face.Surface.SemiAngle)))
                 continue
             return None
         try:
             if draft_walls.is_wall(face, _vec(d)):
+                straight += 1
                 continue
         except Exception:
             pass
@@ -1998,7 +2206,88 @@ def _levels(solid, axis_name):
     for h in sorted(heights):
         if not levels or h - levels[-1] > 1e-6:
             levels.append(h)
-    return levels
+    if tapers and straight and allow_taper == "pure":
+        return None  # (a band of one draft cannot have straight walls too)
+    return levels, tapers
+
+
+def _flat_normal(face):
+    """The normal of a free-form face that is in fact flat (SciForge's tapered extrude makes
+    its walls as flat B-spline faces), or None."""
+    try:
+        plane = face.findPlane(1e-7)
+    except Exception:
+        return None
+    if plane is None:
+        return None
+    try:
+        return core.unit(_t(plane.Axis))
+    except Exception:
+        return None
+
+
+def _caps_at(solid, plane, h):
+    """The solid's flat faces square to the plane's normal at height h."""
+    n = core.PLANES[plane]["n"]
+    out = []
+    for face in solid.Faces:
+        if _face_kind(face) != "plane":
+            continue
+        try:
+            axis = _t(face.Surface.Axis)
+        except Exception:
+            continue
+        if not core.parallel(axis, n, 1e-7):
+            continue
+        if abs(core.dot(_t(face.Vertexes[0].Point), n) - h) < 1e-6:
+            out.append(face)
+    return out
+
+
+def _tapered(solid, plane, lo, hi, box, outline=False):
+    """Whether the band between lo and hi changes its section (or only its outline, the
+    openings filled) with the height: walls on a draft."""
+    delta = 1e-3 * (hi - lo)
+    a = _section(solid, plane, lo + delta, box)
+    b = _section(solid, plane, hi - delta, box)
+    if not a or not b:
+        return False
+    if outline:
+        a, b = _outline(a), _outline(b)
+    return not _same_region(a, b)
+
+
+def _taper_op(kind, solid, plane, lo, hi, tapers):
+    """One extrude with a draft (taper) for a band whose walls all lean by one angle: the
+    profile is the solid's own flat face at the sketch's end (exact), the taper's sign from
+    whether it widens on its way. None when the walls lean by different angles or some do
+    not lean."""
+    angle = tapers[0]
+    if any(abs(t - angle) > 1e-6 for t in tapers):
+        return None
+    box = solid.BoundBox
+    delta = 1e-3 * (hi - lo)
+    low = _area(_section(solid, plane, lo + delta, box))
+    high = _area(_section(solid, plane, hi - delta, box))
+    straight = _section(solid, plane, 0.5 * (lo + hi), box)
+    if not straight:
+        return None
+    start = lo if kind != "cut" else hi
+    caps = _caps_at(solid, plane, start)
+    if not caps:
+        return None
+    op = _op(kind, caps, plane, lo, hi)
+    if op is None:
+        return None
+    widening = high > low if kind != "cut" else low > high
+    taper = core.snap(angle if widening else -angle, 1e-7)
+    if kind == "base":
+        op["offset"] = lo
+        op["extrude"] = {"distance": core.snap(hi - lo)}
+    op["extrude"]["taper"] = taper
+    op["solid"] = solid
+    op["taper"] = taper
+    return op
 
 
 def _section(solid, plane, h, box):
@@ -2069,6 +2358,8 @@ def _wire_loop(wire, plane):
             loop.append(
                 {"kind": "arc", "c": c, "r": e.Curve.Radius, "a": s2, "b": e2, "ccw": tm < te}
             )
+        elif abs(e.Length - (end - start).Length) <= 1e-7 * max(1.0, e.Length):
+            loop.append({"kind": "line", "a": p2(start), "b": p2(end)})  # (a straight spline)
         else:
             loop.append({"kind": "other", "a": p2(start), "b": p2(end), "what": kind})
         cur = end
@@ -2112,14 +2403,22 @@ def _prismatic(solid, axis_name):
     """The solid as extrudes along this origin axis: the base extrude (the biggest level's
     region over the levels whose outline it covers) and the bosses / cuts that make the
     rest, or None."""
-    levels = _levels(solid, axis_name)
-    if levels is None or len(levels) < 2:
+    walls = _walls(solid, axis_name, allow_taper=True)
+    if walls is None or len(walls[0]) < 2:
         return None
+    levels, tapers = walls
     plane = core.PLANE_OF_AXIS[axis_name]
     frame = core.PLANES[plane]
     sign = 1 if core.dot(frame["n"], core.AXES[axis_name]) > 0 else -1
     hs = sorted(sign * h for h in levels)  # heights along the plane's normal (XZ's is -Y)
     box = solid.BoundBox
+    if tapers and len(hs) == 2 and _tapered(solid, plane, hs[0], hs[1], box):
+        if _walls(solid, axis_name, allow_taper="pure") is None:
+            return None
+        op = _taper_op("base", solid, plane, hs[0], hs[1], tapers)
+        if op is None:
+            return None
+        return _prismatic_result(op, [op], 1, plane, axis_name, hs)
     slabs = []
     for lo, hi in zip(hs, hs[1:]):
         faces = _section(solid, plane, 0.5 * (lo + hi), box)
@@ -2130,14 +2429,22 @@ def _prismatic(solid, axis_name):
     base_outline = _outline(slabs[k]["faces"])
     covered = [False] * len(slabs)
     covered[k] = True
+
+    def drafted(i):  # its outline leans (a drafted pocket inside it does not count)
+        if not tapers:
+            return False
+        return _tapered(solid, plane, slabs[i]["lo"], slabs[i]["hi"], box, outline=True)
+
     for step in (1, -1):
         i = k + step
-        while 0 <= i < len(slabs) and _covers(base_outline, slabs[i]["faces"]):
-            covered[i] = True
+        while 0 <= i < len(slabs) and _covers(base_outline, slabs[i]["faces"]) and not drafted(i):
+            covered[i] = True  # (a drafted level is a boss / cut of its own, not the base)
             i += step
     run = [i for i in range(len(slabs)) if covered[i]]
     lo, hi = slabs[run[0]]["lo"], slabs[run[-1]]["hi"]
     base_faces = slabs[k]["faces"]
+    if tapers and _tapered(solid, plane, slabs[k]["lo"], slabs[k]["hi"], box):
+        return None  # a drafted base with more on it: not read (yet)
     first = _op("base", base_faces, plane, lo, hi)
     if first is None:
         return None
@@ -2153,23 +2460,79 @@ def _prismatic(solid, axis_name):
             if got is None:
                 return None
             ops += got
-    return {
-        "public": {
-            "kind": "extrude",
-            "plane": plane,
-            "direction": axis_name,
-            "offset": core.snap(first["offset"]),
-            "distance": core.snap(hi - lo),
-            "from": core.snap(lo),
-            "to": core.snap(hi),
-            "profile": first["loops_public"],
-            "profile_words": first["words"],
-            "levels": [core.snap(h) for h in hs],
-        },
-        "ops": ops,
-        "slabs": len(slabs),
-        "plane": plane,
+    _mark_shell(ops, solid)
+    return _prismatic_result(first, ops, len(slabs), plane, axis_name, hs)
+
+
+def _mark_shell(ops, solid):
+    """A base whose only cut is its own outline moved inward by one thickness t, open on one
+    side (or both) and t thick at the other, is Fusion's Shell: mark the cut so the plan
+    makes it with the shell tool (the face(s) taken away, the thickness)."""
+    if len(ops) != 2 or ops[1]["kind"] != "cut" or ops[1].get("taper") or ops[0].get("taper"):
+        return
+    base, cut = ops
+    lo, hi = base["lo"], base["hi"]
+    open_top = abs(cut["hi"] - hi) < 1e-6
+    open_bottom = abs(cut["lo"] - lo) < 1e-6
+    if not (open_top or open_bottom):
+        return
+    try:
+        outer = [f for f in base["faces"]]
+        if len(outer) != 1 or len(outer[0].Wires) != 1 or len(cut["faces"]) != 1:
+            return
+        region = cut["faces"][0]
+        # the thickness: from the bottom (or top) left standing, else from the side walls
+        if open_top and not open_bottom:
+            t = cut["lo"] - lo
+        elif open_bottom and not open_top:
+            t = hi - cut["hi"]
+        else:
+            t = None
+        inner_wire = outer[0].OuterWire
+        guess = t
+        if guess is None:  # open both ends: the wall's thickness, outline to opening
+            moved_wire = region.OuterWire.copy()
+            normal = outer[0].Surface.Axis
+            shift = outer[0].CenterOfMass.sub(region.CenterOfMass)
+            moved_wire.translate(normal * shift.dot(normal))
+            guess = inner_wire.distToShape(moved_wire)[0]
+        if guess is None or guess <= 1e-6:
+            return
+        offset = inner_wire.makeOffset2D(-guess, 2, False, False, False)
+        import Part
+
+        shrunk = Part.Face(offset)
+        moved = region.copy()
+        normal = outer[0].Surface.Axis
+        shift = outer[0].CenterOfMass.sub(region.CenterOfMass)
+        moved.translate(normal * shift.dot(normal))
+        diff = shrunk.cut(moved).Area + moved.cut(shrunk).Area
+        if diff > 1e-6 * max(1.0, outer[0].Area):
+            return
+    except Exception:
+        return
+    cut["shell"] = {
+        "thickness": core.snap(guess),
+        "open": "both" if (open_top and open_bottom) else ("top" if open_top else "bottom"),
     }
+
+
+def _prismatic_result(first, ops, slabs, plane, axis_name, hs):
+    public = {
+        "kind": "extrude",
+        "plane": plane,
+        "direction": axis_name,
+        "offset": core.snap(first["offset"]),
+        "distance": core.snap(first["hi"] - first["lo"]),
+        "from": core.snap(first["lo"]),
+        "to": core.snap(first["hi"]),
+        "profile": first["loops_public"],
+        "profile_words": first["words"],
+        "levels": [core.snap(h) for h in hs],
+    }
+    if first.get("taper"):
+        public["taper"] = first["taper"]
+    return {"public": public, "ops": ops, "slabs": slabs, "plane": plane}
 
 
 def _outline(faces):
@@ -2257,12 +2620,20 @@ def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None):
     merged), or None when it is not prismatic along the plane's normal."""
     n = core.PLANES[plane]["n"]
     axis_name = core.origin_axis(n)
-    levels = _levels(piece, axis_name)
-    if levels is None or len(levels) < 2:
+    walls = _walls(piece, axis_name, allow_taper=True)
+    if walls is None or len(walls[0]) < 2:
         return None
+    levels, tapers = walls
+    if tapers and _walls(piece, axis_name, allow_taper="pure") is None:
+        return None  # some walls lean and some do not: no single draft makes it
     sign = 1 if core.dot(n, core.AXES[axis_name]) > 0 else -1
     hs = sorted(sign * h for h in levels)
     box = piece.BoundBox
+    if tapers:  # a boss or pocket on a draft: one band only
+        if len(hs) != 2:
+            return None
+        op = _taper_op(operation, piece, plane, hs[0], hs[1], tapers)
+        return None if op is None else [op]
     bands = []
     for lo, hi in zip(hs, hs[1:]):
         faces = _section(piece, plane, 0.5 * (lo + hi), box)
@@ -2371,7 +2742,10 @@ def _build_ops(chosen):
         return chosen["solid_check"]
     shape = None
     for op in chosen["ops"]:
-        prism = _extrude_faces(op["faces"], op["plane"], op["lo"], op["hi"])
+        if op.get("solid") is not None:
+            prism = op["solid"]
+        else:
+            prism = _extrude_faces(op["faces"], op["plane"], op["lo"], op["hi"])
         if shape is None:
             shape = prism
         elif op["kind"] == "cut":

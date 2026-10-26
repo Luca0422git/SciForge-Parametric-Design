@@ -420,6 +420,89 @@ class ThePlan(unittest.TestCase):
         self.assertEqual(core.confidence(0, 0, 0, 0), 0.0)
 
 
+class ExactSketches(unittest.TestCase):
+    def test_lines_meet_arcs_exactly(self):
+        """A line written with 6 decimals missed an arc's end by 4e-7 mm: more than FreeCAD's
+        1e-7 closing tolerance, so the sketch had no area. Lines now take the arc's ends."""
+        r = 20.0
+        loop = [
+            line((14.142136, 14.142136), (7.071068, 7.071068)),
+            arc((0, 0), 10.0, (7.071068, 7.071068), (7.071068, -7.071068), ccw=False),
+            line((7.071068, -7.071068), (14.142136, -14.142136)),
+            arc((0, 0), r, (14.142136, -14.142136), (14.142136, 14.142136), ccw=True),
+        ]
+        item = core.loop_geometry(core.clean_loop(loop))
+        segs = item["segments"]
+        ends = []
+        for seg in segs:
+            if "line" in seg:
+                x0, y0, x1, y1 = seg["line"]
+                ends.append(((x0, y0), (x1, y1)))
+            else:
+                cx, cy, rr, a0, a1 = seg["arc"]
+                p0 = (cx + rr * math.cos(math.radians(a0)), cy + rr * math.sin(math.radians(a0)))
+                p1 = (cx + rr * math.cos(math.radians(a1)), cy + rr * math.sin(math.radians(a1)))
+                ends.append((p0, p1))
+        points = [p for pair in ends for p in pair]
+        for p in points:  # every end meets another end within 1e-12
+            near = [q for q in points if q is not p and math.dist(p, q) < 1e-12]
+            self.assertTrue(near, p)
+
+    def test_shift_and_compare_items(self):
+        items = [
+            {"circle": [1, 2, 3]},
+            {"rect": [0, 0, 4, 2]},
+            {"slot": [0, 0, 10, 0, 4]},
+            {"polyline": [[0, 0], [1, 0], [0, 1]]},
+            {"segments": [{"line": [0, 0, 1, 0]}, {"arc": [1, 1, 1, -90, 90]}]},
+        ]
+        moved = [core.shift_item(i, 5, -2) for i in items]
+        self.assertEqual(moved[0], {"circle": [6, 0, 3]})
+        self.assertEqual(moved[1], {"rect": [5, -2, 9, 0]})
+        back = [core.shift_item(i, -5, 2) for i in moved]
+        self.assertTrue(core.same_items(items, back))
+        self.assertTrue(core.same_items(list(reversed(items)), back))
+        self.assertFalse(core.same_items(items, moved))
+        self.assertFalse(core.same_items(items[:2], items[:1]))
+
+
+class Frames(unittest.TestCase):
+    def test_euler_round_trip(self):
+        for rx, ry, rz in ((30, 0, 20), (-45, 10, 170), (0, 89, 0), (12.5, -33, -90)):
+            rot = core.rotation_xyz(rx, ry, rz)
+            again = core.rotation_xyz(*core.euler_xyz(rot))
+            for i in range(3):
+                for j in range(3):
+                    self.assertAlmostEqual(rot[i][j], again[i][j], places=9)
+
+    def test_straight_up_or_down(self):
+        rot = core.rotation_xyz(25, 90, 0)
+        again = core.rotation_xyz(*core.euler_xyz(rot))
+        for i in range(3):
+            for j in range(3):
+                self.assertAlmostEqual(rot[i][j], again[i][j], places=9)
+
+    def test_closest_frame_is_the_smallest_turn(self):
+        c, s = math.cos(math.radians(30)), math.sin(math.radians(30))
+        rot = core.closest_frame((0, -s, c), (1, 0, 0))  # turned 30 degrees about X
+        self.assertAlmostEqual(core.euler_xyz(rot)[0], 30.0, places=6)
+        self.assertAlmostEqual(core.euler_xyz(rot)[1], 0.0, places=6)
+        self.assertAlmostEqual(core.euler_xyz(rot)[2], 0.0, places=6)
+        same = core.closest_frame((0, 0, 1), (1, 0, 0))
+        self.assertEqual(
+            [[round(v, 12) for v in row] for row in same], [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        )
+
+    def test_a_frame_is_a_turn_not_a_mirror(self):
+        rot = core.closest_frame((0.6, 0.8, 0), (0, 0, 1))
+        det = (
+            rot[0][0] * (rot[1][1] * rot[2][2] - rot[1][2] * rot[2][1])
+            - rot[0][1] * (rot[1][0] * rot[2][2] - rot[1][2] * rot[2][0])
+            + rot[0][2] * (rot[1][0] * rot[2][1] - rot[1][1] * rot[2][0])
+        )
+        self.assertAlmostEqual(det, 1.0)
+
+
 class MeshHelpers(unittest.TestCase):
     def test_fit_circle(self):
         pts = [(3 + 7 * math.cos(t), -2 + 7 * math.sin(t)) for t in (0.1, 0.9, 2.0, 3.3, 5.0)]
