@@ -665,6 +665,8 @@ BENCH = [
     ("revolve_washer", {"holes": [20]}),
     ("groove_ring", {"holes": []}),
     ("sf_revolve_cone", {"base": "revolve", "holes": []}),
+    ("sf_torus_new_body", {"base": "revolve", "holes": []}),
+    ("sf_sphere_intersect", {"base": "revolve", "holes": []}),
     ("bench_stepped_shaft", {"base": "revolve", "holes": []}),
     ("bench_knob", {"base": "revolve", "holes": [6]}),
     ("bench_bracket_holes", {"base": "extrude", "holes": [5, 5, 6], "fillets": [3]}),

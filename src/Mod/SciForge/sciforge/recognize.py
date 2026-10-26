@@ -1761,19 +1761,42 @@ class _Reader:
             return
         steps = []
         if public["kind"] == "revolve":
+            line = public.get("axis_line")  # (a line parallel to an origin axis)
+            where = (
+                " through (%s)" % ", ".join(core.fmt(c) for c in public["axis_at"]) if line else ""
+            )
             sketch = plan.add(
                 "create_sketch",
                 core.sketch_args(
-                    public["plane"], 0.0, core.name_items(public.pop("geometry"), "profile")
+                    public["plane"],
+                    public.get("offset", 0.0),
+                    core.name_items(public.pop("geometry"), "profile"),
                 ),
-                "The half profile of the turned part (%s), on the %s plane, on one side of the "
-                "%s axis." % (public["profile_words"], public["plane"], public["axis"]),
+                "The half profile of the turned part (%s), on the %s plane%s, on one side of "
+                "the %s axis%s."
+                % (
+                    public["profile_words"],
+                    public["plane"],
+                    " at %s mm" % core.fmt(public["offset"]) if line else "",
+                    public["axis"],
+                    where,
+                ),
             )
+            uses = {"profile": plan.step_of(sketch)}
+            axis = public["axis"]
+            if line:
+                axis = {"sketch": sketch, "construction": line}
+                uses["axis.sketch"] = plan.step_of(sketch)
             rev = plan.add(
                 "revolve",
-                {"profile": sketch, "axis": public["axis"]},
-                "Revolve it a full turn about the %s axis: the base shape." % public["axis"],
-                uses={"profile": plan.step_of(sketch)},
+                {"profile": sketch, "axis": axis},
+                "Revolve it a full turn about the %s axis%s: the base shape%s."
+                % (
+                    public["axis"],
+                    " line" + where if line else "",
+                    " (a construction line drawn on the sketch)" if line else "",
+                ),
+                uses=uses,
             )
             public["steps"] = [plan.step_of(sketch), plan.step_of(rev)]
             return
@@ -4018,7 +4041,10 @@ def _build_ops(chosen):
 
 
 def _revolved(solid):
-    """The solid as a profile turned about an origin axis, or None."""
+    """The solid as a profile turned about an axis line along X, Y or Z: an origin axis, or a
+    line parallel to one (a turned part placed away from the origin: the sketch is then
+    offset to the line and the revolve turns about a construction line drawn on it), or
+    None."""
     import Part
 
     from .ai.ops import selectors
@@ -4027,6 +4053,14 @@ def _revolved(solid):
         d = core.AXES[axis_name]
         ok = True
         round_faces = 0
+        line = []  # the axis line's point square to d, from the first round face
+
+        def on_line(point):
+            q = core.sub(point, core.mul(d, core.dot(point, d)))
+            if not line:
+                line.append(q)
+            return core.norm(core.sub(q, line[0])) < 1e-6
+
         for face in solid.Faces:
             kind = _face_kind(face)
             if kind not in ("plane", "cylinder", "cone", "torus", "sphere"):
@@ -4041,17 +4075,17 @@ def _revolved(solid):
                     for e in face.Edges:  # its edges: circles about the axis
                         if _curve_name(e) != "Circle":
                             ok = False
-                        elif not _on_axis(_t(e.Curve.Center), d) or not core.parallel(
+                        elif not on_line(_t(e.Curve.Center)) or not core.parallel(
                             _t(e.Curve.Axis), d, 1e-7
                         ):
                             ok = False
             elif kind in ("cylinder", "cone", "torus"):
                 anchor = _t(s.Center if kind != "cone" else s.Apex)
-                if not core.parallel(_t(s.Axis), d, 1e-7) or not _on_axis(anchor, d):
+                if not core.parallel(_t(s.Axis), d, 1e-7) or not on_line(anchor):
                     ok = False
                 round_faces += 1
             elif kind == "sphere":
-                if not _on_axis(_t(s.Center), d):
+                if not on_line(_t(s.Center)):
                     ok = False
                 round_faces += 1
             else:
@@ -4060,7 +4094,8 @@ def _revolved(solid):
                 break
         if not ok or round_faces == 0:
             continue
-        # the half profile: the solid cut by the half plane that holds the axis
+        p0 = line[0] if line and core.norm(line[0]) > 1e-6 else (0.0, 0.0, 0.0)
+        # the half profile: the solid cut by the half plane that holds the axis line
         plane = {"Z": "XZ", "X": "XY", "Y": "XY"}[axis_name]
         frame = core.PLANES[plane]
         radial = frame["y"] if axis_name == "X" else frame["x"]
@@ -4069,12 +4104,12 @@ def _revolved(solid):
         corners = [(box.XMin, box.YMin, box.ZMin), (box.XMax, box.YMax, box.ZMax)]
         lo = min(core.dot(c, d) for c in corners) - 5.0
         hi = max(core.dot(c, d) for c in corners) + 5.0
-        # a rectangle from the axis outward (radial) and along it (d)
+        # a rectangle from the axis line outward (radial) and along it (d)
         pts = [
-            core.mul(d, lo),
-            core.add(core.mul(d, lo), core.mul(radial, reach)),
-            core.add(core.mul(d, hi), core.mul(radial, reach)),
-            core.mul(d, hi),
+            core.add(p0, core.mul(d, lo)),
+            core.add(p0, core.add(core.mul(d, lo), core.mul(radial, reach))),
+            core.add(p0, core.add(core.mul(d, hi), core.mul(radial, reach))),
+            core.add(p0, core.mul(d, hi)),
         ]
         half = Part.Face(Part.makePolygon([_vec(p) for p in pts + pts[:1]]))
         faces = [f for f in solid.common(half).Faces if f.Area > 1e-9]
@@ -4085,25 +4120,31 @@ def _revolved(solid):
         if geometry is None:
             continue
         try:
-            check = Part.makeCompound(faces).revolve(_vec((0, 0, 0)), _vec(d), 360)
+            check = Part.makeCompound(faces).revolve(_vec(p0), _vec(d), 360)
             if not check.Solids:
                 check = Part.makeSolid(check)
         except Exception:
             check = solid
-        return {
-            "public": {
-                "kind": "revolve",
-                "plane": plane,
-                "axis": axis_name,
-                "angle": 360,
-                "profile": public,
-                "profile_words": words,
-                "geometry": geometry,
-            },
-            "ops": [],
-            "slabs": 0,
-            "solid_check": check,
+        out = {
+            "kind": "revolve",
+            "plane": plane,
+            "axis": axis_name,
+            "angle": 360,
+            "profile": public,
+            "profile_words": words,
+            "geometry": geometry,
         }
+        if core.norm(p0) > 1e-6:
+            # the sketch lies on the axis line; the line in sketch coordinates (two points)
+            out["offset"] = core.snap(core.dot(p0, frame["n"]))
+            a = (core.dot(p0, frame["x"]), core.dot(p0, frame["y"]))
+            u = (core.dot(d, frame["x"]), core.dot(d, frame["y"]))
+            out["axis_line"] = [
+                [core.snap(a[0]), core.snap(a[1])],
+                [core.snap(a[0] + 10.0 * u[0]), core.snap(a[1] + 10.0 * u[1])],
+            ]
+            out["axis_at"] = [core.snap(c) for c in p0]
+        return {"public": out, "ops": [], "slabs": 0, "solid_check": check}
     return None
 
 
