@@ -7,8 +7,9 @@ from STEP, its rebuild started; an AI's tool calls build in the rebuilt body.
 
 A  After the base plate: UTILITIES > AI > Compare with Reference shows the match (about 95
    %), the volumes, 6 of 14 faces matched, a verdict naming the 4 holes and the 4 rounded
-   edges, one row per difference, and the differences in the 3D view (8 green regions of
-   extra material, nothing red); Close clears them.
+   edges (in a person's words: Compare Again, no tool names), one row per difference, and
+   the differences in the 3D view (8 green regions of extra material, nothing red); Close
+   clears them.
 B  The AI's compare_to_reference (tool call) draws the differences too; after the holes and
    the fillet the comparison says done (100 %, all faces) and draws nothing; Finish
    Rebuild... in the dialog opens Finish; Esc leaves everything as it was.
@@ -21,7 +22,6 @@ D  Undo, then Finish with "Keep the original, hidden": the original stays, hidde
 """
 
 import FreeCAD as App
-import FreeCADGui as Gui
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import rebuild_steps as r
@@ -77,6 +77,11 @@ def a_numbers():
     verdict = box.verdict.text()
     h.check("the verdict names the 4 holes", "4 round holes about 6 mm across" in verdict, verdict)
     h.check("... and the 4 rounded edges", "4 rounded edges of radius about 3" in verdict, verdict)
+    h.check(
+        "... said for a person (Compare Again, no tool names)",
+        "Compare Again" in verdict and "_" not in verdict and "groups[" not in verdict,
+        verdict,
+    )
     h.check(
         "one row per difference", box.table.topLevelItemCount() == 2, box.table.topLevelItemCount()
     )

@@ -22,7 +22,8 @@ and documentation", "The command a person uses", the at-tools tests and known ga
   reference), `find` / `reference_for`, an undo / redo watcher for the original's visibility.
 - `sciforge/rebuild_core.py` (pure Python): what a region looks like (hole, stepped hole,
   boss, rounded edge, chamfer, block, layer, a mesh's faceted hole), equal regions grouped in
-  Fusion's order, faces in words, size notes, the verdict, the chat message. 19 unit tests.
+  Fusion's order, faces in words, size notes, the verdict (for an AI, and in a person's
+  words for the dialogs), the chat message. 20 unit tests.
 - Compare, in short: one General Fuse; each piece put inside / outside each solid from the
   orientation of its faces (a point test only as a fallback); the pieces must add up to both
   volumes (else fuzzy, else sampled); regions with "fix" calls (a Single Hole on the right
@@ -50,7 +51,7 @@ and documentation", "The command a person uses", the at-tools tests and known ga
   knob, block with pocket and boss, plate from an STL) rebuilt only through the tools, then
   the timeline, check_design and an early edit checked (66 checks), and the same loop through
   the real MCP server (14 checks); `run_tests.sh --only headless / base` runs both.
-- Scenarios: `rebuild_start` (57 checks), `rebuild_compare_finish` (65), `rebuild_mesh_reopen`
+- Scenarios: `rebuild_start` (57 checks), `rebuild_compare_finish` (66), `rebuild_mesh_reopen`
   (39), `rebuild_chat` (20: a fake local model rebuilds the plate through SciForge's own chat,
   from the right-click to Finish).
 

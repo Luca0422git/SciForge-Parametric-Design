@@ -21,7 +21,6 @@ import json
 import threading
 
 import FreeCAD as App
-import FreeCADGui as Gui
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import rebuild_steps as r

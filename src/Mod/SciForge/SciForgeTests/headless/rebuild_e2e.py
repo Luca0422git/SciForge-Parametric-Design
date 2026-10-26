@@ -310,7 +310,7 @@ def made_id(text):
     return found.group(1) if found else None
 
 
-# -- the agent: reads only the tools' answers ----------------------------------------------------------
+# -- the agent: reads only the tools' answers ------------------------------------------------------
 class Agent:
     """Rebuilds one part as an AI would; call(tool, args) -> (text, is_error)."""
 
@@ -418,6 +418,11 @@ class Agent:
             "%s/%s" % (result["faces"]["matched"], result["faces"]["reference"]) if result else ""
         )
         out["verdict"] = result.get("verdict") if result else ""
+        compares = [c for c in self.log if c["tool"] == "compare_to_reference"]
+        out["compare"] = "%s s (%s)" % (
+            compares[-1]["seconds"] if compares else "?",
+            result.get("method") if result else "?",
+        )
         done = bool(result and result.get("done"))
         self.check(
             "%s: the rebuild matches (match >= 0.999, every face): %s" % (pid, out["match"]),
@@ -569,12 +574,13 @@ def markdown(title, agent, rows):
         "",
         "%d checks, %s." % (len(agent.checks), "all passed" if passed else "FAILED"),
         "",
-        "| Part | Plan steps | Failed steps | Fix rounds | Match | Faces | Timeline | Edit | s |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Part | Plan steps | Failed steps | Fix rounds | Match | Faces | Last compare | Timeline "
+        "| Edit | s |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
         lines.append(
-            "| %s | %s | %s | %s | %s | %s | %s | %s | %s |"
+            "| %s | %s | %s | %s | %s | %s | %s | %s | %s | %s |"
             % (
                 r["id"],
                 r.get("plan", ""),
@@ -582,6 +588,7 @@ def markdown(title, agent, rows):
                 r.get("rounds", ""),
                 r.get("match", ""),
                 r.get("faces", ""),
+                r.get("compare", ""),
                 " ".join(r.get("timeline", [])),
                 r.get("edit", ""),
                 r.get("seconds", ""),
@@ -639,7 +646,7 @@ def main():
     return report
 
 
-# -- through the real MCP server (plain Python) ------------------------------------------------------
+# -- through the real MCP server (plain Python) ----------------------------------------------------
 def run_over_mcp(command, out_dir=None):
     sys.path.insert(0, HERE)
     import agent_e2e

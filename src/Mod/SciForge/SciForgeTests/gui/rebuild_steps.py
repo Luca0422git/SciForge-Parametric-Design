@@ -72,7 +72,7 @@ def new_design(name):
     return doc
 
 
-# -- the AI's tool calls (as through the AI bridge) -------------------------------------------------
+# -- the AI's tool calls (as through the AI bridge) ------------------------------------------------
 _HOST = {"host": None}
 
 

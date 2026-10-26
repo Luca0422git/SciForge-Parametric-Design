@@ -267,6 +267,37 @@ class Groups(unittest.TestCase):
         self.assertIn("1 face of the original is not matched yet", text)
         self.assertIn("a round hole face 6 mm across", text)
 
+    def test_the_verdict_for_a_person(self):
+        groups = core.group_regions(self.regions(), reference_volume=22791.77)
+        groups[1]["fix_at"] = 1
+        groups[1]["regions"][0]["fix"] = {"tool": "fillet"}
+        result = {
+            "match": 0.949657,
+            "faces": {"reference": 14, "matched": 6, "unmatched_rebuilt": []},
+            "groups": groups,
+        }
+        text = core.person_words(core.verdict(result))
+        self.assertTrue(text.startswith("Next: 4 round holes"), text)  # (the window has the match)
+        self.assertNotIn("groups[", text)
+        self.assertTrue(text.endswith("Fix that, then Compare Again."), text)
+        done = core.verdict({"match": 1.0, "done": True, "faces": {"reference": 14}})
+        self.assertTrue(core.person_words(done).endswith("Press Finish Rebuild..."))
+        empty = core.person_words(core.verdict({"empty": True, "faces": {}}))
+        self.assertEqual(
+            empty,
+            "The rebuilt body is still empty: build the base shape first, then Compare Again.",
+        )
+        for refusal in (
+            "The rebuilt body of Plate is gone (deleted?): undo that, or call start_rebuild on "
+            "Plate again for a new one.",
+            "Plate is already being rebuilt in Plate (rebuilt) (reference R): carry on there, or "
+            "finish_rebuild first.",
+            "Plate (rebuilt) is still empty: build the part first (describe_reference gives the "
+            "plan).",
+        ):
+            self.assertNotIn("_", core.person_words(refusal))
+        self.assertEqual(core.person_words(None), "")
+
     def test_size_notes(self):
         notes = core.size_notes([0, 0, 0, 60, 40, 10], [0, 0, 0, 60, 40, 12])
         self.assertEqual(notes, ["it is 2 mm taller along Z (0 to 12; the original 0 to 10)"])

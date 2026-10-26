@@ -36,7 +36,7 @@ EXTRA_GLOW = (0.06, 0.32, 0.10)
 OVERLAY_TRANSPARENCY = 0.45
 
 
-# -- drawing ----------------------------------------------------------------------------------------
+# -- drawing ---------------------------------------------------------------------------------------
 def _mesh(coin, shape, color, glow, transparency, offset, edge, edge_transparency=0.0):
     """A see-through picture of `shape`: its faces and its edges, unpickable. offset > 0
     draws it behind faces lying on it (the ghost under the rebuild), < 0 in front (the
@@ -292,7 +292,7 @@ def current_reference(doc=None, quiet=False):
         ref = rebuild.find(doc, body)
     except rebuild.RebuildError as exc:
         if not quiet:
-            commands.tell(str(exc))
+            commands.tell(rebuild_core.person_words(str(exc)))
         return None
     if ref is None and not quiet:
         commands.tell(
@@ -309,7 +309,8 @@ def start_for(source):
     if not commands.finish_open_dialog():
         return None
     existing = rebuild.reference_for(source)
-    if existing is not None and rebuild.target_of(existing) is not None:
+    going = existing is not None and getattr(existing, "Shown", True)
+    if going and rebuild.target_of(existing) is not None:
         offer_message(existing)
         return existing
     doc.openTransaction("Rebuild with Timeline")
@@ -317,7 +318,7 @@ def start_for(source):
         ref = rebuild.start(doc, source)
     except rebuild.RebuildError as exc:
         doc.abortTransaction()
-        _say_refused(str(exc))
+        _say_refused(rebuild_core.person_words(str(exc)))
         return None
     except Exception:
         doc.abortTransaction()
@@ -451,12 +452,19 @@ class NoChatDialog(QtWidgets.QDialog):
 
     def _add_ai(self):
         try:
-            from . import ai_ui
-
             self.accept()
-            QtCore.QTimer.singleShot(0, ai_ui.add_ai)
+            QtCore.QTimer.singleShot(0, _open_add_ai)
         except Exception as exc:
             warn("rebuild: %s" % exc)
+
+
+def _open_add_ai():
+    try:
+        from . import ai_ui
+
+        ai_ui.add_ai()
+    except Exception as exc:
+        warn("Add an AI App: %s" % exc)
 
 
 # -- Compare with Reference ---------------------------------------------------------------------
@@ -522,7 +530,7 @@ class CompareDialog(QtWidgets.QDialog):
         except rebuild.RebuildError as exc:
             self.data = None
             self.headline.setText("Cannot compare")
-            self.verdict.setText(str(exc))
+            self.verdict.setText(rebuild_core.person_words(str(exc)))
             self.table.clear()
             return
         except Exception as exc:
@@ -555,7 +563,7 @@ class CompareDialog(QtWidgets.QDialog):
             "<table>%s</table>"
             % "".join("<tr><td>%s&nbsp;&nbsp;</td><td>%s</td></tr>" % r for r in rows)
         )
-        self.verdict.setText(data["verdict"])
+        self.verdict.setText(rebuild_core.person_words(data["verdict"]))
         self.table.clear()
         for group in data.get("groups", []):
             item = QtWidgets.QTreeWidgetItem(
@@ -574,7 +582,7 @@ class CompareDialog(QtWidgets.QDialog):
     def _finish(self):
         ref = self.ref
         self.reject()
-        QtCore.QTimer.singleShot(0, lambda: open_finish(ref))
+        QtCore.QTimer.singleShot(0, lambda: _open_finish_later(ref))
 
     def _closed(self, *_args):
         try:
@@ -589,7 +597,7 @@ def open_compare(ref):
     return versions_ui._show(CompareDialog(ref), "rebuild-compare")
 
 
-# -- Finish Rebuild ---------------------------------------------------------------------------------
+# -- Finish Rebuild --------------------------------------------------------------------------------
 class FinishDialog(QtWidgets.QDialog):
     """Finish: the original deleted or kept hidden, the reference kept or not."""
 
@@ -638,7 +646,10 @@ class FinishDialog(QtWidgets.QDialog):
                     )
                 )
         except rebuild.RebuildError as exc:
-            words = str(exc)
+            words = rebuild_core.person_words(str(exc))
+        except Exception as exc:  # (OpenCASCADE: the window still opens, Finish still works)
+            warn("Finish Rebuild: the comparison did not run (%s)" % exc)
+            words = "The comparison did not run; you can finish the rebuild as it is."
         self.state.setText(words)
         self.delete_original = QtWidgets.QRadioButton(
             "Delete the original body (%s)" % ref.SourceLabel
@@ -692,7 +703,7 @@ def finish(ref, keep_original=False, keep_reference=False):
         body = rebuild.finish(ref, None, keep_reference=keep_reference, keep_original=keep_original)
     except rebuild.RebuildError as exc:
         doc.abortTransaction()
-        commands.tell(str(exc))
+        commands.tell(rebuild_core.person_words(str(exc)))
         return None
     except Exception:
         doc.abortTransaction()
@@ -712,6 +723,17 @@ def open_finish(ref):
     from . import versions_ui
 
     return versions_ui._show(FinishDialog(ref), "rebuild-finish")
+
+
+def _open_finish_later(ref):
+    """Compare's Finish Rebuild... (from a timer: nothing may escape it)."""
+    from . import bodies
+
+    try:
+        if bodies.alive(ref) and rebuild.is_reference(ref) and getattr(ref, "Shown", True):
+            open_finish(ref)
+    except Exception as exc:
+        warn("Finish Rebuild: %s" % exc)
 
 
 # -- the 3D view's right-click ------------------------------------------------------------------
@@ -760,7 +782,8 @@ def marking_entries(global_pos):
         return []
     _PENDING.update(doc=body.Document.Name, name=body.Name)
     ref = rebuild.reference_for(body)
-    if ref is not None and getattr(ref, "TargetName", "") == body.Name:
+    going = ref is not None and getattr(ref, "Shown", True)
+    if going and getattr(ref, "TargetName", "") == body.Name:
         return [
             cfg.SEP,
             cfg.item("Compare with Reference", "SciForge_CompareReference", "rebuild_compare"),

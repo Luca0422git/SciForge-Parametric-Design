@@ -479,10 +479,11 @@ def compare(ref, target=None, options=None):
             )
     body, rebuilt = _target_shape(target)
     place = frame(body=body) if body is not None else App.Placement()
-    reference = in_frame(reference_shape(ref), place)
+    known = _reference_facts(ref, place)  # (measured once for all the compares of a rebuild)
+    reference = known["shape"]
     tol = float(opts["tolerance"] or getattr(ref, "Tolerance", 0.0) or core.FACE_TOL)
     mesh = getattr(ref, "SourceKind", "") == "mesh"
-    v_ref = _volume(reference)
+    v_ref = known["volume"]
     result = {
         "reference": ref.Name,
         "rebuilt": body.Name if body is not None else None,
@@ -502,7 +503,7 @@ def compare(ref, target=None, options=None):
             missing=[],
             extra=[],
             faces={
-                "reference": len(reference.Faces),
+                "reference": len(known["rows"]),
                 "matched": 0,
                 "unmatched_reference": [],
                 "unmatched_rebuilt": [],
@@ -519,28 +520,30 @@ def compare(ref, target=None, options=None):
         return result
     rebuilt = in_frame(rebuilt, place)
     v_new = _volume(rebuilt)
-    rows = (_face_rows(reference), _face_rows(rebuilt))
-    common, missing, extra, method = _pieces(reference, rebuilt, rows)
-    if method == "sampled":
-        v_common, v_missing, v_extra = common, missing, extra
-        missing_solids, extra_solids = [], []
-    else:
-        v_common = sum(s.Volume for s in common)
-        missing_solids, extra_solids = missing, extra
-        v_missing = sum(s.Volume for s in missing)
-        v_extra = sum(s.Volume for s in extra)
-    union = v_ref + v_new - v_common
-    match = max(0.0, min(1.0, v_common / union)) if union > 1e-12 else 0.0
+    rows = (known["rows"], _face_rows(rebuilt))
     opts["_edges"] = None  # (the rebuild's edges, measured once for the fillet calls)
     opts["_flat"] = None  # (its flat faces, for the hole calls)
     opts["_fixes"] = {"missing": 0, "extra": 0}
-    missing_solids = sorted(missing_solids, key=lambda x: -x.Volume)
-    extra_solids = sorted(extra_solids, key=lambda x: -x.Volume)
-    regions_missing = [_region(s, "missing", rebuilt, tol, opts) for s in missing_solids]
-    regions_extra = [_region(s, "extra", rebuilt, tol, opts) for s in extra_solids]
+    opts["_index"] = dict(known["index"])  # (selector indexes, built once: _refs)
+    faces = _match_faces(reference, rebuilt, tol, mesh, opts, rows)
+    if not mesh and _same_solid(faces, v_ref, v_new):
+        # every face of each part lies on a face of the other and the volumes agree: the same
+        # solid, no boolean needed
+        v_common, v_missing, v_extra, missing, extra = min(v_ref, v_new), 0.0, 0.0, [], []
+        method = "faces"
+    else:
+        # (a copy: an OpenCASCADE boolean may touch its arguments' tolerances)
+        v_common, v_missing, v_extra, missing, extra, method = _pieces(
+            reference.copy(), rebuilt, rows, (v_ref, v_new)
+        )
+    union = v_ref + v_new - v_common
+    match = max(0.0, min(1.0, v_common / union)) if union > 1e-12 else 0.0
+    missing = sorted(missing, key=lambda pair: -pair[1])  # ([(solid, volume)], biggest first)
+    extra = sorted(extra, key=lambda pair: -pair[1])
+    regions_missing = [_region(s, "missing", rebuilt, tol, opts, v) for s, v in missing]
+    regions_extra = [_region(s, "extra", rebuilt, tol, opts, v) for s, v in extra]
     regions_missing = [r for r in regions_missing if r is not None]
     regions_extra = [r for r in regions_extra if r is not None]
-    faces = _match_faces(reference, rebuilt, tol, mesh, opts, rows)
     deviation = _deviation(faces["_rows"]) if opts["deviation"] else {"max": None, "mean": None}
     groups = core.group_regions(regions_missing + regions_extra, reference_volume=v_ref)
     done = (
@@ -584,11 +587,12 @@ def compare(ref, target=None, options=None):
             "compare",
             ref,
             {
-                "missing": [out_of_frame(s, place) for s in missing_solids],
-                "extra": [out_of_frame(s, place) for s in extra_solids],
+                "missing": [out_of_frame(s, place) for s, _v in missing],
+                "extra": [out_of_frame(s, place) for s, _v in extra],
                 "done": result["done"],
             },
         )
+    _keep_index(known, opts)
     log(
         "rebuild: compare %s with %s: match %.6f, %d/%d faces, %.2f s"
         % (
@@ -603,6 +607,61 @@ def compare(ref, target=None, options=None):
     return result
 
 
+_KNOWN = {}  # (document, reference) -> the reference as compare measured it (_reference_facts)
+
+
+def _reference_facts(ref, place):
+    """The reference in the frame, its volume, its face rows and selector indexes: measured
+    once for all the compares of a rebuild (the reference never changes; a 300-face one takes
+    a third of a second to measure). Measured again when its shape or the frame changes."""
+    frozen = getattr(ref, SHAPE, None)
+    try:
+        box = frozen.BoundBox
+        stamp = (
+            frozen.hashCode(),
+            len(frozen.Faces),
+            tuple(round(v, 6) for v in (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax)),
+            round(box.ZMax, 6),
+            tuple(round(v, 9) for v in place.toMatrix().A),
+        )
+    except Exception:
+        stamp = None
+    key = (ref.Document.Name, ref.Name)
+    known = _KNOWN.get(key)
+    if known is not None and stamp is not None and known["stamp"] == stamp:
+        for row in known["rows"]:
+            row.matched = False
+        return known
+    shape = in_frame(reference_shape(ref), place)
+    known = {
+        "stamp": stamp,
+        "shape": shape,
+        "volume": _volume(shape),
+        "rows": _face_rows(shape),
+        "index": {},
+    }
+    if stamp is not None:
+        if len(_KNOWN) >= 8:
+            _KNOWN.clear()
+        _KNOWN[key] = known
+    return known
+
+
+def _keep_index(known, opts):
+    """Keep the reference's selector indexes a compare built, for the next compare."""
+    mine = id(known["shape"])
+    for key, value in (opts.get("_index") or {}).items():
+        if key[0] == mine:
+            known["index"][key] = value
+
+
+def forget(doc=None):
+    """Drop what compare kept of the references (of one document, or all)."""
+    for key in list(_KNOWN):
+        if doc is None or key[0] == getattr(doc, "Name", doc):
+            _KNOWN.pop(key, None)
+
+
 def _volume(shape):
     try:
         return sum(s.Volume for s in shape.Solids)
@@ -615,14 +674,26 @@ def _bbox(shape):
     return [box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax]
 
 
-def _pieces(a, b, rows=None):
-    """(common solids, missing solids, extra solids, method): a split of both solids by each
-    other (OpenCASCADE's General Fuse), each piece put where it lies: read from its faces (a
-    face of a piece lies on a face of A or B; facing the same way, the piece is inside that
-    solid), else from a point inside it. Checked: the pieces must add up to both volumes;
-    else again with a fuzzy tolerance; else the volumes are sampled: (common, missing, extra
-    volumes, "sampled")."""
-    v_a, v_b = _volume(a), _volume(b)
+def _same_solid(faces, v_ref, v_new):
+    """Every face of each part lies on a face of the other (within the tolerance) and the
+    volumes agree: the same solid."""
+    return (
+        faces["reference"] > 0
+        and faces["matched"] == faces["reference"]
+        and faces["rebuilt_matched"] == faces["rebuilt"]
+        and abs(v_ref - v_new) <= 1e-6 * max(1.0, v_ref, v_new)
+    )
+
+
+def _pieces(a, b, rows=None, volumes=None):
+    """(common volume, missing volume, extra volume, [(missing solid, its volume)], [(extra
+    solid, its volume)], method): a split of both solids by each other (OpenCASCADE's General
+    Fuse), each piece put where it lies: read from its faces (a face of a piece lies on a face
+    of A or B; facing the same way, the piece is inside that solid), else from a point inside
+    it. Checked: the pieces must add up to both volumes; else again with a fuzzy tolerance;
+    else the volumes are sampled (no regions; method "sampled"). Each volume is measured once
+    (a 300-face piece takes OpenCASCADE tens of milliseconds)."""
+    v_a, v_b = volumes if volumes is not None else (_volume(a), _volume(b))
     scale = max(1.0, v_a, v_b)
     rows_a, rows_b = rows if rows is not None else (_face_rows(a), _face_rows(b))
     on = 1e-6 * max(1.0, a.BoundBox.DiagonalLength)
@@ -636,14 +707,16 @@ def _pieces(a, b, rows=None):
         ok = True
         noise = 0.0
         for piece in result.Solids:
-            if abs(piece.Volume) <= 1e-7 * scale:
+            volume = piece.Volume
+            if abs(volume) <= 1e-7 * scale:
                 # a sliver between faces that lie on each other within a hair (a mesh's facets
                 # and their copies): no material either side, only rounding
-                noise += abs(piece.Volume)
+                noise += abs(volume)
                 continue
             # every piece lies in A or in B: when it is not in one, it is in the other
-            in_a = _membership(piece, rows_a, on)
-            in_b = _membership(piece, rows_b, on)
+            points = _PiecePoints(piece)
+            in_a = _membership(points, rows_a, on)
+            in_b = _membership(points, rows_b, on)
             if in_a is False and in_b is None:
                 in_b = True
             elif in_b is False and in_a is None:
@@ -656,36 +729,61 @@ def _pieces(a, b, rows=None):
                 in_b = b.isInside(point, 1e-9, True)
                 in_a = a.isInside(point, 1e-9, True) if in_b else True
             if in_a and in_b:
-                common.append(piece)
+                common.append((piece, volume))
             elif in_a:
-                missing.append(piece)
+                missing.append((piece, volume))
             elif in_b:
-                extra.append(piece)
+                extra.append((piece, volume))
         if not ok:
             continue
-        v_c = sum(s.Volume for s in common)
-        v_m = sum(s.Volume for s in missing)
-        v_e = sum(s.Volume for s in extra)
+        v_c = sum(v for _s, v in common)
+        v_m = sum(v for _s, v in missing)
+        v_e = sum(v for _s, v in extra)
         slack = 1e-6 * scale + noise
         if abs(v_c + v_m - v_a) <= slack and abs(v_c + v_e - v_b) <= slack:
-            return common, _merge(missing), _merge(extra), "exact" if not fuzzy else "fuzzy"
+            method = "exact" if not fuzzy else "fuzzy"
+            return v_c, v_m, v_e, _merge(missing), _merge(extra), method
         log(
             "rebuild: the pieces do not add up (%.6g + %.6g vs %.6g; %.6g + %.6g vs %.6g)"
             % (v_c, v_m, v_a, v_c, v_e, v_b)
         )
     common, missing, extra = _sampled(a, b)
-    return common, missing, extra, "sampled"
+    return common, missing, extra, [], [], "sampled"
 
 
-def _membership(piece, rows, tol):
+class _PiecePoints:
+    """A point (and the outward normal) on each face of a piece, worked out when first asked:
+    the tests against both solids read the same points (and no face's area is measured)."""
+
+    def __init__(self, piece):
+        faces = piece.Faces
+        # curved faces first: they lie on small faces of the solids (holes, fillets), whose
+        # inside test is quick; a flat face often lies on a big face with many holes
+        flat = [f for f in faces if f.Surface.TypeId == "Part::GeomPlane"]
+        self.faces = [f for f in faces if f.Surface.TypeId != "Part::GeomPlane"] + flat
+        self.found = {}
+
+    def __len__(self):
+        return len(self.faces)
+
+    def point(self, i):
+        if i not in self.found:
+            face = self.faces[i]
+            got = _face_points(face, 1) or _face_points(face, 3)
+            self.found[i] = got[0] if got else None
+        return self.found[i]
+
+
+def _membership(points, rows, tol):
     """True / False: the piece lies inside / outside the solid these face rows belong to, read
     from a face of the piece that lies on one of the solid's faces (the piece's outward normal
-    agrees with the solid's there: inside); None when no face of the piece lies on them."""
-    for face in sorted(piece.Faces, key=lambda f: -f.Area):
-        found = _face_points(face, 1) or _face_points(face, 3)
-        if not found:
+    agrees with the solid's there: inside); None when no face of the piece lies on them.
+    points: the piece's _PiecePoints."""
+    for i in range(len(points)):
+        found = points.point(i)
+        if found is None:
             continue
-        p, n = found[0]
+        p, n = found
         for row in rows:
             box = row.box
             if not (
@@ -728,15 +826,18 @@ def _outward(row, p):
         return None
 
 
-def _merge(solids):
+def _merge(pairs):
     """Pieces that touch along a face are one region (a General Fuse can split a region where
-    a face of the other solid ends inside it)."""
-    if len(solids) < 2:
-        return solids
+    a face of the other solid ends inside it). pairs: [(solid, volume)]; so is the answer."""
+    if len(pairs) < 2:
+        return pairs
+    boxes = [solid.BoundBox for solid, _v in pairs]  # (once: a box is measured on each ask)
     groups = []
-    for solid in solids:
-        joined = [g for g in groups if any(_touch(solid, other) for other in g)]
-        merged = [solid]
+    for i, (solid, _v) in enumerate(pairs):
+        joined = [
+            g for g in groups if any(_touch(solid, boxes[i], pairs[j][0], boxes[j]) for j in g)
+        ]
+        merged = [i]
         for g in joined:
             merged.extend(g)
             groups.remove(g)
@@ -744,18 +845,22 @@ def _merge(solids):
     out = []
     for g in groups:
         if len(g) == 1:
-            out.append(g[0])
+            out.append(pairs[g[0]])
             continue
+        solids = [pairs[j][0] for j in g]
         try:
-            fused = g[0].fuse(g[1:]).removeSplitter()
-            out.extend(fused.Solids if fused.Solids else g)
+            fused = solids[0].fuse(solids[1:]).removeSplitter()
+            if fused.Solids:
+                out.extend((s, s.Volume) for s in fused.Solids)
+            else:
+                out.extend(pairs[j] for j in g)
         except Exception:
-            out.extend(g)
+            out.extend(pairs[j] for j in g)
     return out
 
 
-def _touch(a, b):
-    if not _boxes_near(a.BoundBox, b.BoundBox, 1e-7):
+def _touch(a, box_a, b, box_b):
+    if not _boxes_near(box_a, box_b, 1e-7):
         return False
     try:
         for fa in a.Faces:
@@ -789,9 +894,10 @@ def _inside_point(solid):
     return None
 
 
-def _face_points(face, n):
+def _face_points(face, n, full=False):
     """[(point, outward normal)] at the centres of an n x n grid of the face's parameters
-    that lie on the face."""
+    that lie on the face (full: the face is its whole parameter rectangle, every point is on
+    it: no domain test, which costs a millisecond on a face with many holes)."""
     out = []
     try:
         u0, u1, v0, v1 = face.ParameterRange
@@ -802,7 +908,7 @@ def _face_points(face, n):
             u = u0 + (u1 - u0) * (i + 0.5) / n
             v = v0 + (v1 - v0) * (j + 0.5) / n
             try:
-                if face.isPartOfDomain(u, v):
+                if full or face.isPartOfDomain(u, v):
                     out.append((face.valueAt(u, v), face.normalAt(u, v)))
             except Exception:
                 continue
@@ -845,8 +951,9 @@ def _r(value, digits=6):
     return 0.0 if out == 0 else out
 
 
-def region_facts(solid):
-    """The plain numbers rebuild_core classifies a region of material by."""
+def region_facts(solid, volume=None):
+    """The plain numbers rebuild_core classifies a region of material by (volume: the solid's,
+    when already measured)."""
     from .ai.ops import selectors
 
     box = solid.BoundBox
@@ -865,7 +972,7 @@ def region_facts(solid):
             pass
         faces.append(row)
     return {
-        "volume": solid.Volume,
+        "volume": solid.Volume if volume is None else volume,
         "center": _xyz(centre),
         "bbox": [_r(v) for v in (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)],
         "faces": faces,
@@ -916,11 +1023,11 @@ def _round_facts(face, surface, kind, centre):
     return row
 
 
-def _region(solid, side, rebuilt, tol, opts):
+def _region(solid, side, rebuilt, tol, opts, volume=None):
     """One region of missing / extra material: its numbers, what it looks like, and the tool
     call that would make it when that is certain (fillet / chamfer the edges found)."""
     try:
-        facts = region_facts(solid)
+        facts = region_facts(solid, volume)
     except Exception as exc:
         warn("rebuild: a region could not be measured (%s)" % exc)
         return None
@@ -983,8 +1090,6 @@ def _flat_faces(rebuilt, opts):
 def _hole_fix(shape, rebuilt, tol, opts=None):
     """A hole the rebuild has not cut: a Single Hole call on the flat face it starts on
     (through_all when it comes out on the other side too)."""
-    from .ai import geometry_facts
-
     ends = shape.get("ends")
     if not ends:
         return None
@@ -1014,7 +1119,7 @@ def _hole_fix(shape, rebuilt, tol, opts=None):
     if not starts:
         return None
     name, _normal, point = starts[0]
-    refs = geometry_facts.stable_refs(rebuilt, "faces", {name})
+    refs = _refs(rebuilt, "faces", {name}, opts)
     if not refs.get(name):
         return None
     args = {
@@ -1030,6 +1135,35 @@ def _hole_fix(shape, rebuilt, tol, opts=None):
 
 
 MAX_FIXES = 24  # regions per side given a ready call (the biggest first)
+
+
+def _refs(shape, element, names, opts=None):
+    """geometry_facts.stable_refs for these names, with the shape's selector index built once
+    per compare (24 hole calls on a 300-face part built it 24 times: about a second)."""
+    from .ai import geometry_facts
+
+    make = getattr(geometry_facts, "_Index", None)
+    unique = getattr(geometry_facts, "_unique", None)
+    if opts is None or make is None or unique is None:
+        return geometry_facts.stable_refs(shape, element, set(names))
+    cache = opts.setdefault("_index", {})
+    key = (id(shape), element)
+    if key not in cache:
+        cache[key] = (shape, make(shape, element))  # (the shape kept: its id stays its own)
+    index = cache[key][1]
+    out = {}
+    for i, (name, _sub) in enumerate(index.items):
+        if name not in names:
+            continue
+        spec = unique(index, i)
+        if spec is not None:
+            try:
+                if index.select(spec) != [i]:
+                    spec = None
+            except Exception:
+                spec = None
+        out[name] = spec
+    return out
 
 
 def _edge_table(rebuilt, opts):
@@ -1053,8 +1187,6 @@ def _edge_fix(solid, shape, rebuilt, tol, opts=None):
     chamfer call: {"tool", "args": {"edges": selector, "radius" | "distance"}}."""
     import Part
 
-    from .ai import geometry_facts
-
     names = []
     box = solid.BoundBox
     near = max(tol, 1e-6)
@@ -1076,7 +1208,7 @@ def _edge_fix(solid, shape, rebuilt, tol, opts=None):
         names.append(name)
     if not names:
         return None
-    refs = geometry_facts.stable_refs(rebuilt, "edges", set(names))
+    refs = _refs(rebuilt, "edges", set(names), opts)
     picks = [refs[n] for n in names if refs.get(n)]
     if len(picks) != len(names):
         return None
@@ -1175,21 +1307,45 @@ def group_fix(group):
 class _FaceRow:
     """What the face matching needs of one face, worked out once."""
 
-    __slots__ = ("index", "face", "kind", "area", "box", "key", "matched", "samples", "grid")
+    __slots__ = (
+        "index",
+        "face",
+        "kind",
+        "area",
+        "box",
+        "key",
+        "matched",
+        "samples",
+        "grid",
+        "full",
+        "range",
+    )
 
-    def __init__(self, index, face, grid=5):
+    def __init__(self, index, face, grid=5, area=None):
         from .ai.ops import selectors
 
         self.index = index
         self.face = face
         self.kind = selectors.face_type(face)
-        self.area = face.Area
+        self.area = face.Area if area is None else area
         self.box = face.BoundBox
         self.key = None
         self.matched = False
         self.samples = None
         self.grid = grid
         surface = face.Surface
+        self.full = False  # a plane / cylinder face that is its whole parameter rectangle
+        self.range = None
+        try:
+            if self.kind in ("plane", "cylinder") and len(face.Wires) == 1:
+                u0, u1, v0, v1 = face.ParameterRange
+                rect = (u1 - u0) * (v1 - v0)
+                if self.kind == "cylinder":
+                    rect *= surface.Radius
+                self.full = rect > 0 and abs(rect - self.area) <= 1e-7 * max(1.0, self.area)
+                self.range = (u0, u1, v0, v1)
+        except Exception:
+            self.full = False
         try:
             if self.kind == "plane":
                 n = App.Vector(*selectors._unit(selectors.face_normal(face)))
@@ -1230,7 +1386,7 @@ class _FaceRow:
 
     def points(self):
         if self.samples is None:
-            found = [p for p, _n in _face_points(self.face, self.grid)]
+            found = [p for p, _n in _face_points(self.face, self.grid, self.full)]
             if len(found) < 3:
                 found += [p for p, _n in _face_points(self.face, 11)][:25]
             if not found:
@@ -1245,11 +1401,45 @@ class _FaceRow:
         return self.samples
 
 
+def _on_full(row, p, tol):
+    """p lies on a face that is its whole parameter rectangle (row.full: a plane or cylinder
+    face without holes or trims), measured on its surface instead of with OpenCASCADE's face
+    classifier."""
+    surface = row.face.Surface
+    u, v = surface.parameter(p)
+    if (surface.value(u, v) - p).Length > tol:
+        return False
+    u0, u1, v0, v1 = row.range
+    du = tol
+    if row.kind == "cylinder":
+        du = tol / max(surface.Radius, 1e-12)
+        turn = 2.0 * math.pi
+        while u < u0 - du:
+            u += turn
+        while u > u1 + du and u - turn >= u0 - du:
+            u -= turn
+    return u0 - du <= u <= u1 + du and v0 - tol <= v <= v1 + tol
+
+
+def _on_face(row, p, tol):
+    """p lies on the row's face (within tol)."""
+    if row.full:
+        try:
+            return _on_full(row, p, tol)
+        except Exception:
+            pass
+    return row.face.isInside(p, tol, True)
+
+
 def _face_rows(shape):
     """The faces' rows; small faces get fewer sample points (a mesh's narrow facets)."""
     faces = list(shape.Faces)
-    biggest = max([f.Area for f in faces] or [0.0])
-    return [_FaceRow(i, f, 5 if f.Area >= 0.02 * biggest else 3) for i, f in enumerate(faces)]
+    areas = [f.Area for f in faces]  # (once: an area is measured on each ask)
+    biggest = max(areas or [0.0])
+    return [
+        _FaceRow(i, f, 5 if a >= 0.02 * biggest else 3, a)
+        for i, (f, a) in enumerate(zip(faces, areas))
+    ]
 
 
 def _same_surface(a, b, tol):
@@ -1334,7 +1524,7 @@ def _covered(row, others, tol):
             ):
                 continue
             try:
-                if other.face.isInside(p, tol, True):
+                if _on_face(other, p, tol):
                     hit = True
                     break
             except Exception:
@@ -1391,21 +1581,15 @@ def _match_faces(reference, rebuilt, tol, mesh, opts, rows=None):
         # the exact test first (the mesh's flat faces are exact planes), then within tol of
         # the other part's surface for the facets of round regions and the round faces
         for mine, theirs in ((rows_a, rows_b), (rows_b, rows_a)):
+            near = _BoxIndex(theirs, tol)
             for row in mine:
-                same = [
-                    o
-                    for o in theirs
-                    if _boxes_near(row.box, o.box, tol) and _same_surface(row, o, tol)
-                ]
+                same = [o for o in near(row) if _same_surface(row, o, tol)]
                 row.matched = _covered(row, same, tol) or _near_surfaces(row, theirs, tol)
     else:
         for mine, theirs in ((rows_a, rows_b), (rows_b, rows_a)):
+            near = _BoxIndex(theirs, tol)
             for row in mine:
-                same = [
-                    o
-                    for o in theirs
-                    if _boxes_near(row.box, o.box, tol) and _same_surface(row, o, tol)
-                ]
+                same = [o for o in near(row) if _same_surface(row, o, tol)]
                 row.matched = _covered(row, same, tol)
                 if not row.matched and (row.key is None or row.kind in ("cone", "torus")):
                     # (a cone or torus may be described from its other end: measured)
@@ -1423,6 +1607,29 @@ def _match_faces(reference, rebuilt, tol, mesh, opts, rows=None):
         "_rows": (rows_a, rows_b),
     }
     return out
+
+
+class _BoxIndex:
+    """The rows whose boxes come within tol of a row's box, in their order (numpy: a 300-face
+    part against another made 90 000 box tests in Python)."""
+
+    def __init__(self, rows, tol):
+        import numpy
+
+        self.rows = rows
+        self.np = numpy
+        self.tol = tol
+        self.lo = numpy.array([[r.box.XMin, r.box.YMin, r.box.ZMin] for r in rows] or [[0, 0, 0]])
+        self.hi = numpy.array([[r.box.XMax, r.box.YMax, r.box.ZMax] for r in rows] or [[0, 0, 0]])
+
+    def __call__(self, row):
+        if not self.rows:
+            return []
+        b, t, np = row.box, self.tol, self.np
+        fits = np.all(self.lo <= np.array([b.XMax + t, b.YMax + t, b.ZMax + t]), axis=1) & np.all(
+            self.hi >= np.array([b.XMin - t, b.YMin - t, b.ZMin - t]), axis=1
+        )
+        return [self.rows[int(i)] for i in np.nonzero(fits)[0]]
 
 
 def _twin(row, others, tol):
@@ -1499,7 +1706,7 @@ def _near_face(point, row, tol):
             import Part
 
             return row.face.distToShape(Part.Vertex(point))[0] <= tol
-        return row.face.isInside(foot, tol, True)
+        return _on_face(row, foot, tol)
     except Exception:
         return False
 
@@ -1524,7 +1731,7 @@ def _face_list(shape, rows, limit, opts):
     if opts.get("selectors") and shown:
         try:
             wanted = {"Face%d" % (r.index + 1) for r in shown}
-            refs = geometry_facts.stable_refs(shape, "faces", wanted)
+            refs = _refs(shape, "faces", wanted, opts)
         except Exception as exc:
             log("rebuild: face selectors not made (%s)" % exc)
     out = []
@@ -1553,23 +1760,50 @@ def _face_list(shape, rows, limit, opts):
 
 
 # -- deviation ------------------------------------------------------------------------------------
+DEVIATION_FACES = 48  # unmatched faces measured at most (spread over their sizes)
+
+
+def _spread(rows, count):
+    """At most `count` of the rows, from the biggest to the smallest, evenly spread."""
+    if len(rows) <= count:
+        return rows
+    ordered = sorted(rows, key=lambda r: -r.area)
+    if count <= 1:
+        return ordered[:1]
+    return [ordered[round(i * (len(ordered) - 1) / (count - 1))] for i in range(count)]
+
+
 def _deviation(rows, budget=160):
     """How far the surfaces are apart: sample points of the unmatched faces of each part,
     their exact distance to the other part (matched faces count 0). max and an
-    area-weighted mean, mm."""
+    area-weighted mean, mm. Beyond DEVIATION_FACES unmatched faces, a spread of them is
+    measured (and the mean scaled to all of them): an estimate, as the sampling is."""
     rows_a, rows_b = rows
     open_a = [r for r in rows_a if not r.matched]
     open_b = [r for r in rows_b if not r.matched]
     total_area = sum(r.area for r in rows_a) + sum(r.area for r in rows_b)
     if not open_a and not open_b:
         return {"max": 0.0, "mean": 0.0}
-    per_face = max(1, min(9, budget // max(1, len(open_a) + len(open_b))))
+    count = len(open_a) + len(open_b)
+    if count > DEVIATION_FACES:
+        keep_a = max(1, round(DEVIATION_FACES * len(open_a) / count)) if open_a else 0
+        sides = (_spread(open_a, keep_a), _spread(open_b, max(1, DEVIATION_FACES - keep_a)))
+        per_face = 1  # (the middle of each: a spread of faces says more than more points)
+    else:
+        sides = (open_a, open_b)
+        per_face = max(1, min(9, budget // max(1, count)))
     worst = 0.0
     weighted = 0.0
-    for rows_open, other in ((open_a, rows_b), (open_b, rows_a)):
+    for rows_all, rows_open, other in ((open_a, sides[0], rows_b), (open_b, sides[1], rows_a)):
         distance = _Distances(other)
+        picked_area = sum(r.area for r in rows_open)
+        scale = sum(r.area for r in rows_all) / picked_area if picked_area > 0 else 1.0
         for row in rows_open:
-            points = row.points()
+            if per_face == 1 and row.samples is None:
+                # (one point a face: its middle, not a whole grid sampled to keep one)
+                points = [p for p, _n in _face_points(row.face, 1, row.full)] or row.points()
+            else:
+                points = row.points()
             if len(points) > per_face:
                 step = len(points) / float(per_face)
                 points = [points[int(i * step)] for i in range(per_face)]
@@ -1577,7 +1811,7 @@ def _deviation(rows, budget=160):
             if not found:
                 continue
             worst = max(worst, max(found))
-            weighted += row.area * sum(found) / len(found)
+            weighted += scale * row.area * sum(found) / len(found)
     mean = weighted / total_area if total_area > 0 else 0.0
     return {"max": _r(worst), "mean": _r(mean)}
 
@@ -1632,6 +1866,7 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
         target.Label = label
     _HIDDEN.get(doc.Name, {}).pop(ref.Name, None)
     NOTES.pop(ref.Name, None)
+    _KNOWN.pop((doc.Name, ref.Name), None)
     _notify("clear", ref, None)
     if keep_reference:
         ref.Shown = False
@@ -1722,6 +1957,7 @@ class _Watch:
     def slotDeletedDocument(self, doc):
         try:
             _HIDDEN.pop(doc.Name, None)
+            forget(doc)
         except Exception:
             pass
 

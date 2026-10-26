@@ -18,6 +18,7 @@ a hole the rebuild has not cut yet is extra material shaped like a cylinder.
 """
 
 import math
+import re
 
 MATCH_DONE = 0.999  # the share of the volume that must agree (common / union) to be done
 FACE_TOL = 1e-3  # mm: two faces on the same surface within this are the same face
@@ -715,3 +716,37 @@ def chat_message(body_label, rebuilt_label=None, mesh=False):
         "every feature and fix what its verdict says, and call finish_rebuild when it says "
         "done." % (source, body_label, rebuilt)
     )
+
+
+# -- the same words for a person (the dialogs) -------------------------------------------------
+_PERSON_WORDS = (
+    (
+        " (describe_reference gives the plan; its step 1 is the base), then "
+        "compare_to_reference again.",
+        ", then Compare Again.",
+    ),
+    ("Fix that, then compare_to_reference again.", "Fix that, then Compare Again."),
+    ("Call finish_rebuild.", "Press Finish Rebuild..."),
+    ("missing / extra list them", "the list below has them"),
+    (
+        "Look at missing / extra and the unmatched faces.",
+        "Look at the list below and at the faces not matched yet.",
+    ),
+    (" (describe_reference gives the plan)", ""),
+    ("call start_rebuild on", "use Rebuild with Timeline (AI)... on"),
+    ("start_rebuild", "Rebuild with Timeline (AI)..."),
+    ("finish_rebuild", "Finish Rebuild"),
+    ("about 1 % exact: see note.)", "about 1 % exact.)"),
+)
+
+
+def person_words(verdict):
+    """A verdict or refusal written for an AI, said for a person: without the tools' names."""
+    text = re.sub(r" \(the \w+ call is ready in groups\[\d+\]\.fix\)", "", verdict or "")
+    # (the window shows the match and the faces above the verdict: the next step is enough)
+    text = re.sub(
+        r"Match [0-9.]+ \(1 is identical\); \d+ of \d+ faces of the original matched\. ", "", text
+    )
+    for old, new in _PERSON_WORDS:
+        text = text.replace(old, new)
+    return text
