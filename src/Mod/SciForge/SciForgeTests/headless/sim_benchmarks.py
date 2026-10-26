@@ -699,6 +699,7 @@ def check_cancel(doc, out):
 
     moments = (
         ("model", lambda job: True),  # before the first turn
+        ("model's second turn", lambda job: job.stage == "model" and job._checked),
         ("mesh", lambda job: job.stage == "mesh" and not background_done(job)),
         ("input", lambda job: job.stage == "mesh" and background_done(job)),
         # (the input is written over two turns, the results read over three)
@@ -970,6 +971,58 @@ def check_same_labels(doc, out):
         )
     finally:
         params.SetBool("DuplicateLabels", allowed)
+
+
+@engine_check("a body whose middle is a hole, glued to another")
+def check_hollow_owners(doc, out):
+    """A steel plate with a hole in its middle under a solid aluminium plate, glued: each
+    piece of the model keeps its own body, so its own material (the holed plate's centre of
+    mass, in the hole, is nearer the other plate: SciForge first went by it)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    holed = Part.makeBox(100, 100, 5).cut(Part.makeCylinder(10, 5, App.Vector(50, 50, 0)))
+    lower = make_body(doc, holed, "Lower")
+    upper = make_body(doc, Part.makeBox(100, 100, 5, App.Vector(0, 0, 5)), "Upper")
+    study = sim.create_study(doc, study_bodies=[lower, upper])
+    sim.set_study_material(study, upper, "aluminium")
+    model, owners = sim.build_model(study)
+    right = all(
+        owner is (lower if solid.BoundBox.ZMax <= 5 + 1e-6 else upper)
+        for solid, owner in zip(model.Solids, owners)
+    )
+    out.append(
+        (
+            "each piece of the model belongs to its own plate",
+            right and len(owners) == 2,
+            [(round(s.BoundBox.ZMax, 3), o.Label) for s, o in zip(model.Solids, owners)],
+        )
+    )
+    sim.add_item(
+        study,
+        "constraint",
+        "fixed",
+        [(lower, one_face(lower, lambda f: near(f.CenterOfMass.z, 0)))],
+    )
+    sim.add_item(
+        study,
+        "load",
+        "pressure",
+        [(upper, one_face(upper, lambda f: near(f.CenterOfMass.z, 10)))],
+        {"magnitude": 1.0},
+    )
+    summary = sim.solve(study, timeout=600)
+    rows = summary.get("bodies", {})
+    out.append(
+        (
+            "each plate keeps its material in the results",
+            rows.get("Lower", {}).get("material", "").startswith("Steel")
+            and "lumin" in rows.get("Upper", {}).get("material", ""),
+            {k: v.get("material") for k, v in rows.items()},
+        )
+    )
 
 
 @engine_check("a change while it solves")

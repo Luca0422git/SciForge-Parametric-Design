@@ -130,3 +130,12 @@ sections Engine and Benchmarks.
 - 21:05-21:15 the pre-check of the big plate fixed at its 120 holes took 8 s: every pick made
   its own copy of the 366-face shape (27 ms each) to compare its remembered shape. The copy is
   now made once per object and call, and remembered per shape: 0.4 s.
+- 21:15-21:35 a solve of 20 stacked plates with 25 holes each: the model turn took 16 s (the
+  pre-check's first contacts 7 s, the general fuse 1.3 s, and 2.3 s working out which body
+  each piece of the model came from). That last part was also **wrong** in a case: it went by
+  each piece's centre of mass, and a plate with a hole in its middle has it in the hole, nearer
+  a plate glued on it; that plate's material then went to both (engine check "a body whose
+  middle is a hole, glued to another": the old rule gave both pieces to the upper plate). Now
+  the general fuse's own history says which body each piece came from (exact and instant), and
+  the model stage is two turns (pre-check, then the model). The same stack at the default mesh
+  needs over 6 GB in CalculiX (stopped after 9 minutes): a big model is still big.

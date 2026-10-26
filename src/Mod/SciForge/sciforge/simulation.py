@@ -1206,25 +1206,63 @@ def build_model(study):
     tol = float(settings(study)["contact_tolerance"])
     first, rest = pieces[0][1], [p[1] for p in pieces[1:]]
     try:
-        fused, _history = first.generalFuse(rest, tol)
+        fused, history = first.generalFuse(rest, tol)
     except Exception as exc:
         raise SimulationError("The bodies could not be joined for the mesh: %s" % exc)
     solids = list(fused.Solids)
     owners = []
     for solid in solids:
-        centre = solid.CenterOfMass
+        # the general fuse says which body each piece came from (where two bodies overlap,
+        # the first); a piece's centre of mass is no guide: a plate with a hole in its middle
+        # has it in the hole, nearer the next plate
         owner = None
-        for body, piece in pieces:
-            try:
-                if piece.isInside(centre, 1e-6, True):
-                    owner = body
-                    break
-            except Exception:
-                continue
-        if owner is None:  # a thin piece whose centre falls outside: the nearest body
-            owner = min(pieces, key=lambda p: p[1].distToShape(Part.Vertex(centre))[0])[0]
+        for (body, _piece), made in zip(pieces, history or []):
+            if any(solid.isSame(m) for m in made):
+                owner = body
+                break
+        if owner is None:
+            owner = _owner_by_geometry(solid, pieces)
         owners.append(owner)
     return Part.makeCompound(solids), owners
+
+
+def _inside_point(solid):
+    """A point inside a solid: its centre of mass when that is inside, else a point just
+    under one of its faces."""
+    centre = solid.CenterOfMass
+    try:
+        if solid.isInside(centre, 1e-9, False):
+            return centre
+        size = max(solid.BoundBox.DiagonalLength, 1e-6)
+        for face in solid.Faces:
+            u0, u1, v0, v1 = face.ParameterRange
+            for fu, fv in ((0.5, 0.5), (0.3, 0.3), (0.7, 0.7), (0.3, 0.7), (0.7, 0.3)):
+                u, v = u0 + (u1 - u0) * fu, v0 + (v1 - v0) * fv
+                if not face.isPartOfDomain(u, v):
+                    continue
+                p, n = face.valueAt(u, v), face.normalAt(u, v)
+                for depth in (1e-4, 1e-3, 1e-2):
+                    q = p - n * (depth * size)
+                    if solid.isInside(q, 1e-9, False):
+                        return q
+    except Exception:
+        pass
+    return centre
+
+
+def _owner_by_geometry(solid, pieces):
+    """The body a model solid lies in (when the general fuse did not say): the first whose
+    solid holds a point inside it, else the nearest."""
+    import Part
+
+    point = _inside_point(solid)
+    for body, piece in pieces:
+        try:
+            if piece.isInside(point, 1e-6, True):
+                return body
+        except Exception:
+            continue
+    return min(pieces, key=lambda p: p[1].distToShape(Part.Vertex(point))[0])[0]
 
 
 def _element(obj, sub):
@@ -2378,6 +2416,7 @@ class Job:
         self._curved = None  # (made straight, still bad, error) of the check before a solve
         self._curved_text = None  # its note
         self._fingerprints = None  # (signature, mesh signature) when the solve started
+        self._checked = False  # the pre-check passed (the model is built on the next turn)
         self._getter = None  # FreeCAD's mesh tables for the input (made a turn earlier)
         self._results_step = None  # the next turn of reading the results
         self._solid_nodes = {}  # model solid index -> its mesh nodes (from Gmsh's groups)
@@ -2447,6 +2486,8 @@ class Job:
     # -- stages (main thread)
     def _stage_model(self):
         _close_open_transaction(self.doc)
+        if self._checked:
+            return self._build_model()
         try:
             repaired = repair_picks(self.study)
         except Exception as exc:
@@ -2476,6 +2517,11 @@ class Job:
             errors = [text for level, text in checks if level == "error"]
         if errors:
             raise SimulationError(" ".join(errors))
+        # the model is built on the next turn (the window gets a moment between the two; a
+        # further pass of the same solve starts there)
+        self._checked = True
+
+    def _build_model(self):
         t = time.time()
         shape, self._owners = build_model(self.study)
         self._model_shape = shape
