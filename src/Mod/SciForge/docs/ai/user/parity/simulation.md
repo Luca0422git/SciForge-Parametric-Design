@@ -92,7 +92,7 @@ again) runs in the docs runner.
   elements made smaller (automatic, with a note) and stays coarse across the wall: a tube
   pushed along its axis came out 11 % too stiff, with the note that elements are stretched
   131:1. Fusion's mesh settings apply the same way: a smaller Average Element Size or a Local
-  Mesh Control on the wall gives the accurate answer (the same tube at 3 %: 0.9 % off).
+  Mesh Control on the wall gives the accurate answer (the same tube at 3 %: 1 % off).
 - **Big parts**: the window still pauses up to about 3-4 s at a time on a 140 000-node part
   (FreeCAD's tables of the mesh, its result mesh, mapping 120 picked faces onto the model); the
   rest runs in the background. A 300 000-node mesh (20 stacked plates with 500 holes) needs over
