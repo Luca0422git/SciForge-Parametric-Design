@@ -310,6 +310,17 @@ rebuilt; a body already being rebuilt is not started twice (carry on in its rebu
   says what that step should have made.
 - **A mesh is refused** ("not watertight"): the mesh has holes or loose triangles; the person
   repairs it first (MESH tab > Repair), then starts again.
+- **describe_reference lists a thread, a text or free-form faces** in `unrecognized`: they
+  are never guessed. A thread: the plan drills the plain hole; add the thread with `thread`
+  (modeled) if it is a standard one, compare again, and finish with `even_if_different` when
+  the person accepts it as close. Free-form faces (a loft, raised text): the notes say what
+  to build by hand (`loft`, `sketch_text` and an extrude).
+- **finish_rebuild kept the original** ("kept (hidden) instead of deleted: ... still use it"):
+  joints, patterns and sketches that used the original moved onto the rebuild; the ones
+  named could not (they use something of the original the rebuild has not). Point them at
+  the rebuild by hand, then delete the hidden original.
+- **After opening the design again** the rebuild carries on in its rebuilt body (it is the
+  active body again); with several rebuilds going on, `activate` the one to work in.
 - **The match stays just under 1 on a mesh**: a mesh is flat facets, so a round hole of the
   mesh is a polygon; the faces are matched within the mesh's tolerance and `done` comes when
   every face is within it. Build round holes anyway (the person wants a real part).
