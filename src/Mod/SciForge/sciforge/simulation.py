@@ -252,6 +252,8 @@ def set_settings(study, new):
             merged[key] = value
     data["settings"] = core.settings(merged)
     _save(study, STUDY_PROP, data)
+    if "keep_results" in (new or {}):
+        apply_keep_results(study)
     return data["settings"]
 
 
@@ -398,9 +400,10 @@ def _link_list(refs):
         if obj.Name not in grouped:
             grouped[obj.Name] = (obj, [])
             order.append(obj.Name)
-        if sub and sub not in grouped[obj.Name][1]:
+        if sub not in grouped[obj.Name][1]:
             grouped[obj.Name][1].append(sub)
-    return [(grouped[n][0], grouped[n][1]) for n in order]
+    # (a whole object is the element "": FreeCAD drops an entry with no element at all)
+    return [(grouped[n][0], grouped[n][1] or [""]) for n in order]
 
 
 def lost_items(study):
@@ -850,6 +853,131 @@ def _twice(study):
     return out
 
 
+# -- held enough? -------------------------------------------------------------------------------
+def _sample_points(element):
+    """Points spread over a picked face, edge or corner (design coordinates)."""
+    kind = element.ShapeType
+    if kind == "Vertex":
+        return [element.Point]
+    if kind == "Edge":
+        a, b = element.FirstParameter, element.LastParameter
+        return [element.valueAt(a + (b - a) * f) for f in (0.0, 0.25, 0.5, 0.75, 1.0)]
+    pts = [v.Point for v in element.Vertexes]
+    try:
+        u0, u1, v0, v1 = element.ParameterRange
+        for i in range(5):
+            for j in range(5):
+                u = u0 + (u1 - u0) * (0.1 + 0.2 * i)
+                v = v0 + (v1 - v0) * (0.1 + 0.2 * j)
+                if element.isPartOfDomain(u, v):
+                    pts.append(element.valueAt(u, v))
+    except Exception:
+        pts.append(element.CenterOfMass)
+    return pts
+
+
+def _held_rows(item):
+    """[(body, point, direction)]: where an item's constraint stops the model moving and
+    along which directions (sampled over its picks)."""
+    data = item_data(item)
+    kind = data["kind"]
+    opts = core.options("constraint", kind, data["options"])
+    axes = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    out = []
+    for obj, names, _moved in resolve_picks(item):
+        body = obj if bodies.is_body(obj) else (bodies.body_of(obj) or obj)
+        try:
+            shape = bodies.global_shape(obj, copy=False)
+        except Exception:
+            continue
+        for name in names:
+            if not name:
+                continue
+            try:
+                element = shape.getElement(name)
+            except Exception:
+                continue
+            frame = None
+            if kind == "pin" and element.ShapeType == "Face":
+                try:
+                    frame = _cylinder_frame(element)
+                except Exception:
+                    frame = None
+            for p in _sample_points(element):
+                point = (p.x, p.y, p.z)
+                if kind == "fixed":
+                    dirs = [axes[i] for i, a in enumerate("xyz") if opts.get(a)]
+                elif kind == "displacement":
+                    dirs = [axes[i] for i, a in enumerate("xyz") if opts.get(a) is not None]
+                elif kind == "pin" and frame is not None:
+                    centre, axis, _sign = frame
+                    radial = _radial(point, centre, axis)
+                    dirs = []
+                    if radial is not None:
+                        if opts.get("radial"):
+                            dirs.append(tuple(radial))
+                        if opts.get("tangential"):
+                            dirs.append(tuple(core._cross(axis, radial)))
+                    if opts.get("axial"):
+                        dirs.append(tuple(axis))
+                elif kind == "frictionless" and element.ShapeType == "Face":
+                    dirs = [_face_normal_at(element, point)]
+                else:
+                    dirs = []
+                out += [(body, point, d) for d in dirs]
+    return out
+
+
+def _pieces(study, touching=None):
+    """The study's bodies grouped by what touches what (glued pieces move together)."""
+    found = study_bodies(study)
+    if touching is None:
+        touching = contacts(study) if len(found) > 1 else []
+    parent = {b.Name: b.Name for b in found}
+
+    def root(name):
+        while parent[name] != name:
+            parent[name] = parent[parent[name]]
+            name = parent[name]
+        return name
+
+    for a, b, _kind in touching:
+        if a.Name in parent and b.Name in parent:
+            parent[root(b.Name)] = root(a.Name)
+    groups = {}
+    for b in found:
+        groups.setdefault(root(b.Name), []).append(b)
+    return list(groups.values())
+
+
+def not_held(study, touching=None):
+    """[(bodies, [free movement in words])] of the pieces of the study that its constraints
+    hold (at least one constraint on them) but not completely: they could still slide or turn
+    as a whole, and the solve would fail or give nonsense (Fusion's rigid body motion)."""
+    rows = []
+    for item in items(study, "constraint"):
+        if not item.Suppressed:
+            rows += _held_rows(item)
+    out = []
+    for piece in _pieces(study, touching):
+        names = set(b.Name for b in piece)
+        mine = [(p, d) for body, p, d in rows if body.Name in names]
+        if not mine:
+            continue  # (held by nothing: loose_bodies / Remove rigid body modes)
+        box = None
+        for b in piece:
+            bb = bodies.global_shape(b, copy=False).BoundBox
+            if box is None:
+                box = bb
+            else:
+                box.add(bb)
+        centre = (box.Center.x, box.Center.y, box.Center.z)
+        free = core.free_modes(mine, centre, max(box.DiagonalLength, 1.0))
+        if free:
+            out.append((piece, [core.describe_free_mode(m) for m in free]))
+    return out
+
+
 # -- pre-check -------------------------------------------------------------------------------------
 def precheck(study):
     """[(level, sentence)] of simulation_core.precheck for this study as it is now."""
@@ -894,6 +1022,18 @@ def precheck(study):
     if found and any(not c[2] for c in summary["constraints"]):
         summary["loose"] = [b.Label for b in loose_bodies(study, touching)]
     checks = core.precheck(summary)
+    try:
+        for piece, free in not_held(study, touching if len(found) > 1 else []):
+            checks.append(
+                (
+                    "error",
+                    "%s is not held enough: it could still %s. Add a constraint that stops "
+                    "it (a Fixed face is the simplest)."
+                    % (" and ".join(b.Label for b in piece), " or ".join(free)),
+                )
+            )
+    except Exception as exc:
+        warn("simulation pre-check (held enough): %s" % exc)
     for label in summary.get("unbuilt", []):
         checks.append(("error", "%s is not in SciForge yet: suppress or delete it." % label))
     return checks
@@ -2154,6 +2294,7 @@ class Job:
             _remove_run(self.study, "SimMeshRun")
             self.study.SimMeshRun = self._analysis
             _save(self.study, MESH_PROP, self.mesh_info)
+            apply_keep_results(self.study)
             self.summary = dict(self.mesh_info)
             self._analysis = None  # (kept)
             return self._stop("done", "Done")
@@ -2238,12 +2379,26 @@ class Job:
                         "total": (fx * fx + fy * fy + fz * fz) ** 0.5,
                     }
         self.timings["results"] = time.time() - t
+        try:
+            moved = max(result.DisplacementLengths) if result.DisplacementLengths else 0.0
+        except Exception:
+            moved = 0.0
+        size = self._model_shape.BoundBox.DiagonalLength
+        if not (moved == moved) or moved > size:
+            # CalculiX does not always notice a model that can still move: its numbers are
+            # then nonsense (it "moved" by more than its own size)
+            raise SimulationError(
+                "The model is not held enough: the solve moved it by more than its own size, "
+                "so a part can still move or spin freely. Add constraints so every body is held "
+                "in X, Y and Z (a Fixed face is the simplest)."
+            )
         _close_open_transaction(self.doc)
         self.summary = _finish(self.study, result, self._mesh, self._owners, self, reactions)
         _remove_run(self.study, "SimRun")
         _remove_run(self.study, "SimMeshRun")
         self.study.SimRun = self._analysis
         _save(self.study, MESH_PROP, self.mesh_info)
+        apply_keep_results(self.study)
         self._analysis = None  # (kept)
         self._stop("done", "Done")
 
@@ -2487,9 +2642,63 @@ def result_object(study):
 
 
 def results(study):
-    """The Results of the study's last solve, or None when it has not been solved."""
+    """The Results of the study's last solve, or None when it has not been solved (or its
+    results were not kept in the file: results_dropped())."""
     obj = result_object(study)
-    return Results(obj) if obj is not None else None
+    return Results(obj) if obj is not None and _has_data(obj) else None
+
+
+def _has_data(result):
+    try:
+        mesh = result.Mesh.FemMesh if result.Mesh is not None else None
+        return len(result.NodeNumbers) > 1 and mesh is not None and mesh.NodeCount > 0
+    except Exception:
+        return False
+
+
+def results_dropped(study):
+    """True when the study was solved but its coloured results are not here: the design was
+    saved with Keep results in the file off (its numbers, summary(), are kept). Solve again
+    to see them."""
+    if not summary(study):
+        return False
+    obj = result_object(study)
+    return obj is None or not _has_data(obj)
+
+
+# What a solve adds to the design file: the meshes and the results (about 10 MB for 25 000
+# nodes). With the study setting keep_results off they are left out of the file (FreeCAD's
+# Transient status: the objects stay, empty after reopening; the summary's numbers stay).
+def _heavy_properties(obj):
+    out = []
+    for prop in obj.PropertiesList:
+        try:
+            kind = obj.getTypeIdOfProperty(prop)
+        except Exception:
+            continue
+        if prop in ("FemMesh", "Data"):
+            out.append(prop)
+        elif obj.isDerivedFrom("Fem::FemResultObject") and (
+            "FloatList" in kind or "VectorList" in kind or "IntegerList" in kind
+        ):
+            out.append(prop)
+    return out
+
+
+def apply_keep_results(study):
+    """Mark the study's meshes and results as saved or not saved with the design, as its
+    keep_results setting says."""
+    keep = bool(settings(study)["keep_results"])
+    for link in ("SimRun", "SimMeshRun"):
+        run = run_of(study, link)
+        if run is None:
+            continue
+        for obj in _run_members(run):
+            for prop in _heavy_properties(obj):
+                try:
+                    obj.setPropertyStatus(prop, "-Transient" if keep else "Transient")
+                except Exception:
+                    pass
 
 
 def summary(study):
@@ -2598,6 +2807,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
         "safety_basis": basis,
         "reactions": reactions or {},
         "notes": list(job.notes),
+        "results_kept": bool(data["settings"]["keep_results"]),
         "seconds": round(time.time() - job.started, 2),
         "timings": {k: round(v, 3) for k, v in job.timings.items()},
     }
