@@ -390,6 +390,14 @@ def tooltip_text():
     return QtWidgets.QToolTip.text() if QtWidgets.QToolTip.isVisible() else ""
 
 
+def told():
+    """The last sentence a command told next to the pointer (commands.tell), even once its
+    tip has gone."""
+    from sciforge import commands
+
+    return (getattr(commands, "_TOLD", None) or {}).get("msg") or ""
+
+
 # -- the study ------------------------------------------------------------------------------------
 def sim():
     from sciforge import simulation

@@ -7,8 +7,8 @@ A  Structural Constraints > Frictionless on a side face of the bracket: rollers 
 B  Structural Loads > Force on two faces (the arm's top and the plate's top) with Force Per
    Entity ticked (it is no longer greyed with two picks), 50 N; OK: each face gets the whole
    50 N.
-C  Structural Loads > Moment, Direction Type Vector, the axis (0, 1, 0) typed; OK: a moment
-   about Y.
+C  Structural Loads > Moment, Direction Type Angle: at 0 its axis comes out of the face (as
+   Normal); Vector: that axis carried over; (0, 1, 0) typed; OK: a moment about Y.
 D  Gravity on, Edit Gravity: Vector (1, 0, 0) typed, OK: gravity along +X.
 E  MANAGE > Local Mesh Control on the arm's top face, 2 mm; OK. A double-click on its row in
    the browser opens it again (its face picked, 2 mm): 1.5 mm typed, OK: 1.5 mm kept; Undo:
@@ -131,15 +131,33 @@ def c_choose():
     s.choose("SciForgeSimItemType", "Moment")
 
 
-def c_vector():
+def c_angle():
     p = s.item_panel()
     if not h.check("Moment chosen", p is not None and p.kind == "moment"):
         return
     s.click_face(s.body(), s.arm_top(s.body()))
+    s.choose("SciForgeSim_direction", "Angle")
+
+
+def c_vector():
+    p = s.item_panel()
+    if p is None:
+        return
+    opts, problem = p.read_options()
+    h.check(
+        "Angle at 0: the axis out of the face (as Normal)",
+        problem is None and close(opts.get("vector"), [0, 0, 1]),
+        (problem, opts.get("vector")),
+    )
     s.choose("SciForgeSim_direction", "Vector")
 
 
 def c_values():
+    from sciforge import simulation_panels
+
+    shown = [s.panel_field("SciForgeSim_v" + a, QtWidgets.QLineEdit) for a in "xyz"]
+    values = [simulation_panels._value(f) for f in shown if f is not None]
+    h.check("Vector carries the axis over", close(values, [0, 0, 1]), values)
     for name, value in (("vx", "0"), ("vy", "1"), ("vz", "0")):
         h.check("axis field %s shown" % name, s.panel_field("SciForgeSim_" + name) is not None)
         s.type_in("SciForgeSim_" + name, value)
@@ -389,6 +407,7 @@ h.run(
         b_check,
         c_open,
         c_choose,
+        c_angle,
         c_vector,
         c_values,
         c_check,

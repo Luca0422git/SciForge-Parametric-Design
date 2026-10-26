@@ -34,6 +34,10 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 - **Solve** (`simulation_solve_dialog.py`): the Solve dialog, the progress window (stages,
   elapsed time, Cancel; only Close once it ended), studies one after another, the hand-over to
   RESULTS, Generate Mesh with the engine's mesh-only job, Show Mesh, the "not held enough" guard.
+  A study that cannot solve has Fusion's **Repair** button: it closes the dialog and goes to the
+  first thing to fix, with a sentence (`simulation_setup_core.repair_step`: a lost item's Edit
+  dialog, Structural Constraints, DOF View, Study Materials, else the Pre-check list); a red
+  Pre-check list has the same Repair.
 - **Glyphs** (`simulation_glyphs.py`), **browser** (`simulation_browser.py` + hooks in
   `browser_ui.py`), **ribbon** (the SETUP entries in `ribbon_config.py`, DISPLAY > Show Mesh,
   a big button in every group), **icons** (`tools/sciforge/icons_simulation.py`, 43 icons, also
@@ -72,7 +76,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 
 | Scenario | Checks | Result |
 |---|---|---|
-| `sim_setup_bracket` | 74 | PASS |
+| `sim_setup_bracket` | 80 | PASS |
 | `sim_setup_dialogs` | 85 | PASS |
 | `sim_setup_browser` | 61 | PASS |
 | `sim_setup_documents` | 59 | PASS |
@@ -82,9 +86,9 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_glyphs` | 20 | PASS |
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
-| `sim_setup_more` | 61 | PASS |
-| `sim_setup_lost` | 20 | PASS |
-| `sim_setup_two` | 32 | PASS |
+| `sim_setup_more` | 63 | PASS |
+| `sim_setup_lost` | 37 | PASS |
+| `sim_setup_two` | 40 | PASS |
 | `sim_setup_mesh` | 34 | PASS |
 
 Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser`,
@@ -164,5 +168,6 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
 ## Gaps
 
 See the parity doc's Known gaps (Simplify, several load cases, per-body safety basis, manual
-contacts / connectors / global loads / point mass, Limit Target, Repair and the Job Status
-history, the glyph look is SciForge's own; an Angle direction is worked out when OK is pressed).
+contacts / connectors / global loads / point mass, Limit Target, the Job Status history of this
+session only, the glyph look is SciForge's own; an Angle direction is worked out when OK is
+pressed; what Fusion's Repair opens is not known, SciForge's goes to the first thing to fix).

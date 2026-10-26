@@ -1284,6 +1284,14 @@ class PrecheckDialog(FocusBack, QtWidgets.QDialog):
         layout.addWidget(self.list)
         buttons = QtWidgets.QHBoxLayout()
         buttons.addStretch(1)
+        self.repair = None
+        if state == "red" and self._repair_opens() != "precheck":
+            # Fusion's Repair, as in the Solve dialog: to the first thing to fix
+            self.repair = QtWidgets.QPushButton("Repair")
+            self.repair.setObjectName("SciForgeSimPrecheckRepair")
+            self.repair.setToolTip("Take me to what stops it from solving")
+            self.repair.clicked.connect(self._repair)
+            buttons.addWidget(self.repair)
         self.solve = QtWidgets.QPushButton("Solve")
         self.solve.setObjectName("SciForgeSimPrecheckSolve")
         self.solve.setEnabled(state != "red")
@@ -1303,6 +1311,25 @@ class PrecheckDialog(FocusBack, QtWidgets.QDialog):
             from . import simulation_solve_dialog
 
             simulation_solve_dialog.open_solve()
+        except Exception as exc:
+            warn("pre-check: %s" % exc)
+
+    def _repair_opens(self):
+        try:
+            from . import simulation_solve_dialog
+
+            info = simulation_solve_dialog.repair_info(self.study)
+            return score.repair_step(info)[0]
+        except Exception as exc:
+            log("pre-check: what Repair would open is not known (%s)" % exc)
+            return "precheck"
+
+    def _repair(self):
+        try:
+            self.accept()
+            from . import simulation_solve_dialog
+
+            simulation_solve_dialog.repair(self.study)
         except Exception as exc:
             warn("pre-check: %s" % exc)
 

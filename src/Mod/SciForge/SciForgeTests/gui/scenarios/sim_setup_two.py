@@ -2,9 +2,10 @@
 """Two bodies half a millimetre apart, two studies solved together (builder sim-ui), with real
 clicks. The blocks and the first study's Fixed and Force are made by script.
 
-A  A base block and a top block 0.5 mm above it. Workspace > Simulation. Automatic Contacts:
-   Generate finds nothing at 0.1 mm; the tolerance typed as 1 mm, Generate: one bonded pair
-   with a 0.5 mm gap; OK keeps 1 mm.
+A  A base block and a top block 0.5 mm above it. Workspace > Simulation: the pre-check is red
+   (the top touches nothing held). Solve > Repair: DOF View comes on, the top's arrows drawn and
+   the top named; DOF View off. Automatic Contacts: Generate finds nothing at 0.1 mm; the
+   tolerance typed as 1 mm, Generate: one bonded pair with a 0.5 mm gap; OK keeps 1 mm.
 B  DOF View: every body is held (the top through its contact with the held base); off again.
 C  Clone Study: Study 2, active. Its Study Materials: Aluminium for the top block; OK. Again:
    In Study unticked for the top: Study 2 without it (its row greyed); Undo: back.
@@ -54,7 +55,32 @@ def enter():
 
 
 # -- A ------------------------------------------------------------------------------------------
+def a_red():
+    h.check("pre-check red: the top is held by nothing", s.light() == "red", s.light())
+    h.ribbon("Solve")
+
+
+def a_repair():
+    dialog = s.solve_dialog()
+    button = dialog.table.cellWidget(0, 3) if dialog is not None else None
+    if h.check("Repair next to the study", button is not None and button.text() == "Repair"):
+        s.click_widget(button)
+
+
+def a_dof():
+    from sciforge import simulation_ui
+
+    h.check("the Solve dialog closed", s.solve_dialog() is None)
+    h.check("Repair switched DOF View on", simulation_ui.dof_on())
+    h.check("the top named", "Top" in s.told() and "Base" not in s.told(), s.told())
+    h.check("its arrows drawn", s.glyph_counts().get("dof", 0) > 0, s.glyph_counts())
+    s.menu_item("DISPLAY", "DOF View")
+
+
 def a_contacts():
+    from sciforge import simulation_ui
+
+    h.check("DOF View off again", not simulation_ui.dof_on())
     h.ribbon("Automatic Contacts")
 
 
@@ -212,6 +238,9 @@ h.run(
     [
         setup,
         enter,
+        a_red,
+        a_repair,
+        a_dof,
         a_contacts,
         a_generate,
         a_check,

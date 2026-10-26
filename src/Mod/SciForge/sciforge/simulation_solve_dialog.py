@@ -21,6 +21,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 from . import bodies, log, ui_icon, warn
+from . import simulation_core as core
 from . import simulation_setup_core as score
 from .compat import QtCore, QtGui, QtWidgets
 from .simulation_dialogs import FocusBack, tick_style
@@ -89,12 +90,11 @@ class SolveDialog(FocusBack, QtWidgets.QDialog):
         self.setWindowTitle("Solve")
         layout = QtWidgets.QVBoxLayout(self)
         layout.addWidget(QtWidgets.QLabel("Studies to solve"))
-        self.table = QtWidgets.QTableWidget(0, 3)
+        self.table = QtWidgets.QTableWidget(0, 4)
         self.table.setObjectName("SciForgeSimSolveStudies")
-        self.table.setHorizontalHeaderLabels(["Study", "Pre-check", "Status"])
+        self.table.setHorizontalHeaderLabels(["Study", "Pre-check", "Status", ""])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        self.table.horizontalHeader().setStretchLastSection(True)
         tick_style(self.table)
         self.studies = _sim().studies(doc)
         active = _ui().active_study(doc)
@@ -114,7 +114,18 @@ class SolveDialog(FocusBack, QtWidgets.QDialog):
             light.setToolTip("\n".join(text for _l, text in checks) or score.light_text(state))
             self.table.setItem(row, 1, light)
             self.table.setItem(row, 2, QtWidgets.QTableWidgetItem(_status_text(study)))
+            if state == "red":
+                # Fusion's Repair (research 3.10): next to a study that cannot solve
+                button = QtWidgets.QPushButton("Repair")
+                button.setObjectName("SciForgeSimRepair")
+                button.setProperty("study", study.Name)
+                button.setToolTip("Take me to what stops %s from solving" % study.Label)
+                button.clicked.connect(lambda _on=False, st=study: self._repair(st))
+                self.table.setCellWidget(row, 3, button)
         self.table.resizeColumnsToContents()
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        header.setSectionResizeMode(2, QtWidgets.QHeaderView.Stretch)
         self.table.itemChanged.connect(lambda *_a: self._count())
         layout.addWidget(self.table)
         where = QtWidgets.QLabel(
@@ -170,12 +181,95 @@ class SolveDialog(FocusBack, QtWidgets.QDialog):
                         % (study.Label, " ".join(t for level, t in checks if level == "error"))
                     )
             if refused:
-                self.message.setText("\n".join(refused))
+                self.message.setText("\n".join(refused + ["Repair takes you to what to fix."]))
                 return
             self.accept()
             start(chosen, "solve")
         except Exception as exc:
             warn("solve: %s" % exc)
+
+    def _repair(self, study):
+        try:
+            self.reject()
+            repair(study)
+        except Exception as exc:
+            warn("repair: %s" % exc)
+
+
+def repair_info(study):
+    """What stops `study` from solving, for score.repair_step."""
+    sim = _sim()
+    settings = sim.settings(study)
+    found = sim.study_bodies(study)
+    names = {b.Name for b in found}
+    info = {
+        "lost": [i.Label for i in sim.lost_items(study)],
+        "held": len([i for i in sim.items(study, "constraint") if not i.Suppressed]),
+        "remove_rigid": bool(settings.get("remove_rigid")),
+        "loose": [],
+        "materials": [],
+        "outside": [],
+    }
+    if found and info["held"] and not info["remove_rigid"]:
+        try:
+            info["loose"] = [b.Label for b in sim.loose_bodies(study)]
+        except Exception as exc:
+            log("repair: which bodies are held is not known (%s)" % exc)
+    gravity = bool(settings["gravity"].get("on"))
+    for body in found:
+        name, props, _source = sim.study_material(study, body)
+        density = props.get("density")
+        if core.material_problems(name, props) or (
+            gravity and not (isinstance(density, (int, float)) and density > 0)
+        ):
+            info["materials"].append(body.Label)
+    for item in sim.items(study):
+        if item.Suppressed:
+            continue
+        for obj, _sub in sim._picks(item.References):
+            body = obj if bodies.is_body(obj) else bodies.body_of(obj)
+            if body is not None and bodies.alive(body) and body.Name not in names:
+                info["outside"].append((item.Label, body.Label))
+    return info
+
+
+def repair(study):
+    """Fusion's Repair: the study made the active one, and the person taken to the first thing
+    that stops it from solving (the dialog of a load that lost its face, Structural
+    Constraints when nothing holds the model, DOF View when a body is not held, Study
+    Materials, else the pre-check's list), with a sentence. Returns what it opened."""
+    from . import commands, simulation_dialogs, simulation_panels
+
+    try:
+        what, name, sentence = score.repair_step(repair_info(study))
+        ui = _ui()
+        if ui.active_study(study.Document) is not study:
+            ui.set_active_study(study)
+        if what == "edit":
+            item = next((i for i in _sim().items(study) if i.Label == name), None)
+            if item is None:
+                what = "precheck"
+            else:
+                commands.tell("Repair: " + sentence)
+                simulation_panels.edit_item(item)
+        elif what == "constraints":
+            commands.tell("Repair: " + sentence)
+            simulation_panels.open_item(study, "constraint")
+        elif what == "dof":
+            if ui.STATE.get("dof"):
+                commands.tell("Repair: " + sentence)
+            else:
+                simulation_dialogs.dof_view(study)  # (it says which bodies and how they move)
+        elif what == "materials":
+            commands.tell("Repair: " + sentence)
+            simulation_dialogs.open_materials(study)
+        if what == "precheck":
+            simulation_dialogs.open_precheck(study)
+        log("repair of %s: %s" % (study.Label, what))
+        return what
+    except Exception as exc:
+        warn("repair: %s" % exc)
+        return None
 
 
 def open_solve():

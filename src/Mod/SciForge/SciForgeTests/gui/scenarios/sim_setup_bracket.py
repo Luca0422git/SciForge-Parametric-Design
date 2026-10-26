@@ -8,9 +8,11 @@ A  Workspace > Simulation on a design without a study: the SETUP / RESULTS tabs 
    greyed with "Not in SciForge yet".
 B  Create Study: "Study 1 - Static Stress" is the active study; the browser shows Fusion's study
    tree (Study Materials, Load Case 1 with Constraints and Loads, Contacts, Mesh); the
-   Pre-check light is red (nothing holds the model).
-C  Structural Constraints: Fixed by default; a click on each hole wall picks it (the preview
-   draws its glyphs); OK keeps "Fixed 1" on the two hole faces; its glyphs are drawn.
+   Pre-check light is red (nothing holds the model). The Pre-check list says so and offers
+   Repair (Solve greyed).
+C  Repair: Structural Constraints opens (told why): Fixed by default; a click on each hole
+   wall picks it (the preview draws its glyphs); OK keeps "Fixed 1" on the two hole faces; its
+   glyphs are drawn.
 D  Structural Loads: Force (Normal) by default; a click on the arm's top face; 250 N typed; OK
    keeps "Force 1".
 E  Pre-check: the light turns green; its list says nothing is missing.
@@ -104,16 +106,29 @@ def b_check():
     )
 
 
+def b_precheck():
+    h.ribbon("Pre-check")
+
+
+def b_repair():
+    dialog = s.popup_named("SciForgeSimPrecheck")
+    if not h.check("the Pre-check list opened", dialog is not None):
+        return
+    texts = [dialog.list.item(i).text() for i in range(dialog.list.count())]
+    h.check("it says nothing holds the model", any("Nothing holds" in x for x in texts), texts)
+    h.check("Solve greyed", not dialog.solve.isEnabled())
+    h.check("Repair offered", dialog.repair is not None and dialog.repair.isVisible())
+    s.click_widget(dialog.repair)
+
+
 # -- C ------------------------------------------------------------------------------------------
-def c_constraints():
-    h.ribbon("Structural Constraints")
-
-
 def c_pick_holes():
+    h.check("the Pre-check list closed", s.popup_named("SciForgeSimPrecheck") is None)
     p = s.item_panel()
-    h.check("Structural Constraints opened", p is not None)
+    h.check("Repair opened Structural Constraints", p is not None and p.category == "constraint")
     if p is None:
         return
+    h.check("told why", "Nothing holds the model" in s.told(), s.told())
     h.check("Fixed by default", p.type_box.currentText() == "Fixed", p.type_box.currentText())
     bracket = s.body()
     holes = s.hole_faces(bracket)
@@ -302,7 +317,8 @@ h.run(
         a_check,
         b_create,
         b_check,
-        c_constraints,
+        b_precheck,
+        b_repair,
         c_pick_holes,
         c_check_picks,
         c_check,
