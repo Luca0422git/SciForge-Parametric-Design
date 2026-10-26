@@ -1452,49 +1452,122 @@ SIM_SOLVE = group(
 SIMR_TOOLS = group(
     "simr_tools",
     "RESULT TOOLS",
-    ["Animate"],
+    ["Animate", "Results Details", "Report"],
     [
-        item("Animate", None, SIM_ICON),  # owner: sim-results
-        item("Results Details", None, SIM_ICON),  # owner: sim-results
-        item("Compare", None, SIM_ICON, note=_SIM_LATER),
-        item("Report", None, SIM_ICON),  # owner: sim-results
+        item(
+            "Animate",
+            "SciForge_SimResultsAnimate",
+            "simr_animate",
+            toggle="simulation_results_ui:animation_on",
+        ),  # owner: sim-results
+        item("Results Details", "SciForge_SimResultsDetails", "simr_details"),  # owner: sim-results
+        item(
+            "Compare",
+            None,
+            "simr_compare",
+            note=_SIM_LATER + ": compare studies by showing each one's results in turn",
+        ),
+        item("Report", "SciForge_SimResultsReport", "simr_report"),  # owner: sim-results
     ],
 )
+_SIMR_DEFORM = "simulation_results_ui:deform_"  # owner: sim-results (the ticked scale)
 SIMR_DEFORMATION = group(
     "simr_deformation",
     "DEFORMATION",
     [],
     [
-        item("Undeformed", None, SIM_ICON),  # owner: sim-results
-        item("Actual", None, SIM_ICON),  # owner: sim-results
-        item("Adjusted x 0.5", None, SIM_ICON),  # owner: sim-results
-        item("Adjusted", None, SIM_ICON),  # owner: sim-results
-        item("Adjusted x 2", None, SIM_ICON),  # owner: sim-results
-        item("Adjusted x 5", None, SIM_ICON),  # owner: sim-results
+        item(
+            "Undeformed",
+            "SciForge_SimResultsUndeformed",
+            "simr_deform_none",
+            checked=_SIMR_DEFORM + "undeformed",
+        ),
+        item(
+            "Actual",
+            "SciForge_SimResultsActual",
+            "simr_deform_actual",
+            checked=_SIMR_DEFORM + "actual",
+        ),
+        item(
+            "Adjusted x 0.5",
+            "SciForge_SimResultsAdjustedHalf",
+            "simr_deform_half",
+            checked=_SIMR_DEFORM + "adjusted_half",
+        ),
+        item(
+            "Adjusted",
+            "SciForge_SimResultsAdjusted",
+            "simr_deform_adjusted",
+            checked=_SIMR_DEFORM + "adjusted",
+        ),
+        item(
+            "Adjusted x 2",
+            "SciForge_SimResultsAdjusted2",
+            "simr_deform_x2",
+            checked=_SIMR_DEFORM + "adjusted_2",
+        ),
+        item(
+            "Adjusted x 5",
+            "SciForge_SimResultsAdjusted5",
+            "simr_deform_x5",
+            checked=_SIMR_DEFORM + "adjusted_5",
+        ),
     ],
 )
 SIMR_DISPLAY = group(
     "simr_display",
     "DISPLAY",
-    [],
+    ["Show Mesh"],
     [
-        item("Show Mesh", None, SIM_ICON),  # owner: sim-results
-        item("Wireframe", None, SIM_ICON),  # owner: sim-results
+        item(
+            "Show Mesh",
+            "SciForge_SimResultsMesh",
+            "simr_mesh",
+            toggle="simulation_results_ui:mesh_on",
+        ),  # owner: sim-results
+        item(
+            "Undeformed Model",
+            "SciForge_SimResultsGhost",
+            "simr_ghost",
+            toggle="simulation_results_ui:ghost_on",
+        ),  # owner: sim-results
+        item(
+            "Loads and Constraints",
+            "SciForge_SimResultsLoads",
+            "simr_loads",
+            toggle="simulation_results_ui:loads_on",
+            note="The loads and constraints drawn on the results (with the SETUP tab's glyphs)",
+        ),  # owner: sim-results
     ],
 )
 SIMR_INSPECT = group(
     "simr_inspect",
     "INSPECT",
-    ["Surface Probes"],
+    ["Surface Probes", "Slice Plane"],
     [
-        item("Surface Probes", None, SIM_ICON),  # owner: sim-results
-        item("Show Min/Max", None, SIM_ICON),  # owner: sim-results
-        item("Reaction Force", None, SIM_ICON),  # owner: sim-results
-        item("Slice Plane", None, SIM_ICON),  # owner: sim-results
+        item("Surface Probes", "SciForge_SimResultsProbes", "simr_probe"),  # owner: sim-results
+        item(
+            "Show Min/Max",
+            "SciForge_SimResultsMinMax",
+            "simr_minmax",
+            toggle="simulation_results_ui:minmax_on",
+        ),  # owner: sim-results
+        item(
+            "Reaction Force",
+            "SciForge_SimResultsReactions",
+            "simr_reaction",
+            note="The force each constraint takes (when the solve worked them out)",
+        ),  # owner: sim-results
+        item("Slice Plane", "SciForge_SimResultsSlice", "simr_slice"),  # owner: sim-results
         SEP,
-        item("Point Probes", None, SIM_ICON, note=_SIM_LATER),
-        item("Iso-surface", None, SIM_ICON, note=_SIM_LATER),
-        item("Solver Data", None, SIM_ICON, note=_SIM_LATER),
+        item(
+            "Point Probes",
+            None,
+            "simr_point_probe",
+            note=_SIM_LATER + ": a Surface Probe on a slice plane reads the value inside",
+        ),
+        item("Iso-surface", None, "simr_iso", note=_SIM_LATER),
+        item("Solver Data", None, "simr_solver_data", note=_SIM_LATER),
         SEP,
         item("Measure", ("SciForge_Measure", "Std_Measure"), "measure"),
     ],
@@ -1504,7 +1577,7 @@ SIMR_FINISH = group(
     "FINISH RESULTS",
     ["Finish Results"],
     [
-        item("Finish Results", None, SIM_ICON),  # owner: sim-results
+        item("Finish Results", "SciForge_SimResultsFinish", "simr_finish"),  # owner: sim-results
     ],
 )
 
