@@ -45,6 +45,102 @@ def _main():
 
 
 # -- Surface Probes --------------------------------------------------------------------------------
+class _Hover:
+    """The value under the mouse while a probe dialog is open (Fusion shows it as the mouse
+    moves over the result; a click places the probe). Mouse moves are taken at most every
+    40 ms (a ray against the whole surface each time)."""
+
+    def __init__(self, session, callbacks, inside):
+        self.session = session
+        self.inside = inside
+        self.place = None
+        self.closed = False
+        self.timer = QtCore.QTimer()
+        self.timer.setSingleShot(True)
+        self.timer.setInterval(40)
+        self.timer.timeout.connect(self._update)
+        self.watch = None
+        try:
+            callbacks.append(
+                (
+                    "SoLocation2Event",
+                    session.view.addEventCallback("SoLocation2Event", self._moved),
+                )
+            )
+            if session.gl is not None:  # the mouse leaving the 3D view takes the value away
+                self.watch = _LeaveWatch(self)
+                session.gl.installEventFilter(self.watch)
+        except Exception as exc:
+            warn("probes: no value under the mouse: %s" % exc)
+
+    def left(self):
+        self.place = None
+        try:
+            self.timer.stop()
+            self.session.set_hover(None)
+        except Exception as exc:
+            warn("probes: %s" % exc)
+
+    def _moved(self, info):
+        try:
+            if self.closed:
+                return
+            self.place = info.get("Position")
+            if not self.timer.isActive():
+                self.timer.start()
+        except Exception as exc:
+            warn("probes: %s" % exc)
+
+    def _update(self):
+        try:
+            if self.closed or self.place is None or not self.session.active:
+                return
+            x, y = self.place
+            self.session.set_hover(x, y, self.inside)
+        except Exception as exc:
+            warn("probes: %s" % exc)
+
+    def stop(self):
+        self.closed = True
+        try:
+            self.timer.stop()
+        except RuntimeError:
+            pass
+        watch, self.watch = self.watch, None
+        if watch is not None:
+            try:
+                if self.session.gl is not None:
+                    self.session.gl.removeEventFilter(watch)
+            except RuntimeError:
+                pass
+        try:
+            self.session.set_hover(None)
+        except Exception:
+            pass
+
+
+class _LeaveWatch(QtCore.QObject):
+    """Tells the hover when the mouse leaves the 3D view."""
+
+    def __init__(self, hover):
+        super().__init__()
+        self.hover = hover
+
+    def eventFilter(self, _obj, event):
+        try:
+            if event.type() == QtCore.QEvent.Leave:
+                self.hover.left()
+        except Exception as exc:
+            warn("probes: %s" % exc)
+        return False
+
+
+def _stop_hover(panel):
+    hover = getattr(panel, "hover", None)
+    if hover is not None:
+        hover.stop()
+
+
 class ProbePanel:
     """Surface Probes: each click on the result adds a probe (a tag with the value there) until
     Close; Clear All removes them. The probes stay on the result after Close (Fusion)."""
@@ -70,10 +166,17 @@ class ProbePanel:
         self.listing = QtWidgets.QListWidget()
         self.listing.setObjectName("SciForgeSimProbeList")
         box.addWidget(self.listing)
+        row = QtWidgets.QHBoxLayout()
+        self.remove_button = QtWidgets.QPushButton("Remove")
+        self.remove_button.setObjectName("SciForgeSimProbeRemove")
+        self.remove_button.clicked.connect(self.remove)
+        row.addWidget(self.remove_button)
         self.clear_button = QtWidgets.QPushButton("Clear All")
         self.clear_button.setObjectName("SciForgeSimProbeClear")
         self.clear_button.clicked.connect(self.clear)
-        box.addWidget(self.clear_button)
+        row.addWidget(self.clear_button)
+        row.addStretch(1)
+        box.addLayout(row)
         self.callbacks = []
         try:
             view = session.view
@@ -82,6 +185,7 @@ class ProbePanel:
             )
         except Exception as exc:
             warn("Surface Probes: clicks unavailable: %s" % exc)
+        self.hover = _Hover(session, self.callbacks, inside=False)
         self._guards = []
         try:
             from . import preview
@@ -129,6 +233,18 @@ class ProbePanel:
             if tag.get("kind") == "probe":
                 self.listing.addItem(tag.get("text", ""))
         self.clear_button.setEnabled(bool(self.session.probes))
+        self.remove_button.setEnabled(bool(self.session.probes))
+
+    def remove(self):
+        """Remove the probe chosen in the list (the newest when none is)."""
+        try:
+            row = self.listing.currentRow()
+            if row < 0 or row >= len(self.session.probes):
+                row = len(self.session.probes) - 1
+            self.session.remove_probe(row)
+            self.refresh()
+        except Exception as exc:
+            warn("Surface Probes: %s" % exc)
 
     def result_changed(self):  # (the legend's result or unit changed)
         self.refresh()
@@ -158,6 +274,7 @@ class ProbePanel:
         if self._closed:
             return True
         self._closed = True
+        _stop_hover(self)
         for kind, callback in self.callbacks:
             try:
                 self.session.view.removeEventCallback(kind, callback)
@@ -614,6 +731,7 @@ class PointProbePanel:
             )
         except Exception as exc:
             warn("Point Probes: clicks unavailable: %s" % exc)
+        self.hover = _Hover(session, self.callbacks, inside=True)
         self._guards = []
         try:
             from . import preview
@@ -756,6 +874,7 @@ class PointProbePanel:
         if self._closed:
             return True
         self._closed = True
+        _stop_hover(self)
         for kind, callback in self.callbacks:
             try:
                 self.session.view.removeEventCallback(kind, callback)

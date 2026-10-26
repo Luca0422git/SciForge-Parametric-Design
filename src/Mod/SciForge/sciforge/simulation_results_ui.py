@@ -432,6 +432,7 @@ class Session:
         self.targets = core.DEFAULT_TARGETS
         self.probes = []  # {"node": index} or {"point": (x, y, z), "values": {...}}
         self.points = []  # Point Probes: {"at": (x, y, z) on the unloaded part, "where": ...}
+        self.hover = None  # the probe under the mouse while a probe tool is open (not kept)
         self.slice = None  # {"axis": "x"|"y"|"z", "offset": mm, "flip": bool, "style": ...}
         self.iso_on = False  # the iso-surface of the result shown
         self.iso_levels = {}  # result key -> the iso-surface's value (base unit)
@@ -759,51 +760,81 @@ class Session:
                         }
                     )
             for probe in self.probes:
-                if "node" in probe:
-                    index = probe["node"]
-                    value = float(values[index])
-                    point = tuple(float(c) for c in self.display.node_place(index))
-                else:
-                    value = probe.get("values", {}).get(self.result)
-                    point = probe["point"]
-                    if value is None:
-                        continue
-                if value != value:
-                    text = "-"
-                else:
-                    text = core.with_unit(core.convert(value, unit), unit)
-                tags.append(
-                    {
-                        "kind": "probe",
-                        "node": probe.get("node"),
-                        "value": value,
-                        "point": point,
-                        "text": text,
-                        "colour": core.map_colour(core.position(value, lo, hi, reverse)),
-                    }
-                )
+                tag = self._probe_tag(probe, values, unit, (lo, hi, reverse))
+                if tag is not None:
+                    tags.append(tag)
             for number, point in enumerate(self.points, 1):
-                value = self.point_value(point)
-                if value is None:
-                    text, colour = "P%d: outside the part" % number, core.NO_VALUE
-                elif value != value:
-                    text, colour = "P%d: -" % number, core.NO_VALUE
+                tags.append(self._point_tag(point, "P%d: " % number, unit, (lo, hi, reverse)))
+            hover = self.hover
+            if hover is not None:
+                if "at" in hover:
+                    tag = self._point_tag(hover, "", unit, (lo, hi, reverse))
                 else:
-                    text = "P%d: %s" % (number, core.with_unit(core.convert(value, unit), unit))
-                    colour = core.map_colour(core.position(value, lo, hi, reverse))
-                tags.append(
-                    {
-                        "kind": "point",
-                        "value": value,
-                        "point": tuple(float(c) for c in self.point_place(point)),
-                        "text": text,
-                        "colour": colour,
-                    }
-                )
+                    tag = self._probe_tag(hover, values, unit, (lo, hi, reverse))
+                if tag is not None:
+                    tag["kind"] = "hover"
+                    tags.append(tag)
         del np
         self.tag_list = tags
         if self.tags is not None and view_mod._alive(self.tags):
             self.tags.set_tags(tags)
+
+    def _probe_tag(self, probe, values, unit, scale):
+        """The tag of a surface probe ({"node"} or a point of the cut face with its values)."""
+        lo, hi, reverse = scale
+        if "node" in probe:
+            index = probe["node"]
+            value = float(values[index])
+            point = tuple(float(c) for c in self.display.node_place(index))
+        else:
+            value = probe.get("values", {}).get(self.result)
+            point = probe["point"]
+            if value is None:
+                return None
+        text = "-" if value != value else core.with_unit(core.convert(value, unit), unit)
+        return {
+            "kind": "probe",
+            "node": probe.get("node"),
+            "value": value,
+            "point": point,
+            "text": text,
+            "colour": core.map_colour(core.position(value, lo, hi, reverse)),
+        }
+
+    def _point_tag(self, point, prefix, unit, scale):
+        """The tag of a Point Probe (`prefix`: its name)."""
+        lo, hi, reverse = scale
+        value = self.point_value(point)
+        if value is None:
+            text, colour = prefix + "outside the part", core.NO_VALUE
+        elif value != value:
+            text, colour = prefix + "-", core.NO_VALUE
+        else:
+            text = prefix + core.with_unit(core.convert(value, unit), unit)
+            colour = core.map_colour(core.position(value, lo, hi, reverse))
+        return {
+            "kind": "point",
+            "value": value,
+            "point": tuple(float(c) for c in self.point_place(point)),
+            "text": text,
+            "colour": colour,
+        }
+
+    def set_hover(self, x=None, y=None, inside=False):
+        """The value under the Coin pixel (x, y) while a probe tool is open (Fusion shows it as
+        the mouse moves; a click places the probe): `inside` for Point Probes. None (or off
+        the result) takes it away."""
+        hover = None
+        if x is not None and self.display is not None and self.view is not None:
+            if inside:
+                rest = self.pick_rest_point(x, y)
+                hover = {"at": tuple(float(c) for c in rest)} if rest is not None else None
+            else:
+                hover = self.probe_at(x, y)
+        if hover is None and self.hover is None:
+            return
+        self.hover = hover
+        self.update_tags()
 
     def _redraw(self):
         try:
@@ -870,6 +901,22 @@ class Session:
         """A surface probe where the Coin pixel (x, y) meets the result (the nearest node of
         the face it meets; on the slice's cut face, the value there). Returns the probe or
         None."""
+        probe = self.probe_at(x, y)
+        if probe is None:
+            return None
+        self.probes.append(probe)
+        self.update_tags()
+        self._redraw()
+        return probe
+
+    def remove_probe(self, index):
+        if 0 <= index < len(self.probes):
+            del self.probes[index]
+            self.update_tags()
+            self._redraw()
+
+    def probe_at(self, x, y):
+        """The surface probe the Coin pixel (x, y) would place (not kept), or None."""
         if self.display is None or self.view is None:
             return None
         np = view_mod._np()
@@ -908,9 +955,6 @@ class Session:
             probe = {"point": tuple(float(c) for c in point), "values": {}}
             rest = self.display.cap_rest[3 * tri : 3 * tri + 3]
             probe["values"] = self._values_at(np.asarray(weights) @ rest)
-        self.probes.append(probe)
-        self.update_tags()
-        self._redraw()
         return probe
 
     def _values_at(self, rest):

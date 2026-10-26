@@ -269,15 +269,37 @@ def _table():
     return s.panel_field("SciForgeSimPointTable", QtWidgets.QTableWidget)
 
 
-def c_click_iso():
+def _iso_centre():
     import numpy as np
 
+    tris = s.session().display.iso_points.reshape((-1, 3, 3))
+    area = np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
+    return V(*tris[int(np.argmax(area))].mean(axis=0))
+
+
+def c_hover():
     panel = s.task_panel()
     h.check("Point Probes open", panel is not None and panel.title == "Point Probes")
+    h.move(h.screen_point(_iso_centre()))
+
+
+c_hover.wait_ms = 400
+
+
+def c_hover_check():
     sess = s.session()
-    tris = sess.display.iso_points.reshape((-1, 3, 3))
-    area = np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
-    h.click(V(*tris[int(np.argmax(area))].mean(axis=0)))
+    hover = s.tags("hover")
+    lo, hi = state["vm"]
+    h.check(
+        "over the iso-surface: its value under the mouse",
+        len(hover) == 1 and _close(hover[0]["value"], sess.iso_level(), hi - lo),
+        hover,
+    )
+    h.check("nothing placed yet", not sess.points)
+
+
+def c_click_iso():
+    h.click(_iso_centre())
 
 
 def c_click_iso_check():
@@ -548,6 +570,8 @@ h.run(
         b_ok,
         b_ok_check,
         c_points,
+        c_hover,
+        c_hover_check,
         c_click_iso,
         c_click_iso_check,
         c_type_y,

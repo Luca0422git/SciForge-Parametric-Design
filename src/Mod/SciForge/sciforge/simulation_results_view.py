@@ -614,7 +614,7 @@ class TagLayer(QtWidgets.QWidget):
             *[min(max(c, 0.0), 1.0) for c in tag.get("colour", (1, 1, 1))]
         )
         dx, dy = (16, -26) if kind != "min" else (16, 18)
-        if kind in ("probe", "point"):
+        if kind in ("probe", "point", "hover"):
             dx, dy = (14, -20)
         box_w = metrics.horizontalAdvance(text) + 14
         box_h = metrics.height() + 6
@@ -645,8 +645,12 @@ class TagLayer(QtWidgets.QWidget):
             painter.drawLine(
                 QtCore.QPointF(pos.x(), pos.y() - 7), QtCore.QPointF(pos.x(), pos.y() + 7)
             )
-        painter.setPen(QtGui.QPen(QtGui.QColor(86, 96, 111), 1.0))
-        painter.setBrush(QtGui.QBrush(QtGui.QColor(43, 49, 59, 235)))
+        if kind == "hover":  # the value under the mouse: a lighter box, not placed yet
+            painter.setPen(QtGui.QPen(QtGui.QColor(160, 170, 185), 1.0, QtCore.Qt.DashLine))
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(43, 49, 59, 170)))
+        else:
+            painter.setPen(QtGui.QPen(QtGui.QColor(86, 96, 111), 1.0))
+            painter.setBrush(QtGui.QBrush(QtGui.QColor(43, 49, 59, 235)))
         painter.drawRoundedRect(rect, 4, 4)
         painter.setPen(QtGui.QColor(245, 245, 245))
         painter.drawText(rect, QtCore.Qt.AlignCenter, text)

@@ -2,8 +2,10 @@
 """Surface Probes and Slice Plane with real clicks (builder sim-results), on a solved steel
 cantilever (100 x 10 x 10 mm, 100 N at the tip).
 
-A  INSPECT > Surface Probes: a click on the result's top face reads the value of the node under
-   the mouse (a tag on the model and a line in the dialog); a second click adds a second probe;
+A  INSPECT > Surface Probes: the mouse over the result shows the value under it (a lighter tag
+   that follows the mouse and goes away off the model); a click on the result's top face reads
+   the value of the node under the mouse (a tag on the model and a line in the dialog); a
+   second click adds a second probe; Remove takes the one chosen in the list away;
    the legend's Stress makes the probes read the stress there; Clear All removes them; Close.
    Esc in the dialog closes it and keeps the probes.
 B  Slice Plane: the result is cut across X at the middle and the cut face is coloured with the
@@ -65,11 +67,37 @@ def a_probes_check():
     h.check("Surface Probes open", panel is not None and panel.title == "Surface Probes")
 
 
-def a_click_top():
+def a_hover():
     sess = s.session()
     node = _node_near(50.0, 5.0, 10.0)
     state["node1"] = node
-    h.click(V(*sess.display.node_place(node)))
+    h.move(h.screen_point(V(*sess.display.node_place(node))))
+
+
+a_hover.wait_ms = 400
+
+
+def a_hover_check():
+    sess = s.session()
+    hover = s.tags("hover")
+    h.check("the value under the mouse shows", len(hover) == 1, s.tags())
+    if hover:
+        value = float(sess.data.values("safety")[state["node1"]])
+        h.check("the node's value", abs(hover[0]["value"] - value) < 1e-9, (hover, value))
+    h.check("no probe placed by a move", not s.tags("probe"))
+    h.move(h._empty_spot(h.gl_widget()))
+
+
+a_hover_check.wait_ms = 400
+
+
+def a_hover_away_check():
+    h.check("off the model: gone", not s.tags("hover"), s.tags("hover"))
+
+
+def a_click_top():
+    sess = s.session()
+    h.click(V(*sess.display.node_place(state["node1"])))
 
 
 def a_click_top_check():
@@ -102,6 +130,25 @@ def a_click_front_check():
     h.check("two probes", len(probes) == 2, probes)
     if len(probes) == 2:
         h.check("the second at the front face's node", probes[1]["node"] == state["node2"])
+    # Remove with nothing chosen in the list takes the newest away; a third click puts it back
+    s.click_widget(s.panel_field("SciForgeSimProbeRemove", QtWidgets.QPushButton))
+
+
+def a_remove_check():
+    probes = s.tags("probe")
+    h.check(
+        "Remove took the newest probe away",
+        len(probes) == 1 and probes[0]["node"] == state["node1"],
+        probes,
+    )
+    listing = s.panel_field("SciForgeSimProbeList", QtWidgets.QListWidget)
+    h.check("the list follows", listing.count() == 1)
+    sess = s.session()
+    h.click(V(*sess.display.node_place(state["node2"])))
+
+
+def a_again_check():
+    h.check("the second probe again", len(s.tags("probe")) == 2, s.tags("probe"))
 
 
 def a_stress():
@@ -481,10 +528,15 @@ h.run(
         results_check,
         a_probes,
         a_probes_check,
+        a_hover,
+        a_hover_check,
+        a_hover_away_check,
         a_click_top,
         a_click_top_check,
         a_click_front,
         a_click_front_check,
+        a_remove_check,
+        a_again_check,
         a_stress,
         a_stress_check,
         a_clear,
