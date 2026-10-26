@@ -198,3 +198,12 @@ sections Engine and Benchmarks.
   hollow_sphere); a shaft glued in a hub (a round contact) under a moment: solves, the hub's
   reaction balances; a 2 x 2 x 200 mm rod: 2.1 % / 0.8 % off beam theory with 16:1 elements,
   so the stretched-elements note only comes far past the limit (over 3 times it).
+- 22:10-22:20 a twisted loft (B-spline faces) with Frictionless on one, pressure on another and
+  a moment on its top: solves at both meshes. Final integration with `sf/sim-results` (and
+  sim-ui's work in it) on this engine: sim_setup_bracket 74, sim_setup_components 37,
+  sim_setup_kinds 52, sim_setup_dialogs 76, sim_setup_workspace 43 (it lost one click while
+  the machine was busy with five other builds; alone it passes), simres_cantilever 80,
+  simres_out_of_date 32, simres_reopen 21, simres_adaptive 16, simres_inspect 93,
+  simres_linear 27 checks pass. `--only base` passes (unit 2504, golden 614 + 2 known, headless
+  306 calls, docs 152 items / 1002 calls, agent 81, sim 138, GUI smoke 79 / restart 17 /
+  journey 25).
