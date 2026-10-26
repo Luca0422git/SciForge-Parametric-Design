@@ -1078,7 +1078,11 @@ def solver_failure(output):
             "Remove rigid body modes if the loads balance each other."
         )
     if "nonpositive jacobian" in text or "negative jacobian" in text:
-        return "The mesh has distorted elements: make the Average Element Size smaller."
+        return (
+            "The mesh has distorted elements CalculiX cannot use (large elements at thin walls "
+            "or tight curves): try a smaller Average Element Size, or a Local Mesh Control on "
+            "the thin or curved faces."
+        )
     if (
         "dependent dof" in text
         or "is used as dependent" in text
