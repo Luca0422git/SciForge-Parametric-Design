@@ -1247,8 +1247,8 @@ def markdown(report):
         "",
         "FreeCAD %s, %s. %d parts: %d pass, %d fail. Each part: built, exported to STEP, "
         "imported as a body without a timeline, described, rebuilt from the plan through the "
-        "headless AI executor, compared (volume within 0.1 %%, every face matched; for the STEP "
-        "files made by other programs, every surface: they split faces the rebuild keeps whole)."
+        "headless AI executor, compared (volume within 0.1 %%, every face matched; for the real "
+        "files, every face or else every surface: they split faces the rebuild keeps whole)."
         % (
             report["freecad"],
             report["platform"],

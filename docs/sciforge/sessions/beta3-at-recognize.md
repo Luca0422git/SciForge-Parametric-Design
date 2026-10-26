@@ -130,7 +130,12 @@
 
 ## Tests
 
-- BASE_RUN_PLACEHOLDER
+- `tools/sciforge/run_tests.sh --freecad /home/user/fc/freecad --only base` on my branch, the
+  final run (23:29-23:36 UTC, the code of 6408c0c4, after the container restart): **all
+  passed**. Unit tests 2524 (9 skipped), golden models 614 pass + 2 xfail (expected), headless AI
+  tools 284 calls 0 failed (117 tools), documentation examples 141 items 0 failed, AI agent end
+  to end (MCP) 81 checks 0 failed, **recognition benchmark 67 parts 0 failed**, GUI smoke 79
+  checks, journey 25, restarts 8 + 9. (A run started just before was killed by the restart.)
 - Earlier, `--only base` at 21:59-22:11 UTC (the code of e59e4f28): the same stages all passed
   but the unit stage, whose two AI-docs contract tests failed on a stale generated copy of the
   parity doc (`docs/ai/user/parity/auto-timeline.md`): after every edit of the parity doc,
@@ -144,8 +149,8 @@
   example assembly placed at angles, 2 BREP parts) face by face or surface by surface; 5 meshes;
   the contract on odd input, with the BREP part that crashed FreeCAD answered in under 30 s.
   Table: the parity doc's Benchmark section.
-- Scratch sweeps (not in the suite), with the final code: every golden model that builds one
-  solid: 601 models, 505 described, 406 rebuilt exactly (391 earlier in the session), 420 with
+- Scratch sweeps (not in the suite), with the final code: 601 golden models tried, the 505 that
+  build one solid described, 406 rebuilt exactly (391 earlier in the session), 420 with
   a base read, 0 crashes, no regression between runs; 71 solids of 36 real files: 23 exact
   (19 before the rods with an eye), 12 exact with faces split in the file, 4 within 1e-7 of the
   volume, 1 step stopped (a fillet selector), 31 base not read (said so); 27 BREP solids: 18
