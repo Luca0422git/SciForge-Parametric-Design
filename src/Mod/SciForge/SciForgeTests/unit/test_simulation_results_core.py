@@ -319,6 +319,29 @@ class MeshTests(unittest.TestCase):
             mid = (sub[i] + sub[j]) / 2.0
             self.assertTrue(np.allclose(mid, sub[m]))
 
+    def test_quadratic_faces_drawn_smoothly(self):
+        import numpy as np
+
+        corners = [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
+        pts = list(corners)
+        for a, b in ((0, 1), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3)):
+            pts.append(tuple((corners[a][k] + corners[b][k]) / 2.0 for k in range(3)))
+        surf = core.surface(pts, [list(range(10))])
+        self.assertEqual(surf["faces6"].shape, (4, 6))
+        sub = np.asarray(pts, dtype=float)[surf["nodes"]]
+        tris, nodes, weights = core.refine_quadratic(surf["faces6"], len(sub))
+        self.assertEqual(tris.shape, (4 * 16, 3))
+        self.assertEqual(len(nodes), 4 * 9)  # 15 grid points a face, 6 of them its nodes
+        self.assertTrue(np.allclose(weights.sum(axis=1), 1.0))
+        new = np.einsum("vk,vkd->vd", weights, sub[nodes])
+        drawn = np.vstack([sub, new])
+        # the faces still enclose the tetrahedron (straight sides: its volume) and face out
+        self.assertAlmostEqual(self._signed_volume(drawn, tris), 1.0 / 6.0)
+        # a quadratic field is followed exactly: z^2 at the new points
+        field = sub[:, 2] ** 2
+        self.assertTrue(np.allclose(np.einsum("vk,vk->v", weights, field[nodes]), new[:, 2] ** 2))
+        self.assertIsNone(core.surface(*_cube())["faces6"])
+
     def test_ray(self):
         verts = [(0, 0, 0), (1, 0, 0), (0, 1, 0)]
         hit = core.ray_hit((0.2, 0.2, 5), (0, 0, -1), verts, [(0, 1, 2)])

@@ -700,9 +700,58 @@ def surface(points, tets):
         "nodes": used,
         "triangles": out_tris,
         "faces": out_faces,
+        "faces6": np.column_stack([out_faces, out_mids]) if out_mids is not None else None,
         "lines": lines,
         "features": features,
     }
+
+
+QUAD_STEPS = 4  # a 6-node face is drawn as 4 x 4 = 16 triangles (its quadratic field, smoothly)
+
+
+def _quadratic_template(n):
+    """A 6-node triangle cut n x n (n even): (the grid points' weights (p, 6) for the nodes A,
+    B, C, AB, BC, CA - the quadratic shape functions -, which node each grid point is (0..5) or
+    -1 for a new point, the triangles (n * n, 3) over the grid points, wound like A, B, C)."""
+    np = _np()
+    weights, node_at, index = [], [], {}
+    nodes = {(0, 0): 0, (n, 0): 1, (0, n): 2, (n // 2, 0): 3, (n // 2, n // 2): 4, (0, n // 2): 5}
+    for i in range(n + 1):
+        for j in range(n + 1 - i):
+            b, c = i / float(n), j / float(n)
+            a = 1.0 - b - c
+            index[(i, j)] = len(weights)
+            weights.append(
+                [a * (2 * a - 1), b * (2 * b - 1), c * (2 * c - 1), 4 * a * b, 4 * b * c, 4 * c * a]
+            )
+            node_at.append(nodes.get((i, j), -1))
+    tris = []
+    for i in range(n):
+        for j in range(n - i):
+            tris.append((index[(i, j)], index[(i + 1, j)], index[(i, j + 1)]))
+            if i + j < n - 1:
+                tris.append((index[(i + 1, j)], index[(i + 1, j + 1)], index[(i, j + 1)]))
+    return np.array(weights), np.array(node_at), np.array(tris, dtype=np.int64)
+
+
+def refine_quadratic(faces6, count, n=QUAD_STEPS):
+    """A smooth drawing of 6-node faces (a coarse quadratic mesh otherwise shows its nodes'
+    pattern): each face cut n x n with its quadratic shape functions. faces6: (f, 6) node
+    indices (corners A, B, C, then the mid nodes of AB, BC, CA) of a surface of `count` nodes.
+    Returns (triangles (f * n * n, 3) into [the count nodes, then the new points], the new
+    points' nodes (v, 6) and weights (v, 6))."""
+    np = _np()
+    faces6 = np.asarray(faces6, dtype=np.int64).reshape((-1, 6))
+    weights, node_at, template = _quadratic_template(n)
+    extra = np.flatnonzero(node_at < 0)
+    real = np.flatnonzero(node_at >= 0)
+    per = len(extra)
+    f = len(faces6)
+    index = np.empty((f, len(node_at)), dtype=np.int64)
+    index[:, real] = faces6[:, node_at[real]]
+    index[:, extra] = int(count) + np.arange(f * per, dtype=np.int64).reshape((f, per))
+    triangles = index[:, template].reshape((-1, 3))
+    return triangles, np.repeat(faces6, per, axis=0), np.tile(weights[extra], (f, 1))
 
 
 def _edges(points, faces, mids):

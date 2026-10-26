@@ -150,8 +150,19 @@ class ResultDisplay:
         faces.addChild(offset)
         self.faceset = coin.SoIndexedFaceSet()
         index = _faces(self.triangles)
-        _ints(self.faceset.coordIndex, index)
-        _ints(self.faceset.textureCoordIndex, index)
+        # 6-node faces drawn with their quadratic shape functions (new points after the nodes)
+        self.extra_nodes = self.extra_weights = None
+        faces6 = surf.get("faces6")
+        if faces6 is not None and len(faces6):
+            drawn, self.extra_nodes, self.extra_weights = core.refine_quadratic(
+                faces6, len(self.nodes)
+            )
+            self.drawn_triangles = drawn
+        else:
+            self.drawn_triangles = self.triangles
+        drawn_index = _faces(self.drawn_triangles)
+        _ints(self.faceset.coordIndex, drawn_index)
+        _ints(self.faceset.textureCoordIndex, drawn_index)
         faces.addChild(self.faceset)
         part.addChild(faces)
 
@@ -347,15 +358,30 @@ class ResultDisplay:
     def set_positions(self, positions):
         """The colour map position (0..1, None = no value) of every surface node."""
         np = _np()
-        pos = [None if p is None or p != p else float(p) for p in positions]
-        self.positions = np.asarray([np.nan if p is None else p for p in pos], dtype=float)
-        coords = [core.texture_coordinate(p) for p in pos]
+        self.positions = np.asarray(
+            [np.nan if p is None else float(p) for p in positions], dtype=float
+        ).reshape(-1)
+        t = self.positions
+        if self.extra_nodes is not None:
+            t = np.concatenate([t, np.einsum("vk,vk->v", self.extra_weights, t[self.extra_nodes])])
+        coords = np.empty((len(t), 2))
+        missing = np.isnan(t)
+        coords[:, 0] = np.where(missing, 0.5, np.clip(np.nan_to_num(t), 0.0, 1.0))
+        coords[:, 1] = np.where(missing, 0.75, 0.25)  # (core.texture_coordinate's rows)
         _floats(self.texcoords.point, coords, 2)
+
+    def _drawn(self, points):
+        """The surface nodes' places, then the new points of the 6-node faces drawn smoothly."""
+        np = _np()
+        if self.extra_nodes is None:
+            return points
+        extra = np.einsum("vk,vkd->vd", self.extra_weights, points[self.extra_nodes])
+        return np.vstack([points, extra])
 
     def set_factor(self, factor):
         """Draw the displacement `factor` times (0 = the undeformed shape)."""
         self.factor = float(factor)
-        _floats(self.coords.point, self.surface_points(), 3)
+        _floats(self.coords.point, self._drawn(self.surface_points()), 3)
 
     def surface_points(self):
         """(k, 3) places of the surface nodes as drawn now."""
