@@ -597,7 +597,13 @@ def _pieces(a, b):
             continue
         common, missing, extra = [], [], []
         ok = True
+        noise = 0.0
         for piece in result.Solids:
+            if abs(piece.Volume) <= 1e-7 * scale:
+                # a sliver between faces that lie on each other within a hair (a mesh's facets
+                # and their copies): no material either side, only rounding
+                noise += abs(piece.Volume)
+                continue
             point = _inside_point(piece)
             if point is None:
                 ok = False
@@ -615,7 +621,8 @@ def _pieces(a, b):
         v_c = sum(s.Volume for s in common)
         v_m = sum(s.Volume for s in missing)
         v_e = sum(s.Volume for s in extra)
-        if abs(v_c + v_m - v_a) <= 1e-6 * scale and abs(v_c + v_e - v_b) <= 1e-6 * scale:
+        slack = 1e-6 * scale + noise
+        if abs(v_c + v_m - v_a) <= slack and abs(v_c + v_e - v_b) <= slack:
             return common, _merge(missing), _merge(extra), "exact" if not fuzzy else "fuzzy"
         log(
             "rebuild: the pieces do not add up (%.6g + %.6g vs %.6g; %.6g + %.6g vs %.6g)"
@@ -1031,9 +1038,9 @@ def group_fix(group):
 class _FaceRow:
     """What the face matching needs of one face, worked out once."""
 
-    __slots__ = ("index", "face", "kind", "area", "box", "key", "matched", "samples")
+    __slots__ = ("index", "face", "kind", "area", "box", "key", "matched", "samples", "grid")
 
-    def __init__(self, index, face):
+    def __init__(self, index, face, grid=5):
         from .ai.ops import selectors
 
         self.index = index
@@ -1044,6 +1051,7 @@ class _FaceRow:
         self.key = None
         self.matched = False
         self.samples = None
+        self.grid = grid
         surface = face.Surface
         try:
             if self.kind == "plane":
@@ -1072,7 +1080,7 @@ class _FaceRow:
 
     def points(self):
         if self.samples is None:
-            found = [p for p, _n in _face_points(self.face, 5)]
+            found = [p for p, _n in _face_points(self.face, self.grid)]
             if len(found) < 3:
                 found += [p for p, _n in _face_points(self.face, 11)][:25]
             if not found:
@@ -1088,7 +1096,10 @@ class _FaceRow:
 
 
 def _face_rows(shape):
-    return [_FaceRow(i, f) for i, f in enumerate(shape.Faces)]
+    """The faces' rows; small faces get fewer sample points (a mesh's narrow facets)."""
+    faces = list(shape.Faces)
+    biggest = max([f.Area for f in faces] or [0.0])
+    return [_FaceRow(i, f, 5 if f.Area >= 0.02 * biggest else 3) for i, f in enumerate(faces)]
 
 
 def _same_surface(a, b, tol):
@@ -1113,6 +1124,17 @@ def _same_surface(a, b, tol):
     return False
 
 
+def _same_box(a, b, tol):
+    return (
+        abs(a.XMin - b.XMin) <= tol
+        and abs(a.YMin - b.YMin) <= tol
+        and abs(a.ZMin - b.ZMin) <= tol
+        and abs(a.XMax - b.XMax) <= tol
+        and abs(a.YMax - b.YMax) <= tol
+        and abs(a.ZMax - b.ZMax) <= tol
+    )
+
+
 def _boxes_near(a, b, tol):
     return not (
         a.XMin > b.XMax + tol
@@ -1126,8 +1148,16 @@ def _boxes_near(a, b, tol):
 
 def _covered(row, others, tol):
     """Every sample point of the face lies on one of the other faces."""
+    if not others:
+        return False
+    for other in others:
+        # the same face (same surface, area and box): no need to sample it
+        if abs(other.area - row.area) <= 1e-7 * max(1.0, row.area) and _same_box(
+            row.box, other.box, tol
+        ):
+            return True
     points = row.points()
-    if not points or not others:
+    if not points:
         return False
     for p in points:
         hit = False
@@ -1195,11 +1225,16 @@ def _match_faces(reference, rebuilt, tol, mesh, opts):
     rows_a = _face_rows(reference)
     rows_b = _face_rows(rebuilt)
     if mesh:
-        to_b, to_a = _Distances(rows_b), _Distances(rows_a)
-        for row in rows_a:
-            row.matched = all(to_b(p, tol) <= tol for p in row.points())
-        for row in rows_b:
-            row.matched = all(to_a(p, tol) <= tol for p in row.points())
+        # the exact test first (the mesh's flat faces are exact planes), then within tol of
+        # the other part's surface for the facets of round regions and the round faces
+        for mine, theirs in ((rows_a, rows_b), (rows_b, rows_a)):
+            for row in mine:
+                same = [
+                    o
+                    for o in theirs
+                    if _boxes_near(row.box, o.box, tol) and _same_surface(row, o, tol)
+                ]
+                row.matched = _covered(row, same, tol) or _near_surfaces(row, theirs, tol)
     else:
         for mine, theirs in ((rows_a, rows_b), (rows_b, rows_a)):
             for row in mine:
@@ -1224,6 +1259,57 @@ def _match_faces(reference, rebuilt, tol, mesh, opts):
         "_rows": (rows_a, rows_b),
     }
     return out
+
+
+def _near_surfaces(row, others, tol):
+    """Every sample point of the face lies within tol of a face of the other part (its
+    surface, inside its boundary): a mesh's facets against round faces and the other way."""
+    near = [o for o in others if _boxes_near(row.box, o.box, tol)]
+    if not near:
+        return False
+    for p in row.points():
+        if not any(_near_face(p, o, tol) for o in near):
+            return False
+    return True
+
+
+def _near_face(point, row, tol):
+    """The point lies within tol of the face (plane, cylinder, sphere: measured on the
+    surface and checked inside the face's boundary; other faces: OpenCASCADE's distance)."""
+    box = row.box
+    if not (
+        box.XMin - tol <= point.x <= box.XMax + tol
+        and box.YMin - tol <= point.y <= box.YMax + tol
+        and box.ZMin - tol <= point.z <= box.ZMax + tol
+    ):
+        return False
+    try:
+        if row.kind == "plane" and row.key is not None:
+            normal, offset = row.key
+            gap = normal.dot(point) - offset
+            if abs(gap) > tol:
+                return False
+            foot = point - normal * gap
+        elif row.kind == "cylinder" and row.key is not None:
+            axis, centre, radius, _concave = row.key
+            on_axis = centre + axis * (point - centre).dot(axis)
+            radial = point - on_axis
+            if abs(radial.Length - radius) > tol:
+                return False
+            foot = on_axis + radial * (radius / radial.Length) if radial.Length > 1e-12 else point
+        elif row.kind == "sphere" and row.key is not None:
+            centre, radius, _concave = row.key
+            radial = point - centre
+            if abs(radial.Length - radius) > tol:
+                return False
+            foot = centre + radial * (radius / radial.Length) if radial.Length > 1e-12 else point
+        else:
+            import Part
+
+            return row.face.distToShape(Part.Vertex(point))[0] <= tol
+        return row.face.isInside(foot, tol, True)
+    except Exception:
+        return False
 
 
 def _on_surfaces(row, others, tol):

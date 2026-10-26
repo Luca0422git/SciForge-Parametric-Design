@@ -75,41 +75,47 @@ def a_numbers():
     h.check("... the faces matched: 6 of 14", "6 of 14" in numbers, numbers)
     h.check("... the volumes", "22791.77 mm3" in numbers and "24000 mm3" in numbers, numbers)
     verdict = box.verdict.text()
-    h.check("the verdict names the 4 holes", "4 round holes about 6 mm across" in verdict,
-            verdict)
-    h.check("... and the 4 rounded edges", "4 rounded edges of radius about 3" in verdict,
-            verdict)
-    h.check("one row per difference", box.table.topLevelItemCount() == 2,
-            box.table.topLevelItemCount())
+    h.check("the verdict names the 4 holes", "4 round holes about 6 mm across" in verdict, verdict)
+    h.check("... and the 4 rounded edges", "4 rounded edges of radius about 3" in verdict, verdict)
+    h.check(
+        "one row per difference", box.table.topLevelItemCount() == 2, box.table.topLevelItemCount()
+    )
     count = r.overlay_count(s["ref"])
     h.check("the 3D view shows the 8 regions of extra material", count == 8, count)
     view = r.view_of(s["ref"])
-    h.check("... green, none red", view is not None and view.shown_regions == {"missing": 0,
-                                                                               "extra": 8},
-            view.shown_regions if view else None)
+    h.check(
+        "... green, none red",
+        view is not None and view.shown_regions == {"missing": 0, "extra": 8},
+        view.shown_regions if view else None,
+    )
     h.shot("compare")
     r.click_button(box, "SciForgeRebuildCompareClose")
 
 
 def a_closed():
     h.check("Close closes the window", r.dialog("SciForgeRebuildCompare") is None)
-    h.check("... and clears the differences", r.overlay_count(s["ref"]) == 0,
-            r.overlay_count(s["ref"]))
+    h.check(
+        "... and clears the differences", r.overlay_count(s["ref"]) == 0, r.overlay_count(s["ref"])
+    )
 
 
 # -- B ------------------------------------------------------------------------------------------
 def b_ai_compare():
     answer, data = r.tool_json("compare_to_reference")
-    h.check("the AI's compare answers the same", data is not None and abs(data["match"] -
-            0.949657) < 1e-5, answer["text"][:300])
-    h.check("... and draws the differences", r.overlay_count(s["ref"]) == 8,
-            r.overlay_count(s["ref"]))
+    h.check(
+        "the AI's compare answers the same",
+        data is not None and abs(data["match"] - 0.949657) < 1e-5,
+        answer["text"][:300],
+    )
+    h.check(
+        "... and draws the differences", r.overlay_count(s["ref"]) == 8, r.overlay_count(s["ref"])
+    )
     holes = [g for g in (data or {}).get("groups", []) if g["kind"] == "cylinder"]
     fillets = [g for g in (data or {}).get("groups", []) if g["kind"] == "fillet"]
-    h.check("a fillet call is ready for the 4 edges", fillets and fillets[0].get("fix"),
-            fillets)
-    r.tool("create_sketch", plane="XY", offset=10,
-           geometry=[{"circle": [x, y, 3]} for x, y in r.HOLES])
+    h.check("a fillet call is ready for the 4 edges", fillets and fillets[0].get("fix"), fillets)
+    r.tool(
+        "create_sketch", plane="XY", offset=10, geometry=[{"circle": [x, y, 3]} for x, y in r.HOLES]
+    )
     answer = r.tool("hole", sketch="Sketch2", diameter=6, through_all=True)
     h.check("the AI drills the holes", not answer["is_error"], answer["text"])
     if fillets and fillets[0].get("fix"):
@@ -134,8 +140,11 @@ b_done.wait_ms = 2000
 
 def b_dialog_done():
     box = r.dialog("SciForgeRebuildCompare")
-    h.check("the window says done", box is not None and box.headline.text().startswith("Done"),
-            box.headline.text() if box else h.popups())
+    h.check(
+        "the window says done",
+        box is not None and box.headline.text().startswith("Done"),
+        box.headline.text() if box else h.popups(),
+    )
     h.check("... 14 of 14 faces", box is not None and "14 of 14" in box.numbers.text())
     if box is not None:
         r.click_button(box, "SciForgeRebuildCompareFinish")
@@ -156,8 +165,10 @@ def b_finish_esc():
 
 def b_nothing():
     h.check("Esc closed Finish", r.dialog("SciForgeRebuildFinish") is None, h.popups())
-    h.check("... and changed nothing", len(r.references()) == 1 and App.ActiveDocument.getObject(
-        s["plate_name"]) is not None)
+    h.check(
+        "... and changed nothing",
+        len(r.references()) == 1 and App.ActiveDocument.getObject(s["plate_name"]) is not None,
+    )
 
 
 # -- C ------------------------------------------------------------------------------------------
@@ -188,19 +199,25 @@ def c_finished():
     if target is None:
         return
     h.check("it took the original's name", target.Label == s["label"], target.Label)
-    h.check("... stays in the original's component",
-            components.container_of(target) is s["component"])
+    h.check(
+        "... stays in the original's component", components.container_of(target) is s["component"]
+    )
     h.check("... and place", target.Placement.isIdentity())
     h.check("the original is deleted", doc.getObject(s["plate_name"]) is None)
     h.check("the reference is gone", not r.references(), r.references())
-    h.check("the rebuilt body is shown and active", r.shown(target) and
-            bodies.active_body(doc) is target)
+    h.check(
+        "the rebuilt body is shown and active",
+        r.shown(target) and bodies.active_body(doc) is target,
+    )
     h.check("one undo step", len(doc.UndoNames) == s["undo_before"] + 1, doc.UndoNames[:3])
     names = r.timeline_names()
     mine = [n for n in names if bodies.body_of(doc.getObject(n)) is target]
     h.check("its timeline: sketch, extrude, sketch, hole, fillet", len(mine) == 5, mine)
-    h.check("the part is the plate", abs(target.Shape.Volume - r.PLATE_VOLUME) < 1e-3,
-            target.Shape.Volume)
+    h.check(
+        "the part is the plate",
+        abs(target.Shape.Volume - r.PLATE_VOLUME) < 1e-3,
+        target.Shape.Volume,
+    )
     t.undo()
 
 
@@ -216,9 +233,11 @@ def c_undone():
     plate = doc.getObject(s["plate_name"])
     h.check("... the original is back, hidden", plate is not None and not r.shown(plate))
     target = doc.getObject(s["target_name"])
-    h.check("... the rebuild has its '(rebuilt)' name again",
-            target is not None and target.Label == "%s (rebuilt)" % s["label"],
-            target.Label if target else None)
+    h.check(
+        "... the rebuild has its '(rebuilt)' name again",
+        target is not None and target.Label == "%s (rebuilt)" % s["label"],
+        target.Label if target else None,
+    )
     if refs:
         s["ref"] = refs[0]
         h.check("... the reference is drawn", r.ghost_drawn(refs[0]))
@@ -232,8 +251,11 @@ c_undone.wait_ms = 1500
 def c_redone():
     doc = App.ActiveDocument
     target = doc.getObject(s["target_name"])
-    h.check("Redo finishes again", not r.references() and target is not None and target.Label
-            == s["label"], (r.references(), target.Label if target else None))
+    h.check(
+        "Redo finishes again",
+        not r.references() and target is not None and target.Label == s["label"],
+        (r.references(), target.Label if target else None),
+    )
     t.undo()
 
 
@@ -272,16 +294,22 @@ def d_kept():
     plate = doc.getObject(s["plate_name"])
     h.check("the original is kept", plate is not None)
     h.check("... hidden", plate is not None and not r.shown(plate))
-    h.check("... renamed '<name> (original)'", plate is not None and plate.Label ==
-            "%s (original)" % s["label"], plate.Label if plate else None)
+    h.check(
+        "... renamed '<name> (original)'",
+        plate is not None and plate.Label == "%s (original)" % s["label"],
+        plate.Label if plate else None,
+    )
     target = doc.getObject(s["target_name"])
     h.check("the rebuild took the name", target is not None and target.Label == s["label"])
     refs = r.references()
     h.check("the reference is kept", len(refs) == 1, refs)
     h.check("... not drawn", refs and not r.ghost_drawn(refs[0]))
     names = r.browser_labels()
-    h.check("the browser lists the rebuild and the original", s["label"] in [n.split("  ")[0]
-            for n in names] and "%s (original)" % s["label"] in names, names)
+    h.check(
+        "the browser lists the rebuild and the original",
+        s["label"] in [n.split("  ")[0] for n in names] and "%s (original)" % s["label"] in names,
+        names,
+    )
 
 
 def finish():

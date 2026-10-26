@@ -97,15 +97,22 @@ def b_started():
         return
     ref = s["ref"] = refs[0]
     h.check("... made from the mesh", ref.SourceKind == "mesh", ref.SourceKind)
-    h.check("... a solid of the plate's size", ref.FrozenShape.Solids and abs(
-        ref.FrozenShape.BoundBox.XLength - 60) < 1e-3, ref.FrozenShape.BoundBox)
+    h.check(
+        "... a solid of the plate's size",
+        ref.FrozenShape.Solids and abs(ref.FrozenShape.BoundBox.XLength - 60) < 1e-3,
+        ref.FrozenShape.BoundBox,
+    )
     h.check("... with a mesh's tolerance", ref.Tolerance > 0.01, ref.Tolerance)
     h.check("the mesh is hidden", not r.shown(s["mesh"]))
     h.check("the reference is drawn faint", r.ghost_drawn(ref))
     target = rebuild.target_of(ref)
     s["target_name"] = target.Name if target else None
-    h.check("'<name> (rebuilt)' is active", target is not None and target.Label ==
-            "%s (rebuilt)" % s["mesh_label"] and bodies.active_body(App.ActiveDocument) is target)
+    h.check(
+        "'<name> (rebuilt)' is active",
+        target is not None
+        and target.Label == "%s (rebuilt)" % s["mesh_label"]
+        and bodies.active_body(App.ActiveDocument) is target,
+    )
 
 
 # -- C ------------------------------------------------------------------------------------------
@@ -168,14 +175,15 @@ def d_reopened():
     if not refs:
         return
     ref = refs[0]
-    h.check("... with its solid", ref.FrozenShape.Solids and abs(ref.FrozenShape.BoundBox.XLength
-            - 60) < 1e-3)
+    h.check(
+        "... with its solid",
+        ref.FrozenShape.Solids and abs(ref.FrozenShape.BoundBox.XLength - 60) < 1e-3,
+    )
     h.check("... drawn faint again", r.ghost_drawn(ref))
     h.check("... not in the browser", ref.Label not in r.browser_labels())
     h.check("... not in the timeline", ref.Name not in r.timeline_names())
     target = rebuild.target_of(ref)
-    h.check("... pointing at the rebuild", target is not None and target.Name ==
-            s["target_name"])
+    h.check("... pointing at the rebuild", target is not None and target.Name == s["target_name"])
     mesh = App.ActiveDocument.getObject(ref.SourceName)
     h.check("the mesh is still hidden", mesh is not None and not r.shown(mesh))
     s["ref"] = ref
@@ -187,8 +195,11 @@ d_reopened.wait_ms = 2500
 
 def d_compare():
     box = r.dialog("SciForgeRebuildCompare")
-    h.check("Compare works after reopening", box is not None and "Match 9" in
-            box.headline.text(), box.headline.text() if box else h.popups())
+    h.check(
+        "Compare works after reopening",
+        box is not None and "Match 9" in box.headline.text(),
+        box.headline.text() if box else h.popups(),
+    )
     if box is not None:
         r.click_button(box, "SciForgeRebuildCompareClose")
 
