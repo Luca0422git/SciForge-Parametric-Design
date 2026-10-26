@@ -693,12 +693,21 @@ def check_cancel(doc, out):
     def background_done(job):
         return job._thread is None or not job._thread.is_alive()
 
+    def results_step(job):
+        step = getattr(job, "_results_step", None)
+        return getattr(getattr(step, "func", None), "__name__", None)
+
     moments = (
         ("model", lambda job: True),  # before the first turn
+        ("model's second turn", lambda job: job.stage == "model" and job._checked),
         ("mesh", lambda job: job.stage == "mesh" and not background_done(job)),
         ("input", lambda job: job.stage == "mesh" and background_done(job)),
+        # (the input is written over two turns, the results read over three)
+        ("input's second turn", lambda job: job.stage == "input" and job._getter is not None),
         ("solve", lambda job: job.stage == "solve" and not background_done(job)),
         ("results", lambda job: job.stage == "solve" and background_done(job)),
+        ("results' second turn", lambda job: results_step(job) == "_results_compact"),
+        ("results' last turn", lambda job: results_step(job) == "_results_finish"),
     )
     for stage, ready in moments:
         job = sim.Job(study)
@@ -796,6 +805,9 @@ def check_mesh_only(doc, out):
     out.append(
         ("a solve replaces the Generate Mesh run", sim.run_of(study, "SimMeshRun") is None, "")
     )
+    run = sim.run_of(study)
+    touched = [o.Name for o in [study] + list(sim._run_members(run)) if "Touched" in o.State]
+    out.append(("nothing left needing a recompute after the solve", not touched, touched))
 
 
 @engine_check("save and reopen")
@@ -847,6 +859,13 @@ def check_reopen(doc, out):
     out.append(("without results: the numbers stay", sim.summary(st) == summary, ""))
     out.append(
         (
+            "without results: not out of date (keeping them changes nothing)",
+            not sim.out_of_date(st),
+            "",
+        )
+    )
+    out.append(
+        (
             "without results: solve again to see them",
             sim.results(st) is None and sim.results_dropped(st),
             "",
@@ -891,6 +910,145 @@ def check_component(doc, out):
     )
 
 
+@engine_check("two components' bodies with the same name")
+def check_same_labels(doc, out):
+    """Fusion numbers bodies per component: two components can each have a "Body1". The
+    result summary keeps them apart (sim-ui's report)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    params = App.ParamGet("User parameter:BaseApp/Preferences/Document")
+    allowed = params.GetBool("DuplicateLabels", False)
+    params.SetBool("DuplicateLabels", True)  # (SciForge's own setting, theme.py)
+    try:
+        first = doc.addObject("App::Part", "CompA")
+        second = doc.addObject("App::Part", "CompB")
+        first.Label, second.Label = "Bracket", "Plate"
+        a = make_body(doc, Part.makeBox(100, 10, 10), "SameA")
+        b = make_body(doc, Part.makeBox(100, 10, 10, App.Vector(0, 50, 0)), "SameB")
+        first.addObject(a)
+        second.addObject(b)
+        a.Label = "Body1"
+        b.Label = "Body1"
+        doc.recompute()
+        study = sim.create_study(doc, study_bodies=[a, b])
+        sim.add_item(
+            study,
+            "constraint",
+            "fixed",
+            [(body, one_face(body, lambda f: near(f.CenterOfMass.x, 0))) for body in (a, b)],
+        )
+        sim.add_item(
+            study,
+            "load",
+            "force",
+            [(body, one_face(body, lambda f: near(f.CenterOfMass.x, 100))) for body in (a, b)],
+            {"direction": "vector", "vector": [0, 0, -1], "magnitude": 100.0, "per_entity": True},
+        )
+        summary = sim.solve(study, timeout=600)
+        rows = summary.get("bodies", {})
+        keys = (sim.body_key(study, a), sim.body_key(study, b))
+        out.append(
+            (
+                "both named Body1, two rows: %s" % ", ".join(sorted(rows)),
+                a.Label == b.Label == "Body1" and len(rows) == 2 and keys[0] != keys[1],
+                (a.Label, b.Label, sorted(rows), keys),
+            )
+        )
+        out.append(
+            (
+                "each row is its own body (bends 0.2 mm, as one cantilever)",
+                all(
+                    k in rows
+                    and rows[k].get("name") == body.Name
+                    and abs(rows[k]["displacement_max"] - 0.2) <= 0.006
+                    for k, body in zip(keys, (a, b))
+                ),
+                rows,
+            )
+        )
+    finally:
+        params.SetBool("DuplicateLabels", allowed)
+
+
+@engine_check("a body whose middle is a hole, glued to another")
+def check_hollow_owners(doc, out):
+    """A steel plate with a hole in its middle under a solid aluminium plate, glued: each
+    piece of the model keeps its own body, so its own material (the holed plate's centre of
+    mass, in the hole, is nearer the other plate: SciForge first went by it)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    holed = Part.makeBox(100, 100, 5).cut(Part.makeCylinder(10, 5, App.Vector(50, 50, 0)))
+    lower = make_body(doc, holed, "Lower")
+    upper = make_body(doc, Part.makeBox(100, 100, 5, App.Vector(0, 0, 5)), "Upper")
+    study = sim.create_study(doc, study_bodies=[lower, upper])
+    sim.set_study_material(study, upper, "aluminium")
+    model, owners = sim.build_model(study)
+    right = all(
+        owner is (lower if solid.BoundBox.ZMax <= 5 + 1e-6 else upper)
+        for solid, owner in zip(model.Solids, owners)
+    )
+    out.append(
+        (
+            "each piece of the model belongs to its own plate",
+            right and len(owners) == 2,
+            [(round(s.BoundBox.ZMax, 3), o.Label) for s, o in zip(model.Solids, owners)],
+        )
+    )
+    sim.add_item(
+        study,
+        "constraint",
+        "fixed",
+        [(lower, one_face(lower, lambda f: near(f.CenterOfMass.z, 0)))],
+    )
+    sim.add_item(
+        study,
+        "load",
+        "pressure",
+        [(upper, one_face(upper, lambda f: near(f.CenterOfMass.z, 10)))],
+        {"magnitude": 1.0},
+    )
+    summary = sim.solve(study, timeout=600)
+    rows = summary.get("bodies", {})
+    out.append(
+        (
+            "each plate keeps its material in the results",
+            rows.get("Lower", {}).get("material", "").startswith("Steel")
+            and "lumin" in rows.get("Upper", {}).get("material", ""),
+            {k: v.get("material") for k, v in rows.items()},
+        )
+    )
+
+
+@engine_check("a change while it solves")
+def check_change_during(doc, out):
+    """The results are of the study as the solve started: a load changed while CalculiX runs
+    leaves them out of date (sim-ui's report)."""
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc, size_pct=3.0)
+    job = sim.Job(study)
+    tries = 0
+    while job.state == "running" and job.stage != "solve" and tries < 20000:
+        tries += 1
+        if job._thread is not None and job._thread.is_alive():
+            job._thread.join(0.002)
+            continue
+        job.poll()
+    load = sim.items(study, "load")[0]
+    sim.update_item(load, opts={"magnitude": 200.0})
+    job.wait(600)
+    out.append(("solved", job.state == "done", job.message))
+    out.append(("out of date: the load changed while it solved", sim.out_of_date(study), ""))
+    sim.solve(study, timeout=600)
+    out.append(("solved again: up to date", not sim.out_of_date(study), ""))
+
+
 @engine_check("a deleted body")
 def check_deleted_body(doc, out):
     import FreeCAD as App
@@ -906,6 +1064,15 @@ def check_deleted_body(doc, out):
         "pressure",
         [(other, one_face(other, lambda f: near(f.CenterOfMass.z, 10)))],
         {"magnitude": 1},
+    )
+    study.SimBodies = [body]
+    checks = sim.precheck(study)
+    out.append(
+        (
+            "a load on a body the study leaves out: refused, naming both",
+            any("Pressure 1 is on Other" in t and "leaves out" in t for _l, t in checks),
+            checks,
+        )
     )
     study.SimBodies = [body, other]
     doc.removeObject(other.Name)
@@ -1094,6 +1261,25 @@ def check_contacts(doc, out):
             checks,
         )
     )
+    # the contacts are remembered per geometry (the pre-check runs after every command):
+    # moving a body or changing its shape is seen at once
+    b.Placement = App.Placement(App.Vector(1, 0, 0), App.Rotation())
+    doc.recompute()
+    moved = sorted((p.Label, q.Label) for p, q, _k in sim.contacts(study))
+    b.Placement = App.Placement()
+    doc.recompute()
+    back = sorted((p.Label, q.Label) for p, q, _k in sim.contacts(study))
+    out.append(
+        (
+            "B moved 1 mm away: no longer glued; moved back: glued again",
+            ("A", "B") not in moved and ("A", "B") in back and back == pairs,
+            (moved, back),
+        )
+    )
+    b.BaseFeature.Shape = Part.makeBox(49, 10, 10, App.Vector(51, 0, 0))
+    doc.recompute()
+    shorter = sorted((p.Label, q.Label) for p, q, _k in sim.contacts(study))
+    out.append(("B made shorter, 1 mm off A: not glued", ("A", "B") not in shorter, shorter))
 
 
 # -- running ----------------------------------------------------------------------------------

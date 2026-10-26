@@ -539,5 +539,71 @@ class MorePrecheck(unittest.TestCase):
         self.assertIn("F1 and F2", checks[1][1])
 
 
+try:
+    import numpy  # noqa: F401
+
+    HAVE_NUMPY = True
+except ImportError:  # (FreeCAD always has it; a bare Python may not)
+    HAVE_NUMPY = False
+
+
+@unittest.skipUnless(HAVE_NUMPY, "numpy is not installed")
+class CurvedElements(unittest.TestCase):
+    """Curved parabolic tetrahedra that turn inside out are made straight-sided."""
+
+    @staticmethod
+    def tet10(corners):
+        import numpy as np
+
+        pts = [list(map(float, c)) for c in corners]
+        for a, b in core.TET10_EDGES:
+            pts.append([(pts[a][i] + pts[b][i]) / 2.0 for i in range(3)])
+        return np.array(pts)
+
+    def test_straight_and_curved(self):
+        import numpy as np
+
+        xyz = self.tet10([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)])
+        rows = np.arange(10).reshape(1, 10)
+        self.assertAlmostEqual(core.tet10_distortion(xyz, rows)[0], 1.0, places=9)
+        # a gently curved edge (the mid-side node of 2-3 pushed out a little): still good
+        xyz[5] += [0.05, 0.05, 0.0]
+        self.assertGreater(core.tet10_distortion(xyz, rows)[0], core.DISTORTION_LIMIT)
+        # pushed through the opposite corner: inside out
+        xyz[5] = [-0.6, -0.6, 0.0]
+        self.assertLess(core.tet10_distortion(xyz, rows)[0], 0.0)
+
+    def test_straighten_one_and_its_neighbour(self):
+        import numpy as np
+
+        # two tetrahedra sharing the face 1-2-3: the first one's edge 2-3 is pushed inside out
+        first = self.tet10([(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)])
+        second = self.tet10([(1, 1, 1), (1, 0, 0), (0, 0, 1), (0, 1, 0)])
+        xyz = np.vstack([first, second])
+        rows = np.array([list(range(10)), list(range(10, 20))])
+        # the second shares the first's mid-side node of the edge (1, 0, 0)-(0, 1, 0): its
+        # own corners 2 and 4 (CalculiX's node 9)
+        rows[1][8] = 5
+        self.assertGreater(core.tet10_distortion(xyz, rows)[1], 0.99)
+        xyz[5] = [-0.6, -0.6, 0.0]
+        before = core.tet10_distortion(xyz, rows)
+        self.assertLess(before[0], 0.0)
+        moved, straightened, left = core.straighten_tets(xyz, rows)
+        self.assertEqual((straightened, left), (1, 0))
+        self.assertIn(5, moved)
+        self.assertEqual(list(xyz[5]), [0.5, 0.5, 0.0])
+        after = core.tet10_distortion(xyz, rows)
+        self.assertTrue(all(after > 0.99), after)
+
+    def test_corners_inside_out_are_left(self):
+        import numpy as np
+
+        xyz = self.tet10([(0, 0, 0), (0, 1, 0), (1, 0, 0), (0, 0, 1)])  # mirrored order
+        rows = np.arange(10).reshape(1, 10)
+        self.assertEqual(core.tet10_distortion(xyz, rows)[0], -np.inf)
+        moved, straightened, left = core.straighten_tets(xyz, rows)
+        self.assertEqual((moved, straightened, left), ([], 0, 1))
+
+
 if __name__ == "__main__":
     unittest.main()

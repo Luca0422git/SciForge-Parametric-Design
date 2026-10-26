@@ -58,6 +58,13 @@ sections Engine and Benchmarks.
   the numbers; solve again to see them.
 - **Contacts**: `simulation_core.CONTACT_TYPES` (key, Fusion's name, available) and
   `CONTACT_NOT_AVAILABLE` (the sentence for the greyed types).
+- **Per-body results** (`summary["bodies"]`): keyed by the body's label, or "Body1 (Bracket)"
+  (its component's label added) when two bodies of the study share a label; each row has
+  `"name"` (the body's object name). `body_key(study, body)` gives a body's key. (sim-ui's
+  report: two components' "Body1" shared one row.)
+- **Out of date**: the fingerprints (results and mesh) are taken when the solve starts, so a
+  design changed while it runs leaves the results out of date (sim-ui's report;
+  `simulation_solve_dialog._keep_out_of_date` is no longer needed but harmless).
 - **No VTK pipeline** is made with the results any more (`Pipeline_SimResults` is gone): draw
   from `results(study)` / the result object.
 
@@ -78,3 +85,59 @@ sections Engine and Benchmarks.
   Gmsh's 2D meshing on several threads gives a different mesh each run (SciForge writes
   `General.NumThreads = 1`); FreeCAD's TNP marks a body face pick lost ("?Face1") after a
   SciForge Press Pull.
+- 19:00-19:45 big parts. A 366-face plate (120 counterbored holes) at 2.5 % mesh: 142 756
+  nodes. Before: the window froze 84 s writing the input (FreeCAD's `getNodesByFace` searches
+  every node by geometry: 31 s per face) and 598 s reading results (the scaffold's per-body
+  maximum read `result.DisplacementLengths`, a 143 000-value copy, once per node). After:
+  model 1.9 s, mesh turn 3.5 s, input 5.8 s, results 7.6 s on the main thread; Gmsh 16 s,
+  CalculiX 100 s (2 threads, shared machine), the result file parsed in the background (2.7 s).
+  How: Gmsh's groups ("Face12", the reader adds "_Faces" / "_Nodes" suffixes) give the nodes of
+  every model face / edge / solid; FreeCAD's pressure writer and Remove rigid body modes use
+  them through a patched `meshtools.get_femnodes_by_refshape`; the writer's unused second
+  mesh-sets getter is skipped; von Mises / principal stresses with numpy (FreeCAD loops per
+  node); no VTK pipeline.
+- FreeCAD facts: `obj.Shape` is read-only in 1.1 (`copy(False)` shares the geometry and can be
+  re-placed); freecadcmd crashes in PySide at exit when a FreeCAD GmshTools (it owns a QProcess
+  with a connected signal) is still referenced: drop it when done.
+- 20:00-20:20 the default mesh of the same plate took 268 s in Gmsh (10 % size; 6 %: 334 s),
+  2.5 % only 16 s: Gmsh's high-order optimisation (`HighOrderOptimize`, which SciForge had
+  switched on so curved elements would not turn inside out at small holes) merged the 278 bad
+  elements into patches of 15 000 elements. Without it Gmsh takes 10 s; its other modes do not
+  help (elastic: 31 s and 137 elements still inside out; fast curving: none fixed; fewer
+  layers / passes: 148 s). Now SciForge checks every curved element of the solver input where
+  CalculiX integrates it (and at its corners and middle), in the background thread before
+  CalculiX starts, and makes only the elements inside out or nearly (Jacobian below 1 % of the
+  straight element's) straight-sided, with a note ("SciForge made 12 curved mesh elements
+  straight-sided ..."). Straightening every element below Gmsh's own 10 % aim made a coarse
+  shaft 18 % too soft in torsion (each straight element flattens a bit of the curved face);
+  the 1 % rule: 1.2 % at the default mesh, 0.01 % at the finer one. The plate solves in 115 s
+  instead of 375 s. The straight-sided retry stays as the fallback.
+- Fixed in review: a mesh made again after a failed solve looked for Netgen's old mesh when
+  Netgen had been used (Gmsh is tried first again now); switching Keep results in the file made
+  the results out of date (it changes nothing they say).
+- 20:35-20:50 the window's longest pause on the 131 000-node part: 2.7 s (was 6.8-11.6 s): the
+  input is written over two turns (FreeCAD's mesh tables first), the results read over three
+  (FreeCAD's import with the renumbering of its result mesh moved to a turn of its own, then
+  the summary); displacement lengths and the result statistics with numpy. sim-ui's two open
+  engine issues fixed (per-body rows of same-named bodies, fingerprints from the solve's
+  start), each with an engine check.
+- 20:50-21:05 the pre-check of 20 stacked plates with holes took 5.8 s (contacts 4 s, overlaps
+  2 s: OpenCASCADE's distance and common of every touching pair), and sim-ui runs it after every
+  SETUP command. Contacts and overlaps are now remembered per geometry (each body's shape hash,
+  face / edge / corner counts, box and place, its component's place, the tolerance): 0.2 s
+  after the first time; a moved or edited body is seen at once (engine check). Only checking
+  the faces near the other body did not make OpenCASCADE's distance faster; its section does
+  (two bodies whose boundaries cross touch: 0.06 s instead of 0.19 s a pair), and only those
+  are tested for overlap: contacts and overlaps together 3.5 s instead of 6 s the first time.
+- 21:05-21:15 the pre-check of the big plate fixed at its 120 holes took 8 s: every pick made
+  its own copy of the 366-face shape (27 ms each) to compare its remembered shape. The copy is
+  now made once per object and call, and remembered per shape: 0.4 s.
+- 21:15-21:35 a solve of 20 stacked plates with 25 holes each: the model turn took 16 s (the
+  pre-check's first contacts 7 s, the general fuse 1.3 s, and 2.3 s working out which body
+  each piece of the model came from). That last part was also **wrong** in a case: it went by
+  each piece's centre of mass, and a plate with a hole in its middle has it in the hole, nearer
+  a plate glued on it; that plate's material then went to both (engine check "a body whose
+  middle is a hole, glued to another": the old rule gave both pieces to the upper plate). Now
+  the general fuse's own history says which body each piece came from (exact and instant), and
+  the model stage is two turns (pre-check, then the model). The same stack at the default mesh
+  needs over 6 GB in CalculiX (stopped after 9 minutes): a big model is still big.

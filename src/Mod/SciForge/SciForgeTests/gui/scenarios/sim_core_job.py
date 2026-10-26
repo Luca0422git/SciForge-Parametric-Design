@@ -190,7 +190,8 @@ def after_mesh():
 def start_third_and_cancel_in_mesh():
     _start()
     job = S["job"]
-    job.poll()  # the first turn builds the model and starts Gmsh in the background
+    job.poll()  # the first turn checks the study (the pre-check)
+    job.poll()  # the second builds the model and starts Gmsh in the background
     h.check("E: the job is meshing", job.stage == "mesh", (job.state, job.stage))
     job.cancel()
 

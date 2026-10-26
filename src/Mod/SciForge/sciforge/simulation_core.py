@@ -1168,6 +1168,109 @@ def tetra_aspect(p0, p1, p2, p3):
     return max(edges) / height / math.sqrt(1.5)
 
 
+# -- curved elements turned inside out -------------------------------------------------------------
+# A curved parabolic tetrahedron has its mid-side nodes on the model's curved faces. Where an
+# element is large next to a tight curve (a small hole in a coarse mesh) a curved edge can push
+# through the element's other faces: it turns inside out and CalculiX stops ("nonpositive
+# jacobian"). SciForge checks every curved element where CalculiX integrates it, at its corners
+# and in its middle, and makes the bad ones straight-sided (their mid-side nodes back to the
+# middle of their edges). Gmsh's own repair (HighOrderOptimize) took minutes on a big part.
+TET10_EDGES = ((0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3))  # CalculiX's C3D10 nodes 5-10
+_GA, _GB = 0.5854101966249685, 0.1381966011250105
+TET10_POINTS = (  # (L1, L2, L3, L4): CalculiX's four integration points, the corners, the middle
+    (_GA, _GB, _GB, _GB),
+    (_GB, _GA, _GB, _GB),
+    (_GB, _GB, _GA, _GB),
+    (_GB, _GB, _GB, _GA),
+    (1.0, 0.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0, 0.0),
+    (0.0, 0.0, 1.0, 0.0),
+    (0.0, 0.0, 0.0, 1.0),
+    (0.25, 0.25, 0.25, 0.25),
+)
+# Only elements inside out or nearly (the Jacobian somewhere below 1 % of the straight-sided
+# element's) are made straight: a low but positive Jacobian solves well, and every straightened
+# element flattens a bit of a curved face (straightening all below Gmsh's own aim of 10 % made
+# a coarse shaft 18 % too soft in torsion; this rule: 1.2 %)
+DISTORTION_LIMIT = 0.01
+
+
+def tet10_gradients(point):
+    """d N / d (xi, eta, zeta) of the ten shape functions of a parabolic tetrahedron at
+    `point` (L1..L4, with L2 = xi, L3 = eta, L4 = zeta), in CalculiX's node order."""
+    l1, l2, l3, l4 = point
+    return [
+        (1.0 - 4.0 * l1, 1.0 - 4.0 * l1, 1.0 - 4.0 * l1),
+        (4.0 * l2 - 1.0, 0.0, 0.0),
+        (0.0, 4.0 * l3 - 1.0, 0.0),
+        (0.0, 0.0, 4.0 * l4 - 1.0),
+        (4.0 * (l1 - l2), -4.0 * l2, -4.0 * l2),
+        (4.0 * l3, 4.0 * l2, 0.0),
+        (-4.0 * l3, 4.0 * (l1 - l3), -4.0 * l3),
+        (-4.0 * l4, -4.0 * l4, 4.0 * (l1 - l4)),
+        (4.0 * l4, 0.0, 4.0 * l2),
+        (0.0, 4.0 * l4, 4.0 * l3),
+    ]
+
+
+def tet10_distortion(xyz, elements, chunk=20000):
+    """For each parabolic tetrahedron, its smallest Jacobian over TET10_POINTS as a fraction
+    of its straight-sided one (1: as good as straight; 0 or less: inside out; -inf: its
+    corners themselves are inside out or flat, which straight sides do not mend). `xyz`:
+    numpy (nodes, 3) array; `elements`: numpy (elements, 10) array of rows of `xyz`, in
+    CalculiX's node order. Worked in chunks (a big mesh would need gigabytes at once)."""
+    import numpy as np
+
+    grads = np.array([tet10_gradients(p) for p in TET10_POINTS], dtype=float)
+    out = np.empty(len(elements))
+    for start in range(0, len(elements), chunk):
+        coords = xyz[elements[start : start + chunk]]
+        det = np.linalg.det(np.einsum("eai,paj->epij", coords, grads))
+        c = coords[:, :4]
+        straight = np.einsum(
+            "ei,ei->e", c[:, 1] - c[:, 0], np.cross(c[:, 2] - c[:, 0], c[:, 3] - c[:, 0])
+        )
+        part = np.full(len(coords), -np.inf)
+        good = straight > 0.0
+        part[good] = (det[good] / straight[good, None]).min(axis=1)
+        out[start : start + chunk] = part
+    return out
+
+
+def straighten_tets(xyz, elements, limit=DISTORTION_LIMIT, rounds=8):
+    """Make the parabolic tetrahedra whose distortion (tet10_distortion) is below `limit`
+    straight-sided, in place: their mid-side nodes moved to the middle of their edges; then
+    the same for the neighbours this changed, until none is left or after `rounds` passes.
+    `xyz`: numpy (nodes, 3) float array; `elements`: numpy (elements, 10) int array of rows
+    of `xyz`. Returns (sorted moved rows of `xyz`, how many elements were made straight, how
+    many are still bad: inside out at their corners, or left after `rounds`)."""
+    import numpy as np
+
+    elements = np.asarray(elements)
+    straight = np.zeros(len(elements), dtype=bool)
+    moved = set()
+    ends_a = [a for a, _b in TET10_EDGES]
+    ends_b = [b for _a, b in TET10_EDGES]
+    worst = tet10_distortion(xyz, elements)
+    check = np.arange(len(elements))
+    for _round in range(rounds):
+        bad = check[(worst[check] < limit) & np.isfinite(worst[check])]
+        if not len(bad):
+            break
+        rows = elements[bad]
+        mids = rows[:, 4:]
+        xyz[mids] = 0.5 * (xyz[rows[:, ends_a]] + xyz[rows[:, ends_b]])
+        straight[bad] = True
+        changed = np.unique(mids)
+        moved.update(int(n) for n in changed)
+        worst[bad] = 1.0
+        check = np.nonzero(np.isin(elements[:, 4:], changed).any(axis=1) & ~straight)[0]
+        if len(check):
+            worst[check] = tet10_distortion(xyz, elements[check])
+    left = int(np.count_nonzero(worst < limit))
+    return sorted(moved), int(np.count_nonzero(straight)), left
+
+
 # -- pre-check -------------------------------------------------------------------------------------
 def precheck(summary):
     """What is missing before a solve, as [(level, sentence)] with level "error" (cannot
