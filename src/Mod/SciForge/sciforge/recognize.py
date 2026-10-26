@@ -631,7 +631,7 @@ class _Reader:
         (B-spline, swept or offset surfaces; a flat B-spline is a tapered wall)."""
         used = set()
         for g in groups:
-            used.update(g["_faces"])
+            used.update(_wall(g))  # (a hole's thread is its own: beta 3 QA)
         out = []
         for f in self.facts:
             if f.index in used or f.kind in ("plane", "cylinder", "cone", "sphere", "torus"):
