@@ -1851,6 +1851,11 @@ class AnimationSaveDialog(QtWidgets.QDialog):
     def _save(self):
         try:
             path = core.animation_file(self.path_field.text())
+            folder = os.path.dirname(path) or "."
+            if not os.path.isdir(folder):  # (the person's to fix: said here, not an error)
+                self.message.setText("The folder %s does not exist: choose another." % folder)
+                log("Save Animation: no folder %s" % folder)
+                return
             self.message.setText("Making the pictures...")
             QtWidgets.QApplication.processEvents()
             count = save_animation(self.session, path)

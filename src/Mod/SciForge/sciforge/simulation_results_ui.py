@@ -558,11 +558,16 @@ class Session:
         if self.data is None or self.doc is None:
             return None
         key = []
-        for body in self.data.bodies():
+        for number, body in enumerate(self.data.bodies()):
             try:
-                key.append((body.Name, bool(body.ViewObject.Visibility)))
+                name = body.Name
+            except Exception:  # deleted since the solve: its results stay drawn
+                key.append(("#%d" % number, True))
+                continue
+            try:
+                key.append((name, bool(body.ViewObject.Visibility)))
             except Exception:
-                key.append((body.Name, True))
+                key.append((name, True))
         return tuple(key)
 
     def _bodies_shown(self):
@@ -606,7 +611,12 @@ class Session:
         for view in views:
             self.display.attach(view)
         self.apply()
-        labels = {b.Name: b.Label for b in self.data.bodies()}
+        labels = {}
+        for body in self.data.bodies():
+            try:
+                labels[body.Name] = body.Label
+            except Exception:
+                continue
         names = [labels.get(n, n) for n, visible in key if visible]
         log("results: bodies shown %s" % (", ".join(names) if names else "none"))
 
@@ -689,22 +699,15 @@ class Session:
                 continue
 
     def _keep_design_hidden(self):
+        """What FreeCAD shows again while the results show (a display mode change, a body
+        brought back by Undo, a new object) is hidden again; deleted objects are forgotten."""
         doc = self.doc
         if doc is None:
             return
         for name in list(self.hidden):
-            obj = doc.getObject(name)
-            try:
-                if obj is None or obj.ViewObject is None:
-                    self.hidden.pop(name, None)
-                    continue
-                switch = obj.ViewObject.SwitchNode
-                which = switch.whichChild.getValue()
-                if which != -1:  # FreeCAD showed it again (a display mode change...)
-                    self.hidden[name] = which
-                    switch.whichChild = -1
-            except Exception:
+            if doc.getObject(name) is None:
                 self.hidden.pop(name, None)
+        self._hide_design()
 
     def _show_design(self):
         doc = self.doc
