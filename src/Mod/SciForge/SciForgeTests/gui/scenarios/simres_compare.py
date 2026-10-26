@@ -15,6 +15,9 @@ D  A third study (300 N) solved; Compare: three listed, the shown one ticked; ti
    the beam shown.
 E  RESULTS, Compare again (the shown study and one more): Navigation bar > Viewports > Single
    View ends Compare (one view, the shown study's results).
+F  When the view cannot be split (Viewports refuses), Compare puts the studies side by side in
+   the one view instead (the second beam beside the first, along Y: the beams are long in X),
+   each tag at its own beam; Finish Compare.
 """
 
 import FreeCAD as App
@@ -323,6 +326,49 @@ def e_check():
     h.check("the shown study's results", s.session() is not None)
 
 
+def f_no_split():
+    from sciforge import viewports_ui
+
+    state["set_layout"] = viewports_ui.set_layout
+    viewports_ui.set_layout = lambda *_a, **_k: False  # (the view cannot be split)
+    s.menu("RESULT TOOLS", "Compare")
+
+
+def f_go():
+    dialog = s.dialog("SciForgeSimCompare")
+    h.check("Compare dialog open", dialog is not None)
+    if dialog is not None:
+        e_tick()
+
+
+f_go.wait_ms = 1500
+
+
+def f_check():
+    from sciforge import viewports_ui
+
+    viewports_ui.set_layout = state.pop("set_layout")
+    cmp = _compare()
+    h.check("comparing in one view", cmp is not None and not cmp.split and len(cmp.panes) == 1)
+    if cmp is None:
+        return
+    shifts = [tuple(float(c) for c in i["display"].offset) for i in cmp.items]
+    h.check(
+        "side by side (the second 20 mm along Y)",
+        shifts == [(0.0, 0.0, 0.0), (0.0, 20.0, 0.0)],
+        shifts,
+    )
+    ys = [round(t["point"][1], 6) for t in cmp.tag_list]
+    h.check("each tag over its own beam", len(ys) == 2 and abs(ys[1] - ys[0] - 20.0) < 1e-6, ys)
+    h.check("one view", _layout() == "Single View", _layout())
+    s.click_widget(cmp.legend.compare_button)
+
+
+def f_finished():
+    h.check("Compare finished", _compare() is None)
+    h.check("the shown study's results", s.session() is not None)
+
+
 h.run(
     "simres_compare",
     [
@@ -351,5 +397,9 @@ h.run(
         e_tick,
         e_single,
         e_check,
+        f_no_split,
+        f_go,
+        f_check,
+        f_finished,
     ],
 )

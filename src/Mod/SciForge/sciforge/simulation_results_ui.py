@@ -1883,6 +1883,7 @@ class CompareSession:
                 offset = [0.0, 0.0, 0.0]
                 offset[axis] = shift
                 item["display"].set_offset(offset)
+            gl = view_mod.gl_widget_of(self.doc_name)  # (a failed split may have changed it)
             panes = [{"view": gui.ActiveView, "gl": gl, "sub": None}]
             for item in self.items:
                 item["display"].attach(panes[0]["view"])
@@ -1956,6 +1957,7 @@ class CompareSession:
                 return None
             subs = viewports_ui.panes()
             if len(subs) < len(self.items):
+                self._layout_back(viewports_ui)
                 return None
             panes = []
             for sub in subs:
@@ -1970,6 +1972,7 @@ class CompareSession:
             if len({id(p["gl"]) for p in panes}) != len(panes) or any(
                 p["gl"] is None for p in panes
             ):
+                self._layout_back(viewports_ui)
                 return None
             if self._cameras_before is None and self._layout_before == name:
                 # (the person's own panes: their cameras come back after Compare)
@@ -1977,7 +1980,18 @@ class CompareSession:
             return panes
         except Exception as exc:
             warn("Compare: the view could not be split: %s" % exc)
+            try:
+                self._layout_back(viewports_ui)
+            except Exception:
+                pass
             return None
+
+    def _layout_back(self, viewports_ui):
+        """The layout there was before Compare, when splitting failed half way (the studies
+        then lie side by side in one view)."""
+        before, self._layout_before, self._cameras_before = self._layout_before, None, None
+        if before is not None and viewports_ui.current() != before:
+            viewports_ui.set_layout(before, quiet=True)
 
     def _single_chosen(self):
         try:
