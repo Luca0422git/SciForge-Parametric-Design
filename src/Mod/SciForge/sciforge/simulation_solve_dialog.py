@@ -22,7 +22,7 @@ import FreeCADGui as Gui
 
 from . import bodies, log, ui_icon, warn
 from . import simulation_setup_core as score
-from .compat import QtCore, QtWidgets
+from .compat import QtCore, QtGui, QtWidgets
 from .simulation_dialogs import FocusBack, tick_style
 
 RUN = {
@@ -273,7 +273,7 @@ def _next():
         except Exception as exc:
             RUN["job"] = None
             RUN["results"][study.Name] = ("failed", str(exc))
-            _remember(study.Label, "failed")
+            _remember(study, "failed")
             continue
         log("%s %s" % ("meshing" if RUN["kind"] == "mesh" else "solving", study.Label))
         _update_status()
@@ -374,7 +374,7 @@ def _after(study, state, message):
                 else:
                     RUN["last_done"] = study
             log("%s %s" % (study.Label, "meshed" if RUN["kind"] == "mesh" else "solved"))
-        _remember(study.Label, state)
+        _remember(study, state)
         try:
             sim.summary(study)
         except Exception:
@@ -384,12 +384,20 @@ def _after(study, state, message):
         _finish_all()
 
 
-def _remember(label, state):
+def _remember(study, state):
     """A finished job for the progress window's list of earlier ones (Fusion's Job Status
     lists the completed and failed solves; SciForge keeps this session's)."""
     try:
         RUN.setdefault("history", []).insert(
-            0, (RUN.get("run", 0), time.strftime("%H:%M"), RUN["kind"], label, state)
+            0,
+            (
+                RUN.get("run", 0),
+                time.strftime("%H:%M"),
+                RUN["kind"],
+                study.Label,
+                state,
+                (study.Document.Name, study.Name),
+            ),
         )
         del RUN["history"][20:]
     except Exception as exc:
@@ -511,6 +519,7 @@ class StatusDialog(FocusBack, QtWidgets.QDialog):
         self.studies = QtWidgets.QListWidget()
         self.studies.setObjectName("SciForgeSimJobStudies")
         self.studies.setMaximumHeight(110)
+        self.studies.itemDoubleClicked.connect(_show_row)
         layout.addWidget(self.studies)
         self.message = QtWidgets.QLabel("")
         self.message.setObjectName("SciForgeSimJobMessage")
@@ -627,36 +636,68 @@ def _fill_stages(dialog, rows):
 
 
 def _fill_studies(dialog):
-    rows = []
+    """The studies of this run (done, running, waiting), then this session's earlier ones
+    (greyed); a solved one is double-clicked to show its results (Fusion's Job Status has an
+    action per completed solve)."""
+    rows = []  # (text, (document name, study name) to show the results of, or None, earlier)
+    doc = App.ActiveDocument
     for name, (state, _message) in RUN["results"].items():
-        obj = App.ActiveDocument.getObject(name) if App.ActiveDocument else None
+        obj = doc.getObject(name) if doc is not None else None
+        target = (doc.Name, name) if (obj is not None and state == "done") else None
         rows.append(
-            "%s: %s" % (obj.Label if obj is not None else name, score.STATE_WORDS.get(state, state))
-        )
-    if RUN["study"] is not None and bodies.alive(RUN["study"]):
-        rows.append("%s: running" % RUN["study"].Label)
-    for study in RUN["queue"]:
-        if bodies.alive(study):
-            rows.append("%s: waiting" % study.Label)
-    current = len(rows)
-    for run, when, kind, label, state in RUN.get("history", []):
-        if run == RUN.get("run"):
-            continue  # (this run's own are above)
-        rows.append(
-            "Earlier, %s: %s%s: %s"
-            % (
-                when,
-                "Mesh of " if kind == "mesh" else "",
-                label,
-                score.STATE_WORDS.get(state, state),
+            (
+                "%s: %s"
+                % (obj.Label if obj is not None else name, score.STATE_WORDS.get(state, state)),
+                target if RUN["kind"] == "solve" else None,
+                False,
             )
         )
-    if [dialog.studies.item(i).text() for i in range(dialog.studies.count())] != rows:
+    if RUN["study"] is not None and bodies.alive(RUN["study"]):
+        rows.append(("%s: running" % RUN["study"].Label, None, False))
+    for study in RUN["queue"]:
+        if bodies.alive(study):
+            rows.append(("%s: waiting" % study.Label, None, False))
+    for run, when, kind, label, state, target in RUN.get("history", []):
+        if run == RUN.get("run"):
+            continue  # (this run's own are above)
+        text = "Earlier, %s: %s%s: %s" % (
+            when,
+            "Mesh of " if kind == "mesh" else "",
+            label,
+            score.STATE_WORDS.get(state, state),
+        )
+        rows.append((text, target if (kind == "solve" and state == "done") else None, True))
+    if [dialog.studies.item(i).text() for i in range(dialog.studies.count())] != [
+        r[0] for r in rows
+    ]:
         dialog.studies.clear()
-        dialog.studies.addItems(rows)
-        for i in range(current, len(rows)):  # the earlier ones greyed
-            item = dialog.studies.item(i)
-            item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEnabled)
+        for text, target, earlier in rows:
+            item = QtWidgets.QListWidgetItem(text)
+            if target is not None:
+                item.setData(QtCore.Qt.UserRole, list(target))
+                item.setToolTip("Double-click to show its results")
+            if earlier:
+                item.setForeground(QtGui.QBrush(QtGui.QColor("#9aa4b2")))
+            dialog.studies.addItem(item)
+
+
+def _show_row(item):
+    """A solved study's row double-clicked in the progress window: its results show (in front
+    in SIMULATION; else the person is told where they are)."""
+    try:
+        target = item.data(QtCore.Qt.UserRole) if item is not None else None
+        if not target:
+            return
+        doc = App.getDocument(target[0])
+        study = doc.getObject(target[1]) if doc is not None else None
+        if study is None or not _sim().summary(study):
+            from . import commands
+
+            commands.tell("Those results are gone (the study was deleted or solved again).")
+            return
+        _ui().show_results(study)
+    except Exception as exc:
+        warn("job status: %s" % exc)
 
 
 def stage_states():

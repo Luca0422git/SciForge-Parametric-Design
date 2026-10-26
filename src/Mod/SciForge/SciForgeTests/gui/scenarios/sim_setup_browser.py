@@ -132,6 +132,16 @@ def c_check():
         ),
         rows,
     )
+    if status is not None and rows:
+        item = status.studies.item(len(rows) - 1)
+        h.check(
+            "a solved row shows its results on a double-click",
+            "Double-click" in (item.toolTip() or ""),
+            item.toolTip(),
+        )
+        rect = status.studies.visualItemRect(item)
+        w.double_click(status.studies.viewport(), rect.center())
+        h.check("the RESULTS tab in front", s.current_tab() == "sim_results", s.current_tab())
     s.close_popup("SciForgeSimJobStatus")
 
 

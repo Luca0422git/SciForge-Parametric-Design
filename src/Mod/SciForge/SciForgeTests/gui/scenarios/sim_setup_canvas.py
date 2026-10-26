@@ -9,7 +9,8 @@ A  A bracket with a study made by script; Workspace > Simulation. A right click 
    in the ring opens its dialog; Esc.
 B  A right click again: the ring repeats the last setup command ("Repeat Structural Loads").
 C  A click on a face of the bracket selects it; Delete: nothing is deleted (no new step, no
-   undo step) and the face stays; E (Extrude's key in the design) opens nothing either.
+   undo step) and the face stays; E (Extrude's key in the design) and A (Appearance) open
+   nothing either.
 D  Workspace > Design: a right click shows the design's ring again (Extrude), and the Delete
    and E keys work again there.
 """
@@ -122,6 +123,12 @@ def c_check():
 
 def c_e_check():
     h.check("E opened nothing", s.task_panel() is None and not Gui.Control.activeDialog())
+    QtTest.QTest.keyClick(h.gl_widget(), QtCore.Qt.Key_A)
+
+
+def c_a_check():
+    h.check("A (Appearance) opened nothing", not Gui.Control.activeDialog(), h.popups())
+    h.close_popups()
     Gui.Selection.clearSelection()
 
 
@@ -156,6 +163,7 @@ h.run(
         c_delete,
         c_check,
         c_e_check,
+        c_a_check,
         d_leave,
         d_menu,
     ],
