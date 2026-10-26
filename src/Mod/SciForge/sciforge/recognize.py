@@ -353,6 +353,8 @@ class FaceFacts:
                 elif self.kind == "cone":
                     self.semi = abs(surface.SemiAngle)
                     self.apex = _t(surface.Apex)
+                    u0, u1, _v0, _v1 = face.ParameterRange
+                    self.span = abs(u1 - u0)
                 else:
                     self.radius = surface.MajorRadius
                     self.minor = surface.MinorRadius
@@ -1198,7 +1200,8 @@ class _Reader:
             if time.time() - began > DEFEATURE_BUDGET:  # (a pathological shape: stop trying)
                 rejected.extend(candidates)
                 return
-            if self._defeature(accepted + candidates, shape) is not None:
+            got = self._defeature(accepted + candidates, shape)
+            if got is not None and self._plausible(got, accepted + candidates, shape):
                 accepted.extend(candidates)
                 return
             if len(candidates) == 1:
@@ -1210,6 +1213,29 @@ class _Reader:
 
         attempt(list(groups))
         return accepted[len(start) :], rejected
+
+    def _plausible(self, result, groups, shape=None):
+        """Taking these features off changed the volume by about what they hold (a chamfer's
+        wedge, a fillet's corner, a hole's bore): a "chamfer" that was in fact the slanted
+        side of a groove would fill the groove, far more."""
+        shape = self.shape if shape is None else shape
+        budget = 1e-3 + 1e-6 * shape.Volume
+        for g in groups:
+            area = sum(self.facts[i].area for i in g["_faces"])
+            if g["kind"] in ("hole", "counterbore", "countersink"):
+                budget += 1.5 * _hole_void(self, g) + 1e-3
+            elif g["kind"] == "chamfer":
+                d1 = g["distance"]
+                d2 = g.get("distance2", d1)
+                budget += 3.0 * 0.5 * d1 * d2 * area / max(math.hypot(d1, d2), 1e-9)
+            elif g.get("radius"):
+                budget += 3.0 * 0.25 * area * g["radius"]
+            else:
+                budget += area * 1.0
+        try:
+            return abs(result.Volume - shape.Volume) <= budget
+        except Exception:
+            return False
 
     def _drop_holes(self, holes):
         """(solid, holes taken off, holes left): the original solid with the holes closed by
@@ -1369,7 +1395,8 @@ class _Reader:
         for g in rejected:
             self.notes.append(
                 "%s %s could not be taken off the base shape (OpenCASCADE's defeaturing "
-                "refused it): it is left in the base and not in the plan."
+                "refused it, or taking it off changed far more than such a feature holds: then "
+                "it is a slanted face of the part): it is left in the base and not in the plan."
                 % (g["kind"].capitalize(), g["id"])
             )
             self.unrecognized.append(
@@ -2274,9 +2301,10 @@ def _hole_void(reader, h):
     total = 0.0
     for i in h["_faces"]:
         f = reader.facts[i]
+        share = min(1.0, (f.span or 2 * math.pi) / (2 * math.pi))  # (half faces of a split bore)
         if f.kind == "cylinder":
             t0, t1 = reader._extent([i], axis, origin)
-            total += math.pi * f.radius**2 * (t1 - t0)
+            total += share * math.pi * f.radius**2 * (t1 - t0)
         elif f.kind == "cone":
             rings = {}
             for v in f.face.Vertexes:
@@ -2286,7 +2314,7 @@ def _hole_void(reader, h):
             if len(rings) == 1:
                 rings[round(core.dot(core.sub(f.apex, origin), axis), 6)] = 0.0
             (ta, ra), (tb, rb) = sorted(rings.items())[:2]
-            total += math.pi * (tb - ta) * (ra * ra + ra * rb + rb * rb) / 3.0
+            total += share * math.pi * (tb - ta) * (ra * ra + ra * rb + rb * rb) / 3.0
     return total
 
 
