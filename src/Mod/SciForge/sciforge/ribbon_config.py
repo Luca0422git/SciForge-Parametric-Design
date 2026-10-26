@@ -1359,12 +1359,12 @@ SIM_STUDY = group(
 SIM_SIMPLIFY = group(
     "sim_simplify",
     "SIMPLIFY",
-    [],
+    ["Simplify"],
     [
         item(
             "Simplify",
             None,
-            SIM_ICON,
+            "sim_simplify",
             note=_SIM_LATER + ": a study uses the design as it is (leave a body out in Study "
             "Materials)",
         ),
@@ -1402,10 +1402,10 @@ SIM_LOADS = group(
             toggle="simulation_ui:gravity_on",
         ),  # owner: sim-ui
         SEP,
-        item("Linear Global Load", None, SIM_ICON, note=_SIM_LATER),
-        item("Angular Global Load", None, SIM_ICON, note=_SIM_LATER),
-        item("Point Mass (Auto)", None, SIM_ICON, note=_SIM_LATER),
-        item("Point Mass (Manual)", None, SIM_ICON, note=_SIM_LATER),
+        item("Linear Global Load", None, "sim_global_linear", note=_SIM_LATER),
+        item("Angular Global Load", None, "sim_global_angular", note=_SIM_LATER),
+        item("Point Mass (Auto)", None, "sim_point_mass_auto", note=_SIM_LATER),
+        item("Point Mass (Manual)", None, "sim_point_mass_manual", note=_SIM_LATER),
     ],
 )
 SIM_CONTACTS = group(
@@ -1417,21 +1417,21 @@ SIM_CONTACTS = group(
         item(
             "Manual Contacts",
             None,
-            SIM_ICON,
+            "sim_manual_contacts",
             note=_SIM_LATER + ": bodies that touch are bonded, found automatically",
         ),
         item(
             "Contact Manager", "SciForge_SimContactManager", "sim_contact_manager"
         ),  # owner: sim-ui
         SEP,
-        item("Bolt Connector", None, SIM_ICON, note=_SIM_LATER),
-        item("Rigid Body Connector", None, SIM_ICON, note=_SIM_LATER),
+        item("Bolt Connector", None, "sim_bolt", note=_SIM_LATER),
+        item("Rigid Body Connector", None, "sim_rigid_connector", note=_SIM_LATER),
     ],
 )
 SIM_DISPLAY = group(
     "sim_display",
     "DISPLAY",
-    [],
+    ["DOF View"],
     [
         item("DOF View", "SciForge_SimDOFView", "sim_dof"),  # owner: sim-ui
         item(
@@ -1445,7 +1445,7 @@ SIM_DISPLAY = group(
 SIM_MANAGE = group(
     "sim_manage",
     "MANAGE",
-    [],
+    ["Settings"],
     [
         item("Settings", "SciForge_SimSettings", "sim_settings"),  # owner: sim-ui
         item("Local Mesh Control", "SciForge_SimLocalMesh", "sim_local_mesh"),  # owner: sim-ui
