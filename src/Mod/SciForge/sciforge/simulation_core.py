@@ -326,6 +326,12 @@ FORCE_NORMAL_NEEDS_FACES = (
     "a force along the normal pushes into faces, and edges and corners have no normal: pick "
     "only faces, or give the force a direction (vector)."
 )
+NORMAL_NEEDS_FLAT = (
+    "along the normal needs flat faces: a round or curved face has no one normal (it took the "
+    "normal at the middle of the face's parameters, a direction that has nothing to do with "
+    "the part). Give it a direction (vector); to push across a curved face everywhere use a "
+    "Pressure, on a hole or shaft a Bearing Load."
+)
 FORCE_ONE_KIND = (
     "a force shared by its picks needs picks of one kind: faces (shared by area), edges (by "
     "length) or corners (equally). Make one force for each kind, or switch on Force Per Entity "
@@ -401,6 +407,13 @@ def check(category, kind, opts, picks):
                 problems.append("Force: " + FORCE_NORMAL_NEEDS_FACES)
             elif not opts.get("per_entity") and len(elements) > 1:
                 problems.append("Force: " + FORCE_ONE_KIND)
+        if kind in ("force", "moment") and opts.get("direction") == "normal":
+            # (a moment turns about its first face's normal)
+            surfaces = [surface for element, surface in picks if element == "faces"]
+            if kind == "moment":
+                surfaces = surfaces[:1]
+            if any(surface not in (None, "plane") for surface in surfaces):
+                problems.append("%s %s" % (title, NORMAL_NEEDS_FLAT))
         if kind == "remote_force":
             point = opts.get("point")
             if not (

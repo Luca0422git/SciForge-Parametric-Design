@@ -260,6 +260,17 @@ class NewKinds(unittest.TestCase):
             core.check("load", "force", dict(vector, per_entity=True), [face, edge, corner]), []
         )
 
+    def test_normal_needs_flat_faces(self):
+        # a round face's "normal" was the one at the middle of its parameters: an arbitrary
+        # direction (a hole pushed sideways)
+        flat, round_ = ("faces", "plane"), ("faces", "cylinder")
+        problems = core.check("load", "force", {"direction": "normal"}, [flat, round_])
+        self.assertTrue(any("flat faces" in p for p in problems), problems)
+        self.assertEqual(core.check("load", "force", {"direction": "vector"}, [round_]), [])
+        self.assertTrue(core.check("load", "moment", {"direction": "normal"}, [round_, flat]))
+        self.assertEqual(core.check("load", "moment", {"direction": "normal"}, [flat, round_]), [])
+        self.assertEqual(core.check("load", "moment", {"direction": "vector"}, [round_]), [])
+
     def test_descriptions(self):
         self.assertEqual(core.describe("constraint", "pin", {}), "Pin")
         self.assertEqual(

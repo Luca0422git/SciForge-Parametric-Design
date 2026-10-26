@@ -2043,6 +2043,35 @@ def nothing_touched(doc, out):
     out.append(("those changes leave the results out of date", sim.out_of_date(study), ""))
 
 
+@engine_check("along the normal of a curved face")
+def normal_of_curved(doc, out):
+    """A Force or a Moment along the normal of a round face: refused with a sentence (it took
+    the normal at the middle of the face's parameters: a shaft's side face pushed it sideways
+    in a direction that has nothing to do with the part); along a vector it is fine."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    shaft = sb.make_body(
+        doc, Part.makeCylinder(10, 100, App.Vector(0, 0, 0), App.Vector(1, 0, 0)), "Shaft"
+    )
+    study = sim.create_study(doc)
+    side = sb.one_face(shaft, lambda f: f.Surface.TypeId == "Part::GeomCylinder")
+    for kind in ("force", "moment"):
+        try:
+            sim.add_item(study, "load", kind, [(shaft, side)], {"direction": "normal"})
+            out.append(("%s along a round face's normal: refused" % kind, False, "accepted"))
+        except sim.SimulationError as exc:
+            out.append(
+                ("%s along a round face's normal: refused" % kind, "flat faces" in str(exc), exc)
+            )
+    item = sim.add_item(
+        study, "load", "force", [(shaft, side)], {"direction": "vector", "vector": [0, 0, -1]}
+    )
+    out.append(("a force along a vector on it: taken", sim.is_item(item), ""))
+
+
 @engine_check("results kept in and dropped from the file")
 def kept_and_dropped(doc, out):
     """A solved study saved and reopened: the results come back with the same numbers; with

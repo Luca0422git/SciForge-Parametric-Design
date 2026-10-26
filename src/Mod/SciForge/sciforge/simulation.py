@@ -1876,6 +1876,14 @@ def _face_normal_at(face, point):
         return (n.x, n.y, n.z)
 
 
+def _flat(face):
+    """True for a planar face (its normal is the same everywhere)."""
+    try:
+        return face.Surface.TypeId == "Part::GeomPlane"
+    except Exception:
+        return False
+
+
 def _middle_uv(face):
     u0, u1, v0, v1 = face.ParameterRange
     return (u0 + u1) / 2.0, (v0 + v1) / 2.0
@@ -2016,7 +2024,10 @@ def _load_forces(item, model, mesh, subs):
             e_edges = [s for s in entity if s.startswith("Edge")]
             e_vertices = [s for s in entity if s.startswith("Vertex")]
             if normal:
-                # each face along its own normal, the faces sharing the force by area
+                # each face along its own normal, the faces sharing the force by area (flat
+                # faces: a curved one has no one normal, simulation_core.NORMAL_NEEDS_FLAT)
+                if any(not _flat(_model_element(model, s)) for s in e_faces):
+                    raise SimulationError("%s: Force %s" % (item.Label, core.NORMAL_NEEDS_FLAT))
                 areas = [_model_element(model, s).Area for s in e_faces]
                 total = sum(areas) or 1.0
                 for sub, area in zip(e_faces, areas):
@@ -2057,6 +2068,8 @@ def _load_forces(item, model, mesh, subs):
                 continue
             if opts.get("direction") == "normal":
                 face = _model_element(model, group[0])
+                if not _flat(face):
+                    raise SimulationError("%s: Moment %s" % (item.Label, core.NORMAL_NEEDS_FLAT))
                 n = face.normalAt(*_middle_uv(face))
                 axis = (n.x, n.y, n.z)
             else:
