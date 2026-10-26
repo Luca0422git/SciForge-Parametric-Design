@@ -2110,12 +2110,25 @@ def _delete_original(doc, source):
         except Exception:
             doc.removeObject(source.Name)
         return
-    base = getattr(source, "BaseFeature", None)
+    bases = [getattr(source, "BaseFeature", None)]
+    for step in source.Group:  # an Insert STEP step's imported shape (outside the body)
+        if "BaseFeature" in step.PropertiesList:
+            bases.append(getattr(step, "BaseFeature", None))
+    bases = [b for b in bases if b is not None and bodies.body_of(b) is None]
     timeline_ops.delete_bodies(doc, [source.Name], transaction=False)
-    if base is not None and bodies.alive(base):
-        users = [u for u in base.InList if bodies.alive(u)]
+    for base in bases:
+        if not bodies.alive(base):
+            continue
+        # a component holding it is no use of it (QA: the imported shape stayed behind in
+        # the component, a stray "Body001 (imported)" step in the timeline)
+        users = [
+            u for u in base.InList if bodies.alive(u) and not u.hasExtension("App::GroupExtension")
+        ]
         if not users:
             try:
+                for holder in base.InList:
+                    if bodies.alive(holder) and hasattr(holder, "removeObject"):
+                        holder.removeObject(base)
                 doc.removeObject(base.Name)
             except Exception as exc:
                 warn("rebuild: the original's imported shape stays (%s)" % exc)
