@@ -63,10 +63,10 @@ def _item_row(item, lost):
 def _study_row(study):
     sim = _sim()
     lost = {i.Name for i in sim.lost_items(study)}
-    constraints, loads = [], []
+    constraints, loads, local = [], [], []
     for item in sim.items(study):
         row = _item_row(item, lost)
-        (constraints if row["category"] == "constraint" else loads).append(row)
+        {"constraint": constraints, "load": loads}.get(row["category"], local).append(row)
     settings = sim.settings(study)
     gravity = settings["gravity"]
     summary = sim.summary(study)
@@ -76,24 +76,16 @@ def _study_row(study):
         core.fmt(mesh["size_pct"]),
         mesh["order"],
     )
-    info = (summary or {}).get("mesh") or {}
-    if solved and info.get("nodes"):
-        mesh_text = "%s nodes, %s elements (%s)" % (
-            info.get("nodes"),
-            info.get("elements"),
-            info.get("order", mesh["order"]),
-        )
     try:
-        from . import simulation_solve_dialog
-
-        made = simulation_solve_dialog.mesh_object(study)
-        if not solved and made is not None and made.FemMesh.NodeCount:
-            mesh_text = "%d nodes, %d elements (Generate Mesh)" % (
-                made.FemMesh.NodeCount,
-                made.FemMesh.VolumeCount,
-            )
+        made = sim.mesh_summary(study)
     except Exception:
-        pass
+        made = {}
+    if made.get("nodes"):
+        mesh_text = "%s nodes, %s elements%s" % (
+            made.get("nodes"),
+            made.get("elements"),
+            " (out of date: the design or the mesh settings changed)" if made.get("stale") else "",
+        )
     results_text = "Double-click to show the results"
     stats = (summary or {}).get("stats") or {}
     if stats.get("safety", {}).get("min") is not None:
@@ -113,6 +105,7 @@ def _study_row(study):
             ", ".join(core.fmt(c, 3) for c in gravity.get("direction") or []),
         ),
         "mesh_text": mesh_text,
+        "local": local,
         "solved": solved,
         "out_of_date": solved and sim.out_of_date(study),
         "results_text": results_text,
@@ -292,34 +285,13 @@ def rename(widget, node, text):
 
 def clone_study(doc, study):
     """Fusion's Clone Study (research 4): a copy with the same settings, materials,
-    constraints and loads, and no results."""
+    constraints, loads and mesh controls, and no results (simulation.clone_study)."""
     if study is None or not commands.finish_open_dialog():
         return None
-    sim = _sim()
     made = {}
 
     def change():
-        data = sim.study_data(study)
-        copy = sim.create_study(doc, data.get("type", "static_stress"))
-        copy_data = sim.study_data(copy)
-        copy_data["settings"] = data["settings"]
-        copy_data["materials"] = dict(data.get("materials") or {})
-        bodies.save_meta(copy, sim.STUDY_PROP, copy_data)
-        chosen = list(getattr(study, "SimBodies", None) or [])
-        if chosen:
-            copy.SimBodies = chosen
-        for item in sim.items(study):
-            d = sim.item_data(item)
-            new = doc.addObject("App::FeaturePython", "SimItem")
-            sim.ItemProxy(new)
-            bodies.mark(new, sim.ITEM)
-            bodies.hide_from_timeline(new)
-            new.SimStudy = copy
-            new.References = item.References
-            new.Label = item.Label
-            bodies.save_meta(new, sim.ITEM_PROP, d)
-            new.Suppressed = bool(item.Suppressed)
-        made["study"] = copy
+        made["study"] = _sim().clone_study(study)
 
     _transaction(doc, "Clone Study", change)
     log("cloned %s as %s" % (study.Label, made["study"].Label))

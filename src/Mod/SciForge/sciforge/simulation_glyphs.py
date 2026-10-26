@@ -27,6 +27,7 @@ PUSH = (0.96, 0.52, 0.10)  # forces, moments, bearing loads
 PRESS = (0.90, 0.30, 0.22)  # pressure
 WEIGHT = (0.58, 0.40, 0.88)  # gravity
 LOST = (0.85, 0.15, 0.15)
+MESH = (0.30, 0.80, 0.35)  # local mesh controls: green dots (Fusion previews them so)
 
 STATE = {
     "root": None,  # SoSeparator in the view's scene graph
@@ -269,6 +270,8 @@ def _model(name):
         model.addChild(_cone_down(0.0, 0.26, 0.1))
         model.addChild(_cylinder(0.26, 0.42, 0.035))
         model.addChild(_sphere(0.46, 0.07))
+    elif name == "dot":
+        model.addChild(_sphere(0.0, 0.07))
     elif name == "roller":  # Frictionless: a ball on the face with a plate on top
         model.addChild(_sphere(0.12, 0.12))
         model.addChild(_cylinder(0.24, 0.28, 0.2))
@@ -434,6 +437,13 @@ def glyphs_for(doc, category, kind, opts, refs, color=None, transparency=0.0, lo
     opts = core.options(category, kind, opts) if kind else dict(opts or {})
     spacing = _spacing(doc)
     count = 0
+    if category == "mesh":
+        # a local mesh control: green dots on its faces and edges, closer where it is finer
+        sep.addChild(_material(LOST if lost else (color or MESH), transparency))
+        for p, _n, _k in _anchors(refs, spacing * 0.5, most=6):
+            sep.addChild(_place(p, App.Vector(0, 0, -1), _model("dot")))
+            count += 1
+        return sep, count
     if category == "constraint":
         base = HOLD
         if kind == "fixed" and not all(opts.get(a) for a in ("x", "y", "z")):

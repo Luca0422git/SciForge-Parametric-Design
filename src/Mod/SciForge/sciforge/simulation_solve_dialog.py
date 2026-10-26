@@ -23,6 +23,7 @@ import FreeCADGui as Gui
 from . import bodies, log, ui_icon, warn
 from . import simulation_setup_core as score
 from .compat import QtCore, QtWidgets
+from .simulation_dialogs import FocusBack
 
 RUN = {
     "queue": [],  # studies waiting
@@ -76,7 +77,7 @@ def _status_text(study):
     return "Not solved"
 
 
-class SolveDialog(QtWidgets.QDialog):
+class SolveDialog(FocusBack, QtWidgets.QDialog):
     """Fusion's Solve dialog (research 3.10), solving on this computer."""
 
     def __init__(self, doc):
@@ -245,17 +246,7 @@ def start(studies, kind="solve"):
 
 
 def _make_job(study, kind):
-    sim = _sim()
-    if kind == "mesh":
-        try:
-            import inspect
-
-            if "mesh_only" in inspect.signature(sim.Job.__init__).parameters:
-                return sim.Job(study, mesh_only=True)
-        except Exception:
-            pass
-        return _mesh_job_class()(study)
-    return sim.Job(study)
+    return _sim().Job(study, mesh_only=(kind == "mesh"))
 
 
 def _next():
@@ -319,7 +310,18 @@ def _poll():
         _update_status()
         if state != "running":
             RUN["job"] = None
-            _after(study, state, job.message)
+            notes = list(getattr(job, "notes", None) or [])
+            message = job.message
+            if state == "done" and RUN["kind"] == "mesh" and isinstance(job.summary, dict):
+                info = job.summary
+                if info.get("nodes"):
+                    message = "Mesh made: %s nodes, %s elements." % (
+                        info.get("nodes"),
+                        info.get("elements"),
+                    )
+            if notes:
+                message = (message + " " if message else "") + " ".join(notes)
+            _after(study, state, message)
     except Exception as exc:
         warn("solve: %s" % exc)
         RUN["job"] = None
@@ -398,7 +400,7 @@ STATUS_ICONS = {
 }
 
 
-class StatusDialog(QtWidgets.QDialog):
+class StatusDialog(FocusBack, QtWidgets.QDialog):
     def __init__(self):
         super().__init__(Gui.getMainWindow())
         self.setObjectName("SciForgeSimJobStatus")
@@ -498,10 +500,14 @@ def _update_status(final=False):
             elif results:
                 dialog.title.setText("Done")
                 dialog.message.setStyleSheet("")
+                said = " ".join(m for _state, m in results.values() if m and m != "Done")
                 dialog.message.setText(
-                    "The mesh is shown on the model."
-                    if RUN["kind"] == "mesh"
-                    else "The results are shown (RESULTS tab)."
+                    (said + " " if said else "")
+                    + (
+                        "The mesh is shown on the model."
+                        if RUN["kind"] == "mesh"
+                        else "The results are shown (RESULTS tab)."
+                    )
                 )
                 dialog.bar.setValue(100)
                 rows = score.stage_rows("results", "done", stages)
@@ -560,117 +566,24 @@ def last_results():
 
 
 # -- Generate Mesh --------------------------------------------------------------------------------
-_MESH_JOB = {"cls": None}
-
-
-def _mesh_job_class():
-    """A Job that stops once the mesh is made (until the engine has Job(mesh_only=True)): the
-    model and Gmsh's mesh in a hidden run, no solver input, no loads needed."""
-    if _MESH_JOB["cls"] is not None:
-        return _MESH_JOB["cls"]
-    sim = _sim()
-
-    class MeshJob(sim.Job):
-        def _stage_model(self):
-            t = time.time()
-            shape, self._owners = sim.build_model(self.study)
-            self._analysis, self._model, self._mesh = _mesh_run(self.study, shape)
-            self.doc.recompute()
-            self.timings["model"] = time.time() - t
-            self.stage, self.message = "mesh", "Meshing"
-            self._start_mesh()
-
-        def _stage_input(self):
-            mesh = self._mesh.FemMesh
-            self.summary = {"nodes": mesh.NodeCount, "elements": mesh.VolumeCount}
-            self._stop(
-                "done", "Mesh made: %d nodes, %d elements" % (mesh.NodeCount, mesh.VolumeCount)
-            )
-
-        @property
-        def progress(self):
-            if self.state == "done":
-                return 1.0
-            return 0.5 if self.stage == "mesh" else 0.0
-
-    _MESH_JOB["cls"] = MeshJob
-    return MeshJob
-
-
-def _mesh_run(study, model_shape):
-    """The study's hidden run with only the model and Gmsh's mesh object (settings as the
-    engine's solve uses them). Replaces the study's run: its results are gone (Fusion: a new
-    mesh makes the study solve again)."""
-    import ObjectsFem
-
-    from . import simulation_core as core
-
-    sim = _sim()
-    doc = study.Document
-    sim._remove_run(study)
-    if sim.summary(study):
-        bodies.save_meta(study, sim.RESULT_PROP, {})
-    opts = sim.settings(study)
-    analysis = ObjectsFem.makeAnalysis(doc, "SimRun")
-    bodies.mark(analysis, sim.RUN)
-    bodies.hide_from_timeline(analysis)
-    analysis.Label = "%s run" % study.Label
-    study.SimRun = analysis
-    model = doc.addObject("Part::Feature", "SimModel")
-    bodies.mark(model, sim.MODEL)
-    bodies.hide_from_timeline(model)
-    model.Shape = model_shape
-    sim._hide(model)
-    analysis.addObject(model)
-    mesh = ObjectsFem.makeMeshGmsh(doc, "SimMesh")
-    mesh.Shape = model
-    size = core.element_size(sim._bbox(model_shape), opts["mesh"]["size_pct"])
-    mesh.CharacteristicLengthMax = "%r mm" % size
-    mesh.CharacteristicLengthMin = "%r mm" % (size * opts["mesh"]["min_pct"] / 100.0)
-    mesh.ElementOrder = "2nd" if opts["mesh"]["order"] == "parabolic" else "1st"
-    if "SecondOrderLinear" in mesh.PropertiesList:
-        mesh.SecondOrderLinear = not opts["mesh"]["curved"]
-    if "MeshSizeFromCurvature" in mesh.PropertiesList:
-        turn = max(float(opts["mesh"]["max_turn"]), 5.0)
-        mesh.MeshSizeFromCurvature = int(round(360.0 / turn))
-    if "CoherenceMesh" in mesh.PropertiesList:
-        mesh.CoherenceMesh = True
-    sim._hide(mesh)
-    analysis.addObject(mesh)
-    for obj in analysis.Group:
-        bodies.hide_from_timeline(obj)
-    return analysis, model, mesh
-
-
 def generate_mesh(study):
-    """SETUP > SOLVE > Generate Mesh (and the browser's Mesh node)."""
+    """SETUP > SOLVE > Generate Mesh (and the browser's Mesh row): the mesh made now (the
+    engine's mesh-only job: no constraints or loads needed) and shown on the model."""
     from . import commands, simulation_dialogs
 
     if study is None or simulation_dialogs._busy(study):
         return False
     if not commands.finish_open_dialog():
         return False
-    checks = []
-    try:
-        checks = [t for level, t in _sim().precheck(study) if level == "error"]
-    except Exception:
-        pass
-    bad = [t for t in checks if "Young" in t or "Poisson" in t or "no solid body" in t]
-    if bad:
-        commands.tell(" ".join(bad))
-        return False
     return start([study], "mesh")
 
 
 def mesh_object(study):
-    """The mesh object of the study's run, or None."""
-    run = _sim().run_of(study) if study is not None else None
-    if run is None:
+    """The study's newest mesh object (Generate Mesh's, else the last solve's), or None."""
+    try:
+        return _sim().mesh_object(study) if study is not None else None
+    except Exception:
         return None
-    for obj in run.Group:
-        if obj.isDerivedFrom("Fem::FemMeshObject") and obj.Name.startswith("SimMesh"):
-            return obj
-    return None
 
 
 def show_mesh(study):

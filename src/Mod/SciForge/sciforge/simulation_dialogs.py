@@ -70,6 +70,30 @@ def _close_active():
         pass
 
 
+def give_back_focus():
+    """A SciForge window closed: the main window becomes the active one again, so its keys
+    (Esc, Enter, Ctrl+Z over the 3D view) work at once (without a window manager, as on some
+    Linux desktops and under xvfb, nobody else does it)."""
+
+    def run():
+        try:
+            main = Gui.getMainWindow()
+            if QtWidgets.QApplication.activeModalWidget() is None:
+                main.activateWindow()
+        except Exception:
+            pass
+
+    QtCore.QTimer.singleShot(0, run)
+
+
+class FocusBack:
+    """Mixin for SciForge's dialogs: closing one gives the main window the keyboard back."""
+
+    def hideEvent(self, event):
+        give_back_focus()
+        super().hideEvent(event)
+
+
 def _note(text, style=NOTE_STYLE):
     label = QtWidgets.QLabel(text)
     label.setWordWrap(True)
@@ -133,7 +157,7 @@ class _SimPanel(Panel):
 STUDY_ICONS = {"static_stress": "sim_static_stress"}
 
 
-class NewStudyDialog(QtWidgets.QDialog):
+class NewStudyDialog(FocusBack, QtWidgets.QDialog):
     """Fusion's New Study: the study types as pictures, the one picked described in big on the
     right with a Settings gear, Create Study. Only Static Stress is available; every other type
     is shown greyed with "Not in SciForge yet" (research 2.1, 2.2)."""
@@ -294,6 +318,25 @@ def new_study_dialog():
 
 
 # -- Study Settings -----------------------------------------------------------------------------
+def _spin(name, low, high, value, decimals=1, suffix="", step=1.0, tip=""):
+    box = QtWidgets.QDoubleSpinBox()
+    box.setObjectName(name)
+    box.setRange(low, high)
+    box.setDecimals(decimals)
+    box.setSingleStep(step)
+    if suffix:
+        box.setSuffix(suffix)
+    box.setValue(float(value))
+    if tip:
+        box.setToolTip(tip)
+    return box
+
+
+# Adaptive refinement is wired in the engine when simulation_core says so (sim-core).
+def _adaptive_built():
+    return bool(getattr(core, "ADAPTIVE_BUILT", False))
+
+
 class SettingsForm(QtWidgets.QTabWidget):
     """Fusion's Study Settings tabs (research 2.3): General, Mesh, Adaptive Mesh Refinement,
     Contacts. What SciForge's mesher or solver cannot do is shown greyed with the reason."""
@@ -308,38 +351,59 @@ class SettingsForm(QtWidgets.QTabWidget):
         form = QtWidgets.QFormLayout(general)
         self.rigid = QtWidgets.QCheckBox("Remove rigid body modes")
         self.rigid.setObjectName("SciForgeSimRigidModes")
-        has_rigid = "rigid_body_modes" in core.DEFAULT_SETTINGS
-        self.rigid.setChecked(bool(self.base.get("rigid_body_modes", False)))
-        self.rigid.setEnabled(has_rigid)
+        self.rigid.setChecked(bool(self.base.get("remove_rigid", False)))
+        self.rigid.setEnabled("remove_rigid" in core.DEFAULT_SETTINGS)
         self.rigid.setToolTip(
-            "Only for a model held by nothing whose loads balance exactly"
-            if has_rigid
-            else "Not in SciForge yet: hold the model with constraints"
+            "Only for a model held by nothing whose loads balance exactly (they sum to zero): "
+            "SciForge then holds each free piece just enough. With constraints, leave it off."
         )
         form.addRow(self.rigid)
+        self.keep = QtWidgets.QCheckBox("Keep the results in the design file")
+        self.keep.setObjectName("SciForgeSimKeepResults")
+        self.keep.setChecked(bool(self.base.get("keep_results", True)))
+        self.keep.setEnabled("keep_results" in core.DEFAULT_SETTINGS)
+        self.keep.setToolTip(
+            "Off: only the summary is saved and the coloured results need a new solve after "
+            "the design is opened again (a fine mesh can add many MB to the file)"
+        )
+        form.addRow(self.keep)
         form.addRow(_note(score.LIMITS))
         self.addTab(general, "General")
         # Mesh
         page = QtWidgets.QWidget()
         form = QtWidgets.QFormLayout(page)
-        self.size = QtWidgets.QDoubleSpinBox()
-        self.size.setObjectName("SciForgeSimMeshSize")
-        self.size.setRange(0.5, 50.0)
-        self.size.setDecimals(1)
-        self.size.setSingleStep(1.0)
-        self.size.setSuffix(" %")
-        self.size.setValue(float(mesh["size_pct"]))
-        self.size.setToolTip("The average element length as a share of the model's size")
-        form.addRow("Average Element Size (% of model size)", self.size)
+        self.size_kind = QtWidgets.QComboBox()
+        self.size_kind.setObjectName("SciForgeSimMeshSizeKind")
+        self.size_kind.addItem("Model based (% of model size)", "pct")
+        self.size_kind.addItem("Absolute value (mm)", "mm")
+        self.size_kind.setCurrentIndex(1 if float(mesh.get("size_mm") or 0) > 0 else 0)
+        self.size_kind.currentIndexChanged.connect(self._size_kind_changed)
+        form.addRow("Average Element Size", self.size_kind)
+        self.size = _spin(
+            "SciForgeSimMeshSize",
+            0.5,
+            50.0,
+            mesh["size_pct"],
+            1,
+            " %",
+            tip="The average element length as a share of the model's size (its diagonal)",
+        )
+        form.addRow("Size (% of model size)", self.size)
+        self.size_mm = _spin(
+            "SciForgeSimMeshSizeMM",
+            0.05,
+            10000.0,
+            float(mesh.get("size_mm") or 0) or 2.0,
+            2,
+            " mm",
+            0.5,
+            "The average element length",
+        )
+        form.addRow("Size (mm)", self.size_mm)
         self.per_part = QtWidgets.QCheckBox("Scale Mesh Size Per Part")
         self.per_part.setObjectName("SciForgeSimMeshPerPart")
         self.per_part.setChecked(bool(mesh.get("scale_per_part")))
-        per_part_built = bool(core.DEFAULT_SETTINGS.get("mesh", {}).get("per_part_built"))
-        self.per_part.setEnabled(per_part_built)
-        if not per_part_built:
-            self.per_part.setToolTip(
-                "Not in SciForge yet: one element size is used for every body of the study"
-            )
+        self.per_part.setToolTip("Each body's elements sized from its own size, not the model's")
         form.addRow(self.per_part)
         self.order = QtWidgets.QComboBox()
         self.order.setObjectName("SciForgeSimMeshOrder")
@@ -352,43 +416,51 @@ class SettingsForm(QtWidgets.QTabWidget):
         self.curved.setObjectName("SciForgeSimMeshCurved")
         self.curved.setChecked(bool(mesh["curved"]))
         form.addRow(self.curved)
-        self.turn = QtWidgets.QDoubleSpinBox()
-        self.turn.setObjectName("SciForgeSimMeshTurn")
-        self.turn.setRange(5.0, 90.0)
-        self.turn.setDecimals(0)
-        self.turn.setSuffix(" deg")
-        self.turn.setValue(float(mesh["max_turn"]))
+        self.turn = _spin("SciForgeSimMeshTurn", 5.0, 90.0, mesh["max_turn"], 0, " deg")
         form.addRow("Max. Turn Angle on Curves", self.turn)
-        ratio = QtWidgets.QDoubleSpinBox()
-        ratio.setValue(1.5)
-        ratio.setEnabled(False)
-        ratio.setToolTip("SciForge's mesher (Gmsh) grows the elements smoothly by itself")
-        form.addRow("Max. Adjacent Mesh Size Ratio", ratio)
-        aspect = QtWidgets.QDoubleSpinBox()
-        aspect.setValue(10.0)
-        aspect.setEnabled(False)
-        aspect.setToolTip("SciForge's mesher (Gmsh) keeps the elements well shaped by itself")
-        form.addRow("Max. Aspect Ratio", aspect)
-        self.minimum = QtWidgets.QDoubleSpinBox()
-        self.minimum.setObjectName("SciForgeSimMeshMin")
-        self.minimum.setRange(1.0, 100.0)
-        self.minimum.setDecimals(0)
-        self.minimum.setSuffix(" %")
-        self.minimum.setValue(float(mesh["min_pct"]))
+        self.ratio = _spin(
+            "SciForgeSimMeshRatio",
+            1.05,
+            10.0,
+            mesh.get("adjacent_ratio", 1.5),
+            2,
+            step=0.1,
+            tip="How fast the elements may grow from small (local controls) to large",
+        )
+        form.addRow("Max. Adjacent Mesh Size Ratio", self.ratio)
+        self.aspect = _spin(
+            "SciForgeSimMeshAspect",
+            1.5,
+            1000.0,
+            mesh.get("aspect_ratio", 10.0),
+            1,
+            tip="Elements stretched more than this are counted in the mesh statistics",
+        )
+        form.addRow("Max. Aspect Ratio", self.aspect)
+        self.minimum = _spin("SciForgeSimMeshMin", 1.0, 100.0, mesh["min_pct"], 0, " %")
         form.addRow("Minimum Element Size (% of average size)", self.minimum)
         self.addTab(page, "Mesh")
         self._order_changed()
+        self._size_kind_changed()
         # Adaptive Mesh Refinement
         page = QtWidgets.QWidget()
         form = QtWidgets.QFormLayout(page)
         self.adaptive = QtWidgets.QComboBox()
         self.adaptive.setObjectName("SciForgeSimAdaptive")
-        for label in ("None", "Low", "Medium", "High", "Custom"):
-            self.adaptive.addItem(label)
-        adaptive = "adaptive" in core.DEFAULT_SETTINGS
-        self.adaptive.setEnabled(adaptive)
+        for label, key in (
+            ("None", "none"),
+            ("Low", "low"),
+            ("Medium", "medium"),
+            ("High", "high"),
+            ("Custom", "custom"),
+        ):
+            self.adaptive.addItem(label, key)
+        level = (self.base.get("adaptive") or {}).get("level", "none")
+        index = self.adaptive.findData(level)
+        self.adaptive.setCurrentIndex(max(index, 0))
+        self.adaptive.setEnabled(_adaptive_built())
         form.addRow("Refinement", self.adaptive)
-        if not adaptive:
+        if not _adaptive_built():
             form.addRow(
                 _note(
                     "Not in SciForge yet: make the Average Element Size smaller, or use Local "
@@ -408,21 +480,29 @@ class SettingsForm(QtWidgets.QTabWidget):
             item.setEnabled(False)
             item.setToolTip("Not in SciForge yet: bodies that touch are bonded")
         form.addRow("Automatic Contacts", kind)
-        self.tolerance = QtWidgets.QDoubleSpinBox()
-        self.tolerance.setObjectName("SciForgeSimContactTolerance")
-        self.tolerance.setRange(0.0, 10.0)
-        self.tolerance.setDecimals(3)
-        self.tolerance.setSingleStep(0.05)
-        self.tolerance.setSuffix(" mm")
-        self.tolerance.setValue(float(self.base["contact_tolerance"]))
+        self.tolerance = _spin(
+            "SciForgeSimContactTolerance",
+            0.0,
+            10.0,
+            self.base["contact_tolerance"],
+            3,
+            " mm",
+            0.05,
+        )
         form.addRow("Contact Detection Tolerance", self.tolerance)
         self.addTab(page, "Contacts")
 
     def _order_changed(self, *_a):
         self.curved.setEnabled(self.order.currentData() == "parabolic")
 
+    def _size_kind_changed(self, *_a):
+        absolute = self.size_kind.currentData() == "mm"
+        self.size.setEnabled(not absolute)
+        self.size_mm.setEnabled(absolute)
+
     def values(self):
         out = core.settings(self.base)
+        absolute = self.size_kind.currentData() == "mm"
         out["mesh"].update(
             {
                 "size_pct": float(self.size.value()),
@@ -433,13 +513,23 @@ class SettingsForm(QtWidgets.QTabWidget):
                 "scale_per_part": bool(self.per_part.isChecked()),
             }
         )
+        if "size_mm" in out["mesh"]:
+            out["mesh"]["size_mm"] = float(self.size_mm.value()) if absolute else 0.0
+        if "adjacent_ratio" in out["mesh"]:
+            out["mesh"]["adjacent_ratio"] = float(self.ratio.value())
+        if "aspect_ratio" in out["mesh"]:
+            out["mesh"]["aspect_ratio"] = float(self.aspect.value())
         out["contact_tolerance"] = float(self.tolerance.value())
-        if "rigid_body_modes" in core.DEFAULT_SETTINGS:
-            out["rigid_body_modes"] = bool(self.rigid.isChecked())
+        if "remove_rigid" in out:
+            out["remove_rigid"] = bool(self.rigid.isChecked())
+        if "keep_results" in out:
+            out["keep_results"] = bool(self.keep.isChecked())
+        if _adaptive_built() and isinstance(out.get("adaptive"), dict):
+            out["adaptive"]["level"] = self.adaptive.currentData()
         return out
 
 
-class SettingsDialog(QtWidgets.QDialog):
+class SettingsDialog(FocusBack, QtWidgets.QDialog):
     """Study Settings opened from the New Study dialog's gear (before the study exists)."""
 
     def __init__(self, parent, settings):
@@ -840,8 +930,12 @@ def open_contacts(study):
     return _show_panel(ContactsPanel(study.Document, study))
 
 
+class _TableDialog(FocusBack, QtWidgets.QDialog):
+    pass
+
+
 def _table_dialog(name, title, headers, rows, note=""):
-    dialog = QtWidgets.QDialog(Gui.getMainWindow())
+    dialog = _TableDialog(Gui.getMainWindow())
     dialog.setObjectName(name)
     dialog.setWindowTitle(title)
     layout = QtWidgets.QVBoxLayout(dialog)
@@ -925,6 +1019,8 @@ def attribute_rows(study):
     rows = []
     for item in sim.items(study):
         data = sim.item_data(item)
+        if data["category"] not in ("constraint", "load"):
+            continue  # (local mesh controls are not in the load case)
         try:
             info = core.kind_info(data["category"], data["kind"])
             title = info["title"]
@@ -971,7 +1067,7 @@ def open_attributes(study):
 
 
 # -- Pre-check ----------------------------------------------------------------------------------
-class PrecheckDialog(QtWidgets.QDialog):
+class PrecheckDialog(FocusBack, QtWidgets.QDialog):
     """Fusion's Pre-check list (research 3.9): the traffic light and what may be missing."""
 
     def __init__(self, study):
@@ -1039,29 +1135,7 @@ def open_precheck(study):
 def free_bodies(study):
     """Bodies of the study that nothing holds: no constraint on them, and not touching a held
     body (through other bodies) (Fusion's DOF View shows these, research 3.8)."""
-    sim = _sim()
-    found = sim.study_bodies(study)
-    held = set()
-    for item in sim.items(study, "constraint"):
-        if item.Suppressed:
-            continue
-        for obj, _sub in sim._picks(item.References):
-            body = bodies.body_of(obj)
-            if body is not None:
-                held.add(body.Name)
-    links = {}
-    for a, b, _gap in contact_pairs(study):
-        links.setdefault(a.Name, set()).add(b.Name)
-        links.setdefault(b.Name, set()).add(a.Name)
-    reached = set(held)
-    todo = list(held)
-    while todo:
-        name = todo.pop()
-        for other in links.get(name, ()):
-            if other not in reached:
-                reached.add(other)
-                todo.append(other)
-    return [b for b in found if b.Name not in reached]
+    return list(_sim().loose_bodies(study))
 
 
 def dof_view(study):
