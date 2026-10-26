@@ -74,6 +74,7 @@ class ResultData:
         else:
             self.diagonal = 0.0
         self._values = {}
+        self._stats = {}
         self._straight = None
         self._boxes = None
 
@@ -120,7 +121,10 @@ class ResultData:
     def stats(self, key):
         """{"min", "max", "min_index", "max_index", "min_at", "max_at"} of a result: the
         engine's summary when it has it (the numbers Results Details and the report show),
-        worked out from the values otherwise."""
+        worked out from the values otherwise. Kept once worked out (these results do not
+        change: a new solve makes a new ResultData)."""
+        if key in self._stats:
+            return dict(self._stats[key])
         done = simulation.summary(self.study).get("stats", {}).get(key)
         values = self.values(key)
         if done and done.get("count"):
@@ -129,6 +133,7 @@ class ResultData:
             out = sim.stats([None if v != v else v for v in values.tolist()])
             out["min_at"] = self.place(out["min_index"])
             out["max_at"] = self.place(out["max_index"])
+        self._stats[key] = dict(out)
         return out
 
     def place(self, index):
