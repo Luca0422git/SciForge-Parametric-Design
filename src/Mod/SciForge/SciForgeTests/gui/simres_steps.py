@@ -298,6 +298,24 @@ def panel_field(name, kind=QtWidgets.QWidget):
     return form.findChild(kind, name) if form is not None else None
 
 
+def type_enter(widget, text):
+    """Click into a number field, select what is there, type `text` and press Enter."""
+    from PySide6 import QtTest
+
+    if widget is None:
+        h.check("the field to type in", False)
+        return False
+    QtTest.QTest.mouseClick(
+        widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, QtCore.QPoint(10, widget.height() // 2)
+    )
+    _process()
+    QtTest.QTest.keyClick(widget, QtCore.Qt.Key_A, QtCore.Qt.ControlModifier)
+    QtTest.QTest.keyClicks(widget, text)
+    QtTest.QTest.keyClick(widget, QtCore.Qt.Key_Return)
+    _process()
+    return True
+
+
 def esc():
     h.press(QtCore.Qt.Key_Escape)
 

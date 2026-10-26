@@ -840,19 +840,21 @@ class Session:
         self.apply()
 
     def _apply_slice(self):
+        """The slice plane: "clip" cuts the result away on one side and colours the cut face;
+        "slice" shows the cut face inside the whole result drawn see-through."""
         display = self.display
         if self.slice is None:
             display.set_clip(None, None)
             display.set_cap([], [], [])
-            display.part_switch.whichChild = display.coin.SO_SWITCH_ALL
+            display.set_see_through(False)
             return
         origin, normal = slice_plane(self)
-        style = self.slice.get("style", "clip")
-        display.set_clip(origin, normal)
-        if style == "slice":
-            display.part_switch.whichChild = display.coin.SO_SWITCH_NONE
+        if self.slice.get("style", "clip") == "slice":
+            display.set_clip(None, None)
+            display.set_see_through(True)
         else:
-            display.part_switch.whichChild = display.coin.SO_SWITCH_ALL
+            display.set_clip(origin, normal)
+            display.set_see_through(False)
         self._cut(origin, normal)
 
     def _cut(self, origin, normal):

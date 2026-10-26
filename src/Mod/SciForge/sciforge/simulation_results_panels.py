@@ -182,8 +182,8 @@ def probes(session):
 class SlicePanel:
     """Slice Plane: a plane across X, Y or Z cuts the result; the cut face is coloured with the
     result inside the part. Style: cut the result away on one side, or show the slice alone
-    (the part see-through around it). OK keeps it, Cancel / Esc puts back what was there,
-    Remove Slice takes it away."""
+    (the whole result see-through around it). OK keeps it, Cancel / Esc puts back what was
+    there, Remove Slice takes it away."""
 
     title = "Slice Plane"
 
@@ -191,7 +191,6 @@ class SlicePanel:
         self.session = session
         self._closed = False
         self.before = dict(session.slice) if session.slice else None
-        self.ghost_before = session.ghost
         data = session.data
         self.low = data.points.min(axis=0) if len(data.points) else [0.0, 0.0, 0.0]
         self.high = data.points.max(axis=0) if len(data.points) else [1.0, 1.0, 1.0]
@@ -308,14 +307,12 @@ class SlicePanel:
                 "flip": bool(self.flip.isChecked()),
                 "style": self.style_box.currentData(),
             }
-            self.session.ghost = self.ghost_before or self.spec["style"] == "slice"
             self.session.set_slice(self.spec)
         except Exception as exc:
             warn("Slice Plane: %s" % exc)
 
     def remove(self):
         try:
-            self.session.ghost = self.ghost_before
             self.session.set_slice(None)
             self.before = None
             self._close_dialog()
@@ -334,7 +331,6 @@ class SlicePanel:
 
     def reject(self):
         try:
-            self.session.ghost = self.ghost_before
             self.session.set_slice(self.before)
         except Exception as exc:
             warn("Slice Plane: %s" % exc)
@@ -476,6 +472,7 @@ class DetailsDialog(QtWidgets.QDialog):
         bottom.addStretch(1)
         close = QtWidgets.QPushButton("Close")
         close.setObjectName("SciForgeSimDetailsClose")
+        close.setAutoDefault(False)  # Enter in a target field takes the value, not Close
         close.clicked.connect(self.close)
         bottom.addWidget(close)
         box.addLayout(bottom)
@@ -666,6 +663,7 @@ class ReportDialog(QtWidgets.QDialog):
         buttons = QtWidgets.QHBoxLayout()
         self.save_button = QtWidgets.QPushButton("Save")
         self.save_button.setObjectName("SciForgeSimReportSave")
+        self.save_button.setDefault(True)  # Enter saves
         self.save_button.clicked.connect(lambda: self._save(False))
         self.open_button = QtWidgets.QPushButton("Save and Open")
         self.open_button.setObjectName("SciForgeSimReportOpen")

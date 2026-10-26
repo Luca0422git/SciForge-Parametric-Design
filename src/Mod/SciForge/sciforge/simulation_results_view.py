@@ -167,7 +167,11 @@ class ResultDisplay:
         cap_hints = coin.SoShapeHints()
         cap_hints.vertexOrdering = coin.SoShapeHints.UNKNOWN_ORDERING
         cap.addChild(cap_hints)
-        cap.addChild(self.material)
+        cap_material = coin.SoMaterial()  # (opaque even when the part is see-through)
+        cap_material.diffuseColor.setValue(0.92, 0.92, 0.92)
+        cap_material.ambientColor.setValue(0.45, 0.45, 0.45)
+        cap_material.specularColor.setValue(0.12, 0.12, 0.12)
+        cap.addChild(cap_material)
         cap.addChild(self.texture)
         self.cap_coords = coin.SoCoordinate3()
         self.cap_texcoords = coin.SoTextureCoordinate2()
@@ -284,6 +288,13 @@ class ResultDisplay:
 
     def set_ghost(self, on):
         self.ghost_switch.whichChild = self.coin.SO_SWITCH_ALL if on else self.coin.SO_SWITCH_NONE
+
+    def set_see_through(self, on):
+        """The result drawn see-through (a slice shown alone inside it)."""
+        self.material.transparency.setValue(0.8 if on else 0.0)
+
+    def see_through(self):
+        return self.material.transparency[0] > 0.0
 
     def mesh_shown(self):
         return self.mesh_switch.whichChild.getValue() != self.coin.SO_SWITCH_NONE
