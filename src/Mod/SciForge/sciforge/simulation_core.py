@@ -1108,13 +1108,33 @@ def gmsh_errors(output):
     in order, so surface 12 is the model's Face12."""
     import re
 
-    errors = [line.strip() for line in (output or "").splitlines() if "Error" in line]
+    # (Gmsh ends with a summary of its errors: "-----", "Mesh generation error summary",
+    # "2 errors", "Check the full log for details": not reasons)
+    generic = ("------", "error summary", "warnings", "errors", "full log")
+    errors = [
+        line.strip()
+        for line in (output or "").splitlines()
+        if "Error" in line and not any(g in line for g in generic)
+    ]
     numbers = []
     for line in errors:
         for match in re.finditer(r"[Ss]urfaces?\s+(\d+)", line):
             if int(match.group(1)) not in numbers:
                 numbers.append(int(match.group(1)))
     return errors, numbers
+
+
+# Gmsh's complaints when the surface mesh crosses itself: the triangles of two faces closer
+# than the elements are large (a thin wall, a small gap) cut through each other. Smaller
+# elements mesh it.
+CROSSING_WORDS = ("intersect", "invalid boundary mesh", "overlapping facets", "self-intersect")
+
+
+def mesh_crossed_itself(output):
+    """True when Gmsh's output says the surface mesh crossed itself (see CROSSING_WORDS)."""
+    errors, _numbers = gmsh_errors(output)
+    text = " ".join(errors).lower()
+    return any(word in text for word in CROSSING_WORDS)
 
 
 # -- contacts --------------------------------------------------------------------------------------
@@ -1154,6 +1174,24 @@ def mesh_quality(edge_lengths, aspect_ratios, limit):
         out["worst_aspect"] = max(ratios)
         out["over_limit"] = sum(1 for v in ratios if v > limit)
     return out
+
+
+def mesh_quality_note(info, limit):
+    """A sentence when the mesh has elements stretched far beyond the study's aspect ratio
+    limit (a thin wall or a sliver met by large elements: the results near them are less
+    accurate), else None. `info`: mesh_quality's dict with "elements"."""
+    worst = info.get("worst_aspect")
+    over = int(info.get("over_limit") or 0)
+    count = int(info.get("elements") or 0)
+    # (only far past the limit: a slender rod's 16:1 parabolic elements still bend within 2 %)
+    if not worst or worst <= 3.0 * float(limit):
+        return None
+    return (
+        "%d of the %d mesh elements are stretched more than %s:1 (the worst %s:1): results near "
+        "them are less accurate. A thin wall needs smaller elements (the Average Element Size, "
+        "or a Local Mesh Control on it); a tiny step or sliver face is better removed from the "
+        "model." % (over, count, fmt(limit, 3), fmt(worst, 3))
+    )
 
 
 def tetra_aspect(p0, p1, p2, p3):

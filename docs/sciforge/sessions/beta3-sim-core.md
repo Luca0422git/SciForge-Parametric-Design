@@ -68,6 +68,17 @@ sections Engine and Benchmarks.
 - **No VTK pipeline** is made with the results any more (`Pipeline_SimResults` is gone): draw
   from `results(study)` / the result object.
 
+- **Changed since `fe3bf6a5`** (the commit sim-ui and sim-results merged last), all
+  compatible: a Job's stages take more turns (model: pre-check, then the model; input: FreeCAD's
+  mesh tables, then the input; results: import, renumbering, summary), each closing an undo
+  step left open first; `Job.wait(timeout, idle=None)`; the solve's message is "Solving N nodes
+  with CalculiX" (plus a warning for a big mesh); per-body rows can be keyed "Body1 (Bracket)"
+  and name their body; the out-of-date fingerprints are taken when a solve starts; contacts and
+  overlaps are remembered per geometry; new notes (curved elements made straight, elements made
+  smaller for a thin wall, stretched elements) and pre-check warnings (linear elements, a study
+  material no longer in the materials); a solve first removes what an unfinished solve left in
+  a design saved while it ran.
+
 ## Log
 
 - 18:05 read the briefs, research, code. Baseline cantilever 0.1995 mm at the default mesh.
@@ -115,13 +126,13 @@ sections Engine and Benchmarks.
 - Fixed in review: a mesh made again after a failed solve looked for Netgen's old mesh when
   Netgen had been used (Gmsh is tried first again now); switching Keep results in the file made
   the results out of date (it changes nothing they say).
-- 20:35-20:50 the window's longest pause on the 131 000-node part: 2.7 s (was 6.8-11.6 s): the
+- 20:20-20:30 the window's longest pause on the 131 000-node part: 2.7 s (was 6.8-11.6 s): the
   input is written over two turns (FreeCAD's mesh tables first), the results read over three
   (FreeCAD's import with the renumbering of its result mesh moved to a turn of its own, then
   the summary); displacement lengths and the result statistics with numpy. sim-ui's two open
   engine issues fixed (per-body rows of same-named bodies, fingerprints from the solve's
   start), each with an engine check.
-- 20:50-21:05 the pre-check of 20 stacked plates with holes took 5.8 s (contacts 4 s, overlaps
+- 20:45-20:50 the pre-check of 20 stacked plates with holes took 5.8 s (contacts 4 s, overlaps
   2 s: OpenCASCADE's distance and common of every touching pair), and sim-ui runs it after every
   SETUP command. Contacts and overlaps are now remembered per geometry (each body's shape hash,
   face / edge / corner counts, box and place, its component's place, the tolerance): 0.2 s
@@ -129,10 +140,10 @@ sections Engine and Benchmarks.
   the faces near the other body did not make OpenCASCADE's distance faster; its section does
   (two bodies whose boundaries cross touch: 0.06 s instead of 0.19 s a pair), and only those
   are tested for overlap: contacts and overlaps together 3.5 s instead of 6 s the first time.
-- 21:05-21:15 the pre-check of the big plate fixed at its 120 holes took 8 s: every pick made
+- 20:50-20:55 the pre-check of the big plate fixed at its 120 holes took 8 s: every pick made
   its own copy of the 366-face shape (27 ms each) to compare its remembered shape. The copy is
   now made once per object and call, and remembered per shape: 0.4 s.
-- 21:15-21:35 a solve of 20 stacked plates with 25 holes each: the model turn took 16 s (the
+- 20:55-21:15 a solve of 20 stacked plates with 25 holes each: the model turn took 16 s (the
   pre-check's first contacts 7 s, the general fuse 1.3 s, and 2.3 s working out which body
   each piece of the model came from). That last part was also **wrong** in a case: it went by
   each piece's centre of mass, and a plate with a hole in its middle has it in the hole, nearer
@@ -141,39 +152,69 @@ sections Engine and Benchmarks.
   the general fuse's own history says which body each piece came from (exact and instant), and
   the model stage is two turns (pre-check, then the model). The same stack at the default mesh
   needs over 6 GB in CalculiX (stopped after 9 minutes): a big model is still big.
-- 21:20-21:40 integration check (nothing merged): `sf/sim-results` (which holds sim-ui's work
+- 21:15-21:25 integration check (nothing merged): `sf/sim-results` (which holds sim-ui's work
   too) exported to a scratch folder with this branch's `simulation.py` / `simulation_core.py`
   on top: the simulation unit tests (129) and eight of their GUI scenarios pass
   (sim_setup_bracket 74, sim_setup_components 36, sim_setup_kinds 52, simres_cantilever 80,
   simres_out_of_date 32, simres_reopen 21, simres_adaptive 16, simres_inspect 93 checks).
-- 21:40-21:50 a design saved while a solve ran kept that solve's half-made run (its mesh too)
+- 21:25-21:30 a design saved while a solve ran kept that solve's half-made run (its mesh too)
   in the file for good: nothing linked it, nothing removed it. A solve now removes such left
   overs first (objects of a solve that no study links and no running job is making; engine
   check "a design saved while it solves").
-- 21:50-22:00 an undo step someone opened between two turns of a solve (a command run between
+- 21:30 an undo step someone opened between two turns of a solve (a command run between
   the timer's ticks) took in what the next turn made (the result objects, the mesh): undoing it
   took the results away. Every turn now closes such a step first (keeping it), except when a
   cancel removes a run (a dialog's own step must stay open for its Cancel; sim-ui does not
   poll while a dialog is open). Engine check "undo steps opened while it solves" (fails
   without the change).
-- 22:00 a study material later deleted from the materials made the study fall back to the
+- 21:33 a study material later deleted from the materials made the study fall back to the
   body's own material without a word; the pre-check now warns (engine check).
-- 22:05 solve_study from the AI froze the window for the whole solve (the AI's tools run on the
+- 21:35 solve_study from the AI froze the window for the whole solve (the AI's tools run on the
   window's thread). It now lets the window repaint and run its timers while the solve's
   programs work (`Job.wait(timeout, idle=...)`; no mouse or keys meanwhile, so nothing changes
   the design under it). GUI scenario sim_core_job step F: 38 timer ticks during a 5.8 s solve.
-- 22:10 the model turn of the plate fixed at its 120 holes took 7.6 s: mapping each pick onto
+- 21:38 the model turn of the plate fixed at its 120 holes took 7.6 s: mapping each pick onto
   the model asked every model face for its box (120 x 366 times). The model's faces and boxes
   are now listed once per solve: 3.3 s.
-- 22:15 linear elements: the steel cantilever bends 0.082 mm at the default mesh (beam theory
+- 21:43 linear elements: the steel cantilever bends 0.082 mm at the default mesh (beam theory
   0.200; 0.161 at 3 %): linear tetrahedra lock in bending, as everywhere. The pre-check now
   warns when a study uses them (Fusion's help says parabolic is the accurate choice).
   Integration again with the latest engine: sim_setup_dialogs 76, sim_setup_workspace 43,
   simres_linear 27 checks pass.
-- 22:20-22:35 a 3 mm plate (200 x 100 mm) at 2 % mesh failed: "distorted elements". Gmsh left
+- 21:45-21:50 a 3 mm plate (200 x 100 mm) at 2 % mesh failed: "distorted elements". Gmsh left
   a flat sliver element (corners nearly in one plane, 0.0002 mm3), and FreeCAD's "Coherence
   Mesh" (merge nodes closer than a millionth of the model's size, 0.0002 mm here) made its two
   diagonals' middles (0.00006 mm apart) one node: an element with a node twice, which CalculiX
   refuses. The study's bodies share their faces through the general fuse, so the mesh needs no
   merging: it is off now (every benchmark gives the same nodes and numbers; the plate solves,
   its tip between beam and plate theory: engine check "a thin plate at a fine mesh").
+- 21:50-22:00 awkward shapes (scratch "torture" run: a 1 mm-wall tube, an L bracket with a
+  1 mm fillet, a sphere, a box with a 0.01 mm step):
+  - The tube fixed at its end ring was refused as "not held enough: it could still turn about
+    an axis along X": the held-enough check sampled the ring with a grid over its parameter
+    square, which missed the 1 mm ring entirely, leaving its two seam corners on one line.
+    Faces are now also sampled along their edges.
+  - The L bracket's L-shaped end face "lost what it was on" at the solve: every probe spot
+    and the centre of mass of the L lay outside it. More spots, then points along its edges.
+  - The tube at the default size (20 mm elements, 1 mm wall) failed in Gmsh ("a segment and a
+    facet intersect": the two walls' coarse triangles crossed) and in Netgen. SciForge now
+    meshes again with elements half as big (at most twice) when Gmsh's surface mesh crosses
+    itself, with a note; the failure sentence says thin walls need smaller elements (it said
+    "larger"); Gmsh's error summary lines are no longer quoted as the reason.
+  - A note when many elements are stretched far past the aspect ratio limit (the tube: 789 of
+    2192, the worst 131:1; its axial stiffness is then 11 % too high).
+  Engine checks "a thin tube at the default mesh"; unit tests for the new rules.
+- 22:00-22:10 more shapes: a hollow ball under internal pressure held by nothing (Remove rigid
+  body modes): hoop stress at the bore 0.9 % / 0.1 % off Lame (now a benchmark,
+  hollow_sphere); a shaft glued in a hub (a round contact) under a moment: solves, the hub's
+  reaction balances; a 2 x 2 x 200 mm rod: 2.1 % / 0.8 % off beam theory with 16:1 elements,
+  so the stretched-elements note only comes far past the limit (over 3 times it).
+- 22:10-22:20 a twisted loft (B-spline faces) with Frictionless on one, pressure on another and
+  a moment on its top: solves at both meshes. Final integration with `sf/sim-results` (and
+  sim-ui's work in it) on this engine: sim_setup_bracket 74, sim_setup_components 37,
+  sim_setup_kinds 52, sim_setup_dialogs 76, sim_setup_workspace 43 (it lost one click while
+  the machine was busy with five other builds; alone it passes), simres_cantilever 80,
+  simres_out_of_date 32, simres_reopen 21, simres_adaptive 16, simres_inspect 93,
+  simres_linear 27 checks pass. `--only base` passes (unit 2504, golden 614 + 2 known, headless
+  306 calls, docs 152 items / 1002 calls, agent 81, sim 138, GUI smoke 79 / restart 17 /
+  journey 25).

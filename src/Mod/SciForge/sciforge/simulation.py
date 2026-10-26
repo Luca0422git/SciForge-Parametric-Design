@@ -976,6 +976,14 @@ def _sample_points(element):
         a, b = element.FirstParameter, element.LastParameter
         return [element.valueAt(a + (b - a) * f) for f in (0.0, 0.25, 0.5, 0.75, 1.0)]
     pts = [v.Point for v in element.Vertexes]
+    # points along the face's edges: the grid below can miss a narrow face entirely (a tube's
+    # end ring had only its two seam corners, both on one line, and "could still turn")
+    for edge in element.Edges:
+        try:
+            a, b = edge.FirstParameter, edge.LastParameter
+            pts += [edge.valueAt(a + (b - a) * f) for f in (0.125, 0.375, 0.625, 0.875)]
+        except Exception:
+            continue
     try:
         u0, u1, v0, v1 = element.ParameterRange
         for i in range(5):
@@ -1287,12 +1295,15 @@ def _model_element(model, sub):
 
 
 def _probe_points(face):
-    """A few points inside a face: points at chosen spots of its parameter range that lie on
-    the face (not in a hole of it), else its centre of mass."""
+    """A few points on a face: points at chosen spots of its parameter range that lie on the
+    face (not in a hole of it), else points along its edges (an L-shaped or a ring face can
+    have every chosen spot, and its centre of mass, off the face)."""
     pts = []
     try:
         u0, u1, v0, v1 = face.ParameterRange
-        for fu, fv in ((0.5, 0.5), (0.31, 0.43), (0.69, 0.57), (0.43, 0.69), (0.57, 0.31)):
+        spots = ((0.5, 0.5), (0.31, 0.43), (0.69, 0.57), (0.43, 0.69), (0.57, 0.31))
+        spots += tuple((0.1 + 0.2 * i, 0.1 + 0.2 * j) for i in range(5) for j in range(5))
+        for fu, fv in spots:
             u, v = u0 + (u1 - u0) * fu, v0 + (v1 - v0) * fv
             if face.isPartOfDomain(u, v):
                 pts.append(face.valueAt(u, v))
@@ -1300,6 +1311,14 @@ def _probe_points(face):
                 break
     except Exception:
         pass
+    if len(pts) < 3:
+        for edge in face.Edges:
+            try:
+                pts.append(edge.valueAt((edge.FirstParameter + edge.LastParameter) / 2.0))
+            except Exception:
+                continue
+            if len(pts) >= 3:
+                break
     if not pts:
         pts.append(face.CenterOfMass)
     return pts
@@ -2418,7 +2437,8 @@ def _freecad_cmd():
     None when there is none."""
     home = App.getHomePath()
     names = ("SciForgeCmd", "sciforgecmd", "FreeCADCmd", "freecadcmd")
-    for folder in ("bin", ""):
+    # (Linux / Windows: bin next to FreeCAD's home; macOS: the app bundle's Contents/MacOS)
+    for folder in ("bin", "", os.path.join("..", "MacOS")):
         for name in names:
             candidate = os.path.join(home, folder, name + (".exe" if os.name == "nt" else ""))
             if os.path.isfile(candidate):
@@ -2483,6 +2503,8 @@ class Job:
         self._curved = None  # (made straight, still bad, error) of the check before a solve
         self._curved_text = None  # its note
         self._fingerprints = None  # (signature, mesh signature) when the solve started
+        self._mesh_scale = 1.0  # smaller elements (0.5, 0.25) after Gmsh's mesh crossed itself
+        self._quality_text = None  # the note on stretched mesh elements
         self._checked = False  # the pre-check passed (the model is built on the next turn)
         self._getter = None  # FreeCAD's mesh tables for the input (made a turn earlier)
         self._results_step = None  # the next turn of reading the results
@@ -2624,6 +2646,13 @@ class Job:
 
         # (Gmsh first every time: a mesh made again after a failed solve tries Gmsh again)
         self.mesher, self._netgen_out = "gmsh", None
+        if self._mesh_scale != 1.0:  # (smaller elements after Gmsh's mesh crossed itself)
+            size, smallest = _mesh_sizes(self.study, self._model_shape, self._owners)
+            self._mesh.CharacteristicLengthMax = "%r mm" % (size * self._mesh_scale)
+            self._mesh.CharacteristicLengthMin = "%r mm" % (smallest * self._mesh_scale)
+            if "MeshSizeFromCurvature" in self._mesh.PropertiesList:
+                turn = max(float(settings(self.study)["mesh"]["max_turn"]), 5.0)
+                self._mesh.MeshSizeFromCurvature = int(round(360.0 / turn / self._mesh_scale))
         tools = GmshTools(self._mesh)
         # GmshTools.prepare() without get_gmsh_command(): that one only looks on the PATH and
         # reports an error when Gmsh is elsewhere (next to SciForge on Windows)
@@ -2634,7 +2663,7 @@ class Job:
         tools.error = False
         tools.write_part_file()
         tools.write_geo()
-        size = _global_size(self.study, self._model_shape)
+        size = _global_size(self.study, self._model_shape) * self._mesh_scale
         _write_fields(
             tools.temp_file_geo,
             _size_fields(self.study, self._model_shape, self._owners, self._subs, size, self._pos),
@@ -2657,8 +2686,8 @@ class Job:
             handle.write(
                 NETGEN_SCRIPT.format(
                     brep=tools.temp_file_geometry,
-                    size=float(size),
-                    smallest=float(smallest),
+                    size=float(size) * self._mesh_scale,
+                    smallest=float(smallest) * self._mesh_scale,
                     second=opts["order"] == "parabolic",
                     out=self._netgen_out,
                 )
@@ -2733,10 +2762,25 @@ class Job:
                 line.lstrip().startswith("Error") for line in self._output.splitlines()
             )
             if failed:
+                if self._mesh_scale > 0.3 and core.mesh_crossed_itself(self._output):
+                    # the surface mesh crossed itself (a wall thinner than the elements, a
+                    # small gap): elements half as big, at most twice, before Netgen
+                    self._mesh_scale *= 0.5
+                    self.message = "Meshing again with smaller elements"
+                    self._start_mesh()
+                    return
                 self._gmsh_problem = _gmsh_problem(self._output, self._model_shape, self._owners)
                 self._start_netgen()
                 return
             tools.read_and_set_new_mesh()
+            if self._mesh_scale < 1.0:
+                note = (
+                    "Gmsh could not mesh at the study's element size (its surface mesh crossed "
+                    "itself: a wall thinner than the elements, or a small gap), so SciForge "
+                    "made the elements %d times smaller." % int(round(1.0 / self._mesh_scale))
+                )
+                if note not in self.notes:
+                    self.notes.append(note)
         else:
             if not (self._netgen_out and os.path.isfile(self._netgen_out)):
                 raise SimulationError(
@@ -2777,7 +2821,7 @@ class Job:
         self.mesh_info.update(
             {
                 "mesher": self.mesher,
-                "size": _global_size(self.study, self._model_shape),
+                "size": _global_size(self.study, self._model_shape) * self._mesh_scale,
                 "order": settings(self.study)["mesh"]["order"],
                 "signature": (
                     self._fingerprints[1] if self._fingerprints else mesh_signature(self.study)
@@ -2786,6 +2830,12 @@ class Job:
             }
         )
         self.timings["mesh_stats"] = time.time() - t
+        quality = core.mesh_quality_note(self.mesh_info, limit)
+        if self._quality_text in self.notes:  # (the last mesh's only, with adaptive passes)
+            self.notes.remove(self._quality_text)
+        self._quality_text = quality
+        if quality:
+            self.notes.append(quality)
         if self.mesh_only:
             _close_open_transaction(self.doc)
             _remove_run(self.study, "SimMeshRun")
@@ -3156,8 +3206,9 @@ class Job:
 
 
 MESH_ADVICE = (
-    "Try a larger Average Element Size in the mesh settings, or look for tiny gaps, slivers "
-    "and very short edges in the model."
+    "Thin walls need elements about as small as they are thick: try a smaller Average Element "
+    "Size, or a Local Mesh Control on the thin faces; also look for tiny gaps, slivers and very "
+    "short edges in the model."
 )
 
 
