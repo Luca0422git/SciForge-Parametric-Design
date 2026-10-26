@@ -284,6 +284,27 @@ def _original(source):
     body = source if bodies.is_body(source) else bodies.body_of(source)
     if body is not None:
         return "body", body
+    if getattr(source, "TypeId", "") == "App::Part":
+        # a component (import_file answers with the component's id): its one solid body
+        # (beta 3 QA: an AI that passed the id it was given was told to pick a body)
+        from . import components
+
+        found = [
+            b
+            for b in components.bodies_in(source.Document, source, recursive=True)
+            if bodies.has_solid(b)
+        ]
+        if len(found) == 1:
+            return "body", found[0]
+        if found:
+            raise RebuildError(
+                "%s holds %d bodies (%s): pick the one to rebuild by its id."
+                % (
+                    source.Label,
+                    len(found),
+                    ", ".join("%s (%s)" % (b.Label, b.Name) for b in found),
+                )
+            )
     raise RebuildError(
         "%s is not a body or a mesh body: pick the body to rebuild (an imported STEP body, "
         "any solid body, or a mesh body)." % getattr(source, "Label", source)

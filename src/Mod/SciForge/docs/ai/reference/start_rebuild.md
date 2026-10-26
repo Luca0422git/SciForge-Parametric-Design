@@ -6,13 +6,13 @@ Fusion: Browser: right-click a body > Rebuild with Timeline (AI)... (beyond Fusi
 
 ## What it does
 
-Start rebuilding a part that has no timeline as real, editable timeline steps (Auto Timeline): an imported STEP body, any solid body, or a mesh body (made into a solid first; an open or broken mesh is refused). SciForge freezes the part as the reference (drawn faint and see-through; never a body or a step, so it stays the target whatever you build), hides the original and makes a new empty body '<name> (rebuilt)' at its place, active: build the rebuild there with the normal tools. Then: describe_reference (the part's features and a plan of tool calls), build the plan step by step, compare_to_reference after every feature and fix what its verdict says, finish_rebuild when it says done. The recipe: docs_read recipes/reverse-engineer.md. One undo step. body: the id of the body (or of a step in it, or of the mesh body); label: the reference's name (default '<name> (reference)').
+Start rebuilding a part that has no timeline as real, editable timeline steps (Auto Timeline): an imported STEP body, any solid body, or a mesh body (made into a solid first; an open or broken mesh is refused). SciForge freezes the part as the reference (drawn faint and see-through; never a body or a step, so it stays the target whatever you build), hides the original and makes a new empty body '<name> (rebuilt)' at its place, active: build the rebuild there with the normal tools. Then: describe_reference (the part's features and a plan of tool calls), build the plan step by step, compare_to_reference after every feature and fix what its verdict says, finish_rebuild when it says done. The recipe: docs_read recipes/reverse-engineer.md. One undo step. body: the id of the body (or of a step in it, of the mesh body, or of the component holding one body: what import_file answers); label: the reference's name (default '<name> (reference)').
 
 ## Arguments
 
 | Argument | Type | Unit | Default | Limits | Description |
 |---|---|---|---|---|---|
-| `body` (required) | string |  |  |  | the body to rebuild: its id (get_design lists them) |
+| `body` (required) | string |  |  |  | the body to rebuild: its id (get_design lists them), or its component's |
 | `label` | string |  |  |  | a name for the reference (default '<name> (reference)') |
 
 ## Answer

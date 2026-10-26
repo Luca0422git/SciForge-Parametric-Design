@@ -53,11 +53,14 @@ define(
     "(the part's features and a plan of tool calls), build the plan step by step, "
     "compare_to_reference after every feature and fix what its verdict says, finish_rebuild "
     "when it says done. The recipe: docs_read recipes/reverse-engineer.md. One undo step. "
-    "body: the id of the body (or of a step in it, or of the mesh body); label: the "
-    "reference's name (default '<name> (reference)').",
+    "body: the id of the body (or of a step in it, of the mesh body, or of the component "
+    "holding one body: what import_file answers); label: the reference's name (default "
+    "'<name> (reference)').",
     schema(
         {
-            "body": step_id("the body to rebuild: its id (get_design lists them)"),
+            "body": step_id(
+                "the body to rebuild: its id (get_design lists them), or its component's"
+            ),
             "label": string("a name for the reference (default '<name> (reference)')"),
         },
         ["body"],
