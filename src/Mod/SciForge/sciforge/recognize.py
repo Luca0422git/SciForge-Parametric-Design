@@ -896,6 +896,23 @@ class _Reader:
                         "face": outer.get("face"),
                     }
                 out = {"kind": "open", "t": t, "t_open": t, "face": j}
+            elif (
+                fj.kind == "torus"
+                and beyond
+                and fj.axis is not None
+                and core.parallel(fj.axis, axis, 1e-6)
+                and core.norm(core.sub(fj.point, origin)) < 1e-6
+                and abs(fj.radius - (radius + fj.minor)) < 1e-6
+            ):
+                # a rounded rim (a fillet, read as one): the bore goes on to the face the
+                # round meets, where the hole starts
+                t_far = tj1 if side == "high" else tj0
+                return {
+                    "kind": "open",
+                    "t": t_far,
+                    "t_open": t_far,
+                    "face": self._opening_face(j, idx + [j]),
+                }
             elif fj.kind == "cone" and fj.axis is not None and core.parallel(fj.axis, axis, 1e-6):
                 apex_t = core.dot(core.sub(fj.apex, origin), axis)
                 angle = math.degrees(2 * fj.semi)
@@ -2515,7 +2532,7 @@ def _walls(solid, axis_name, allow_taper=False, lenient=False, ranges=None):
         return None
     levels = []
     for h in sorted(heights):
-        if not levels or h - levels[-1] > 1e-6:
+        if not levels or h - levels[-1] > 1e-5:  # (imported parts: faces 1e-6 apart)
             levels.append(h)
     if tapers and straight and allow_taper == "pure":
         return None  # (a band of one draft cannot have straight walls too)
@@ -2799,7 +2816,7 @@ def _prismatic(solid, axis_name, lenient=False):
     missing = prism.cut(solid)
     if len(extra.Solids) + len(missing.Solids) > MAX_PIECES:
         return None
-    cache = {}  # (moved copies of one piece are read once)
+    cache = {"levels": {plane: hs}, "solid": solid}  # (moved copies of a piece read once)
     for piece_shape, operation in ((extra, "join"), (missing, "cut")):
         for piece in piece_shape.Solids:
             if piece.Volume < 1e-9:
@@ -3138,12 +3155,14 @@ def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None, within=N
         key += tuple(round(v, 6) for v in (bb.XLength, bb.YLength, bb.ZLength))
         bands = _moved_bands(cache.get(key), piece, n)
         if bands is not None:
-            return _band_ops(bands, plane, operation, part_lo, part_hi, base_lo)
+            return _band_ops(bands, plane, operation, part_lo, part_hi, base_lo, cache)
     walls = _walls(piece, axis_name, allow_taper=True)
     if walls is None or len(walls[0]) < 2:
         if within is None:
             return None
-        return _open_piece_op(piece, within[0], within[1], plane, operation, part_lo, part_hi)
+        return _open_piece_op(
+            piece, within[0], within[1], plane, operation, part_lo, part_hi, cache
+        )
     levels, tapers = walls
     if tapers and _walls(piece, axis_name, allow_taper="pure") is None:
         return None  # some walls lean and some do not: no single draft makes it
@@ -3166,7 +3185,37 @@ def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None, within=N
         bands.append({"lo": lo, "hi": hi, "faces": faces})
     if key is not None:
         cache[key] = (piece, bands)
-    return _band_ops(bands, plane, operation, part_lo, part_hi, base_lo)
+    return _band_ops(bands, plane, operation, part_lo, part_hi, base_lo, cache)
+
+
+def _part_levels(cache, plane):
+    """The heights (along the plane's normal) of the part's flat faces square to it, made
+    once per reading (cache: see _piece_ops)."""
+    if not cache or cache.get("solid") is None:
+        return []
+    known = cache["levels"]
+    if plane not in known:
+        n = core.PLANES[plane]["n"]
+        out = []
+        for face in cache["solid"].Faces:
+            if _face_kind(face) != "plane":
+                continue
+            try:
+                if core.parallel(_t(face.Surface.Axis), n, 1e-7):
+                    out.append(core.dot(_t(face.Vertexes[0].Point), n))
+            except Exception:
+                continue
+        known[plane] = sorted(out)
+    return known[plane]
+
+
+def _on_level(h, levels, tol=1e-5):
+    """h moved onto the nearest level when it is that close."""
+    best = None
+    for lv in levels:
+        if abs(lv - h) <= tol and (best is None or abs(lv - h) < abs(best - h)):
+            best = lv
+    return h if best is None else best
 
 
 def _moved_bands(hit, piece, n):
@@ -3197,9 +3246,12 @@ def _moved_bands(hit, piece, n):
     return out
 
 
-def _band_ops(bands, plane, operation, part_lo, part_hi, base_lo=None):
-    """The extrudes of a piece's bands (see _piece_ops), or None."""
-    bands = list(bands)
+def _band_ops(bands, plane, operation, part_lo, part_hi, base_lo=None, cache=None):
+    """The extrudes of a piece's bands (see _piece_ops), or None. Their ends are put on the
+    part's own levels when they are that close (a piece's corners differ from the part's by
+    float noise: a boss 1e-6 short of the base would be a body of its own)."""
+    levels = _part_levels(cache, plane)
+    bands = [dict(b, lo=_on_level(b["lo"], levels), hi=_on_level(b["hi"], levels)) for b in bands]
     base_lo = part_lo if base_lo is None else base_lo
     if operation == "join" and bands and bands[-1]["hi"] <= base_lo + 1e-6:
         bands.reverse()  # below the base: the band touching it first, so each one joins
@@ -3216,7 +3268,7 @@ def _band_ops(bands, plane, operation, part_lo, part_hi, base_lo=None):
     return out
 
 
-def _open_piece_op(piece, solid, region, plane, operation, part_lo, part_hi):
+def _open_piece_op(piece, solid, region, plane, operation, part_lo, part_hi, cache=None):
     """A cut that opens onto a round or slanted face of the part (a keyway or a flat on a
     shaft) or a boss standing on one (a port on a pipe): the piece's faces on the part's
     surface all run along the plane's normal, but for one flat end (a cut's floor, a boss's
@@ -3252,7 +3304,7 @@ def _open_piece_op(piece, solid, region, plane, operation, part_lo, part_hi):
     heights = {round(core.dot(_t(f.Vertexes[0].Point), n), 7) for f in ends}
     if len(heights) != 1:
         return None
-    h = heights.pop()
+    h = _on_level(heights.pop(), _part_levels(cache, plane))
     if min(open_ts) >= h - 1e-6:  # it opens above its end
         above = True
         far = part_hi if operation == "cut" else max(open_ts)

@@ -38,11 +38,13 @@ ORDER = ("base", "boss", "cut", "hole", "pattern", "shell", "chamfer", "fillet")
 # -- numbers ------------------------------------------------------------------------------------
 def snap(value, tol=TOL):
     """value with float noise taken off: the fewest decimals (0..6) that stay within tol of
-    it (9.9999999997 -> 10.0, 0.30000000004 -> 0.3); -0.0 becomes 0.0."""
+    it (9.9999999997 -> 10.0, 0.30000000004 -> 0.3); -0.0 becomes 0.0. Snapping a snapped
+    value changes nothing (-3.459989 stays: a whole 1e-6 away is not noise), so an offset
+    and a distance snapped one after the other still meet."""
     value = float(value)
     for digits in range(0, 7):
         r = round(value, digits)
-        if abs(r - value) <= tol:
+        if abs(r - value) <= 0.999 * tol:
             return 0.0 if r == 0 else r
     r = round(value, 9)
     return 0.0 if r == 0 else r
