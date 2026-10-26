@@ -63,7 +63,7 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 | `sim_setup_browser` | 58 | PASS |
 | `sim_setup_documents` | 45 | PASS |
 | `sim_setup_kinds` | 58 | PASS |
-| `sim_setup_workspace` | 43 | PASS |
+| `sim_setup_workspace` | 54 | PASS |
 | `sim_setup_components` | 36 | PASS |
 | `sim_setup_glyphs` | 12 | PASS |
 | `sim_setup_units` | 39 | PASS |
@@ -74,7 +74,10 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`): `timeline_browser`, 
 ## Contract with sim-results (agreed by reading its branch)
 
 - sim-ui calls `simulation_results_ui.show(study)` when a solve ends (else selects the RESULTS
-  tab itself), and `simulation_results_ui.hide()` when the workspace is left.
+  tab itself), and `simulation_results_ui.hide()` when the workspace is left. It calls show()
+  only when the study's design is in front in SIMULATION: show() enters the workspace when it
+  is not on, which took a person who went on in DESIGN (a sketch open) out of their work when a
+  solve ended; now they stay and are told where the results are (`simulation_ui.show_results`).
 - sim-results calls `simulation_ui.active()`, `active_study(doc)`, `set_active_study(study)`,
   `enter_workspace("sim_results")`, and `simulation_glyphs.set_visible(on)` / `visible()`.
 - A study without results made active while RESULTS is in front shows SETUP

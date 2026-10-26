@@ -497,9 +497,21 @@ def light():
 # -- results hand-over ---------------------------------------------------------------------------
 def show_results(study):
     """A solve ended: the results show (sim-results' simulation_results_ui.show(study) when it
-    is there, else the RESULTS tab is selected)."""
+    is there, else the RESULTS tab is selected). Only when the design is in front in the
+    SIMULATION workspace: a person who went on working in DESIGN (or in another design) while
+    it solved is not taken away from it; they are told where the results are."""
     try:
         if study is None:
+            return
+        doc = study.Document
+        if not (STATE["on"] and in_workspace(doc) and App.ActiveDocument is doc):
+            STATE["active"][doc.Name] = study.Name
+            from . import commands
+
+            commands.tell(
+                "%s is solved: its results are in Workspace > Simulation, RESULTS tab."
+                % study.Label
+            )
             return
         set_active_study(study)
         try:
