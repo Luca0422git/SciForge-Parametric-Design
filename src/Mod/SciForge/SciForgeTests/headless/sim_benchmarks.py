@@ -796,6 +796,9 @@ def check_mesh_only(doc, out):
     out.append(
         ("a solve replaces the Generate Mesh run", sim.run_of(study, "SimMeshRun") is None, "")
     )
+    run = sim.run_of(study)
+    touched = [o.Name for o in [study] + list(sim._run_members(run)) if "Touched" in o.State]
+    out.append(("nothing left needing a recompute after the solve", not touched, touched))
 
 
 @engine_check("save and reopen")
@@ -906,6 +909,15 @@ def check_deleted_body(doc, out):
         "pressure",
         [(other, one_face(other, lambda f: near(f.CenterOfMass.z, 10)))],
         {"magnitude": 1},
+    )
+    study.SimBodies = [body]
+    checks = sim.precheck(study)
+    out.append(
+        (
+            "a load on a body the study leaves out: refused, naming both",
+            any("Pressure 1 is on Other" in t and "leaves out" in t for _l, t in checks),
+            checks,
+        )
     )
     study.SimBodies = [body, other]
     doc.removeObject(other.Name)

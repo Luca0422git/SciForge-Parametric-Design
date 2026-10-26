@@ -93,4 +93,33 @@ again) runs in the docs runner.
 
 ## Benchmarks
 
-(builder sim-core)
+(builder sim-core.) `SciForgeTests/headless/sim_benchmarks.py`, run by
+`tools/sciforge/run_tests.sh --only sim` (and `--only base`): every case through the same engine
+as the workspace and the AI tools, in real FreeCAD 1.1.4 with Gmsh 4.15 and CalculiX 2.23, at
+the study's default mesh and at a finer one, against the hand calculation, with CalculiX on one
+thread (so the times compare between runs; a solve uses all cores but one otherwise). Steel is
+FreeCAD's Steel-Generic (E = 200 GPa, nu = 0.3, 7900 kg/m3); every hand calculation reads E,
+nu and the density from the study material, so the formulas and the solve use the same values.
+The evidence outline 0.8 asks for; acceptance of outline 7.18 ("golden studies match hand
+calculations within a few percent").
+
+<!-- BENCHMARK TABLE -->
+
+How to read it: "Default" is the study's default mesh (10 % of the model size) except where the
+case says otherwise; "finer" is the size in the case's own row. Stresses are read away from a
+fixed constraint's edge where the formula is for the material inside (beam theory, torsion),
+and at the peak where the formula is for the peak (Kt at the hole, Lame at the bore).
+
+### Big parts
+
+A 300 x 200 x 10 mm plate with 120 counterbored holes (366 faces), pressure on its top face,
+fixed at one end, solved through `Job` as the Solve dialog does (CalculiX on 2 threads, the
+machine shared with five other builds):
+
+<!-- BIG PART TABLE -->
+
+The window stays usable: Gmsh and CalculiX run in the background thread and the solver's
+result file is parsed there too; the work on the document is split in turns (the longest
+column), so a timer keeps ticking. Before this build the same solve froze the window for 84 s
+(FreeCAD searched the mesh by geometry for the nodes of each picked face) and then for almost
+10 minutes (the scaffold read the whole displacement list once per node).

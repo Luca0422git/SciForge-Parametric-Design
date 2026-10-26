@@ -1045,6 +1045,30 @@ def precheck(study):
     if found and any(not c[2] for c in summary["constraints"]):
         summary["loose"] = [b.Label for b in loose_bodies(study, touching)]
     checks = core.precheck(summary)
+    names = set(b.Name for b in found)
+    for item in items(study):
+        if item.Suppressed:
+            continue
+        outside = []
+        for obj, _sub in _picks(item.References):
+            body = obj if bodies.is_body(obj) else bodies.body_of(obj)
+            if body is not None and bodies.alive(body) and body.Name not in names:
+                if body.Label not in outside:
+                    outside.append(body.Label)
+        if outside:
+            checks.append(
+                (
+                    "error",
+                    "%s is on %s, which this study leaves out: include %s in the study, or "
+                    "suppress or delete %s."
+                    % (
+                        item.Label,
+                        " and ".join(outside),
+                        "it" if len(outside) == 1 else "them",
+                        item.Label,
+                    ),
+                )
+            )
     try:
         for piece, free in not_held(study, touching if len(found) > 1 else []):
             checks.append(
@@ -2450,6 +2474,7 @@ class Job:
             self.study.SimMeshRun = self._analysis
             _save(self.study, MESH_PROP, self.mesh_info)
             apply_keep_results(self.study)
+            _untouch(self.study)
             self.summary = dict(self.mesh_info)
             self._analysis = None  # (kept)
             return self._stop("done", "Done")
@@ -2617,6 +2642,7 @@ class Job:
         self.study.SimRun = self._analysis
         _save(self.study, MESH_PROP, self.mesh_info)
         apply_keep_results(self.study)
+        _untouch(self.study)
         self._analysis = None  # (kept)
         self._stop("done", "Done")
 
@@ -2714,6 +2740,9 @@ class Job:
 
     def _stop(self, state, message):
         self.state, self.message = state, message
+        # FreeCAD's GmshTools holds a QProcess with a connected signal: dropped now, not when
+        # Python shuts down (freecadcmd crashed in Qt at exit with a job still referenced)
+        self._mesh_tools = None
         if state != "done":
             log("simulation %s: %s" % (state, message))
         for run in (self._analysis, self._previous_run):
@@ -2784,6 +2813,21 @@ def _fast_principal_stresses(res_obj):
     res_obj.PrincipalMin = small.tolist()
     res_obj.MaxShear = ((big - small) / 2.0).tolist()
     return res_obj
+
+
+def _untouch(study):
+    """What a solve changed on the study, its items and its runs needs no recompute (their
+    execute does nothing): cleared, so the design does not ask for one after the solve."""
+    objects = [study] + items(study)
+    for link in ("SimRun", "SimMeshRun"):
+        run = run_of(study, link)
+        if run is not None:
+            objects += _run_members(run)
+    for obj in objects:
+        try:
+            obj.purgeTouched()
+        except Exception:
+            pass
 
 
 class _Quiet:
