@@ -435,6 +435,15 @@ def c_top_check():
     )
     texts = [t["text"] for t in s.tags("point")]
     h.check("two tags", len(texts) == 2 and texts[1].startswith("P2: "), texts)
+    layer = sess.tags
+    layer.repaint()
+    boxes = [b for b in getattr(layer, "boxes", []) if b is not None]
+    h.check(
+        "no two tags' boxes overlap",
+        len(boxes) >= 3
+        and not any(a.intersects(b) for i, a in enumerate(boxes) for b in boxes[i + 1 :]),
+        [(b.x(), b.y(), b.width(), b.height()) for b in boxes],
+    )
     state["second_at"] = at
     table = _table()
     from SciForgeTests.gui import widget_input as wi

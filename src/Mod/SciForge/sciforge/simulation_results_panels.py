@@ -781,6 +781,7 @@ class PointProbePanel:
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
+        self.table.horizontalHeader().setStretchLastSection(True)
         self.table.itemChanged.connect(self._edited)
         self.table.itemSelectionChanged.connect(self._chosen)
         self.grips = []  # the chosen probe's drag arrows (X, Y, Z)
@@ -1694,6 +1695,7 @@ class ReactionsDialog(QtWidgets.QDialog):
         table.setObjectName("SciForgeSimReactionTable")
         table.setHorizontalHeaderLabels(["Constraint", "X (N)", "Y (N)", "Z (N)", "Total (N)"])
         table.verticalHeader().setVisible(False)
+        table.horizontalHeader().setStretchLastSection(True)
         table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         for r, (label, (fx, fy, fz)) in enumerate(sorted(found.items())):
             total = (fx * fx + fy * fy + fz * fz) ** 0.5

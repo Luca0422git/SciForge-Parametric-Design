@@ -228,6 +228,11 @@ def b_slice_check():
     )
     xs = sess.display.cap_points[:, 0]
     h.check("on the plane x = 50", abs(xs.min() - 50) < 1e-6 and abs(xs.max() - 50) < 1e-6)
+    h.check(
+        "the max tag (at the held end, cut away) not shown",
+        not s.tags("max") and sess.slice["flip"] is False,
+        s.tags("max"),
+    )
 
 
 def b_lines():
@@ -336,6 +341,7 @@ def b_axis_x_flip_check():
     h.check(
         "keeps the held half (normal -X)", normal == (-1.0, -0.0, -0.0) or normal[0] == -1.0, normal
     )
+    h.check("the max tag back with the held end", len(s.tags("max")) == 1, s.tags("max"))
 
 
 def b_cap_probe():

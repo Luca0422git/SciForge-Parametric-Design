@@ -651,6 +651,7 @@ class TagLayer(QtWidgets.QWidget):
         self.view = view
         self.tags = []
         self.placed = []
+        self.boxes = []  # each tag's box as drawn last (the scenarios read it)
         self.setGeometry(self._area())
         self.show()
         self.raise_()
@@ -686,30 +687,55 @@ class TagLayer(QtWidgets.QWidget):
             font.setPointSizeF(max(font.pointSizeF(), 9.0))
             painter.setFont(font)
             metrics = QtGui.QFontMetrics(font)
-            for tag, pos in zip(self.tags, self.placed):
-                if pos is None:
+            self.boxes = self._layout(metrics)
+            for tag, pos, rect in zip(self.tags, self.placed, self.boxes):
+                if pos is None or rect is None:
                     continue
-                self._paint_tag(painter, metrics, tag, pos)
+                self._paint_tag(painter, tag, pos, rect)
         except Exception as exc:
             warn("results tags: %s" % exc)
         finally:
             painter.end()
 
-    def _paint_tag(self, painter, metrics, tag, pos):
+    @staticmethod
+    def _offset(kind):
+        """Where a tag's box goes from its point (pixels), by kind."""
+        if kind == "min":
+            return 16, 18
+        if kind in ("probe", "point", "hover"):
+            return 14, -20
+        if kind == "reaction":
+            return 18, 24
+        return 16, -26
+
+    def _layout(self, metrics):
+        """Each tag's box: beside its point, moved down past the boxes before it when they
+        would overlap (tags at nearby places stay readable)."""
+        boxes = []
+        for tag, pos in zip(self.tags, self.placed):
+            if pos is None:
+                boxes.append(None)
+                continue
+            dx, dy = self._offset(tag.get("kind", "probe"))
+            width = metrics.horizontalAdvance(tag.get("text", "")) + 14
+            height = metrics.height() + 6
+            rect = QtCore.QRectF(pos.x() + dx, pos.y() + dy - height / 2.0, width, height)
+            for _ in range(len(boxes) + 1):
+                clash = [
+                    b for b in boxes if b is not None and b.intersects(rect.adjusted(-2, -2, 2, 2))
+                ]
+                if not clash:
+                    break
+                rect.moveTop(max(b.bottom() for b in clash) + 3)
+            boxes.append(rect)
+        return boxes
+
+    def _paint_tag(self, painter, tag, pos, rect):
         kind = tag.get("kind", "probe")
         text = tag.get("text", "")
         colour = QtGui.QColor.fromRgbF(
             *[min(max(c, 0.0), 1.0) for c in tag.get("colour", (1, 1, 1))]
         )
-        dx, dy = (16, -26) if kind != "min" else (16, 18)
-        if kind in ("probe", "point", "hover"):
-            dx, dy = (14, -20)
-        if kind == "reaction":
-            dx, dy = (18, 24)
-        box_w = metrics.horizontalAdvance(text) + 14
-        box_h = metrics.height() + 6
-        corner = QtCore.QPointF(pos.x() + dx, pos.y() + dy)
-        rect = QtCore.QRectF(corner.x(), corner.y() - box_h / 2.0, box_w, box_h)
         painter.setPen(QtGui.QPen(QtGui.QColor(20, 22, 26), 1.6))
         painter.drawLine(pos, QtCore.QPointF(rect.left(), rect.center().y()))
         painter.setBrush(QtGui.QBrush(colour))

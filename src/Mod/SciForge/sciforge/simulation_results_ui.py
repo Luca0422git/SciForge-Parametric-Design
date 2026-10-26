@@ -603,7 +603,8 @@ class Session:
         for view in views:
             self.display.attach(view)
         self.apply()
-        names = [n for n, visible in key if visible]
+        labels = {b.Name: b.Label for b in self.data.bodies()}
+        names = [labels.get(n, n) for n, visible in key if visible]
         log("results: bodies shown %s" % (", ".join(names) if names else "none"))
 
     def deactivate(self):
@@ -869,10 +870,21 @@ class Session:
                 if tag is not None:
                     tag["kind"] = "hover"
                     tags.append(tag)
+            if self.display.clipped() and self.slice is not None:
+                tags = self._tags_kept(np, tags)
         del np
         self.tag_list = tags
         if self.tags is not None and view_mod._alive(self.tags):
             self.tags.set_tags(tags)
+
+    def _tags_kept(self, np, tags):
+        """The tags on the half of the result the slice keeps (the others would float where the
+        part is cut away)."""
+        origin, normal = slice_plane(self)
+        n = np.asarray(normal, dtype=float)
+        o = np.asarray(origin, dtype=float) + np.asarray(self.display.offset, dtype=float)
+        tol = 1e-6 * float(self.data.diagonal or 1.0)
+        return [t for t in tags if float((np.asarray(t["point"], dtype=float) - o) @ n) >= -tol]
 
     def _probe_tag(self, probe, values, unit, scale):
         """The tag of a surface probe ({"node"} or a point of the cut face with its values)."""
