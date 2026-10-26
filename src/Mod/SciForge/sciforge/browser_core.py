@@ -72,6 +72,26 @@ def unit_label(schema):
     return None
 
 
+# millimetres in one of each of Fusion's length units
+MM_PER_UNIT = {"mm": 1.0, "cm": 10.0, "m": 1000.0, "in": 25.4, "ft": 304.8}
+
+
+def doc_length_unit(doc):
+    """The length unit of a design's units (Change Active Units: "mm", "cm", "m", "in",
+    "ft"; "mm" for a unit system that is not one of Fusion's). Fusion reads a plain number
+    typed in a dialog in the design's units: "1.5" in an inch design is 1.5 in."""
+    try:
+        schema = list(doc.getEnumerationsOfProperty("UnitSystem")).index(doc.UnitSystem)
+    except Exception:
+        return "mm"
+    return unit_label(schema) or "mm"
+
+
+def plain_length(number, doc):
+    """A plain number typed for a length, in millimetres (see doc_length_unit)."""
+    return float(number) * MM_PER_UNIT.get(doc_length_unit(doc), 1.0)
+
+
 # The icon of each kind of analysis in the Analysis folder (Section is the default).
 ANALYSIS_ICONS = {
     "CenterOfMassAnalysis": "center_of_mass",

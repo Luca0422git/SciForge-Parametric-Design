@@ -21,7 +21,7 @@ import FreeCAD as App
 
 from . import warn
 from .compat import QtCore, QtWidgets
-from .taskui import DistanceField
+from .taskui import DistanceField, plain_value
 
 _NUMBER = re.compile(r"^[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?$")
 UNITS = {"mm": ("a length", "mm"), "deg": ("an angle", "deg")}
@@ -32,9 +32,9 @@ def _in_unit(quantity, unit, text):
     unit; a value of another kind ("30 deg" in a length box) raises ValueError."""
     what, target = UNITS.get(unit, UNITS["mm"])
     if not hasattr(quantity, "Unit"):
-        return float(quantity)
+        return plain_value(float(quantity), unit)
     if quantity.Unit == App.Units.Unit():
-        return float(quantity.Value)
+        return plain_value(float(quantity.Value), unit)
     try:
         return float(quantity.getValueAs(target))
     except Exception:
@@ -51,14 +51,14 @@ def _plain(text):
 
 
 def parse_number(text, unit="mm"):
-    """The value of a plain number typed in a box, in mm (or degrees for unit "deg"), or
-    None if `text` is not a usable plain number (a formula, a name, half-typed, empty, a
-    value of another kind)."""
+    """The value of a plain number typed in a box, in mm (or degrees for unit "deg"; a
+    bare number is in the design's units), or None if `text` is not a usable plain number (a
+    formula, a name, half-typed, empty, a value of another kind)."""
     text = (text or "").strip()
     if not text:
         return None
     if _NUMBER.match(text):
-        return float(text.replace(",", "."))
+        return plain_value(float(text.replace(",", ".")), unit)
     if not _plain(text):
         return None
     try:
@@ -74,7 +74,7 @@ def evaluate(doc, text, unit="mm"):
     if not text:
         raise ValueError("Type a value.")
     if _NUMBER.match(text):
-        return float(text.replace(",", "."))
+        return plain_value(float(text.replace(",", ".")), unit)
     if _plain(text):
         return _in_unit(App.Units.Quantity(text), unit, text)
     from . import parameters, parameters_core
