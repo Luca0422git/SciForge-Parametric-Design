@@ -70,6 +70,10 @@ class RebuildError(ValueError):
 
 REFERENCE = "RebuildReference"
 SHAPE = "FrozenShape"
+# (beta 3 QA) triangles beyond which a mesh is not made into a solid: the time grows much
+# faster than the count (in the sandbox: 6,000 5 s; 15,000 23 s; 16,780 79 s under load;
+# 37,740 160 s, then describe as long again), and FreeCAD cannot be stopped meanwhile
+MESH_TRIANGLES = 10000
 LISTENERS = []  # fn(event, ref, data): the window's red / green overlay (rebuild_ui)
 _LIVE_DOCS = set()  # documents a rebuild was started or opened in (the move watcher looks there)
 _HIDDEN = {}  # document name -> {reference name: original's name}: hidden while it is rebuilt
@@ -324,6 +328,14 @@ def _solid_of(kind, source):
     note = ""
     if kind == "mesh":
         mesh = insert.kernel_copy(source)
+        if mesh.CountFacets > MESH_TRIANGLES:
+            raise RebuildError(
+                "%s is a mesh of %d triangles: turning that many into a solid takes many "
+                "minutes (the time grows much faster than the count), so it is not rebuilt. "
+                "Reduce it to under %d triangles first (MESH tab > Reduce), or export it again "
+                "from its CAD program with a coarser setting, then try again."
+                % (source.Label, mesh.CountFacets, MESH_TRIANGLES)
+            )
         broken = _mesh_problem(mesh)
         if broken:
             raise RebuildError(
@@ -542,7 +554,10 @@ def describe(ref, options=None):
                     whole = place.inverse().multiply(source.Placement)
                 if not whole.isIdentity():
                     mesh.transform(whole.toMatrix())
-                return recognize_mesh.describe_mesh(mesh, options)
+                # the reference's solid was made from these triangles at start: not again
+                # (beta 3 QA: half of a big mesh's minutes)
+                faceted = in_frame(reference_shape(ref), place)
+                return recognize_mesh.describe_mesh(mesh, options, faceted=faceted)
         options.setdefault("source", "mesh")
     shape = in_frame(reference_shape(ref), place)
     return recognize.describe(shape, options)

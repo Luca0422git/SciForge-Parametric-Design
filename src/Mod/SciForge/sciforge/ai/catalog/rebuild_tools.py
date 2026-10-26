@@ -46,7 +46,8 @@ define(
     RIBBON,
     "Start rebuilding a part that has no timeline as real, editable timeline steps (Auto "
     "Timeline): an imported STEP body, any solid body, or a mesh body (made into a solid "
-    "first; an open or broken mesh is refused). SciForge freezes the part as the reference "
+    "first; an open or broken mesh, or one of more than 10,000 triangles, is refused). "
+    "SciForge freezes the part as the reference "
     "(drawn faint and see-through; never a body or a step, so it stays the target whatever "
     "you build), hides the original and makes a new empty body '<name> (rebuilt)' at its "
     "place, active: build the rebuild there with the normal tools. Then: describe_reference "

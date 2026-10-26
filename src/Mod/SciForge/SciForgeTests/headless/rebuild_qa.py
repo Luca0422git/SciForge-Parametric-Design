@@ -37,6 +37,9 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
   the hole are read and the letters are said, with what to do.
 * stopped: a rebuild given up in a design opened again: there was no way but Undo (none
   there); Stop Rebuild shows the original again and deletes (or keeps) the rebuilt body.
+* big mesh: a 37,740-triangle STL took 160 s in start_rebuild and as long again in
+  describe_reference (FreeCAD frozen); now a mesh over 10,000 triangles is refused at once
+  with what to do, and describe reads the reference's solid instead of making it again.
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -1015,6 +1018,61 @@ def stopped(agent, folder):
     )
 
 
+# -- meshes: a big one refused at once, a small one made into a solid once ----------------------
+def _plate_mesh(folder, name, angular):
+    import MeshPart
+
+    path = os.path.join(folder, name)
+    mesh = MeshPart.meshFromShape(
+        Shape=_plate(), LinearDeflection=0.001, AngularDeflection=angular, Relative=False
+    )
+    mesh.write(path)
+    return path, mesh.CountFacets
+
+
+def big_mesh(agent, folder):
+    import time
+
+    from sciforge import insert
+    from . import rebuild_e2e as e2e
+
+    path, count = _plate_mesh(folder, "qa_big_mesh.stl", 0.006)
+    agent.call("new_design", {"name": "QaBigMesh"})
+    text, error = agent.call("import_file", {"path": path})
+    began = time.time()
+    text, error = agent.call("start_rebuild", {"body": e2e.made_id(text)})
+    took = time.time() - began
+    agent.check(
+        "big mesh: a mesh of %d triangles is refused at once, with the reason and what to do "
+        "(it took minutes: 160 s for 37,740, then describe as long again) (%.1f s)" % (count, took),
+        count > 10000 and error and "Reduce" in text and took < 10,
+        (count, took, text[:300]),
+    )
+    path, count = _plate_mesh(folder, "qa_small_mesh.stl", 0.2)
+    agent.call("new_design", {"name": "QaSmallMesh"})
+    text, error = agent.call("import_file", {"path": path})
+    agent.call("start_rebuild", {"body": e2e.made_id(text)})
+    made = []
+    kept = insert.solid_from_mesh
+
+    def counting(*args, **kwargs):
+        made.append(1)
+        return kept(*args, **kwargs)
+
+    insert.solid_from_mesh = counting
+    try:
+        text, error = agent.call("describe_reference", {})
+    finally:
+        insert.solid_from_mesh = kept
+    data = _json(text) or {}
+    agent.check(
+        "small mesh: describe_reference reads the reference's solid, not the triangles made "
+        "into a solid again (%d made)" % len(made),
+        not error and not made and (data.get("base") or {}).get("kind") == "extrude",
+        (len(made), (data.get("base") or {}).get("kind"), text[:200]),
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -1032,6 +1090,7 @@ CHECKS = (
     bossed_plate,
     text_plate,
     stopped,
+    big_mesh,
 )
 
 

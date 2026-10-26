@@ -34,8 +34,10 @@ SOFT = 35.0  # degrees: two faces of a mesh meeting at less than this are one ro
 POSITION_TOL = 0.01  # mm: how far a rounded position may be from the measured one
 
 
-def describe_mesh(mesh, options=None):
-    """recognize.describe()'s dict for a mesh (Mesh.Mesh, or an object with a .Mesh)."""
+def describe_mesh(mesh, options=None, faceted=None):
+    """recognize.describe()'s dict for a mesh (Mesh.Mesh, or an object with a .Mesh).
+    faceted: the solid already made from these triangles (insert.solid_from_mesh, a rebuild's
+    reference), in the mesh's coordinates: not made again (beta 3 QA: minutes on a big mesh)."""
     options = dict(options or {})
     mesh = getattr(mesh, "Mesh", mesh)
     if mesh is None or getattr(mesh, "CountFacets", 0) == 0:
@@ -57,8 +59,11 @@ def describe_mesh(mesh, options=None):
             "cannot be read: repair it first (MESH tab > Repair), then try again.",
         )
     try:
-        faceted = insert.solid_from_mesh(mesh, "Prismatic")
-        if not faceted.isValid() or not all(sh.isClosed() for sh in faceted.Shells):
+        if faceted is None or faceted.isNull() or not faceted.Solids:
+            faceted = insert.solid_from_mesh(mesh, "Prismatic")
+            if not faceted.isValid():
+                raise ValueError("the triangles do not close into a valid solid")
+        if not all(sh.isClosed() for sh in faceted.Shells):
             raise ValueError("the triangles do not close into a valid solid")
     except Exception as exc:
         out = _empty(mesh, "The mesh could not become a solid: %s" % exc)

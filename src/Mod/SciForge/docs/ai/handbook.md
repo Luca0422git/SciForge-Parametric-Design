@@ -362,7 +362,8 @@ the category "Rebuild with a timeline":
 - `start_rebuild` (`body`): the part becomes the **reference**: its solid frozen in a hidden
   object (drawn faint and see-through, never a body or a step, so it stays the target), the
   original hidden, and a new empty body `<name> (rebuilt)` made at its place, active. A mesh
-  must be watertight; it is turned into a solid of flat facets first.
+  must be watertight and of at most 10,000 triangles; it is turned into a solid of flat
+  facets first.
 - `describe_reference`: the part read as numbers: base shape, features (holes, pockets,
   bosses, patterns, fillets, chamfers), a **plan** of tool calls in Fusion's order whose
   arguments pass the tools' own checks, what could not be read, a confidence.

@@ -309,7 +309,10 @@ rebuilt; a body already being rebuilt is not started twice (carry on in its rebu
   ids of the later steps that name it (`uses` lists them). compare_to_reference afterwards
   says what that step should have made.
 - **A mesh is refused** ("not watertight"): the mesh has holes or loose triangles; the person
-  repairs it first (MESH tab > Repair), then starts again.
+  repairs it first (MESH tab > Repair), then starts again. ("a mesh of N triangles"): over
+  10,000 triangles a mesh is not made into a solid (that takes minutes, and FreeCAD cannot be
+  stopped meanwhile); the person reduces it (MESH tab > Reduce) or exports it again from its
+  CAD program with a coarser setting.
 - **describe_reference lists a thread, a text or free-form faces** in `unrecognized`: they
   are never guessed. A thread: the plan drills the plain hole; add the thread with `thread`
   (modeled) if it is a standard one, compare again, and finish with `even_if_different` when
