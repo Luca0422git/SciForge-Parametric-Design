@@ -123,6 +123,23 @@ at-recognize's (0.06 to 6.5 s).
   `tools/sciforge/make_ai_docs.py` after the merge.
 - Found in at-recognize's first version (they fixed it since): a rectangular pattern of holes
   was planned in one direction only; compare's hole calls repaired it in the e2e test.
+- Merging `sf/at-recognize` conflicts in `docs/sciforge/parity/auto-timeline.md`'s Tests
+  section only: keep both (at-recognize's bullet first, then "Tests: ... (at-tools)" and
+  "Known gaps (at-tools)").
+
+## Tests run (final code, after merging at-recognize's bc1bf483)
+
+- `run_tests.sh --only base` (before that merge): all passed: unit 2531 (9 skipped), golden
+  614 + 2 known xfails, headless runner 317 calls / 121 tools, docs runner 146 items / 1009
+  calls, agent e2e (MCP) 81, rebuild e2e 68, rebuild e2e through MCP 14, recognition 37
+  parts, smoke 79, journey 25, restart 8 + 9.
+- After the merge: the whole unit suite 2537 OK (11 skipped without FreeCAD); rebuild e2e 68,
+  through MCP 14; the runner's rebuild session 32 results; docs runner on the recipe (32
+  calls), troubleshooting (59), the four tools' examples: all pass; scenarios below.
+- Scenarios of the areas touched (run alone or in small groups): ai_bridge 44, ai_chat 20,
+  ai_docs_gui 18, ai_panel 27, ai_tools_gui 38, browser_opacity_hover 46,
+  marking_menu_command 31, timeline_browser 92: PASS; rebuild_start 70,
+  rebuild_compare_finish 66, rebuild_mesh_reopen 39, rebuild_chat 20: PASS.
 
 ## Gaps
 
