@@ -242,6 +242,24 @@ class NewKinds(unittest.TestCase):
         self.assertEqual(core.check("mesh", "local", {"size": 2.0}, [("bodies", None)]), [])
         self.assertTrue(core.check("mesh", "local", {"size": 0}, [face]))
 
+    def test_force_picks(self):
+        face, edge, corner = ("faces", "plane"), ("edges", None), ("vertices", None)
+        vector = {"direction": "vector", "vector": [0, 0, -1]}
+        # along the normal: faces only (the edges or corners of a mix were left out)
+        problems = core.check("load", "force", {"direction": "normal"}, [face, edge])
+        self.assertTrue(any("no normal" in p for p in problems), problems)
+        self.assertTrue(core.check("load", "force", {"direction": "normal"}, [corner]))
+        self.assertEqual(core.check("load", "force", {"direction": "normal"}, [face, face]), [])
+        # shared: one kind of pick (a face and a corner each got the whole force: twice it)
+        problems = core.check("load", "force", vector, [face, corner])
+        self.assertTrue(any("one kind" in p for p in problems), problems)
+        self.assertTrue(core.check("load", "force", vector, [face, edge]))
+        self.assertEqual(core.check("load", "force", vector, [edge, edge]), [])
+        # per entity: every pick its own whole force, any mix
+        self.assertEqual(
+            core.check("load", "force", dict(vector, per_entity=True), [face, edge, corner]), []
+        )
+
     def test_descriptions(self):
         self.assertEqual(core.describe("constraint", "pin", {}), "Pin")
         self.assertEqual(

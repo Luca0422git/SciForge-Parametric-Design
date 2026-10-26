@@ -1341,14 +1341,33 @@ def map_picks(item, model, owners=None, index=None):
     """The model's sub-elements ("Face12", "Edge3", "Vertex5", "Solid2") that lie on the
     item's picks (a whole-body pick: the model solids that body owns). index: _model_index of
     the model, when several items are mapped onto it."""
+    picked = []
+    for obj, found, _moved in resolve_picks(item):
+        picked += [(obj, n) for n in found]
+    return _map_onto(picked, model, owners, index)
+
+
+def map_pick_groups(item, model, owners=None, index=None):
+    """[[the model's sub-elements of the 1st pick], [... of the 2nd], ...]: map_picks pick by
+    pick. Force Per Entity and Moment Per Entity give each pick (Fusion's entity) the whole
+    load, and one picked face can be several faces of the model: the bodies are split where
+    another body touches them (a block glued on a plate splits the plate's top face), or an
+    edit split the face. Giving every model face the whole load doubled it."""
+    if index is None:
+        index = _model_index(model)
+    return [
+        _map_onto([(obj, n) for n in found], model, owners, index)
+        for obj, found, _moved in resolve_picks(item)
+    ]
+
+
+def _map_onto(picked, model, owners=None, index=None):
+    """map_picks for [(object, element name)] of resolved picks."""
     import Part
 
     if index is None:
         index = _model_index(model)
     names = []
-    picked = []
-    for obj, found, _moved in resolve_picks(item):
-        picked += [(obj, n) for n in found]
     shapes = {}
     for obj, sub in picked:
         if not sub:
@@ -1935,40 +1954,43 @@ def _load_forces(item, model, mesh, subs):
         faces = [s for s in subs if s.startswith("Face")]
         edges = [s for s in subs if s.startswith("Edge")]
         vertices = [s for s in subs if s.startswith("Vertex")]
-        groups = []  # (direction, {node: weight}, share of the total)
-        if opts.get("direction") == "normal":
-            if not faces:
-                raise SimulationError(
-                    "%s: a force along the normal needs faces; pick faces or give a direction."
-                    % item.Label
-                )
-            areas = [_model_element(model, s).Area for s in faces]
-            total = sum(areas) or 1.0
-            for sub, area in zip(faces, areas):
-                face = _model_element(model, sub)
-                n = face.normalAt(*_middle_uv(face))
-                # a positive force pushes into the face (against its outward normal)
-                direction = (-n.x, -n.y, -n.z)
-                weights, _owner = _weights_on(mesh, model, [sub])
-                share = 1.0 if opts.get("per_entity") else area / total
-                groups.append((direction, weights, share))
-        else:
+        per_entity = bool(opts.get("per_entity"))
+        normal = opts.get("direction") == "normal"
+        # (the dialogs refuse these with the same sentences: simulation_core.check; an item
+        # saved before they did is refused here rather than solved with a part of its picks
+        # left out, or with its total counted twice)
+        if normal and (edges or vertices or not faces):
+            raise SimulationError("%s: %s" % (item.Label, core.FORCE_NORMAL_NEEDS_FACES))
+        kinds = [k for k in (faces, edges, vertices) if k]
+        if not normal and not per_entity and len(kinds) > 1:
+            raise SimulationError("%s: %s" % (item.Label, core.FORCE_ONE_KIND))
+        # an entity is one pick of the person's (each gets the whole force with Force Per
+        # Entity), else all the picks together share it
+        entities = map_pick_groups(item, model) if per_entity else [list(subs)]
+        groups = []  # (direction, {node: weight}, share of the force)
+        for entity in entities:
+            e_faces = [s for s in entity if s.startswith("Face")]
+            e_edges = [s for s in entity if s.startswith("Edge")]
+            e_vertices = [s for s in entity if s.startswith("Vertex")]
+            if normal:
+                # each face along its own normal, the faces sharing the force by area
+                areas = [_model_element(model, s).Area for s in e_faces]
+                total = sum(areas) or 1.0
+                for sub, area in zip(e_faces, areas):
+                    face = _model_element(model, sub)
+                    n = face.normalAt(*_middle_uv(face))
+                    # a positive force pushes into the face (against its outward normal)
+                    weights, _owner = _weights_on(mesh, model, [sub])
+                    groups.append(((-n.x, -n.y, -n.z), weights, area / total))
+                continue
             direction = core.unit_vector(opts.get("vector") or [0, 0, -1])
-            picks = faces or edges
-            if picks:
-                if opts.get("per_entity"):
-                    for sub in picks:
-                        weights, _owner = _weights_on(mesh, model, [sub])
-                        groups.append((direction, weights, 1.0))
-                else:
-                    weights, _owner = _weights_on(mesh, model, picks)
-                    groups.append((direction, weights, 1.0))
-            if vertices:
-                count = len(vertices)
-                for sub in vertices:
-                    weights = {n: 1.0 for n in mesh.nodes_of(model, sub)}
-                    share = 1.0 if opts.get("per_entity") else 1.0 / count
-                    groups.append((direction, weights, share))
+            if e_faces or e_edges:
+                # faces share it by area, edges by length (FreeCAD's consistent node shares)
+                weights, _owner = _weights_on(mesh, model, e_faces or e_edges)
+                groups.append((direction, weights, 1.0))
+            for sub in e_vertices:
+                weights = {n: 1.0 for n in mesh.nodes_of(model, sub)}
+                groups.append((direction, weights, 1.0 / len(e_vertices)))
         for direction, weights, share in groups:
             total = sum(weights.values())
             if total <= 0:
@@ -1979,7 +2001,12 @@ def _load_forces(item, model, mesh, subs):
         return out
     faces = [s for s in subs if s.startswith("Face")]
     if kind == "moment":
-        sets = [[s] for s in faces] if opts.get("per_entity") else [faces]
+        if opts.get("per_entity"):
+            # each pick of the person's gets the whole moment (map_pick_groups)
+            sets = [[s for s in g if s.startswith("Face")] for g in map_pick_groups(item, model)]
+            sets = [g for g in sets if g]
+        else:
+            sets = [faces]
         for group in sets:
             weights, _owner = _weights_on(mesh, model, group)
             nodes = sorted(weights)

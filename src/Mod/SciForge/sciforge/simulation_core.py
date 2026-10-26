@@ -319,6 +319,20 @@ UNITS = {
 }
 
 
+# A force's picks: along the normal it pushes into faces; shared by its picks they are of one
+# kind (faces share it by area, edges by length, corners equally: Fusion, research 3.5); with
+# Force Per Entity every pick gets the whole force, whatever its kind.
+FORCE_NORMAL_NEEDS_FACES = (
+    "a force along the normal pushes into faces, and edges and corners have no normal: pick "
+    "only faces, or give the force a direction (vector)."
+)
+FORCE_ONE_KIND = (
+    "a force shared by its picks needs picks of one kind: faces (shared by area), edges (by "
+    "length) or corners (equally). Make one force for each kind, or switch on Force Per Entity "
+    "(each pick gets the whole force)."
+)
+
+
 class SimulationError(ValueError):
     """Something the person (or the AI) has to change; the message is a plain sentence."""
 
@@ -381,6 +395,12 @@ def check(category, kind, opts, picks):
                 problems.append("%s needs a direction that is not zero." % title)
         if "direction" in opts and opts["direction"] not in ("normal", "vector"):
             problems.append("%s: the direction is normal or vector." % title)
+        if kind == "force" and picks:
+            elements = set(element for element, _surface in picks)
+            if opts.get("direction") == "normal" and elements - {"faces"}:
+                problems.append("Force: " + FORCE_NORMAL_NEEDS_FACES)
+            elif not opts.get("per_entity") and len(elements) > 1:
+                problems.append("Force: " + FORCE_ONE_KIND)
         if kind == "remote_force":
             point = opts.get("point")
             if not (

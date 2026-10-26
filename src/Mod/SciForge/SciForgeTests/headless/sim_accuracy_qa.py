@@ -1839,6 +1839,80 @@ def reactions_balance(doc, out):
     )
 
 
+@engine_check("a force's picks")
+def force_picks(doc, out):
+    """A force on a face and a corner, or a face and an edge, shared: refused with a sentence
+    (it used to give the corner the whole force on top of the face's, twice the total, and to
+    leave the edge out); per pick (Force Per Entity) each gets the whole force. Per Entity on a
+    face that a glued block splits in two: still once (it was given to each piece: twice)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    body, study = _cantilever_study(doc, label="Mixed")
+    tip = sb.one_face(body, lambda f: sb.near(f.CenterOfMass.x, 100))
+    corner = sb.vertex_at(body, (100, 0, 10))
+    top_edge = line_at(body, y=0.0, z=10.0)
+    vector = {"direction": "vector", "vector": [0, 0, -1], "magnitude": 100.0}
+    for label, refs in (
+        ("a face and a corner", [tip, corner]),
+        ("a face and an edge", [tip, top_edge]),
+    ):
+        try:
+            sim.add_item(study, "load", "force", [(body, r) for r in refs], vector)
+            out.append(("shared over %s: refused" % label, False, "it was accepted"))
+        except sim.SimulationError as exc:
+            out.append(("shared over %s: refused" % label, "one kind" in str(exc), str(exc)))
+    try:
+        sim.add_item(study, "load", "force", [(body, top_edge)], {"magnitude": 100.0})
+        out.append(("along the normal on an edge: refused", False, "it was accepted"))
+    except sim.SimulationError as exc:
+        out.append(("along the normal on an edge: refused", "no normal" in str(exc), str(exc)))
+    for item in sim.items(study, "load"):
+        sim.delete_item(item)
+    sim.add_item(
+        study, "load", "force", [(body, tip), (body, corner)], dict(vector, per_entity=True)
+    )
+    m = sim.solve(study, timeout=900)
+    total = m["reactions"]["Fixed 1"]["total"]
+    out.append(
+        (
+            "per entity on a face and a corner: the hold takes 2 x 100 N (%.6g)" % total,
+            abs(total - 200.0) < 1e-6 * 200.0 + 1e-6,
+            m["reactions"],
+        )
+    )
+    plate = sb.make_body(doc, Part.makeBox(100, 100, 5, App.Vector(0, 100, 0)), "Plate")
+    block = sb.make_body(doc, Part.makeBox(20, 20, 10, App.Vector(40, 140, 5)), "Block")
+    st = sim.create_study(doc, study_bodies=[plate, block])
+    sim.add_item(
+        st,
+        "constraint",
+        "fixed",
+        [(plate, sb.one_face(plate, lambda f: sb.near(f.CenterOfMass.z, 0)))],
+    )
+    top = sb.one_face(plate, lambda f: sb.near(f.CenterOfMass.z, 5))
+    roof = sb.one_face(block, lambda f: sb.near(f.CenterOfMass.z, 15))
+    sim.add_item(
+        st,
+        "load",
+        "force",
+        [(plate, top), (block, roof)],
+        {"direction": "vector", "vector": [0, 0, -1], "magnitude": 1000.0, "per_entity": True},
+    )
+    m = sim.solve(st, timeout=900)
+    total = m["reactions"]["Fixed 2"]["z"]
+    out.append(
+        (
+            "per entity on a plate's top that a glued block splits, and the block's roof: the "
+            "hold takes 2 x 1000 N (%.6g)" % total,
+            abs(total - 2000.0) < 0.002 * 2000.0,
+            m["reactions"],
+        )
+    )
+
+
 @engine_check("results kept in and dropped from the file")
 def kept_and_dropped(doc, out):
     """A solved study saved and reopened: the results come back with the same numbers; with
