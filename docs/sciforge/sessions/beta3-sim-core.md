@@ -126,7 +126,9 @@ sections Engine and Benchmarks.
   SETUP command. Contacts and overlaps are now remembered per geometry (each body's shape hash,
   face / edge / corner counts, box and place, its component's place, the tolerance): 0.2 s
   after the first time; a moved or edited body is seen at once (engine check). Only checking
-  the faces near the other body did not make OpenCASCADE's distance faster.
+  the faces near the other body did not make OpenCASCADE's distance faster; its section does
+  (two bodies whose boundaries cross touch: 0.06 s instead of 0.19 s a pair), and only those
+  are tested for overlap: contacts and overlaps together 3.5 s instead of 6 s the first time.
 - 21:05-21:15 the pre-check of the big plate fixed at its 120 holes took 8 s: every pick made
   its own copy of the 366-face shape (27 ms each) to compare its remembered shape. The copy is
   now made once per object and call, and remembered per shape: 0.4 s.

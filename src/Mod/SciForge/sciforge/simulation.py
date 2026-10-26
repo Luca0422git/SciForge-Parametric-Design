@@ -816,19 +816,6 @@ def set_study_material(study, body, key):
 
 
 # -- contacts --------------------------------------------------------------------------------------
-def _gap(a, b, tol):
-    """The distance between two shapes, or None when their boxes are farther apart than
-    `tol` (the cheap test first)."""
-    box = a.BoundBox
-    box.enlarge(tol)
-    if not box.intersect(b.BoundBox):
-        return None
-    try:
-        return a.distToShape(b)[0]
-    except Exception:
-        return None
-
-
 # Contacts and overlaps of the study's bodies, worked out once per geometry: the pre-check
 # runs after every SETUP command, and for 20 stacked plates with holes they took 4 s and 2 s.
 _GEOMETRY_CACHE = {}
@@ -864,62 +851,71 @@ def _geometry_key(found, tol):
     return (tuple(rows), round(float(tol), 9))
 
 
-def _cached(kind, study, compute):
-    """compute(found, tol) -> [(body, body, value)], remembered by body name for the same
-    geometry (at most 16 answers kept)."""
+def _contact_data(study):
+    """([(body, body, "bonded")] touching or closer than the contact tolerance, [(body, body,
+    volume mm3)] overlapping) of the study's bodies, remembered for the same geometry (at most
+    16 answers kept). Two bodies whose boundaries cross (OpenCASCADE's section: a third of the
+    time of a distance) touch; the others are measured; only touching ones can overlap."""
     found = study_bodies(study)
     tol = float(settings(study)["contact_tolerance"])
     key = _geometry_key(found, tol)
-    if key is None:
-        return compute(found, tol)
-    full = (kind, study.Document.Name, key)
+    full = None if key is None else ("contacts", study.Document.Name, key)
     by_name = {b.Name: b for b in found}
-    hit = _GEOMETRY_CACHE.get(full)
+    hit = _GEOMETRY_CACHE.get(full) if full is not None else None
     if hit is not None:
-        return [(by_name[a], by_name[b], value) for a, b, value in hit]
-    out = compute(found, tol)
-    if len(_GEOMETRY_CACHE) >= 16:
-        _GEOMETRY_CACHE.pop(next(iter(_GEOMETRY_CACHE)))
-    _GEOMETRY_CACHE[full] = [(a.Name, b.Name, value) for a, b, value in out]
-    return out
+        return tuple([(by_name[a], by_name[b], v) for a, b, v in rows] for rows in hit)
+    shapes = [(b, bodies.global_shape(b, copy=False)) for b in found]
+    volumes = {}
+    touching, overlapping = [], []
+    for i, (a, sa) in enumerate(shapes):
+        box = sa.BoundBox
+        near = sa.BoundBox
+        near.enlarge(tol)
+        for b, sb in shapes[i + 1 :]:
+            if not near.intersect(sb.BoundBox):
+                continue
+            gap = None
+            try:
+                cut = sa.section(sb)
+                if cut.Edges or cut.Vertexes:
+                    gap = 0.0
+            except Exception:
+                gap = None
+            if gap is None:
+                try:
+                    gap = sa.distToShape(sb)[0]
+                except Exception:
+                    continue
+            if gap <= tol + 1e-9:
+                touching.append((a, b, "bonded"))
+            if gap <= 1e-9 and box.intersect(sb.BoundBox):
+                try:
+                    volume = sa.common(sb).Volume
+                    for body, shape in ((a, sa), (b, sb)):
+                        if body.Name not in volumes:
+                            volumes[body.Name] = shape.Volume
+                except Exception:
+                    continue
+                if volume > 1e-6 * max(1.0, min(volumes[a.Name], volumes[b.Name])):
+                    overlapping.append((a, b, volume))
+    if full is not None:
+        if len(_GEOMETRY_CACHE) >= 16:
+            _GEOMETRY_CACHE.pop(next(iter(_GEOMETRY_CACHE)))
+        _GEOMETRY_CACHE[full] = tuple(
+            [(x.Name, y.Name, v) for x, y, v in rows] for rows in (touching, overlapping)
+        )
+    return touching, overlapping
 
 
 def contacts(study):
     """Fusion's automatic contacts: [(body, body, "bonded")] of the study's bodies that touch
     or are closer than the contact tolerance (they are glued when the study solves)."""
-
-    def compute(found, tol):
-        shapes = [(b, bodies.global_shape(b, copy=False)) for b in found]
-        out = []
-        for i, (a, sa) in enumerate(shapes):
-            for b, sb in shapes[i + 1 :]:
-                gap = _gap(sa, sb, tol)
-                if gap is not None and gap <= tol + 1e-9:
-                    out.append((a, b, "bonded"))
-        return out
-
-    return _cached("contacts", study, compute)
+    return _contact_data(study)[0]
 
 
 def overlaps(study):
     """[(body, body, volume mm3)] of the study's bodies that overlap."""
-
-    def compute(found, _tol):
-        shapes = [(b, bodies.global_shape(b, copy=False)) for b in found]
-        out = []
-        for i, (a, sa) in enumerate(shapes):
-            for b, sb in shapes[i + 1 :]:
-                if not sa.BoundBox.intersect(sb.BoundBox):
-                    continue
-                try:
-                    volume = sa.common(sb).Volume
-                except Exception:
-                    continue
-                if volume > 1e-6 * max(1.0, min(sa.Volume, sb.Volume)):
-                    out.append((a, b, volume))
-        return out
-
-    return _cached("overlaps", study, compute)
+    return _contact_data(study)[1]
 
 
 def loose_bodies(study, touching=None):
