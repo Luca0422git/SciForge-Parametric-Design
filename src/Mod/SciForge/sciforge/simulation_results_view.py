@@ -828,6 +828,15 @@ class Legend(QtWidgets.QFrame):
                 colour = {"below": "#ff8a80", "meets": "#ffd666", "above": "#8cc4ff"}.get(
                     state, "#c3cad4"
                 )
+                try:
+                    from . import theme
+
+                    if theme.is_light():  # (darker on the light look's white panel)
+                        colour = {"below": "#c62828", "meets": "#9a6b00", "above": "#1f6fbf"}.get(
+                            state, "#5b6573"
+                        )
+                except Exception:
+                    pass
                 self.verdict_label.setText(text)
                 self.verdict_label.setStyleSheet("QLabel { color: %s; }" % colour)
             self.range_label.setText(info.get("span_text", ""))

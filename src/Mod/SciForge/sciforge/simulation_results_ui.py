@@ -712,7 +712,7 @@ class Session:
             return "Deformation: Undeformed"
         if self.deformation == "actual":
             return "Deformation: Actual (true size)"
-        return "Deformation: %s (shown %s x)" % (name, core.fmt(f, 3))
+        return "Deformation: %s (%s x)" % (name, core.fmt(f, 3))
 
     def update_tags(self):
         tags = []
@@ -1311,8 +1311,11 @@ class CompareSession:
             pts = data.points
             boxes.append(tuple(pts.min(axis=0)) + tuple(pts.max(axis=0)))
             self.items.append({"study": study, "data": data, "display": display})
-        for item, shift in zip(self.items, core.compare_offsets(boxes)):
-            item["display"].set_offset((shift, 0.0, 0.0))
+        axis = core.compare_axis(boxes)
+        for item, shift in zip(self.items, core.compare_offsets(boxes, axis=axis)):
+            offset = [0.0, 0.0, 0.0]
+            offset[axis] = shift
+            item["display"].set_offset(offset)
         self.view = Gui.getDocument(doc.Name).ActiveView
         self.gl = gl
         for item in self.items:

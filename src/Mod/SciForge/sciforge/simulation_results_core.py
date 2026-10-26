@@ -451,18 +451,31 @@ NO_RESULTS = "This study has no results yet: solve it (SETUP > Solve)."
 COMPARE_MOST = 4  # Fusion compares up to 4 studies (research 5.11)
 
 
-def compare_offsets(boxes, gap=0.25):
-    """X shifts that put each model (bounding box (xmin, ymin, zmin, xmax, ymax, zmax)) beside
-    the one before it along +X, `gap` x the widest model apart; the first stays where it is."""
+def compare_axis(boxes):
+    """The axis (0 = X, 1 = Y) to put the models side by side along: the one they are thinnest
+    in (two beams lie side by side, not end to end); Z stays the up direction."""
+    if not boxes:
+        return 0
+    dx = max(b[3] - b[0] for b in boxes)
+    dy = max(b[4] - b[1] for b in boxes)
+    return 1 if dy < dx else 0
+
+
+def compare_offsets(boxes, gap=0.25, axis=0):
+    """Shifts along `axis` (0 X, 1 Y, 2 Z) that put each model (bounding box (xmin, ymin, zmin,
+    xmax, ymax, zmax)) beside the one before it, `gap` x the widest model apart (at least a
+    quarter of its size along the axis); the first stays where it is."""
     if not boxes:
         return []
-    widest = max(b[3] - b[0] for b in boxes) or 1.0
+    widest = max(b[3 + axis] - b[axis] for b in boxes) or 1.0
+    size = max(max(b[3] - b[0], b[4] - b[1], b[5] - b[2]) for b in boxes) or 1.0
+    space = max(gap * widest, 0.1 * size)
     shifts = [0.0]
-    end = boxes[0][3]
+    end = boxes[0][3 + axis]
     for box in boxes[1:]:
-        start = end + gap * widest
-        shifts.append(start - box[0])
-        end = start + (box[3] - box[0])
+        start = end + space
+        shifts.append(start - box[axis])
+        end = start + (box[3 + axis] - box[axis])
     return shifts
 
 

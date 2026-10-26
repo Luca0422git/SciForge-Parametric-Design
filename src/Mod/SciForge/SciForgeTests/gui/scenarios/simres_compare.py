@@ -3,8 +3,8 @@
 studies (100 N and 200 N at the tip), both solved.
 
 A  Compare: the dialog lists both studies ticked; Compare 2 Studies puts the two results side by
-   side (the second beside the first), each with a tag naming its study with its min and max,
-   on one colour scale.
+   side (the second beam beside the first, along Y: the beams are long in X), each with a tag
+   naming its study with its min and max, on one colour scale.
 B  Legend > Stress: one scale for both, so the 100 N beam's highest stress sits half way up the
    200 N one's; DEFORMATION > Actual applies to both; Surface Probes rests meanwhile.
 C  Finish Compare (under the legend): back to the active study's results.
@@ -70,8 +70,13 @@ def a_check():
     if cmp is None:
         return
     h.check("two results drawn", len(cmp.items) == 2)
-    shifts = [float(i["display"].offset[0]) for i in cmp.items]
-    h.check("side by side (the second 125 mm along X)", shifts == [0.0, 125.0], shifts)
+    shifts = [tuple(float(c) for c in i["display"].offset) for i in cmp.items]
+    # the beams are long in X: they lie side by side along Y, 10 mm apart
+    h.check(
+        "side by side (the second 20 mm along Y)",
+        shifts == [(0.0, 0.0, 0.0), (0.0, 20.0, 0.0)],
+        shifts,
+    )
     texts = [t["text"] for t in cmp.tag_list]
     h.check(
         "a tag per study with its name",

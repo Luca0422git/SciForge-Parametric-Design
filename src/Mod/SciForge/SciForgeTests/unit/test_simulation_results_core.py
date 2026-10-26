@@ -193,6 +193,9 @@ class CompareTests(unittest.TestCase):
         self.assertAlmostEqual(shifts[1], 125.0)  # 100 + a quarter of the widest (100)
         self.assertAlmostEqual(shifts[2] + boxes[2][0], 250.0)  # starts after the second + gap
         self.assertEqual(core.compare_offsets([]), [])
+        # beams long in X lie side by side along Y, 10 mm apart (a tenth of their size)
+        self.assertEqual(core.compare_axis(boxes[:2]), 1)
+        self.assertEqual(core.compare_offsets(boxes[:2], axis=1), [0.0, 20.0])
 
     def test_shared_scale(self):
         both = core.combined_stats([{"min": 1, "max": 5}, {"min": 0.5, "max": 3}, None])
