@@ -152,9 +152,11 @@ def _measure_centre(doc):
             else:
                 box.add(b)
         if box is not None:
+            _CENTRE["half"] = (box.XLength / 2.0, box.YLength / 2.0, box.ZLength / 2.0)
             return App.Vector(box.Center), box.DiagonalLength
     except Exception:
         pass
+    _CENTRE["half"] = (50.0, 50.0, 50.0)
     return App.Vector(0, 0, 0), 100.0
 
 
@@ -283,8 +285,8 @@ def _model(name):
         model.addChild(_cylinder(0.45, 2.0, 0.06))
         model.addChild(_sphere(2.1, 0.16))
     elif name == "ground":  # Fixed: a cone standing on the face with a plate on top
-        model.addChild(_cone_down(0.0, 0.3, 0.14))
-        model.addChild(_cylinder(0.3, 0.34, 0.2))
+        model.addChild(_cone_down(0.0, 0.42, 0.19))
+        model.addChild(_cylinder(0.42, 0.48, 0.27))
     elif name == "pin":
         model.addChild(_cone_down(0.0, 0.26, 0.1))
         model.addChild(_cylinder(0.26, 0.42, 0.035))
@@ -608,7 +610,7 @@ def _first_normal(refs):
 
 def _moment(sep, centre, axis):
     size = STATE["size"] or 5.0
-    pts = score.arc_points(tuple(centre), tuple(axis), size * 0.6, 270.0, 24)
+    pts = score.arc_points(tuple(centre), tuple(axis), size * 0.8, 270.0, 24)
     sep.addChild(_polyline(pts, PUSH, 3.0))
     end = App.Vector(*pts[-1])
     tangent = App.Vector(*(score.arc_tangent(tuple(axis), pts[-1], tuple(centre)) or (1, 0, 0)))
@@ -630,8 +632,10 @@ def _gravity(sep, doc, direction):
         return 0
     d.normalize()
     size = STATE["size"] or diag / 10.0
-    # beside the model, on the side the weight comes from
-    point = centre - d * (diag * 0.5 + size * 0.2)
+    # standing on the model's box, on the side the weight comes from, pointing at it
+    half = _CENTRE.get("half") or (diag / 2.0,) * 3
+    reach = abs(d.x) * half[0] + abs(d.y) * half[1] + abs(d.z) * half[2]
+    point = centre - d * (reach + size * 0.15)
     sep.addChild(_material(WEIGHT))
     sep.addChild(_place(point, d, _model("big_arrow")))
     return 1

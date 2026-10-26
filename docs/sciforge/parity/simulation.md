@@ -134,6 +134,7 @@ G = guess (the SciForge choice when the sources are silent).
 | `sim_setup_kinds` | every constraint and load type (Pin filter and defaults, Moment with a unit, vector force components, pressure flip, prescribed displacement), Local Mesh Control with Body Selection, Generate Mesh + Show Mesh, Cancel a solve |
 | `sim_setup_workspace` | entering with a sketch open, leaving with a dialog open, Esc, a second study, Solve dialog with two studies (one refused), undo while results show, leaving from RESULTS |
 | `sim_setup_components` | an empty design, moved components, a model held by one edge (not held enough) |
+| `sim_setup_glyphs` | the glyphs rendered off screen: drawn, hidden on request, same screen size after a zoom, gone in DESIGN |
 
 ### Known gaps
 
@@ -153,8 +154,9 @@ G = guess (the SciForge choice when the sources are silent).
   N m, in) is converted, but a design in inches still shows metric values.
 - **Repair** (Fusion's button for a study with serious input errors) and the Job Status
   history of earlier solves are not built.
-- **Glyph look**: SciForge's own (Fusion's are unknown here; research 3.12 is G); they cannot
-  be checked on screen in the sandbox (xvfb draws no 3D), only counted.
+- **Glyph look**: SciForge's own (Fusion's are unknown here; research 3.12 is G). xvfb shows no
+  3D on the screen, but FreeCAD's off-screen picture does: `sim_setup_glyphs` renders the view
+  with and without them and checks their colours.
 - **Engine issues found while building the UI** (reported to sim-core in
   `docs/sciforge/sessions/beta3-sim-ui.md`): a whole-body pick was dropped by the engine's link
   list (the UI keeps it: `simulation_panels._keep_whole_bodies`); the result summary keys bodies
