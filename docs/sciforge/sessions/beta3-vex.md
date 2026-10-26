@@ -59,8 +59,10 @@ a page for the team `docs/sciforge/vex.md`).
   `instances.source_bodies` / `sync` / `instances_of` use them.
 - `browser_ui`: rows never listed are passed over before they are read; origin rows from one
   look per Origin (`_origin_index`); a row's item keeps its node without its subtree (Qt
-  copied the whole tree in and out for the design's row on every read and paint); the timer's
-  read is paced on a design whose read takes long (`POLL_PAUSE`).
+  copied the whole tree in and out for the design's row on every read and paint; what needs
+  the children, Show / Hide from the row's menu or eye column, takes the node from the tree:
+  `_with_children`, found by the GUI smoke test); the timer's read is paced on a design whose
+  read takes long (`POLL_PAUSE`); a new row is not closed again.
 - `step_import`: files read before the undo step opens; a body read from a file is not copied
   again; `export_report.shape_notes` builds no compound of every face of a solid.
 - Measured, not changed (FreeCAD's own): opening is 3.7 s without the window and 36 s or more
@@ -102,7 +104,7 @@ a page for the team `docs/sciforge/vex.md`).
 
 ## Scenarios
 
-New (all pass): `vex_joint_hole` (51 checks), `vex_align` (145), `vex_shaft` (33),
+New (all pass): `vex_joint_hole` (51 checks), `vex_align` (145), `vex_shaft` (39),
 `vex_insert_many` (37), `vex_duplicate` (52, with the parts list's Qty), `vex_robot` (11: the
 speed measurements; it records which of the brief's targets are met and fails on a missed
 one only with `SCIFORGE_PERF_STRICT=1`, like the other benchmarks). Changed: `insert_step`
