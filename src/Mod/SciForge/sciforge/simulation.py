@@ -1390,6 +1390,34 @@ def _remove_run(study, link="SimRun"):
     _remove_objects(study.Document, list(reversed(_run_members(run))))
 
 
+# (document name, run name) of the runs a job is still making: not linked to their study yet
+_LIVE_RUNS = set()
+
+
+def _orphans(doc):
+    """The objects of solves that no study links and no job is still making: a design saved
+    while a solve ran keeps that solve's half-made run (its mesh too), which nothing else would
+    ever remove."""
+    kept = set()
+    for study in studies(doc):
+        for link in ("SimRun", "SimMeshRun"):
+            run = run_of(study, link)
+            if run is not None:
+                kept.update(o.Name for o in _run_members(run))
+    for doc_name, name in list(_LIVE_RUNS):
+        run = doc.getObject(name) if doc_name == doc.Name else None
+        if run is not None:
+            kept.update(o.Name for o in _run_members(run))
+    found = [o for o in doc.Objects if _type(o) in (RUN, MODEL, HELPER) and o.Name not in kept]
+    # (a run's members with it)
+    out = []
+    for obj in found:
+        for member in _run_members(obj) if _type(obj) == RUN else [obj]:
+            if member.Name not in kept and member not in out:
+                out.append(member)
+    return out
+
+
 def _hide(obj):
     try:
         obj.Visibility = False
@@ -2418,6 +2446,7 @@ class Job:
         self._checked = False  # the pre-check passed (the model is built on the next turn)
         self._getter = None  # FreeCAD's mesh tables for the input (made a turn earlier)
         self._results_step = None  # the next turn of reading the results
+        self._made = set()  # (document name, run name) of the runs this job made
         self._solid_nodes = {}  # model solid index -> its mesh nodes (from Gmsh's groups)
         self._groups = {}  # Gmsh's groups: model faces / edges / solids -> elements, nodes
         self._previous_run = None  # adaptive refinement: the last pass's run, until the next
@@ -2488,6 +2517,13 @@ class Job:
         if self._checked:
             return self._build_model()
         try:
+            left = _orphans(self.doc)
+            if left:
+                _remove_objects(self.doc, list(reversed(left)))
+                log("simulation: removed %d objects of an unfinished solve" % len(left))
+        except Exception as exc:
+            warn("simulation: tidying up: %s" % exc)
+        try:
             repaired = repair_picks(self.study)
         except Exception as exc:
             warn("simulation: finding picks again: %s" % exc)
@@ -2527,6 +2563,9 @@ class Job:
         self._analysis, self._model, self._mesh, self._subs = _make_run(
             self.study, shape, self._owners, self.mesh_only, self._straight
         )
+        made = (self.doc.Name, self._analysis.Name)
+        self._made.add(made)
+        _LIVE_RUNS.add(made)
         self.timings["model"] = time.time() - t
         self.stage, self.message = "mesh", "Meshing"
         self._start_mesh()
@@ -3059,6 +3098,8 @@ class Job:
                     pass
         self._analysis = self._previous_run = None
         self._getter = self._results_step = None
+        for doc_name, name in list(self._made):
+            _LIVE_RUNS.discard((doc_name, name))
         shutil.rmtree(self.work, ignore_errors=True)
         return state
 

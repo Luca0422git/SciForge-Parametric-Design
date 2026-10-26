@@ -146,3 +146,7 @@ sections Engine and Benchmarks.
   on top: the simulation unit tests (129) and eight of their GUI scenarios pass
   (sim_setup_bracket 74, sim_setup_components 36, sim_setup_kinds 52, simres_cantilever 80,
   simres_out_of_date 32, simres_reopen 21, simres_adaptive 16, simres_inspect 93 checks).
+- 21:40-21:50 a design saved while a solve ran kept that solve's half-made run (its mesh too)
+  in the file for good: nothing linked it, nothing removed it. A solve now removes such left
+  overs first (objects of a solve that no study links and no running job is making; engine
+  check "a design saved while it solves").

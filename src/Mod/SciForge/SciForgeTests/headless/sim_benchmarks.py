@@ -1025,6 +1025,55 @@ def check_hollow_owners(doc, out):
     )
 
 
+@engine_check("a design saved while it solves")
+def check_saved_mid_solve(doc, out):
+    """Saved while CalculiX runs, the design holds that solve's half-made run (its mesh too);
+    the next solve removes it, and nothing of a running job is ever removed."""
+    import tempfile
+
+    import FreeCAD as App
+
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc, size_pct=3.0)
+    sim.solve(study, timeout=600)
+    job = sim.Job(study)
+    tries = 0
+    while job.state == "running" and job.stage != "solve" and tries < 20000:
+        tries += 1
+        if job._thread is not None and job._thread.is_alive():
+            job._thread.join(0.002)
+            continue
+        job.poll()
+    out.append(
+        (
+            "a running job's run is not taken for left over",
+            not [o.Name for o in sim._orphans(doc)],
+            [o.Name for o in sim._orphans(doc)],
+        )
+    )
+    path = os.path.join(tempfile.mkdtemp(prefix="sciforge-bench-"), "mid.FCStd")
+    doc.saveAs(path)
+    job.cancel()
+    job.wait(60)
+    App.closeDocument(doc.Name)
+    again = App.openDocument(path)
+    try:
+        st = sim.studies(again)[0]
+        left = [o.Name for o in sim._orphans(again)]
+        out.append(("reopened: the half-made run is in the file", bool(left), left))
+        sim.solve(st, timeout=600)
+        out.append(
+            (
+                "the next solve removes it and solves",
+                not sim._orphans(again) and sim.results(st) is not None,
+                [o.Name for o in sim._orphans(again)],
+            )
+        )
+    finally:
+        App.closeDocument(again.Name)
+
+
 @engine_check("a change while it solves")
 def check_change_during(doc, out):
     """The results are of the study as the solve started: a load changed while CalculiX runs
