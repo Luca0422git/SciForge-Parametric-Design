@@ -1,7 +1,7 @@
 # Session log: beta 3, sim-ui (the SIMULATION workspace's SETUP side), branch `sf/sim-ui`
 
 Builder sim-ui of beta 3 (2026-10-26/27). Brief: `docs/sciforge/dev/briefs/beta3-sim-ui.md`.
-Spec: `docs/sciforge/parity/simulation.md` section "Setup" (behaviour table S1-S25 with sources,
+Spec: `docs/sciforge/parity/simulation.md` section "Setup" (behaviour table S1-S28 with sources,
 scenarios, Known gaps). Engine: sim-core's `simulation.py` / `simulation_core.py`, merged into
 this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30a6).
 
@@ -58,18 +58,23 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   named; the arrows follow the setup until it is switched off. **Job Status** also lists this
   session's earlier solves and meshes (a solved one's row shows its results on a double-click,
   its design brought to the front in SIMULATION: `simulation_ui.open_results`; the rows name
-  each study from its own design, whichever is in front). **OK right after a click** keeps that pick (pickpanel
-  handles a click 30 ms later; my dialogs take the queued click first: a busy machine once lost
-  it in `sim_setup_dialogs`).
+  each study from its own design, whichever is in front). **OK right after a click** keeps
+  that pick (pickpanel handles a click 30 ms later; my dialogs take the queued click first: a
+  busy machine once lost it in `sim_setup_dialogs`).
 - **The 3D view in SIMULATION**: the right-click marking menu offers the setup's commands
   (`ribbon_config.SIM_MARKING_MENU` / `SIM_MARKING_LIST`, chosen by a hook in
   `marking_menu._open_for_state`), Repeat only repeats a setup command; the design's keys are
   off while SIMULATION shows (`simulation_ui.DESIGN_KEYS`: a face clicked in the view and Delete
   made a Delete Face step in the design; E opened Extrude).
-- **Exercising every option end to end** found two more: a Bearing Load's default direction
-  ran along a hole drilled along Z (no arrow, a failed solve: now turned across the hole), and
-  editing a load whose face a design change removed kept the gone pick (now left out with a
-  sentence; the faces the engine finds again by shape come under their new names).
+- **Exercising every option end to end** found more: a Bearing Load's default direction ran
+  along a hole drilled along Z (no arrow, a failed solve: now turned across the hole); editing a
+  load whose face a design change removed kept the gone pick (now left out with a sentence; the
+  faces the engine finds again by shape come under their new names); unticking "Keep the
+  results in the design file" made up-to-date results look out of date (the engine's
+  fingerprint counted it: fixed by sim-core) and the Results row then said they were kept;
+  with another design in front, Job Status named a study by its internal name and its
+  double-click said the results were gone; a design closed during its solve left the progress
+  window saying "Solving...".
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
@@ -87,7 +92,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_documents` | 71 | PASS |
 | `sim_setup_kinds` | 70 | PASS |
 | `sim_setup_workspace` | 70 | PASS |
-| `sim_setup_components` | 42 | PASS |
+| `sim_setup_components` | 43 | PASS |
 | `sim_setup_glyphs` | 20 | PASS |
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
@@ -96,8 +101,10 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_two` | 40 | PASS |
 | `sim_setup_mesh` | 42 | PASS |
 
-Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser`,
-`drawing_new`, `browser_opacity_hover`, `ribbon_sweep` and `hole_qa_more` (the marking menu) pass; unit tests 2534 OK.
+All fourteen in one batch (22:35-22:57 UTC, with the five below): every one passes. Shared
+files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser` (92),
+`drawing_new` (63), `browser_opacity_hover` (46), `ribbon_sweep` (221) and `hole_qa_more` (363,
+the marking menu) pass.
 
 ## Contract with sim-results (agreed by reading its branch)
 
