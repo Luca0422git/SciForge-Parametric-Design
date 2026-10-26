@@ -185,14 +185,14 @@ Static Stress study. Files (`src/Mod/SciForge/sciforge/`):
 
 | File | What it holds |
 |---|---|
-| `simulation_results_core.py` | the rules, no FreeCAD / Qt, unit tested: Fusion's result list (type + component), units, the colour map texture and legend, the safety factor targets and their sentence, deformation and animation, the outer surface of the tetrahedral mesh (10-node faces split in 4, facing out; mesh and outline edges), a ray against it (probes), a level set through it (the slice plane and the iso-surface, in numpy), a point found in it with its weights (Point Probes), Solver Data's rows, the HTML report |
+| `simulation_results_core.py` | the rules, no FreeCAD / Qt, unit tested: Fusion's result list (type + component), units, the colour map texture and legend, the safety factor targets and their sentence, deformation and animation, the outer surface of the tetrahedral mesh (10-node faces split in 4, facing out; mesh and outline edges), a ray against it (probes), a level set through it (the slice plane and the iso-surface, in numpy), a point found in it with its weights (Point Probes), Solver Data's rows, the convergence plot's data, the HTML report |
 | `simulation_results.py` | the document side, no Qt: a study's results as arrays (kept per solve), strain components, values and displacement at any point inside the part, Results Details' numbers, the report's data |
 | `simulation_results_view.py` | the drawing: SciForge's own Coin nodes (never document objects), the legend, the tags and the animation bar floating over the 3D view |
-| `simulation_results_ui.py` | when the results show (the RESULTS tab watcher), `show(study)` for sim-ui's Solve dialog, `hide()`, Compare, the 22 commands |
-| `simulation_results_panels.py` | Surface Probes, Point Probes, Slice Plane, Iso-surface, Results Details, Legend Min/Max, Compare, Report, Reaction Force, Solver Data, a solve from out-of-date results when sim-ui's Solve is missing |
+| `simulation_results_ui.py` | when the results show (the RESULTS tab watcher), `show(study)` for sim-ui's Solve dialog, `hide()`, Compare, the 23 commands |
+| `simulation_results_panels.py` | Surface Probes, Point Probes, Slice Plane, Iso-surface, Results Details, Legend Min/Max, Compare, Report, Reaction Force, Solver Data, Convergence Plot, Save Animation, a solve from out-of-date results when sim-ui's Solve is missing |
 
 Shared files: `ribbon_config.py` (the RESULTS tab's groups: commands, icons, ticks),
-`tools/sciforge/icons_simresults.py` (22 icons), `docs/sciforge/parity-checklist.md`
+`tools/sciforge/icons_simresults.py` (23 icons), `docs/sciforge/parity-checklist.md`
 (regenerated). No FreeCAD core change. Sources as in the research file (**A** Autodesk, **F**
 forum, **T** tutorial / exported report, **G** guess); four WebSearch excerpts this session:
 Autodesk's Results details help (three states against a Lower and an Upper target, "reducing the
@@ -204,7 +204,9 @@ relocated internally", "global coordinates", the first place "picked from any vi
 including slice planes and iso-surfaces", "fixed in the global coordinate system, however the
 displacement is honored in the scene") and an AU handout (moved "using the grips or x, y and z
 inputs"); no Fusion source on the iso-surface's dialog was found (Autodesk Flow Design's iso
-surface: a Value slider over the result, an opacity).
+surface: a Value slider over the result, an opacity); an Autodesk blog excerpt on adaptive
+mesh refinement (it "unlocks 2D convergence plots" of the von Mises stress, displacement, 1st
+and 3rd principal stress; where the plot opens was not found).
 
 ### What shows, when
 
@@ -238,6 +240,7 @@ surface: a Value slider over the result, an opacity).
 | RESULT TOOLS: Animate (legacy dialog with steps; online viewer: bar at the bottom of the canvas, speed 0.25x - 2x, up to 100 frames, play once / loop / mirror loop, save .webm) | Animate: a bar at the bottom left of the 3D view: Play / Stop, 0.25x - 2x, 10 - 100 steps, Play Once / Loop / Mirror Loop, **Save...** (an animated GIF or WebP: one picture of the 3D view per step, at the speed chosen, looping as chosen, the legend drawn in; Pillow, which FreeCAD bundles), Close; undeformed to the chosen scale (Adjusted when Undeformed is chosen) | A[52]; GIF / WebP instead of .webm: G |
 | RESULT TOOLS: Results Details | The lowest safety factor against the Lower / Upper targets (3 / 6) in a sentence with advice (SciForge's words), the targets editable, **Show the target bands on the model** (the newer viewer's guided bands: below / meets / above), per body: material, strength (yield or ultimate), max von Mises, min safety factor (in its band's colour: below / meets / above), max displacement; every result's min / max; the mesh; the limits of the study; the deformation scale at the bottom | Autodesk help (Results details), Learn video, A[54] A[71] A[51] |
 | RESULT TOOLS: Report (General, Properties, Studies; Preview / Save; HTML) | Report: General (title, author, logo, cover picture, summary), Properties (project, approved by, revision), Studies (this design's studies with results, the one shown ticked: one report can cover several), pictures or not, file; Save / Save and Open (the web browser). One HTML page: the cover, then per study the sentence, the limits, settings, materials with strengths, constraints and loads with their faces, contacts, mesh, every result's min / max, per body, a picture of the loads and constraints and three of the results with their legend drawn in | A[62] T[107] |
+| Convergence plots after a solve with adaptive mesh refinement (2D, of the result judged: von Mises, displacement, 1st or 3rd principal) | RESULT TOOLS > **Convergence Plot** (greyed for a study solved without adaptive refinement): the judged result's highest value (the 3rd principal's lowest) at each solve on a chart, over a band showing the tolerance around the last solve; a table with each solve's nodes, elements, value and the change from the solve before (the engine's own rule: % of the larger of the two); a sentence: converged within the tolerance, or not and what to do (allow more refinements); the report's mesh section has the same table. Its place in the ribbon is SciForge's | A[71] A[76], web excerpt (Autodesk blog: "2D convergence plots"); place G |
 | RESULT TOOLS: Compare (up to 4 studies; the canvas splits into views; Finish closes it; no probes in the legacy Compare) | Compare: tick 2 to 4 of the design's studies with results; they show **side by side in the one 3D view** (each moved beside the one before, across the way they are thinnest: two beams lie side by side), each with a tag (study, min, max), on **one colour scale** and one deformation scale (the same colour is the same value; a bigger bend looks bigger: SciForge's choice); the legend's result and unit, DEFORMATION and Show Mesh work on all; probes, slices and the rest rest meanwhile; **Finish Compare** under the legend, Compare again, SETUP or another design end it | A[61] F[86], G |
 | DEFORMATION: Undeformed, Actual, Adjusted x 0.5, Adjusted, x 2, x 5 | Same, ticked in the menu; also in Results Details | A[51] |
 | DISPLAY: Mesh, Wireframe | Show Mesh (element edges); **Undeformed Model** (the unloaded shape see-through: the web viewer's "Show Undeformed model") instead of Wireframe; **Loads and Constraints** (sim-ui's glyphs on the results, off by default) | A[49] A[68], G |
