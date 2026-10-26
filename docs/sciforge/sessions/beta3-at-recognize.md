@@ -22,6 +22,14 @@
   regions in separate sketches; the readings compared by steps, then by the volume the steps
   add or take (a round boss on a block reads as a boss along Z); axes where some faces belong
   to features along another axis are tried only when no axis fits every face.
+- Then, from real files: repeated openings become one cut and a pattern (a VEX plate), moved
+  copies of a piece are read once, drafted blocks with a cavity (molded boxes), chamfers on
+  round edges (narrow cones), holes with a rounded rim, arcs that miss each other by noise,
+  idempotent snapping, a volume check on defeaturing, free-form parts not defeatured, a time
+  budget, guarded curve / surface types, each plan stage on its own.
+- Not mine but touching my file: the QA builder (`sf/autotimeline-qa`) added modelled-thread
+  handling and two speed-ups to `recognize.py` on its branch and merges mine regularly; `git
+  merge-tree` of the two branches shows no conflict (checked at the end).
 - `sciforge/recognize_core.py` (pure Python): snapping, "nice" rounding of measured values,
   origin planes, 2D loops (clean-up, areas, create_sketch items that close exactly), patterns
   (grid / circle / row), the plan's ids, extents, frames and Euler angles, mesh helpers

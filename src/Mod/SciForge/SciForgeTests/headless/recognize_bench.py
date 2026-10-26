@@ -529,6 +529,41 @@ EXTRA_MODELS = {
             {"op": "hole", "id": "h2", "sketch": "s3", "diameter": 3, "depth": 8},
         ],
     },
+    "bench_chamfered_boss": {
+        "title": "Plate 40 x 30 x 5 with a round boss d10 x 10 whose top edge has a 1 mm chamfer "
+        "(a cone, not a flat face)",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 5},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 5,
+                "geometry": [{"circle": [20, 15, 5]}],
+            },
+            {"op": "extrude", "id": "e2", "profile": "s2", "distance": 10},
+            {
+                "op": "chamfer",
+                "id": "c1",
+                "distance": 1,
+                "edges": {"type": "circle", "at": {"axis": "z", "value": "max"}, "count": 1},
+            },
+        ],
+    },
+    "bench_chamfered_shaft": {
+        "title": "Shaft d20 x 40 along Z with both end edges chamfered 1.5",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"circle": [0, 0, 10]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 40},
+            {
+                "op": "chamfer",
+                "id": "c1",
+                "distance": 1.5,
+                "edges": {"type": "circle", "count": 2},
+            },
+        ],
+    },
     "bench_turned_bracket": {
         "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
         "placed in an assembly)",
@@ -619,6 +654,8 @@ BENCH = [
     ("bench_vex_plate", {"base": "extrude", "holes": [], "patterns": 1}),
     ("bench_vex_angle", {"base": "extrude", "holes": [], "patterns": 2}),
     ("bench_shaft_collar", {"base": "extrude", "holes": [3, 8]}),
+    ("bench_chamfered_boss", {"base": "extrude", "holes": [], "chamfers": [1]}),
+    ("bench_chamfered_shaft", {"holes": [], "chamfers": [1.5]}),
     ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]

@@ -559,6 +559,23 @@ class _Reader:
             )
             base = {"public": {"kind": "none"}, "ops": [], "faces": [], "volume_error": 0.0}
             self.base_shape = self.shape
+        elif not self._some_axis_fits(holes + chamfers + blends):
+            # the faces left would fit no extrude or revolve even without the features:
+            # defeaturing (seconds to minutes) would not make the base readable
+            removed = {
+                "base": self.shape,
+                "ok": {g["id"] for g in holes + chamfers + blends},
+                "accepted": holes + chamfers + blends,
+            }
+            self.edges_off = "its base cannot be read"
+            self.notes.append(
+                "The part's faces fit no extrude along X, Y or Z nor a revolve about one (slanted "
+                "faces in several directions: a molded body drafted both ways, bent leads...): "
+                "build its base yourself (look at render and query_geometry), then follow the "
+                "rest of the plan."
+            )
+            base = {"public": {"kind": "none"}, "ops": [], "faces": [], "volume_error": 0.0}
+            self.base_shape = self.shape
         else:
             t = time.time()
             removed = self.defeature(holes, chamfers, blends)
@@ -638,6 +655,41 @@ class _Reader:
             "Plan step %d does not pass the tool's check: %s" % (n, sentence)
             for n, sentence in core.check_plan(steps, catalog.validate)
         ]
+
+    def _some_axis_fits(self, groups):
+        """Whether the faces no feature took could make an extrude along X, Y or Z (each face
+        a level, a wall or a draft along it, or all but a quarter of the area: features along
+        another axis) or a revolve about one. (Optimistic: defeaturing only extends these faces,
+        it makes no new kinds.)"""
+        used = set(i for g in groups for i in g["_faces"])
+        rest = [f for f in self.facts if f.index not in used]
+        total = sum(f.area for f in rest) or 1.0
+        for axis in ("Z", "Y", "X"):
+            d = core.AXES[axis]
+            odd, turned = 0.0, True
+            for f in rest:
+                normal = f.normal if f.kind == "plane" else None
+                if normal is None and f.kind == "bspline":
+                    normal = _flat_normal(f.face)
+                if normal is not None:
+                    c = abs(core.dot(normal, d))
+                    if not (c > 1 - 1e-7 or c < math.sin(math.radians(60))):
+                        odd += f.area  # (steeper than a draft, not square: another axis)
+                    if c < 1 - 1e-7:
+                        turned = False  # (a revolve's flat faces are square to its axis)
+                elif f.kind in ("cylinder", "cone") and f.axis is not None:
+                    if not core.parallel(f.axis, d, 1e-7):
+                        odd += f.area
+                        turned = False
+                elif f.kind in ("torus", "sphere"):
+                    odd += f.area
+                    if f.kind == "torus" and not core.parallel(f.axis, d, 1e-7):
+                        turned = False
+                else:
+                    return True  # (a kind this check does not know: let the reading decide)
+            if turned or odd <= 0.25 * total:
+                return True
+        return False
 
     def _free_form(self, groups):
         """Faces no feature took that no extrude or revolve of lines and arcs makes
@@ -1088,18 +1140,81 @@ class _Reader:
         return min(a1, b1) - max(a0, b0) > 1e-6
 
     def find_chamfers(self, holes, blends):
-        """Narrow flat faces cut across the edge between two faces."""
+        """Narrow flat faces cut across the edge between two faces; narrow cones across a
+        round edge (the chamfered end of a shaft or a round boss)."""
         taken = set(i for h in holes for i in h["_faces"]) | set(
             i for b in blends for i in b["_faces"]
         )
         out = []
         for f in self.facts:
-            if f.kind != "plane" or f.index in taken:
+            if f.index in taken:
                 continue
-            found = self._chamfer(f, taken)
+            if f.kind == "plane":
+                found = self._chamfer(f, taken)
+            elif f.kind == "cone":
+                found = self._round_chamfer(f, taken)
+            else:
+                continue
             if found is not None:
                 out.append(found)
         return out
+
+    def _round_chamfer(self, f, taken):
+        """A cone between a coaxial cylinder and a flat face square to its axis, meeting them
+        along sharp circles, narrow beside both: the chamfer of the round edge where they
+        would meet (distance 1 along the cylinder, distance 2 across the flat face)."""
+        if f.axis is None or f.point is None:
+            return None
+        cyl, flat = None, None
+        for j in self.topo.neighbours(f.index):
+            if j in taken:
+                return None
+            fj = self.facts[j]
+            keys = self.topo.shared(f.index, j)
+            if not keys or any(self.topo.smooth(k) for k in keys):
+                return None
+            if any(_curve_name(self.topo.edges[k]) != "Circle" for k in keys):
+                return None
+            if fj.kind == "cylinder" and fj.axis is not None:
+                if not core.parallel(fj.axis, f.axis, 1e-6):
+                    return None
+                if core.norm(core.sub(fj.point, f.point)) > 1e-6:
+                    return None
+                if cyl is not None and abs(cyl.radius - fj.radius) > 1e-6:
+                    return None
+                cyl = cyl or fj  # (a bore split in two halves: either one)
+            elif fj.kind == "plane" and core.parallel(fj.normal, f.axis, 1e-6):
+                if flat is not None and abs(flat.h - fj.h) > 1e-6:
+                    return None
+                flat = flat or fj
+            else:
+                return None
+        if cyl is None or flat is None:
+            return None
+        rings = {}
+        for v in f.face.Vertexes:
+            w = core.sub(_t(v.Point), f.point)
+            t = core.dot(w, f.axis)
+            rings[round(t, 6)] = core.norm(core.sub(w, core.mul(f.axis, t)))
+        if len(rings) != 2:
+            return None
+        (t0, r0), (t1, r1) = sorted(rings.items())
+        along, across = abs(t1 - t0), abs(r1 - r0)
+        if along < 1e-6 or across < 1e-6:
+            return None
+        c0, c1 = self._extent([cyl.index], f.axis, f.point)
+        if along > 0.5 * (c1 - c0) or across > 0.5 * cyl.radius:
+            return None  # (a wide cone: part of the shape, a turned profile's slope)
+        item = {
+            "id": self.new_id(),
+            "kind": "chamfer",
+            "distance": self.value(along),
+            "_faces": [f.index],
+            "_between": (cyl.index, flat.index),
+        }
+        if abs(along - across) > 1e-5:
+            item["distance2"] = self.value(across)
+        return item
 
     def _chamfer(self, f, taken):
         if len(f.face.Wires) > 1 or len(f.face.Edges) > 12:
