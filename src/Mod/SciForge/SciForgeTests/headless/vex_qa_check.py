@@ -314,6 +314,93 @@ def check_duplicate_in_place():
         _close(doc)
 
 
+def check_delete_hole_joint():
+    """A screw jointed into a square hole (its record holds the hole), the channel then
+    edited (a new hole cut: faces and edges numbered anew, the joint finds its hole again),
+    then the joint deleted the way the browser does (timeline_ops.delete): both bodies keep
+    their solids, nothing is left in error, the screw stays where it was (patch 0.1.0-beta.2.2:
+    deleting a joint must never break a body)."""
+    from SciForgeTests.fixtures.vex import vex_parts as vp
+    from sciforge import joints
+    from sciforge import timeline_ops as ops
+
+    files = _files(["c_channel_1x2x1x5", "screw_8_32_x_0_5"])
+    doc = App.newDocument("VexQaDelete")
+    try:
+        channel = _insert(doc, files["c_channel_1x2x1x5"]).top
+        screw = _insert(
+            doc, files["screw_8_32_x_0_5"], App.Placement(V(-20, 19.05, 20), App.Rotation())
+        ).top
+        t, p = vp.AL, vp.PITCH
+
+        def hole(i, j):
+            return V(p / 2 + i * p, p / 2 + j * p, t)
+
+        web = _face(
+            doc,
+            channel,
+            lambda f: f.Surface.TypeId == "Part::GeomPlane"
+            and abs(f.BoundBox.ZMin - t) < 1e-9
+            and f.BoundBox.ZLength < 1e-9
+            and f.BoundBox.YLength > 20,
+        )
+        under = _face(
+            doc,
+            screw,
+            lambda f: f.Surface.TypeId == "Part::GeomPlane"
+            and abs(f.BoundBox.ZMax) < 1e-9
+            and len(f.Wires) == 2,
+        )
+        p1 = joints.Pick(screw, _body(doc, screw), under)
+        p2 = joints.Pick(channel, _body(doc, channel), web, hole(2, 1))
+        s1 = [c for c in joints.snap_candidates(p1) if c["kind"] == "centre"][0]
+        s2 = joints.nearest_snap(
+            [c for c in joints.snap_candidates(p2) if c["kind"] == "loop"], hole(2, 1)
+        )
+        doc.openTransaction("Joint")
+        joint = joints.create_joint(doc, "rigid", p1, s1, p2, s2)
+        joints.align(joint, first=True)
+        doc.commitTransaction()
+        doc.recompute()
+        # the channel edited: a round hole cut through its web (a Pocket would do the same)
+        body = _body(doc, channel)
+        base = body.BaseFeature
+        doc.openTransaction("Edit")
+        cut = base.Shape.cut(_cylinder(1.5, V(p * 4, p / 2, -1), 5))
+        base.Shape = cut
+        doc.commitTransaction()
+        doc.recompute()
+        joints.repair_references(doc)
+        joints.solve(doc)
+        doc.recompute()
+        where = _gbox(doc, screw)
+        centred = abs((where.XMin + where.XMax) / 2 - hole(2, 1).x) < 1e-4
+        ops.delete(doc, [joint.Name])
+        doc.recompute()
+        after = _gbox(doc, screw)
+        broken = [o.Label for o in doc.Objects if "Invalid" in o.State or "Error" in o.State]
+        solids = all(_body(doc, c).Shape.Volume > 1.0 for c in (channel, screw))
+        _out(
+            "delete_hole_joint",
+            centred
+            and solids
+            and not broken
+            and not joints.joints(doc)
+            and abs(after.XMin - where.XMin) < 1e-6
+            and abs(after.ZMin - where.ZMin) < 1e-6,
+            "on its hole after the edit %s, solids %s, in error %s, the screw %s -> %s"
+            % (centred, solids, broken, where, after),
+        )
+    finally:
+        _close(doc)
+
+
+def _cylinder(r, at, h):
+    import Part
+
+    return Part.makeCylinder(r, h, at)
+
+
 # -- the first occurrence deleted ----------------------------------------------------------------
 def _parts_list(doc):
     from sciforge import drawing, drawing_core
@@ -580,6 +667,7 @@ CHECKS = [
     check_duplicate_rigid_group,
     check_duplicate_limits,
     check_duplicate_in_place,
+    check_delete_hole_joint,
     check_parts_list_original_deleted,
     check_occurrence_names_after_delete,
     check_same_file_again,
