@@ -87,13 +87,13 @@ What the time goes on, and what was done:
 
 - **Opening**: FreeCAD alone (no window) opens the file in 3.7 s. The rest is FreeCAD's window
   side: FreeCAD 1.1 makes a placement indicator (three axes with text labels drawn with Qt)
-  for every origin plane, axis and body when it is created, about 5400 in this robot (a third
-  of the reading in stack samples), and it meshes the 298 bodies for display (11 s: each occurrence
-  is a copy with its own mesh). SciForge's own share was a document observer of decals that
-  looked at every object on each change (3562 calls while loading, 117 of 180 s): it now asks
-  FreeCAD for its own objects only and waits while a file loads. A FreeCAD change (make the
-  indicator when it is first shown) would take a good part of the rest: not made in this
-  branch (a change to FreeCAD's C++ can be tried only in a full build).
+  for every origin plane, axis and body when it is created, about 5400 in this robot (1.6 ms
+  each here: 8 s; a third of the reading in stack samples), and it meshes the 298 bodies for
+  display (11 s: each occurrence is a copy with its own mesh). SciForge's own share was a
+  document observer of decals that looked at every object on each change (3562 calls while
+  loading, 117 of 180 s): it now asks FreeCAD for its own objects only and waits while a file
+  loads. A FreeCAD change (make the indicator when it is first shown) would save those 8 s:
+  not made in this branch (a change to FreeCAD's C++ can be tried only in a full build).
 - **Browser**: a row's item kept its node with the node's whole subtree (Qt copied it in and
   out on every read and every paint); the origin rows (2400 here) asked FreeCAD for their
   parents one plane at a time.

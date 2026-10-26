@@ -80,8 +80,8 @@ a page for the team `docs/sciforge/vex.md`).
   (`SoFCUnifiedSelection::getPickedList`) takes, among the hits on the first hit's object, an
   edge or a corner within 0.45 mm of it. `view.getObjectsInfo` gives all hits, nearest first.
 - `ViewProviderDragger::attach` (FreeCAD 1.1) builds a `SoFCPlacementIndicatorKit` for every
-  part and datum view provider, shown only with ShowPlacement: a third of reading the robot
-  (6 of 16 stack samples taken with gdb).
+  part and datum view provider, shown only with ShowPlacement: 1.6 ms each (500 made from
+  Python), 8 s for the robot's 5400; a third of reading it (6 of 16 stack samples with gdb).
 - FreeCAD's own tree (the hidden Model tab) costs nothing measurable when opening (deleting it
   changed 38.2 s to 37.5 s); hidden bodies are not meshed until shown (open 43 s hidden, 62 s
   shown, under the same heavy load).

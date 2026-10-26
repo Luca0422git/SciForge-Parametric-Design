@@ -2603,10 +2603,12 @@ class GroundView:
 
 
 def attach_views(doc):
-    """Give every joint object without a view provider its SciForge one."""
+    """Give every joint object without a view provider its SciForge one. (Joints, their
+    helpers, grounds, rigid groups and steps are all App::FeaturePython: after each
+    recompute only those are looked at, not a robot's 6000 objects.)"""
     if doc is None or not App.GuiUp:
         return
-    for obj in doc.Objects:
+    for obj in joints._python_objects(doc):
         try:
             vobj = obj.ViewObject
             if vobj is None or getattr(vobj, "Proxy", None) is not None:
