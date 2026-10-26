@@ -91,8 +91,10 @@ per-body keys of same-named bodies and the last engine fixes.
 - Hiding the design for the results through the view providers' Coin switch
   (`ViewObject.SwitchNode.whichChild = -1`) changes nothing in the document: Visibility, undo,
   the modified mark and the study's out-of-date fingerprint (which counts only shown bodies)
-  stay as they were. FreeCAD may show a switch again on a display mode change: a timer hides it
-  again while results show.
+  stay as they were. FreeCAD may show a switch again on a display mode change (or Undo may
+  bring a deleted body back): a Gui document observer (`Gui.addDocumentObserver`,
+  `slotChangedObject(view_provider, prop)` for Visibility / DisplayMode, `slotCreatedObject`)
+  flags it and the results' timer hides it again; a full look every 3 s catches the rest.
 - FreeCAD's quadratic tetrahedra (SMDS order): corners 0-3, then the mid nodes of 01, 12, 20,
   03, 13, 23.
 - pivy takes numpy float32 arrays in `setValues` (100 000 points: 0.05 s; a list: 0.22 s).
@@ -156,3 +158,8 @@ per-body keys of same-named bodies and the last engine fixes.
   turning together; Viewports > Single View ends it); the side-by-side fallback's tags follow a
   sideways shift; Results Details' tables fit their rows, per-body values in the legend's units
   (the report's too); merged sim-core and sim-ui again; unit tests (2 591) pass.
+- 22:00-22:15 the report's Preview (the page opened in the web browser from the temporary
+  folder, nothing saved) and its reaction force table; with a body's eye off the min / max tags
+  mark the bodies still drawn; objects shown again under the results are found through a Gui
+  document observer (a view provider's Visibility or display mode changed, a new object) and a
+  full look every 3 s, instead of every 0.4 s (a long design's every object each time).

@@ -284,6 +284,10 @@ and 3rd principal stress; where the plot opens was not found).
   own colouring of iso-surfaces was not found); several values at once are not offered.
 - **Solver Data**: CalculiX's own output (its log) is not kept by the engine, so it is not shown;
   the timings, mesh statistics and the engine's messages are.
+- **Reaction Moment** (a result type in Fusion's list): the engine reports the force each
+  constraint takes (Reaction Force, its tags and the report's table), not the moment.
+- **Convergence Plot's place**: where Fusion opens its convergence plots was not found;
+  SciForge puts it in RESULT TOOLS (greyed for a study solved without adaptive refinement).
 - **The legend's place** (top left of the 3D view) and the safety factor's colours (0 .. 15,
   red low) are guesses (research section 10, questions 1 and 6): a screenshot of Luca's Fusion
   would settle them.

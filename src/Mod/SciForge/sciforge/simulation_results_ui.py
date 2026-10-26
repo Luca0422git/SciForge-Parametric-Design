@@ -28,7 +28,14 @@ SETUP_TAB = "sim_setup"
 SESSIONS = {}  # document name -> Session
 ACTIVE = {"session": None}
 COMPARE = {"session": None}  # RESULT TOOLS > Compare while it shows (CompareSession)
-WATCH = {"ribbon": None, "area": None, "observer": None, "timer": None, "syncing": False}
+WATCH = {
+    "ribbon": None,
+    "area": None,
+    "observer": None,
+    "timer": None,
+    "syncing": False,
+    "shown_again": True,  # something may have shown a hidden object again (checked soon)
+}
 # sim-ui's Solve command (the first one that exists): Solve Again on out-of-date results
 SOLVE_COMMANDS = ("SciForge_SimSolve", "SciForge_SimulationSolve", "SciForge_StudySolve")
 
@@ -327,6 +334,16 @@ def _tab_changed(_index):
     QtCore.QTimer.singleShot(0, sync)
 
 
+def _hide_again(ticks):
+    """Time to look for objects shown again under the results: something changed a view
+    provider (the Gui observer said so), or about every 3 seconds (the 70 ms timer's 42nd
+    tick) for what changes without telling (a long design would cost every tick)."""
+    if WATCH["shown_again"] or ticks % 42 == 0:
+        WATCH["shown_again"] = False
+        return True
+    return False
+
+
 def _poll_watch():
     """Started once at import: hooks the watcher up as soon as the ribbon exists."""
     try:
@@ -364,6 +381,18 @@ class _DocWatch:
                 _later(obj.Document, "sync")
         except Exception:
             pass
+
+    # what may show a hidden object again while the results show: an object made or brought
+    # back by Undo, a Visibility switched on (the results' timer then hides the design again;
+    # a display mode change, which tells only the Gui side, is found by its look every 3 s;
+    # a Gui document observer made FreeCAD fail to create FEM objects: "Cannot add static
+    # property")
+    def slotCreatedObject(self, _obj):
+        WATCH["shown_again"] = True
+
+    def slotChangedObject(self, _obj, prop):
+        if prop == "Visibility":
+            WATCH["shown_again"] = True
 
     def slotDeletedDocument(self, doc):
         try:
@@ -1484,7 +1513,8 @@ class Session:
                     self.tags.relayout()
             self._ticks += 1
             if self._ticks % 6 == 0:
-                self._keep_design_hidden()
+                if _hide_again(self._ticks):
+                    self._keep_design_hidden()
                 self._follow_bodies()
             if _picking_dialog_open():
                 # a command that picks faces of the design (a load or constraint edited from the
@@ -2153,7 +2183,7 @@ class CompareSession:
                     if layer is not None and view_mod._alive(layer):
                         layer.relayout()
             self._ticks += 1
-            if self._ticks % 6 == 0:
+            if self._ticks % 6 == 0 and _hide_again(self._ticks):
                 Session._keep_design_hidden(self)
         except Exception as exc:
             warn("Compare: %s" % exc)
