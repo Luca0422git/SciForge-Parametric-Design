@@ -40,6 +40,13 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
   inch design (`simulation_setup_core.unit_set`, `format_quantity(..., shown=)`); a bare number
   is in the unit shown, a typed unit wins; the engine keeps N, MPa, mm. A field (or spin box)
   left as it was shown gives back its exact value, so Edit + OK in inches changes nothing.
+- **DOF View** is a toggle (Fusion's display): arrows over the model for each way a piece can
+  still move (three slides and three turns when nothing holds it; the turn about a held edge
+  for a model held by one edge, from the engine's not-held analysis), the bodies selected and
+  named; the arrows follow the setup until it is switched off. **Job Status** also lists this
+  session's earlier solves and meshes. **OK right after a click** keeps that pick (pickpanel
+  handles a click 30 ms later; my dialogs take the queued click first: a busy machine once lost
+  it in `sim_setup_dialogs`).
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
@@ -87,6 +94,13 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`): `timeline_browser`, 
 4. Open: `_finish` takes `signature(study)` when the solve ends: a design change made while it
    ran looks up to date. The UI stores the fingerprint from the start
    (`simulation_solve_dialog._keep_out_of_date`); the engine could take it in `_stage_model`.
+5. Open (cosmetic): `simulation_core.describe_free_mode` prints the rounding noise of the axis
+   point ("turn about an axis along X through (5, 8.882e-16, 8.882e-16)"), which reaches the
+   pre-check's sentences. DOF View cleans it (`simulation_dialogs.describe_motion`); the engine
+   could round values below 1e-9 of the model's size to 0.
+6. DOF View uses the engine's `_held_rows` and `_pieces` (private) with `free_modes`; a public
+   `free_motions(study)` in the engine would be safer (DOF View falls back to the bodies held
+   by nothing if they change).
 
 ## FreeCAD / Qt facts and traps
 

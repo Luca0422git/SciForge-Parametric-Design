@@ -1301,28 +1301,111 @@ def open_precheck(study):
 
 
 # -- DOF View -----------------------------------------------------------------------------------
+AXES = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+
+
 def free_bodies(study):
     """Bodies of the study that nothing holds: no constraint on them, and not touching a held
     body (through other bodies) (Fusion's DOF View shows these, research 3.8)."""
     return list(_sim().loose_bodies(study))
 
 
-def dof_view(study):
-    """Selects the bodies that could still move and says which they are."""
-    from . import commands
+def _box_centre(found):
+    box = None
+    for body in found:
+        bb = bodies.global_shape(body, copy=False).BoundBox
+        if box is None:
+            box = bb
+        else:
+            box.add(bb)
+    if box is None:
+        return None, 1.0
+    return (box.Center.x, box.Center.y, box.Center.z), max(box.DiagonalLength, 1.0)
 
-    free = free_bodies(study)
+
+def free_motions(study):
+    """[(bodies, centre (x, y, z), [(kind "slide" / "turn", direction, point on the axis)])] of
+    the study's pieces (bodies glued together move as one) that can still move: every way for
+    a piece nothing holds, the ways its constraints leave free for a piece held in part (the
+    engine's not-held analysis)."""
+    sim = _sim()
+    try:
+        found = sim.study_bodies(study)
+        touching = sim.contacts(study) if len(found) > 1 else []
+        rows = []
+        for item in sim.items(study, "constraint"):
+            if not item.Suppressed:
+                rows += sim._held_rows(item)
+        out = []
+        for piece in sim._pieces(study, touching):
+            names = {b.Name for b in piece}
+            centre, size = _box_centre(piece)
+            if centre is None:
+                continue
+            mine = [(p, d) for body, p, d in rows if body.Name in names]
+            modes = core.free_modes(mine, centre, size)
+            if modes:
+                out.append((piece, centre, modes))
+        return out
+    except Exception as exc:
+        log("DOF View: the bodies held by nothing only (%s)" % exc)
+    out = []
+    for body in free_bodies(study):
+        centre, _size = _box_centre([body])
+        if centre is not None:
+            modes = [("slide", list(a), None) for a in AXES]
+            modes += [("turn", list(a), list(centre)) for a in AXES]
+            out.append(([body], centre, modes))
+    return out
+
+
+def describe_motion(mode, size=1.0):
+    """A free movement in words ("turn about an axis along X through (5, 0, 0)"), the point's
+    rounding noise taken away."""
+    kind, direction, through = mode
+    if through is not None:
+        through = [0.0 if abs(c) < 1e-6 * max(size, 1.0) else c for c in through]
+    return core.describe_free_mode((kind, direction, through))
+
+
+def dof_view(study):
+    """Fusion's DOF View, a toggle (research 3.8): on, arrows show how the study's bodies can
+    still move (every way for a body nothing holds; the slides and turns its constraints leave
+    free for one held in part), those bodies are selected and named; off, the arrows go."""
+    from . import commands, simulation_glyphs
+
+    ui = _ui()
+    on = not ui.STATE.get("dof")
+    ui.STATE["dof"] = on
+    simulation_glyphs.set_dof(on)
+    if not on:
+        ui.refresh()
+        commands.tell("DOF View off.")
+        return []
+    motions = free_motions(study)
+    free = [body for piece, _centre, _modes in motions for body in piece]
     try:
         Gui.Selection.clearSelection()
         for body in free:
             Gui.Selection.addSelection(body.Document.Name, body.Name)
     except Exception:
         pass
-    if free:
+    ui.refresh()
+    if motions:
+        parts = []
+        for piece, _centre, modes in motions:
+            names = ", ".join(b.Label for b in piece)
+            if len(modes) >= 6:
+                parts.append("%s: held by nothing" % names)
+            else:
+                _c, size = _box_centre(piece)
+                parts.append(
+                    "%s: can still %s" % (names, "; ".join(describe_motion(m, size) for m in modes))
+                )
         commands.tell(
-            "Not held yet (selected): %s. Add a constraint on them or let them touch a held "
-            "body." % ", ".join(b.Label for b in free)
+            "DOF View: not held yet (selected; the arrows show how they can move): %s. Add "
+            "constraints, or let them touch a held body, until nothing can move." % ". ".join(parts)
         )
     else:
-        commands.tell("Every body of %s is held." % study.Label)
+        commands.tell("DOF View: every body of %s is held." % study.Label)
     return free

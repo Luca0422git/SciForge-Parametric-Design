@@ -13,9 +13,10 @@ D  Structural Loads: a click on the post's top face (inside the other component)
 E  Solve: done; both bodies have results (glued where the post stands on the plate); the
    glyphs stand where the components are (moved).
 F  Clone Study; in the clone the Fixed holds only one straight edge of the plate (the model
-   can still turn about it). Solve: no meaningless numbers are shown as results: the pre-check
-   refuses it (or the progress says) that the model is not held enough, the RESULTS tab does
-   not take over, the study keeps no results.
+   can still turn about it): DISPLAY > DOF View says it can still turn about that edge and
+   draws one turning arrow; DOF View off. Solve: no meaningless numbers are shown as results:
+   the pre-check refuses it (or the progress says) that the model is not held enough, the
+   RESULTS tab does not take over, the study keeps no results.
 """
 
 import FreeCAD as App
@@ -260,7 +261,22 @@ def f_ok():
     s.ok()
 
 
+def f_dof():
+    s.menu_item("DISPLAY", "DOF View")
+
+
+def f_dof_check():
+    text = s.tooltip_text()
+    h.check("DOF View: it can still turn about the edge", "can still turn about" in text, text)
+    h.check("no rounding noise in the point", "e-1" not in text, text)
+    h.check("one turning arrow", s.glyph_counts().get("dof") == 1, s.glyph_counts())
+    s.menu_item("DISPLAY", "DOF View")
+
+
 def f_solve():
+    from sciforge import simulation_ui
+
+    h.check("DOF View off again", not simulation_ui.dof_on())
     h.ribbon("Solve")
 
 
@@ -317,6 +333,8 @@ h.run(
         f_edit,
         f_edge,
         f_ok,
+        f_dof,
+        f_dof_check,
         f_solve,
         f_go,
         s.wait_solved("wait_loose"),

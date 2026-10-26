@@ -36,6 +36,7 @@ STATE = {
     "light": None,  # (document, study, state) shown on the Pre-check button
     "light_key": None,
     "glyph_key": None,
+    "dof": False,  # DOF View is on (SETUP > DISPLAY)
 }
 
 
@@ -241,6 +242,7 @@ def _apply(on, tab=None):
     _timeline(on)
     if not on:
         _results_hide()
+        STATE["dof"] = False  # (DOF View is a SIMULATION display: off when it is left)
         try:  # the mesh Generate Mesh showed is a SIMULATION display: not over the design
             from . import simulation_solve_dialog
 
@@ -251,8 +253,10 @@ def _apply(on, tab=None):
         from . import simulation_glyphs
 
         if on:
+            simulation_glyphs.set_dof(STATE["dof"])
             simulation_glyphs.refresh(_doc(), active_study(), force=True)
         else:
+            simulation_glyphs.set_dof(False)
             simulation_glyphs.clear()
     except Exception as exc:
         warn("simulation glyphs: %s" % exc)
@@ -606,6 +610,11 @@ class LoadsCommand(_SetupCommand):
             simulation_panels.open_item(study, "load")
 
 
+def dof_on():
+    """True while DOF View is on (the menu's tick)."""
+    return bool(STATE["dof"] and STATE["on"])
+
+
 def gravity_on():
     """True when the active study has gravity on (the menu's tick)."""
     try:
@@ -658,7 +667,7 @@ class ContactManagerCommand(_SetupCommand):
 
 class DOFViewCommand(_SetupCommand):
     TEXT = "DOF View"
-    TIP = "Show which bodies are not held yet and could still move"
+    TIP = "On / off: arrows show how the bodies that are not held yet could still move"
     ICON = "sim_dof"
 
     def run(self):

@@ -371,6 +371,7 @@ def i_pick():
     )
     s.click_face(s.body(), s.plate_top(s.body()))
     if opened:
+        QtTest.QTest.qWait(120)  # (a pick is handled a moment after the click)
         h.check("the plate's top face picked", len(s.item_panel().picks) == 1, s.message())
     s.ok()
 

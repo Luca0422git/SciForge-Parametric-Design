@@ -1433,7 +1433,9 @@ SIM_DISPLAY = group(
     "DISPLAY",
     ["DOF View"],
     [
-        item("DOF View", "SciForge_SimDOFView", "sim_dof"),  # owner: sim-ui
+        item(
+            "DOF View", "SciForge_SimDOFView", "sim_dof", toggle="simulation_ui:dof_on"
+        ),  # owner: sim-ui
         item(
             "Show Mesh",
             "SciForge_SimShowMesh",

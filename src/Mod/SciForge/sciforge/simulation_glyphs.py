@@ -28,6 +28,7 @@ PRESS = (0.90, 0.30, 0.22)  # pressure
 WEIGHT = (0.58, 0.40, 0.88)  # gravity
 LOST = (0.85, 0.15, 0.15)
 MESH = (0.30, 0.80, 0.35)  # local mesh controls: green dots (Fusion previews them so)
+DOF = (0.86, 0.26, 0.66)  # DOF View: the ways a body can still move
 
 STATE = {
     "root": None,  # SoSeparator in the view's scene graph
@@ -40,6 +41,7 @@ STATE = {
     "visible": True,
     "counts": {},  # item name -> number of glyphs drawn (tests)
     "preview_count": 0,
+    "dof": False,  # DOF View is on: the free movements are drawn too
 }
 
 
@@ -293,6 +295,9 @@ def _model(name):
         model.addChild(_sphere(0.46, 0.07))
     elif name == "dot":
         model.addChild(_sphere(0.0, 0.07))
+    elif name == "dof_arrow":  # DOF View: a long arrow (length 2.2)
+        model.addChild(_cone_down(0.0, 0.42, 0.14))
+        model.addChild(_cylinder(0.4, 2.2, 0.045))
     elif name == "roller":  # Frictionless: a ball on the face with a plate on top
         model.addChild(_sphere(0.12, 0.12))
         model.addChild(_cylinder(0.24, 0.28, 0.2))
@@ -648,6 +653,10 @@ def _study_key(doc, study):
     if study is None:
         return (doc.Name if doc else None,)
     parts = [doc.Name, study.Name, getattr(study, simulation.STUDY_PROP, "")]
+    try:  # the bodies' shapes: an undo of a design step moves the glyphs too
+        parts.append(tuple((b.Name, b.Shape.hashCode()) for b in simulation.study_bodies(study)))
+    except Exception:
+        pass
     for item in simulation.items(study):
         refs = [(o.Name, s) for o, s in simulation._picks(item.References)]
         parts.append(
@@ -704,8 +713,63 @@ def refresh(doc, study, force=False):
             sep = coin.SoSeparator()
             STATE["counts"]["gravity"] = _gravity(sep, doc, gravity.get("direction") or [0, 0, -1])
             content.addChild(sep)
+        if STATE["dof"]:
+            from . import simulation_dialogs
+
+            STATE["counts"]["dof"] = _dof(content, simulation_dialogs.free_motions(study))
     except Exception as exc:
         warn("simulation glyphs: %s" % exc)
+
+
+def set_dof(on):
+    """DOF View on or off: the free movements of the study's bodies drawn with its glyphs."""
+    STATE["dof"] = bool(on)
+    STATE["key"] = None
+
+
+def _dof(parent, motions):
+    """DOF View: two arrows for each direction a piece can still slide along, a turning arrow
+    about each axis it can still turn about (with the axis); drawn over the model, so a body
+    does not hide its own arrows."""
+    coin = _coin()
+    sep = coin.SoSeparator()
+    sep.setName("SimGlyph_dof")
+    try:
+        depth = coin.SoDepthBuffer()
+        depth.test.setValue(False)
+        sep.addChild(depth)
+    except Exception:
+        pass  # (an old Coin: drawn like the other glyphs)
+    sep.addChild(_material(DOF))
+    size = STATE["size"] or 5.0
+    count = 0
+    for _piece, centre, modes in motions:
+        middle = App.Vector(*centre)
+        for kind, direction, through in modes:
+            d = App.Vector(*direction)
+            if d.Length < 1e-12:
+                continue
+            d.normalize()
+            if kind == "slide":
+                for sign in (1.0, -1.0):
+                    sep.addChild(
+                        _place(middle + d * (sign * size * 2.4), d * sign, _model("dof_arrow"))
+                    )
+            else:
+                p = App.Vector(*(through or centre))
+                sep.addChild(
+                    _polyline([tuple(p - d * (size * 2.6)), tuple(p + d * (size * 2.6))], DOF, 2.0)
+                )
+                pts = score.arc_points(tuple(p), tuple(d), size * 1.5, 270.0, 32)
+                sep.addChild(_polyline(pts, DOF, 4.0))
+                end = App.Vector(*pts[-1])
+                tangent = App.Vector(
+                    *(score.arc_tangent(tuple(d), pts[-1], tuple(p)) or (1.0, 0.0, 0.0))
+                )
+                sep.addChild(_place(end + tangent * (size * 0.18), tangent, _model("short_arrow")))
+            count += 1
+    parent.addChild(sep)
+    return count
 
 
 def counts():

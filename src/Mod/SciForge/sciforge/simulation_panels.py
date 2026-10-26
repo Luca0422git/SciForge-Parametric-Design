@@ -811,6 +811,7 @@ class ItemPanel(pickpanel.PickPanel):
     def accept(self):
         if self._closed:
             return True
+        _flush_picks(self)
         try:
             if not bodies.alive(self.study):
                 self.say("The study is gone (undone or deleted).", error=True)
@@ -859,6 +860,18 @@ class ItemPanel(pickpanel.PickPanel):
         except Exception:
             pass
         super().cleanup()
+
+
+def _flush_picks(panel):
+    """A click handled a moment later (pickpanel queues selection events for 30 ms) is taken
+    now: OK pressed right after a click keeps that pick."""
+    try:
+        events = getattr(panel, "_events", None)
+        if events is not None and events.isActive():
+            events.stop()
+            panel._process_selection()
+    except Exception as exc:
+        warn("%s: %s" % (panel.title, exc))
 
 
 def _keep_whole_bodies(item, picks):
@@ -1068,6 +1081,7 @@ class GravityPanel(pickpanel.PickPanel):
     def accept(self):
         if self._closed:
             return True
+        _flush_picks(self)
         values, problem = self.read()
         if problem:
             self.message.setStyleSheet(ERROR_STYLE)

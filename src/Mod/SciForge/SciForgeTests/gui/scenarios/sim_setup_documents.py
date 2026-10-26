@@ -5,8 +5,9 @@ A  A base block with a smaller block standing on it (two bodies that touch). Wor
    Simulation, Create Study.
 B  CONTACTS > Automatic Contacts > Generate: one bonded pair (Base and Top, gap 0); OK.
    Contact Manager lists it.
-C  DISPLAY > DOF View with nothing held: both bodies free (selected). A Fixed on a face of the
-   base; DOF View again: nothing free (the top is held through the base).
+C  DISPLAY > DOF View (on) with nothing held: both bodies free (selected, named), arrows on
+   them (glued, they move as one: three slides and three turns). A Fixed on a face of the base:
+   the arrows go (the top is held through the base). DOF View again: off.
 D  Right-click Top in the browser > Exclude from Study: greyed, out of the study; Include in
    Study brings it back.
 E  A force on the top block's top face; Solve: done, with a result for each body (glued).
@@ -93,10 +94,17 @@ def c_dof():
 
 def c_dof_check():
     import FreeCADGui as Gui
+    from sciforge import simulation_ui
 
     names = sorted(x.Object.Label for x in Gui.Selection.getSelectionEx())
     h.check("both bodies free and selected", names == ["Base", "Top"], names)
-    h.check("DOF View says which", "Not held yet" in s.tooltip_text(), s.tooltip_text())
+    h.check("DOF View says which", "not held yet" in s.tooltip_text(), s.tooltip_text())
+    h.check("DOF View is on", simulation_ui.dof_on())
+    h.check(
+        "arrows for three slides and three turns",
+        s.glyph_counts().get("dof") == 6,
+        s.glyph_counts(),
+    )
     Gui.Selection.clearSelection()
     h.ribbon("Structural Constraints")
 
@@ -113,18 +121,20 @@ def c_fix_base():
 
 def c_dof_again():
     h.check("Fixed 1 on the base", [i.Label for i in s.items()] == ["Fixed 1"])
+    h.check(
+        "nothing free now: the arrows went",
+        s.glyph_counts().get("dof", 0) == 0,
+        s.glyph_counts(),
+    )
     s.menu_item("DISPLAY", "DOF View")
 
 
 def c_check():
-    import FreeCADGui as Gui
+    from sciforge import simulation_ui
 
-    h.check(
-        "nothing free now",
-        not Gui.Selection.getSelectionEx(),
-        [x.Object.Label for x in Gui.Selection.getSelectionEx()],
-    )
-    h.check("it says every body is held", "is held" in s.tooltip_text(), s.tooltip_text())
+    h.check("DOF View off", not simulation_ui.dof_on())
+    h.check("it says so", "DOF View off" in s.tooltip_text(), s.tooltip_text())
+    h.check("no arrows", "dof" not in s.glyph_counts(), s.glyph_counts())
 
 
 # -- D ------------------------------------------------------------------------------------------
