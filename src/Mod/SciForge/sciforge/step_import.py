@@ -379,9 +379,12 @@ def _bodies(doc, container, pieces, frame, at_root, part_name, made):
     taken = set()
     inverse = frame.inverse().toMatrix()
     for (shape, colours, surface), label in zip(pieces, labels):
-        local = bodies.baked(shape)
-        if not frame.isIdentity():
-            local.transformShape(inverse, True)
+        if frame.isIdentity() and shape.Placement.isIdentity():
+            local = shape  # (read from a document that is closed now: nothing else holds it)
+        else:
+            local = bodies.baked(shape)
+            if not frame.isIdentity():
+                local.transformShape(inverse, True)
         if at_root:
             label = insert._unique_label(doc, label, taken)
         body = components.new_body_in(doc, container, label)

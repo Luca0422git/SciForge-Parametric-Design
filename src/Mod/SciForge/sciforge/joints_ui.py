@@ -114,6 +114,47 @@ class _Gate:
 # -- the snap hover --------------------------------------------------------------------------------
 DRAWN_PIXELS = 90.0  # dots this near the pointer are drawn (plus the face's centre)
 DRAWN_MAX = 24  # never more dots than this at once (a VEX plate has thousands)
+NEAR_HIT = 0.2  # FreeCAD's selection: an edge or corner this near the face hit (squared, mm)
+
+
+def _rank(info):
+    """FreeCAD's pick priority (SoFCUnifiedSelection::getPriority): corner, edge, face."""
+    element = str(info.get("Component") or "")
+    for rank, prefix in ((3, "Vertex"), (2, "Edge"), (1, "Face")):
+        if element.startswith(prefix):
+            return rank
+    return 0
+
+
+def _owner(info):
+    top = info.get("ParentObject")
+    if top is not None:
+        return (info.get("Document"), getattr(top, "Name", top))
+    return (info.get("Document"), info.get("Object"))
+
+
+def object_info(view, position):
+    """What a click at `position` selects, in view.getObjectInfo's form (None: nothing).
+    FreeCAD's selection takes, of the hits along the ray on the first hit's object, an edge
+    or a corner right at the face hit first (SoFCUnifiedSelection::getPickedList);
+    getObjectInfo gives the first hit only, so on a hole's edge the dots would be the face's
+    while the click takes the edge. The hover shows the dots of what the click takes."""
+    try:
+        hits = view.getObjectsInfo(position)
+    except Exception:
+        return view.getObjectInfo(position)
+    if not hits:
+        return None
+    best = first = hits[0]
+    rank, owner = _rank(first), _owner(first)
+    for info in hits[1:]:
+        if _owner(info) != owner:
+            break
+        here = _rank(info)
+        d2 = sum((info[k] - first[k]) ** 2 for k in ("x", "y", "z"))
+        if here > rank and d2 <= NEAR_HIT:
+            best, rank = info, here
+    return best
 
 
 def _modifier(name):
@@ -255,7 +296,7 @@ class SnapHover:
         return True
 
     def _pick_at(self, position):
-        return self._pick_from(self.view.getObjectInfo(position))
+        return self._pick_from(object_info(self.view, position))
 
     def _key(self, pick):
         # the part may have moved since (the joint itself moves it): its place is part of

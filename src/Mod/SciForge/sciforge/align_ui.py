@@ -60,7 +60,7 @@ def _snap_hover_class():
             self.off = False  # Shift: no snapping
 
         def _pick_at(self, position):
-            info = self.view.getObjectInfo(position)
+            info = joints_ui.object_info(self.view, position)
             if not info or not info.get("Object"):
                 return None
             doc = App.getDocument(info["Document"]) if info.get("Document") else None

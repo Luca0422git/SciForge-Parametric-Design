@@ -296,6 +296,9 @@ def g_recompute():
     screw = {c.Label: c for c in comps()}.get("screw_8_32_x_0_5")
     body = components.bodies_in(doc, screw, recursive=True)[0]
     base = body.BaseFeature
+    if os.environ.get("SCIFORGE_VEX_PROFILE"):
+        base.touch()
+        profiled("recompute", lambda: (doc.recompute(), QtWidgets.QApplication.processEvents()))
     tries = []
     for _ in range(2):
         base.touch()

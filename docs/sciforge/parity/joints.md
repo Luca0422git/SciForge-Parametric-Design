@@ -257,6 +257,15 @@ the ASSEMBLE menu and are greyed while nothing was moved.
 | The origin is previewed | Autodesk (1) | The triad shows where it lands once the mode's picks are made |
 | The joint follows later geometry changes | Autodesk (8) | Same: the faces / edges are stored (`SciForgeSnap1/2` "twofaces" / "twoedges" records) and the place is worked out again on today's geometry |
 
+### Hole centres, Ctrl, Duplicate With Joints (beta 3, builder vex)
+
+| Fusion | Evidence | SciForge |
+|---|---|---|
+| No snap at the centre of a square (any non-round) hole | Autodesk; Forum (research/fusion-vex-assembly.md) | **(SciForge)** the centre of every closed inner outline of a flat face is a snap (Joint, Joint Origin, As-built Joint, Duplicate With Joints): lit while the pointer is around the hole, on its edge or in it; a flat wall of a hole gives the hole's ends and middle; the joint keeps the hole after edits (parity/vex-assembly.md, section 1) |
+| Ctrl held keeps the face's snaps | Autodesk; Forum | Same in the joint dialogs (Align had it) |
+| The dots shown are those of what the click takes | Autodesk (1) | Same: the hover takes what FreeCAD's selection takes (an edge right at the face under the pointer wins, as a click) |
+| Duplicate With Joints | Autodesk (22) | Same (ASSEMBLE > Duplicate With Joints; parity/vex-assembly.md, section 3) |
+
 ### Motion Link (ASSEMBLE > Motion Link; wave 4)
 
 | Fusion | Evidence | SciForge |
