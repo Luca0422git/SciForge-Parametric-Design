@@ -313,8 +313,14 @@ rebuilt; a body already being rebuilt is not started twice (carry on in its rebu
 - **describe_reference lists a thread, a text or free-form faces** in `unrecognized`: they
   are never guessed. A thread: the plan drills the plain hole; add the thread with `thread`
   (modeled) if it is a standard one, compare again, and finish with `even_if_different` when
-  the person accepts it as close. Free-form faces (a loft, raised text): the notes say what
-  to build by hand (`loft`, `sketch_text` and an extrude).
+  the person accepts it as close. A text or a logo standing on (or cut into) a flat face: the
+  plan builds the part without it and `unrecognized` says where it is, how big, raised or
+  engraved; make a text with `sketch_text` and an extrude (`join` / `cut`), or leave it out
+  and finish with `even_if_different` if the person agrees. Other free-form faces (a loft):
+  the base is not read; the notes say what to build by hand (`loft`, `sweep`).
+- **The person wants to stop the rebuild** (the wrong body, or not now): `delete_step` the
+  reference (its id is in start_rebuild's answer): the original is shown again, as it was.
+  The rebuilt body stays; `delete_bodies` it if the person does not want it.
 - **finish_rebuild kept the original** ("kept (hidden) instead of deleted: ... still use it"):
   joints, patterns and sketches that used the original moved onto the rebuild; the ones
   named could not (they use something of the original the rebuild has not). Point them at

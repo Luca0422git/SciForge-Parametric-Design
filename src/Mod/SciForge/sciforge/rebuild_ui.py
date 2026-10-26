@@ -823,6 +823,85 @@ def _open_finish_later(ref):
         warn("Finish Rebuild: %s" % exc)
 
 
+# -- Stop Rebuild (beta 3 QA: there was no way back but Undo, none in a design opened again) --
+class StopDialog(QtWidgets.QDialog):
+    """Stop Rebuild: the original shown again, the reference gone; the rebuilt body deleted
+    or kept."""
+
+    def __init__(self, ref):
+        super().__init__(Gui.getMainWindow())
+        self.setObjectName("SciForgeRebuildStop")
+        self.setWindowTitle("Stop Rebuild")
+        self.setModal(True)
+        self.ref = ref
+        self.result = None
+        column = QtWidgets.QVBoxLayout(self)
+        target = rebuild.target_of(ref)
+        words = QtWidgets.QLabel(
+            "Stop rebuilding %s? The original is shown again, as it was, and the rebuild's "
+            "reference goes." % ref.SourceLabel
+        )
+        words.setObjectName("SciForgeRebuildStopState")
+        words.setWordWrap(True)
+        column.addWidget(words)
+        name = target.Label if target is not None else "the rebuilt body"
+        self.delete_rebuilt = QtWidgets.QRadioButton("Delete %s and its steps" % name)
+        self.delete_rebuilt.setObjectName("SciForgeRebuildStopDelete")
+        self.keep_rebuilt = QtWidgets.QRadioButton("Keep %s as a body of its own" % name)
+        self.keep_rebuilt.setObjectName("SciForgeRebuildStopKeep")
+        self.delete_rebuilt.setChecked(True)
+        self.keep_rebuilt.setEnabled(target is not None)
+        column.addWidget(self.delete_rebuilt)
+        column.addWidget(self.keep_rebuilt)
+        buttons = QtWidgets.QDialogButtonBox()
+        self.ok = buttons.addButton("Stop Rebuild", QtWidgets.QDialogButtonBox.AcceptRole)
+        self.ok.setObjectName("SciForgeRebuildStopOK")
+        self.cancel = buttons.addButton("Cancel", QtWidgets.QDialogButtonBox.RejectRole)
+        self.cancel.setObjectName("SciForgeRebuildStopCancel")
+        buttons.accepted.connect(self._accept)
+        buttons.rejected.connect(self.reject)
+        column.addWidget(buttons)
+
+    def _accept(self):
+        try:
+            self.result = stop(self.ref, keep_rebuilt=self.keep_rebuilt.isChecked())
+        except Exception as exc:
+            warn("Stop Rebuild: %s" % exc)
+        self.accept()
+
+
+def stop(ref, keep_rebuilt=False):
+    """Stop Rebuild as one undo step; a refusal is said. Returns the original (or None)."""
+    doc = ref.Document
+    if not commands.finish_open_dialog():
+        return None
+    for widget in QtWidgets.QApplication.topLevelWidgets():  # (its compare window: stale)
+        try:
+            if isinstance(widget, CompareDialog) and widget.isVisible() and widget.ref is ref:
+                widget.close()
+        except Exception:
+            pass
+    doc.openTransaction("Stop Rebuild")
+    try:
+        source = rebuild.stop(ref, keep_rebuilt=keep_rebuilt)
+    except rebuild.RebuildError as exc:
+        doc.abortTransaction()
+        commands.tell(rebuild_core.person_words(str(exc)))
+        return None
+    except Exception:
+        doc.abortTransaction()
+        raise
+    doc.commitTransaction()
+    doc.recompute()
+    return source
+
+
+def open_stop(ref):
+    from . import versions_ui
+
+    return versions_ui._show(StopDialog(ref), "rebuild-stop")
+
+
 # -- the 3D view's right-click ------------------------------------------------------------------
 _PENDING = {"doc": None, "name": None}
 
@@ -875,6 +954,7 @@ def marking_entries(global_pos):
             cfg.SEP,
             cfg.item("Compare with Reference", "SciForge_CompareReference", "rebuild_compare"),
             cfg.item("Finish Rebuild", "SciForge_FinishRebuild", "rebuild_finish"),
+            cfg.item("Stop Rebuild...", "SciForge_StopRebuild", "cancel"),  # (beta 3 QA)
         ]
     return [
         cfg.SEP,
@@ -986,11 +1066,37 @@ class FinishCommand:
             warn("Finish Rebuild: %s" % exc)
 
 
+class StopCommand:
+    """(beta 3 QA: a rebuild could only be taken back with Undo)"""
+
+    def GetResources(self):
+        return {
+            "MenuText": "Stop Rebuild...",
+            "ToolTip": "Give the rebuild up: the original is shown again as it was; the "
+            "rebuilt body is deleted or kept",
+            "Pixmap": ui_icon_path("cancel"),
+        }
+
+    def IsActive(self):
+        return bool(rebuild.active_references(App.ActiveDocument))
+
+    def Activated(self):
+        try:
+            if not commands.finish_open_dialog():
+                return
+            ref = current_reference()
+            if ref is not None:
+                open_stop(ref)
+        except Exception as exc:
+            warn("Stop Rebuild: %s" % exc)
+
+
 COMMANDS = {
     "SciForge_RebuildWithTimeline": RebuildCommand,
     "SciForge_RebuildUnderMouse": RebuildUnderMouseCommand,
     "SciForge_CompareReference": CompareCommand,
     "SciForge_FinishRebuild": FinishCommand,
+    "SciForge_StopRebuild": StopCommand,
 }
 
 _install_marking()

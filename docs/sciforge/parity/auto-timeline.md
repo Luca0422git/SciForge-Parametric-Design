@@ -169,6 +169,7 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
 | The AI | when SciForge's own chat has an AI set up (a key kept, or a local model's address), the AI panel opens on its Chat tab with the message in the box, not sent: the person reads it, may change it, and presses Send. Otherwise a window says how to ask an AI app (Claude Desktop, Gemini CLI, Claude Code...: add it, turn AI control on, paste the message), with the message in an editable box, already on the clipboard, Copy Message, Add an AI... and Close. The message names the body, the rebuilt body, the recipe and the four tools. |
 | Compare with Reference | a window with the match, the volumes (missing red, extra green), the faces matched, the largest gap, the verdict (the AI's, said with the buttons' names instead of the tools') and one row per difference; the 3D view shows the missing material red and the extra green, see-through, until the window closes (Close or Esc), the next compare, or Finish. Compare Again; Finish Rebuild... opens Finish. |
 | Finish Rebuild | a window: whether the rebuild matches (match, faces), Delete the original body (default) or Keep the original, hidden; Keep the reference (hidden); Finish / Cancel (Esc). One undo step "Finish Rebuild". |
+| Stop Rebuild... | (beta 3 QA) UTILITIES > AI and the rebuilt body's right-click in the 3D view: a window: Delete the rebuilt body and its steps (default) or Keep it as a body of its own; Stop Rebuild / Cancel. The original is shown again as it was (and is the active body), the reference goes. One undo step "Stop Rebuild". The AI gives a rebuild up with `delete_step` on the reference. |
 
 ## Tests
 
@@ -267,6 +268,7 @@ What the QA pass found and fixed, each with a check in
 | compare called holes with a chamfered or countersunk rim "a round hole ... with a pointed (drilled) end" | the cone's two radii tell a drill point from a widened rim |
 | A VEX C-channel (410 faces) was also read along its length: 51 levels of square holes, a section and booleans each (37 s) | an axis with far more levels than another reading already found is not read (25 s; the rest is at-recognize's sections) |
 | A plate with a boss and 60 holes in the face the boss stands on: no hole was closed by its rim (`Face.cutHoles` changes the face in place and answers None), every hole went to OpenCASCADE's defeaturing (12.7 s) | the face is rebuilt in place (0.3 s) |
+| There was no way to give a rebuild up but Undo (none at all in a design opened again: the original stayed hidden, the ghost drawn) | Stop Rebuild... (UTILITIES > AI, the rebuilt body's right-click): the original shown again, the rebuilt body deleted or kept, one undo step |
 | Raised or engraved text on a plate made the whole part unreadable (base `none`, every face unrecognized, a plan of a sketch and a hole that failed) | the letters are closed over like holes: the plate and its hole are read and planned, each free-form group of letters is listed (raised or engraved, its size and place, `sketch_text` + extrude to make a text) |
 
 Tried and found right: a body that already has a timeline, two rebuilds at once (each tool
@@ -284,8 +286,9 @@ Known gaps found by the QA pass (not fixed):
   of straight lines and arcs only are read as a boss, those with curves are listed, not built.
 - A VEX C-channel still takes about 25 s in describe_reference (its sections and the booleans
   of its through cuts: at-recognize's reading).
-- There is no Stop Rebuild: deleting the rebuilt body leaves the ghost and the hidden original
-  until the rebuild is started again (a new rebuilt body) or undone; Undo back past the start
-  gives everything back.
+- Deleting the rebuilt body by hand (Delete) leaves the rebuild going on (the ghost, the
+  hidden original) until it is started again (a new rebuilt body) or stopped (Stop
+  Rebuild...). The browser's own right-click on a rebuilt body has no Stop Rebuild entry (the
+  3D view's and UTILITIES > AI have).
 - A thread rebuilt with SciForge's thread tool on the planned hole matches every face but the
   bore's (its seam differs): finish with even_if_different.

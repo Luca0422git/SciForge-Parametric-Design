@@ -19,6 +19,10 @@ C  The base rebuilt next: half way (its base block built), saved (Ctrl+S), close
    again: the rebuilt body is the active body again and its ghost is drawn; the AI's next
    steps go into it and the comparison says done; Finish keeps the joint (now on two rebuilt
    bodies) and the ground.
+D  The base rebuilt once more, then given up: UTILITIES > AI > Stop Rebuild... (there was no
+   way back but Undo) > Stop Rebuild: no rebuild goes on, the base is shown again and is the
+   active body, the rebuilt body is gone, the joint still holds the base; one undo step; Undo
+   brings the rebuild back (the base hidden, the ghost drawn), Redo stops it again.
 """
 
 import os
@@ -387,6 +391,102 @@ def c_both_rebuilt():
     h.shot("both_rebuilt")
 
 
+# -- D ------------------------------------------------------------------------------------------
+def d_start_again():
+    doc = App.ActiveDocument
+    base = doc.getObject(s.get("base_target") or "")
+    s["base_again_label"] = base.Label if base is not None else ""
+    r.browser_menu(s["base_again_label"], ENTRY)
+
+
+d_start_again.wait_ms = 2000
+
+
+def d_stop_menu():
+    from sciforge import rebuild
+
+    r.close_dialogs()
+    doc = App.ActiveDocument
+    live = rebuild.active_references(doc)
+    h.check("the base is being rebuilt again", len(live) == 1, live)
+    target = rebuild.target_of(live[0]) if live else None
+    s["stop_target"] = target.Name if target is not None else ""
+    s["undo_before_stop"] = len(doc.UndoNames)
+    r.utilities_menu("Stop Rebuild...")
+
+
+d_stop_menu.wait_ms = 1500
+
+
+def d_stop_press():
+    box = r.dialog("SciForgeRebuildStop")
+    h.check("UTILITIES > AI > Stop Rebuild... opened its window", box is not None, h.popups())
+    if box is not None:
+        h.check("deleting the rebuilt body is the default", box.delete_rebuilt.isChecked())
+        r.click_button(box, "SciForgeRebuildStopOK")
+
+
+d_stop_press.wait_ms = 2000
+
+
+def d_stopped():
+    from sciforge import bodies, rebuild
+
+    doc = App.ActiveDocument
+    base = doc.getObject(s.get("base_target") or "")
+    h.check("Stop Rebuild: no rebuild goes on", not rebuild.references(doc))
+    h.check("... the base is shown again", base is not None and bool(base.Visibility))
+    h.check(
+        "... and it is the active body",
+        base is not None and bodies.active_body(doc) is base,
+        getattr(bodies.active_body(doc), "Label", None),
+    )
+    h.check("... the rebuilt body is gone", doc.getObject(s["stop_target"]) is None)
+    h.check(
+        "... the joint still holds the base",
+        base is not None and any(base.Name + "." in x for x in joint_subs()),
+        joint_subs(),
+    )
+    h.check("one undo step", len(doc.UndoNames) == s["undo_before_stop"] + 1, doc.UndoNames[:3])
+    h.shot("stopped")
+    t.undo()
+
+
+d_stopped.wait_ms = 1500
+
+
+def d_undone():
+    from sciforge import rebuild
+
+    doc = App.ActiveDocument
+    base = doc.getObject(s.get("base_target") or "")
+    refs = rebuild.active_references(doc)
+    h.check(
+        "Undo: the rebuild is back (its rebuilt body there, the base hidden)",
+        len(refs) == 1
+        and doc.getObject(s["stop_target"]) is not None
+        and base is not None
+        and not base.Visibility,
+        (refs, getattr(base, "Visibility", None)),
+    )
+    h.check("... its ghost drawn", refs and r.ghost_drawn(refs[0]))
+    t.redo()
+
+
+d_undone.wait_ms = 1500
+
+
+def d_redone():
+    from sciforge import rebuild
+
+    doc = App.ActiveDocument
+    base = doc.getObject(s.get("base_target") or "")
+    h.check(
+        "Redo: stopped again (the base shown, no rebuild)",
+        not rebuild.references(doc) and base is not None and bool(base.Visibility),
+    )
+
+
 def finish():
     r.close_dialogs()
     h.expect_no_errors("the jointed rebuild QA scenario")
@@ -411,6 +511,12 @@ h.run(
         c_reopen,
         c_reopened,
         c_both_rebuilt,
+        d_start_again,
+        d_stop_menu,
+        d_stop_press,
+        d_stopped,
+        d_undone,
+        d_redone,
         finish,
     ],
 )

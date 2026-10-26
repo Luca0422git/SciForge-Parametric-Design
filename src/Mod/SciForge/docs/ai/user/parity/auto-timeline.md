@@ -45,7 +45,7 @@ person) builds it with the normal tools, so the result is an ordinary editable t
 | Hole patterns | the centres of equal holes: a grid (rows and columns along the sketch's x / y, even spacing), a circle (equal angles, full or an arc), tolerant to float noise; four holes on a square read as a bolt circle when a round face of the part has that centre (a flange) | one hole and `rectangular_pattern` (quantity, spacing, second direction) or `circular_pattern` (about X / Y / Z, or about a round face of the part when the circle is elsewhere) |
 | Fillets | round faces (cylinder, torus, sphere) tangent to two neighbours, of one radius, with the corner pieces between them; one chain per radius; a round face that covers only part of the edge it would round (the curved edge of a thin rib) is part of the shape, not a fillet; a sheet's bends in two directions stay in the base (OpenCASCADE's fillet builder crashed on such corners) | one `fillet` step per radius, biggest first, its edges picked on the part as it will be then (the sharp edge where the two faces the fillet joined meet), with a short selector when one fits ("the 4 top edges") else one ref per edge (`any_of`); `fillet_sets` with Tangent Chain off when the edges run smoothly on into edges that stay sharp |
 | Chamfers | narrow flat faces between two faces, their normal between the two faces' normals; one or two distances measured from the sharp edge | one `chamfer` step per size; two distances written the way SciForge's Chamfer measures them (distance 1 on the edge's first face) |
-| Defeaturing | holes closed by rebuilding the faces around their rims (milliseconds), then chamfers and fillets taken off with OpenCASCADE's defeaturing (`shape.defeaturing`, all at once, else by halves); a feature that cannot be taken off stays in the base and is said so | the base is read from the solid without its features: sharp corners and simple lines |
+| Defeaturing | holes closed by rebuilding the faces around their rims (milliseconds), then chamfers and fillets taken off with OpenCASCADE's defeaturing (`shape.defeaturing`, all at once, else by halves); a feature that cannot be taken off stays in the base and is said so; raised or engraved text and logos (faces with free-form ones among them that meet the part only along inner loops of one flat face) are closed over the same way as holes (beta 3 QA) | the base is read from the solid without its features: sharp corners and simple lines |
 | Base, extrude | along X, Y or Z: every flat face square to the axis (levels) or along it, every round face along it; the section of each level; the biggest level's region extruded over the levels whose outline it covers; what is extra are bosses, what is missing pockets / cuts (each one a band of equal sections); each boss or cut is read along the axis its open side faces (the holes in a channel's flanges along Y, those in its web along Z); a cut through everything, or one that could go through without taking more (the same hole in both flanges), is `through_all`; walls on a draft give a `taper` (a drafted pocket or boss, a drafted block, a drafted hole in a straight block); a cut that opens onto a round face (a keyway, a flat on a shaft) goes from its floor out of the part, a boss standing on one (a port on a pipe) from its top into the part, from the origin plane or a round value when the part is solid there; when no axis fits every face, an axis is tried with up to a quarter of the area in such features. Of the readings, the one with the fewest steps wins, then the one whose steps add or take the least volume (a round boss on a block is a boss along Z, not the block's side outline with its corners cut off) | `create_sketch` on the origin plane at the right offset (geometry: `rect`, `circle`, `slot`, `polyline` or `segments` of lines and arcs that close exactly) + `extrude` (`flip`, `symmetric` or `two_sides` when the part straddles the plane); bosses / cuts on one level with the same height in one sketch (regions that touch go in sketches of their own: one sketch would merge them); copies of one boss or pocket on a grid or circle as one extrude and a pattern |
 | Base, revolve | every face a surface of revolution about an origin axis (flat faces square to it with round edges about it, coaxial cylinders, cones, tori, spheres): the half profile cut by a half plane | `create_sketch` on XZ (axis Z) or XY (axis X / Y) + `revolve` a full turn |
 | Parts turned away from the origin | most of the area faces no origin axis: the part is read in its own frame (the closest one to the origin's) | the plan builds it lined up with the origin planes, then one `move_copy` (free: X, then Y, then Z angles about the origin) turns it into place |
@@ -94,7 +94,7 @@ interrupted: a 434-face connector with 26 chamfers and fillets spends about 40 s
 
 | Gap | Why | What describe() does |
 |---|---|---|
-| Free-form faces: lofts, sweeps, pipes, coils, B-spline surfaces, embossed text, variable fillets, modelled threads | no extrude or revolve of lines and arcs makes them | the base is `none` (or the faces stay in the base); they are listed in `unrecognized` with a sentence |
+| Free-form faces: lofts, sweeps, pipes, coils, B-spline surfaces, embossed text, variable fillets, modelled threads | no extrude or revolve of lines and arcs makes them | the base is `none` (or the faces stay in the base); they are listed in `unrecognized` with a sentence. A text or a logo standing on or cut into a flat face, and a hole's modelled thread, are taken off instead: the part under them is read and planned, they are listed (beta 3 QA) |
 | Profiles with ellipse or spline edges | `create_sketch` has `ellipse` (axis along x only) and `spline_loop` (a curve through points), which do not give back the original curve exactly | not attempted: listed |
 | A drafted block with more on it (pockets or bosses on a base whose outer walls lean) | the base would be a tapered extrude whose sides are not flat in the sections the reader compares | a drafted block alone, and drafted pockets / bosses / holes in a straight block, are read; this is listed |
 | Fillets between leaning (drafted) walls | SciForge's tapered walls are flat B-spline faces: the round between them is a B-spline, not a cylinder or a torus | the round stays in the shape; the base is then not read |
@@ -171,6 +171,7 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
 | The AI | when SciForge's own chat has an AI set up (a key kept, or a local model's address), the AI panel opens on its Chat tab with the message in the box, not sent: the person reads it, may change it, and presses Send. Otherwise a window says how to ask an AI app (Claude Desktop, Gemini CLI, Claude Code...: add it, turn AI control on, paste the message), with the message in an editable box, already on the clipboard, Copy Message, Add an AI... and Close. The message names the body, the rebuilt body, the recipe and the four tools. |
 | Compare with Reference | a window with the match, the volumes (missing red, extra green), the faces matched, the largest gap, the verdict (the AI's, said with the buttons' names instead of the tools') and one row per difference; the 3D view shows the missing material red and the extra green, see-through, until the window closes (Close or Esc), the next compare, or Finish. Compare Again; Finish Rebuild... opens Finish. |
 | Finish Rebuild | a window: whether the rebuild matches (match, faces), Delete the original body (default) or Keep the original, hidden; Keep the reference (hidden); Finish / Cancel (Esc). One undo step "Finish Rebuild". |
+| Stop Rebuild... | (beta 3 QA) UTILITIES > AI and the rebuilt body's right-click in the 3D view: a window: Delete the rebuilt body and its steps (default) or Keep it as a body of its own; Stop Rebuild / Cancel. The original is shown again as it was (and is the active body), the reference goes. One undo step "Stop Rebuild". The AI gives a rebuild up with `delete_step` on the reference. |
 
 ## Tests
 
@@ -265,21 +266,31 @@ What the QA pass found and fixed, each with a check in
 | describe_reference on a plate with a modeled thread: 210 s (OpenCASCADE's defeaturing on the thread's faces), then no base read | a thread round a bore is closed with its hole, never defeatured, listed as not read (1.3 s) |
 | describe_reference on a VEX plate with 125 square holes (506 faces): 56 s | the base check compares faces before any boolean, planes are bucketed by offset (and at-recognize skips axes with many more levels): 9 s |
 | The chat's ready message waited in the box with nothing saying so | a tip says to read it and press Send |
+| check_design while a rebuild went on took the hidden original under its rebuild for an overlap (NOT OK) | the originals being rebuilt are left out of the interference check (said in the answer) |
+| compare called holes with a chamfered or countersunk rim "a round hole ... with a pointed (drilled) end" | the cone's two radii tell a drill point from a widened rim |
+| A VEX C-channel (410 faces) was also read along its length: 51 levels of square holes, a section and booleans each (37 s) | an axis with far more levels than another reading already found is not read (25 s; the rest is at-recognize's sections) |
+| A plate with a boss and 60 holes in the face the boss stands on: no hole was closed by its rim (`Face.cutHoles` changes the face in place and answers None), every hole went to OpenCASCADE's defeaturing (12.7 s) | the face is rebuilt in place (0.3 s) |
+| There was no way to give a rebuild up but Undo (none at all in a design opened again: the original stayed hidden, the ghost drawn) | Stop Rebuild... (UTILITIES > AI, the rebuilt body's right-click): the original shown again, the rebuilt body deleted or kept, one undo step |
+| Raised or engraved text on a plate made the whole part unreadable (base `none`, every face unrecognized, a plan of a sketch and a hole that failed) | the letters are closed over like holes: the plate and its hole are read and planned, each free-form group of letters is listed (raised or engraved, its size and place, `sketch_text` + extrude to make a text) |
 
 Tried and found right: a body that already has a timeline, two rebuilds at once (each tool
 takes `reference`; the dialogs ask to select the rebuilt body), undo / redo across start, the
 AI's steps and finish, component instances (a pasted copy follows the rebuild), parts of
 0.5 mm and 2 m, an inch STEP file (read at its size; the plan's numbers are millimetres: 12.7
 for half an inch), a 294-face plate (describe 1.7 s, compare 1.6 to 2.2 s while holes are
-left, 0.4 s when done, finish 2 s), a loft and raised text (said not read: the notes say to
-build them by hand).
+left, 0.4 s when done, finish 2 s), a loft (said not read: the notes say to build it by
+hand).
 
 Known gaps found by the QA pass (not fixed):
 
-- Raised or engraved text on a face, and any free-form face, leaves the whole base unread
-  (at-recognize's free-form rule): the plate under the text is not planned either.
-- There is no Stop Rebuild: deleting the rebuilt body leaves the ghost and the hidden original
-  until the rebuild is started again (a new rebuilt body) or undone; Undo back past the start
-  gives everything back.
+- A free-form face that is not a text or a logo on a flat face (a loft, a sweep, letters on a
+  round face) still leaves the whole base unread (at-recognize's free-form rule); letters made
+  of straight lines and arcs only are read as a boss, those with curves are listed, not built.
+- A VEX C-channel still takes about 25 s in describe_reference (its sections and the booleans
+  of its through cuts: at-recognize's reading).
+- Deleting the rebuilt body by hand (Delete) leaves the rebuild going on (the ghost, the
+  hidden original) until it is started again (a new rebuilt body) or stopped (Stop
+  Rebuild...). The browser's own right-click on a rebuilt body has no Stop Rebuild entry (the
+  3D view's and UTILITIES > AI have).
 - A thread rebuilt with SciForge's thread tool on the planned hole matches every face but the
   bore's (its seam differs): finish with even_if_different.

@@ -35,6 +35,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * text: a plate with a hole and raised (or engraved) text: the free-form letters made the whole
   part unreadable (base 'none', a plan of a sketch and a hole that failed); now the plate and
   the hole are read and the letters are said, with what to do.
+* stopped: a rebuild given up in a design opened again: there was no way but Undo (none
+  there); Stop Rebuild shows the original again and deletes (or keeps) the rebuilt body.
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -915,6 +917,87 @@ def text_plate(agent, folder):
         )
 
 
+# -- Stop Rebuild: a rebuild given up in a design opened again (no undo history) -----------------
+def stopped(agent, folder):
+    import FreeCAD as App
+
+    from sciforge import bodies, rebuild
+
+    agent.call("new_design", {"name": "QaStop"})
+    doc = App.ActiveDocument
+    plate = _featureless(doc, "Plate", _plate())
+    agent.call("start_rebuild", {"body": plate.Name})
+    agent.call("create_sketch", {"plane": "XY", "geometry": [{"rect": [0, 0, 60, 40]}]})
+    agent.call("extrude", {"profile": "Sketch1", "distance": 8})
+    path = os.path.join(folder, "qa_stop.FCStd")
+    agent.call("save_as", {"path": path})
+    agent.call("close_design", {})
+    agent.call("open_design", {"path": path})
+    doc = App.ActiveDocument
+    refs = rebuild.active_references(doc)
+    has_stop = hasattr(rebuild, "stop")
+    if not agent.check(
+        "stopped: a rebuild going on in a design opened again can be stopped (there was no "
+        "way back but Undo, and no undo history there)",
+        len(refs) == 1 and has_stop,
+        (refs, has_stop),
+    ):
+        return
+    ref = refs[0]
+    ref_name = ref.Name  # (a removed object has no name any more)
+    target_name = rebuild.target_of(ref).Name
+    original = rebuild.source_of(ref)
+    steps = [o.Name for o in rebuild.target_of(ref).Group]
+    doc.openTransaction("Stop Rebuild")
+    rebuild.stop(ref)
+    doc.commitTransaction()
+    doc.recompute()
+    agent.check(
+        "stopped: the original is shown again, the reference and the rebuilt body (with its "
+        "steps) are gone",
+        not rebuild.references(doc)
+        and bool(original.Visibility)
+        and doc.getObject(target_name) is None
+        and not any(doc.getObject(n) is not None for n in steps),
+        (
+            [r.Name for r in rebuild.references(doc)],
+            original.Visibility,
+            doc.getObject(target_name),
+            [n for n in steps if doc.getObject(n) is not None],
+        ),
+    )
+    doc.undo()
+    ref = doc.getObject(ref_name)
+    agent.check(
+        "stopped: Undo brings the rebuild back (the original hidden again)",
+        ref is not None
+        and rebuild.target_of(ref) is not None
+        and not original.Visibility
+        and len(rebuild.target_of(ref).Group) == len(steps),
+        (ref, original.Visibility),
+    )
+    doc.openTransaction("Stop Rebuild")
+    rebuild.stop(ref, keep_rebuilt=True)
+    doc.commitTransaction()
+    doc.recompute()
+    kept = doc.getObject(target_name)
+    agent.check(
+        "stopped: keeping the rebuilt body leaves it as a body of its own, its steps kept",
+        not rebuild.references(doc)
+        and bool(original.Visibility)
+        and kept is not None
+        and len(kept.Group) == len(steps)
+        and bodies.has_solid(kept),
+        (kept, original.Visibility),
+    )
+    text, error = agent.call("start_rebuild", {"body": original.Name})
+    agent.check(
+        "stopped: the original can be rebuilt again afterwards",
+        not error and len(rebuild.active_references(doc)) == 1,
+        text[:300],
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -931,6 +1014,7 @@ CHECKS = (
     vex_channel,
     bossed_plate,
     text_plate,
+    stopped,
 )
 
 

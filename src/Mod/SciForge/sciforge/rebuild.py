@@ -2138,6 +2138,52 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
 FINISHED = {}  # reference name -> what its finish did: {"followed", "kept_because", ...}
 
 
+def stop(ref, keep_rebuilt=False):
+    """Give the rebuild up: the original is shown again and the reference goes; the rebuilt
+    body goes with its steps (keep_rebuilt: it stays, a body like any other). Inside the
+    caller's undo step. Returns the original (None when it is gone). (beta 3 QA: there was
+    no way back but Undo, and none at all in a design opened again.)"""
+    from . import components, timeline_ops
+
+    if not is_reference(ref) or not bodies.alive(ref):
+        raise RebuildError("There is no rebuild to stop.")
+    if not getattr(ref, "Shown", True):
+        raise RebuildError(
+            "The rebuild of %s is finished already: there is nothing to stop."
+            % (getattr(ref, "SourceLabel", "") or ref.Label)
+        )
+    doc = ref.Document
+    source = source_of(ref)
+    target = target_of(ref)
+    if target is not None and not keep_rebuilt:
+        timeline_ops.delete_bodies(doc, [target.Name], transaction=False)
+    _HIDDEN.get(doc.Name, {}).pop(ref.Name, None)
+    NOTES.pop(ref.Name, None)
+    _KNOWN.pop((doc.Name, ref.Name), None)
+    _notify("clear", ref, None)
+    name = ref.Name  # (a removed object has no name any more)
+    _FINISHING.add(name)
+    try:
+        doc.removeObject(name)
+    finally:
+        _FINISHING.discard(name)
+    if source is not None and bodies.alive(source):
+        bodies.set_shown(source, True)
+        if bodies.is_body(source) and (keep_rebuilt is False or target is None):
+            try:
+                components.activate_body(source)
+            except Exception:
+                bodies.set_active_body(source)
+    log(
+        "rebuild of %s stopped (rebuilt body %s)"
+        % (
+            getattr(source, "Label", "") or getattr(ref, "SourceLabel", ""),
+            "kept" if keep_rebuilt and target is not None else "deleted",
+        )
+    )
+    return source
+
+
 def _still_used(doc, source, target, ref):
     """Words for what still needs the original after the links followed the rebuild (it is
     then kept, hidden): objects that link it, and steps of other bodies its extrudes drive."""

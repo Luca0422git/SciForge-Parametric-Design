@@ -382,6 +382,10 @@ the category "Rebuild with a timeline":
 The whole loop with real calls: [rebuilding a part](sciforge://docs/recipes/reverse-engineer.md).
 A person starts it from a body's right-click, **Rebuild with Timeline (AI)...**: SciForge
 starts the rebuild and hands you a message naming the body; carry on from describe_reference.
+To give a rebuild up (the person asks to stop), `delete_step` the reference (its id is in
+start_rebuild's answer): the original is shown again as it was; the rebuilt body stays
+(`delete_bodies` it if the person does not want it). A person uses UTILITIES > AI > **Stop
+Rebuild...** (or the rebuilt body's right-click in the 3D view).
 
 ## A good way to work
 
