@@ -78,3 +78,17 @@ sections Engine and Benchmarks.
   Gmsh's 2D meshing on several threads gives a different mesh each run (SciForge writes
   `General.NumThreads = 1`); FreeCAD's TNP marks a body face pick lost ("?Face1") after a
   SciForge Press Pull.
+- 19:00-19:45 big parts. A 366-face plate (120 counterbored holes) at 2.5 % mesh: 142 756
+  nodes. Before: the window froze 84 s writing the input (FreeCAD's `getNodesByFace` searches
+  every node by geometry: 31 s per face) and 598 s reading results (the scaffold's per-body
+  maximum read `result.DisplacementLengths`, a 143 000-value copy, once per node). After:
+  model 1.9 s, mesh turn 3.5 s, input 5.8 s, results 7.6 s on the main thread; Gmsh 16 s,
+  CalculiX 100 s (2 threads, shared machine), the result file parsed in the background (2.7 s).
+  How: Gmsh's groups ("Face12", the reader adds "_Faces" / "_Nodes" suffixes) give the nodes of
+  every model face / edge / solid; FreeCAD's pressure writer and Remove rigid body modes use
+  them through a patched `meshtools.get_femnodes_by_refshape`; the writer's unused second
+  mesh-sets getter is skipped; von Mises / principal stresses with numpy (FreeCAD loops per
+  node); no VTK pipeline.
+- FreeCAD facts: `obj.Shape` is read-only in 1.1 (`copy(False)` shares the geometry and can be
+  re-placed); freecadcmd crashes in PySide at exit when a FreeCAD GmshTools (it owns a QProcess
+  with a connected signal) is still referenced: drop it when done.

@@ -2716,6 +2716,8 @@ class Job:
 
         def work():
             try:
+                if self._cancel:  # (cancelled before the program started)
+                    return
                 self._process = subprocess.Popen(
                     command,
                     cwd=self.work,
@@ -2724,6 +2726,8 @@ class Job:
                     env=env,
                     **_no_window(),
                 )
+                if self._cancel:  # (cancelled while it was starting: cancel() saw no process)
+                    self._process.kill()
                 out, _err = self._process.communicate()
                 self._output = (out or b"").decode("utf-8", "replace")
                 self._returncode = self._process.returncode
