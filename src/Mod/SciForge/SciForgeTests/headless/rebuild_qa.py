@@ -996,6 +996,23 @@ def stopped(agent, folder):
         not error and len(rebuild.active_references(doc)) == 1,
         text[:300],
     )
+    # the original deleted by hand meanwhile: stopping keeps what was rebuilt
+    live = rebuild.active_references(doc)
+    again = rebuild.target_of(live[0]).Name if live else None
+    agent.call("delete_bodies", {"bodies": [original.Name]})
+    try:
+        doc.openTransaction("Stop Rebuild")
+        rebuild.stop(live[0], keep_rebuilt=True)
+        doc.commitTransaction()
+        stopped_ok = True
+    except Exception as exc:
+        doc.abortTransaction()
+        stopped_ok = exc
+    agent.check(
+        "stopped: with the original deleted meanwhile, Stop keeps the rebuilt body",
+        stopped_ok is True and not rebuild.references(doc) and doc.getObject(again) is not None,
+        (stopped_ok, again),
+    )
 
 
 CHECKS = (

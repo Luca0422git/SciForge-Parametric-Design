@@ -837,10 +837,18 @@ class StopDialog(QtWidgets.QDialog):
         self.result = None
         column = QtWidgets.QVBoxLayout(self)
         target = rebuild.target_of(ref)
-        words = QtWidgets.QLabel(
-            "Stop rebuilding %s? The original is shown again, as it was, and the rebuild's "
-            "reference goes." % ref.SourceLabel
-        )
+        original = rebuild.source_of(ref)
+        if original is not None:
+            text = (
+                "Stop rebuilding %s? The original is shown again, as it was, and the "
+                "rebuild's reference goes." % ref.SourceLabel
+            )
+        else:  # (the original was deleted meanwhile: the rebuild is all there is)
+            text = (
+                "Stop rebuilding %s? The original is gone (deleted); the rebuild's reference "
+                "goes." % ref.SourceLabel
+            )
+        words = QtWidgets.QLabel(text)
         words.setObjectName("SciForgeRebuildStopState")
         words.setWordWrap(True)
         column.addWidget(words)
@@ -849,7 +857,10 @@ class StopDialog(QtWidgets.QDialog):
         self.delete_rebuilt.setObjectName("SciForgeRebuildStopDelete")
         self.keep_rebuilt = QtWidgets.QRadioButton("Keep %s as a body of its own" % name)
         self.keep_rebuilt.setObjectName("SciForgeRebuildStopKeep")
-        self.delete_rebuilt.setChecked(True)
+        if original is None and target is not None:
+            self.keep_rebuilt.setChecked(True)
+        else:
+            self.delete_rebuilt.setChecked(True)
         self.keep_rebuilt.setEnabled(target is not None)
         column.addWidget(self.delete_rebuilt)
         column.addWidget(self.keep_rebuilt)
