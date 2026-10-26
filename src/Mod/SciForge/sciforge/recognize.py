@@ -673,6 +673,12 @@ class _Reader:
         t_start = start["t_open"]
         far = ends["low" if start_side == "high" else "high"]
         depth = abs(far["t"] - t_start)
+        if through and far["kind"] == "open" and self._overreaches(origin, axis, radius, far, into):
+            # it opens into a hollow (a port into a pipe): through all would drill the far
+            # wall too, so it is drilled to its far end (the bottom is in the hollow)
+            through = False
+            far = dict(far, kind="bottom")
+            depth = self._nice_depth(origin, axis, radius, far["t"], into, depth)
         hole = {
             "kind": "hole",
             "diameter": self.value(2 * radius),
@@ -721,6 +727,49 @@ class _Reader:
                     "end only; add the other countersink after it." % hole["id"]
                 )
         return hole
+
+    def _overreaches(self, origin, axis, radius, far, into):
+        """Whether a through hole's Hole step (through all) would cut more of the part
+        beyond its far end: the part goes on there (only then is it checked, with a boolean)
+        and the bore's cylinder carried on meets material."""
+        import Part
+
+        far_point = core.add(origin, core.mul(axis, far["t"]))
+        box = self.shape.BoundBox
+        beyond = max(
+            core.dot(core.sub((x, y, z), far_point), into)
+            for x in (box.XMin, box.XMax)
+            for y in (box.YMin, box.YMax)
+            for z in (box.ZMin, box.ZMax)
+        )
+        if beyond <= 1e-6:
+            return False
+        try:
+            cyl = Part.makeCylinder(
+                radius * (1.0 - 1e-6), beyond + 1.0, _vec(far_point), _vec(into)
+            )
+            return cyl.common(self.shape).Volume > 1e-6 * max(1.0, cyl.Volume)
+        except Exception:
+            return False
+
+    def _nice_depth(self, origin, axis, radius, t_far, into, depth):
+        """A rounder depth for a hole that ends in a hollow (15 for 13.38) when the bore
+        carried on that far meets no material."""
+        import Part
+
+        far_point = core.add(origin, core.mul(axis, t_far))
+        for unit in (5.0, 1.0):
+            nice = math.ceil(depth / unit - 1e-9) * unit
+            extra = nice - depth
+            if extra < 1e-9:
+                return depth
+            try:
+                cyl = Part.makeCylinder(radius * (1.0 - 1e-6), extra, _vec(far_point), _vec(into))
+                if cyl.common(self.shape).Volume <= 1e-6 * max(1.0, cyl.Volume):
+                    return nice
+            except Exception:
+                pass
+        return depth
 
     def _hole_end(self, idx, axis, origin, radius, t, side, bigger, faces):
         """What closes or opens the hole's bore at height t: open (the part's face), bottom
@@ -1199,23 +1248,9 @@ class _Reader:
     # -- the base -------------------------------------------------------------------------------
     def find_base(self, solid):
         """The base shape: prismatic along an origin axis (fewest steps first) or turned about
-        an origin axis."""
-        best = None
-        for axis in ("Z", "Y", "X"):
-            try:
-                found = _prismatic(solid, axis)
-            except Exception as exc:
-                warn("recognize: prismatic along %s not read (%s)" % (axis, exc))
-                found = None
-            if found is None:
-                continue
-            # fewest steps, then the least volume added / taken by them (a round boss on a
-            # block is a boss along Z, not the block's side profile with its corners cut off)
-            steps = len(_group_ops(found["ops"]))
-            moved = round(found.get("feature_volume", 0.0) / max(solid.Volume, 1e-9), 4)
-            score = (steps, moved, len(found["ops"]), found["slabs"], ("Z", "Y", "X").index(axis))
-            if best is None or score < best[0]:
-                best = (score, found)
+        an origin axis; else prismatic along an axis some faces of which belong to bosses or
+        cuts along another (a keyway in a shaft)."""
+        best = self._best_prismatic(solid, False)
         revolved = None
         drafted = best is not None and any(op.get("taper") for op in best[1]["ops"])
         if best is None or len(best[1]["ops"]) >= 3 or drafted:
@@ -1223,6 +1258,8 @@ class _Reader:
                 revolved = _revolved(solid)
             except Exception as exc:
                 warn("recognize: revolve not read (%s)" % exc)
+        if best is None and revolved is None:
+            best = self._best_prismatic(solid, True)
         if revolved is not None:
             chosen = revolved
         elif best is not None:
@@ -1258,6 +1295,26 @@ class _Reader:
         # every face of the original that is still in the defeatured base is explained by it
         chosen["faces"] = self._faces_in(solid) if good else []
         return chosen
+
+    def _best_prismatic(self, solid, lenient):
+        """(score, reading) of the best extrude reading along X, Y or Z, or None."""
+        best = None
+        for axis in ("Z", "Y", "X"):
+            try:
+                found = _prismatic(solid, axis, lenient)
+            except Exception as exc:
+                warn("recognize: prismatic along %s not read (%s)" % (axis, exc))
+                found = None
+            if found is None:
+                continue
+            # fewest steps, then the least volume added / taken by them (a round boss on a
+            # block is a boss along Z, not the block's side profile with its corners cut off)
+            steps = len(_group_ops(found["ops"]))
+            moved = round(found.get("feature_volume", 0.0) / max(solid.Volume, 1e-9), 4)
+            score = (steps, moved, len(found["ops"]), found["slabs"], ("Z", "Y", "X").index(axis))
+            if best is None or score < best[0]:
+                best = (score, found)
+        return best
 
     def _faces_in(self, solid):
         """Indexes of the original's faces that lie on the surface of a face of `solid`."""
@@ -2263,10 +2320,12 @@ def _levels(solid, axis_name, allow_taper=False):
     return None if got is None else got[0]
 
 
-def _walls(solid, axis_name, allow_taper=False, lenient=False):
-    """(levels, [taper angles in degrees, one per leaning wall]) or None. lenient: faces
-    that fit no rule are passed over (a boss or a cut along another axis: a piece of its
-    own) instead of refusing the axis."""
+def _walls(solid, axis_name, allow_taper=False, lenient=False, ranges=None):
+    """(levels, [taper angles in degrees, one per leaning wall]) or None. lenient: flat,
+    round and conical faces that fit no rule (up to a quarter of the area) are passed over
+    (a boss or a cut along another axis: a piece of its own) instead of refusing the axis,
+    their ends along it made levels (so a keyway's length is a band of its own) and added to
+    `ranges`."""
     from . import draft_walls
     from .ai.ops import selectors
 
@@ -2274,6 +2333,7 @@ def _walls(solid, axis_name, allow_taper=False, lenient=False):
     heights = []
     tapers = []
     straight = 0
+    skipped = 0.0
     for face in solid.Faces:
         kind = _face_kind(face)
         flat = _flat_normal(face) if kind == "bspline" else None
@@ -2294,6 +2354,11 @@ def _walls(solid, axis_name, allow_taper=False, lenient=False):
                 heights += [min(ts), max(ts)]  # (a draft may start where no flat face is)
                 continue
             if lenient:
+                span = _range_along(face, d)
+                heights += span
+                skipped += face.Area
+                if ranges is not None and span:
+                    ranges.append(span)
                 continue
             return None
         if kind == "cylinder":
@@ -2301,6 +2366,11 @@ def _walls(solid, axis_name, allow_taper=False, lenient=False):
                 straight += 1
                 continue
             if lenient:
+                span = _range_along(face, d)
+                heights += span
+                skipped += face.Area
+                if ranges is not None and span:
+                    ranges.append(span)
                 continue
             return None
         if kind == "cone" and allow_taper:
@@ -2308,6 +2378,11 @@ def _walls(solid, axis_name, allow_taper=False, lenient=False):
                 tapers.append(math.degrees(abs(face.Surface.SemiAngle)))
                 continue
             if lenient:
+                span = _range_along(face, d)
+                heights += span
+                skipped += face.Area
+                if ranges is not None and span:
+                    ranges.append(span)
                 continue
             return None
         try:
@@ -2316,8 +2391,8 @@ def _walls(solid, axis_name, allow_taper=False, lenient=False):
                 continue
         except Exception:
             pass
-        if lenient:
-            continue
+        return None
+    if skipped > 0.25 * solid.Area:
         return None
     levels = []
     for h in sorted(heights):
@@ -2326,6 +2401,18 @@ def _walls(solid, axis_name, allow_taper=False, lenient=False):
     if tapers and straight and allow_taper == "pure":
         return None  # (a band of one draft cannot have straight walls too)
     return levels, tapers
+
+
+def _range_along(face, d):
+    """[lowest, highest] of the face's boundary along the direction d."""
+    try:
+        pts = [v.Point for v in face.Vertexes]
+        for e in face.Edges:
+            pts += e.discretize(16)
+        ts = [core.dot(_t(p), d) for p in pts]
+        return [min(ts), max(ts)] if ts else []
+    except Exception:
+        return []
 
 
 def _flat_normal(face):
@@ -2516,11 +2603,12 @@ def _public_loop(loop):
     return out
 
 
-def _prismatic(solid, axis_name):
+def _prismatic(solid, axis_name, lenient=False):
     """The solid as extrudes along this origin axis: the base extrude (the biggest level's
     region over the levels whose outline it covers) and the bosses / cuts that make the
-    rest, or None."""
-    walls = _walls(solid, axis_name, allow_taper=True, lenient=True)
+    rest, or None. lenient: some faces may belong to bosses / cuts along another axis."""
+    ranges = []  # (lenient) where the faces of features along other axes are
+    walls = _walls(solid, axis_name, allow_taper=True, lenient=lenient, ranges=ranges)
     if walls is None or len(walls[0]) < 2:
         return None
     levels, tapers = walls
@@ -2528,10 +2616,14 @@ def _prismatic(solid, axis_name):
     frame = core.PLANES[plane]
     sign = 1 if core.dot(frame["n"], core.AXES[axis_name]) > 0 else -1
     hs = sorted(sign * h for h in levels)  # heights along the plane's normal (XZ's is -Y)
+    ranges = [sorted((sign * a, sign * b)) for a, b in ranges]
     box = solid.BoundBox
-    if tapers and len(hs) == 2 and _tapered(solid, plane, hs[0], hs[1], box):
-        if _walls(solid, axis_name, allow_taper="pure") is None:
-            return None
+    if (
+        tapers
+        and len(hs) == 2
+        and _tapered(solid, plane, hs[0], hs[1], box)
+        and _walls(solid, axis_name, allow_taper="pure") is not None
+    ):  # one extrude on a draft (with straight walls too: a drafted pocket in a block)
         op = _taper_op("base", solid, plane, hs[0], hs[1], tapers)
         if op is None:
             return None
@@ -2542,10 +2634,21 @@ def _prismatic(solid, axis_name):
         slabs.append({"lo": lo, "hi": hi, "faces": faces, "area": _area(faces)})
     if not any(s["area"] > 1e-9 for s in slabs):
         return None
-    k = max(range(len(slabs)), key=lambda i: slabs[i]["area"])
+
+    def touched(i):  # a feature along another axis passes through this level
+        a, b = slabs[i]["lo"], slabs[i]["hi"]
+        return any(r[0] < b - 1e-6 and r[1] > a + 1e-6 for r in ranges)
+
+    clean = [i for i in range(len(slabs)) if slabs[i]["area"] > 1e-9 and not touched(i)]
+    k = max(clean or range(len(slabs)), key=lambda i: slabs[i]["area"])
     base_outline = _outline(slabs[k]["faces"])
     covered = [False] * len(slabs)
     covered[k] = True
+
+    def goes_on(i):  # the base goes on through this level
+        if _covers(base_outline, slabs[i]["faces"]):
+            return True
+        return touched(i) and _mostly_covers(base_outline, slabs[i]["faces"])
 
     def drafted(i):  # its outline leans (a drafted pocket inside it does not count)
         if not tapers:
@@ -2554,14 +2657,16 @@ def _prismatic(solid, axis_name):
 
     for step in (1, -1):
         i = k + step
-        while 0 <= i < len(slabs) and _covers(base_outline, slabs[i]["faces"]) and not drafted(i):
+        while 0 <= i < len(slabs) and goes_on(i) and not drafted(i):
             covered[i] = True  # (a drafted level is a boss / cut of its own, not the base)
             i += step
     run = [i for i in range(len(slabs)) if covered[i]]
     lo, hi = slabs[run[0]]["lo"], slabs[run[-1]]["hi"]
     base_faces = slabs[k]["faces"]
     if tapers and _tapered(solid, plane, slabs[k]["lo"], slabs[k]["hi"], box):
-        return None  # a drafted base with more on it: not read (yet)
+        if drafted(k):
+            return None  # a drafted base with more on it: not read (yet)
+        base_faces = _outline(base_faces)  # its openings lean: cuts of their own
     first = _op("base", base_faces, plane, lo, hi)
     if first is None:
         return None
@@ -2576,10 +2681,10 @@ def _prismatic(solid, axis_name):
             got = None
             for other in _piece_planes(piece, solid, plane):
                 if other == plane:
-                    got = _piece_ops(piece, plane, operation, hs[0], hs[-1], lo)
+                    got = _piece_ops(piece, plane, operation, hs[0], hs[-1], lo, solid)
                 else:  # a boss / cut along another axis (the holes in a channel's sides)
                     span = _span(solid, other)
-                    got = _piece_ops(piece, other, operation, span[0], span[1])
+                    got = _piece_ops(piece, other, operation, span[0], span[1], None, solid)
                 if got is not None:
                     break
             if got is None:
@@ -2639,9 +2744,10 @@ def _through_cuts(ops, solid):
 
 
 def _span(solid, plane):
-    """(lowest, highest) of the solid along the plane's normal."""
+    """(lowest, highest) of the solid along the plane's normal (its tight box: the plain one
+    is padded by the tolerances, 10.000025 for a 10)."""
     n = core.PLANES[plane]["n"]
-    box = solid.BoundBox
+    box = _tight_box(solid)
     corners = [
         (x, y, z)
         for x in (box.XMin, box.XMax)
@@ -2650,6 +2756,23 @@ def _span(solid, plane):
     ]
     ts = [core.dot(c, n) for c in corners]
     return min(ts), max(ts)
+
+
+def _tight_box(shape):
+    """The shape's bounding box without the tolerance padding (made once per shape)."""
+    cache = _tight_box.__dict__.setdefault("cache", {})
+    key = id(shape)
+    got = cache.get(key)
+    if got is not None and got[0] is shape:
+        return got[1]
+    try:
+        box = shape.optimalBoundingBox(False, False)
+    except Exception:
+        box = shape.BoundBox
+    if len(cache) > 64:
+        cache.clear()
+    cache[key] = (shape, box)
+    return box
 
 
 def _mark_shell(ops, solid):
@@ -2764,6 +2887,24 @@ def _covers(base_outline, faces):
         return False
 
 
+def _mostly_covers(base_outline, faces):
+    """This level's region fills nearly all of the base's outline (a boss along another axis
+    may stick out of it: a piece of its own)."""
+    import Part
+
+    if not faces:
+        return False
+    try:
+        mine = Part.makeCompound(_outline(faces))
+        base = Part.makeCompound(base_outline)
+        shift = base_outline[0].CenterOfMass.sub(faces[0].CenterOfMass)
+        normal = base_outline[0].Surface.Axis
+        mine.translate(normal * shift.dot(normal))
+        return mine.common(base).Area >= 0.9 * base.Area
+    except Exception:
+        return False
+
+
 def _extrude_faces(faces, plane, lo, hi):
     n = core.PLANES[plane]["n"]
     solids = []
@@ -2803,14 +2944,16 @@ def _op(kind, faces, plane, lo, hi):
     }
 
 
-def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None):
+def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None, solid=None):
     """A boss or cut piece as one extrude per height band (consecutive equal regions
     merged), or None when it is not prismatic along the plane's normal."""
     n = core.PLANES[plane]["n"]
     axis_name = core.origin_axis(n)
     walls = _walls(piece, axis_name, allow_taper=True)
     if walls is None or len(walls[0]) < 2:
-        return None
+        if solid is None:
+            return None
+        return _open_piece_op(piece, solid, plane, operation, part_lo, part_hi)
     levels, tapers = walls
     if tapers and _walls(piece, axis_name, allow_taper="pure") is None:
         return None  # some walls lean and some do not: no single draft makes it
@@ -2844,6 +2987,100 @@ def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None):
             op["extrude"] = {"through_all": True, "operation": "cut", "flip": True}
             op["offset"] = hi
         out.append(op)
+    return out
+
+
+def _open_piece_op(piece, solid, plane, operation, part_lo, part_hi):
+    """A cut that opens onto a round or slanted face of the part (a keyway or a flat on a
+    shaft) or a boss standing on one (a port on a pipe): the piece's faces on the part's
+    surface all run along the plane's normal, but for one flat end (a cut's floor, a boss's
+    top). The extrude goes from that end out of the part (a cut) or into it down to where the
+    boss meets it: [op] when that takes or adds exactly the piece, else None."""
+    n = core.PLANES[plane]["n"]
+    d = core.AXES[core.origin_axis(n)]
+    ends, open_ts = [], []
+    try:
+        for face in piece.Faces:
+            p = face.valueAt(*_inner_uv(face))
+            if not (solid.isInside(p, 1e-6, True) and not solid.isInside(p, 1e-6, False)):
+                # where the cut opens to the air, or the boss meets the rest of the part
+                pts = [v.Point for v in face.Vertexes]
+                for e in face.Edges:
+                    pts += e.discretize(16)
+                open_ts += [core.dot(_t(q), n) for q in pts]
+                continue
+            kind = _face_kind(face)
+            flat = _flat_normal(face) if kind in ("plane", "bspline") else None
+            if flat is not None and core.parallel(flat, d, 1e-7):
+                ends.append(face)
+            elif flat is not None and core.square(flat, d, 1e-7):
+                pass  # a wall along the normal
+            elif kind == "cylinder" and core.parallel(_t(face.Surface.Axis), d, 1e-7):
+                pass
+            else:
+                return None
+    except Exception:
+        return None
+    if not ends or not open_ts:
+        return None
+    heights = {round(core.dot(_t(f.Vertexes[0].Point), n), 7) for f in ends}
+    if len(heights) != 1:
+        return None
+    h = heights.pop()
+    if min(open_ts) >= h - 1e-6:  # it opens above its end
+        above = True
+        far = part_hi if operation == "cut" else max(open_ts)
+    elif max(open_ts) <= h + 1e-6:
+        above = False
+        far = part_lo if operation == "cut" else min(open_ts)
+    else:
+        return None
+    # a boss may start anywhere inside the part: a round value (the origin plane, ...)
+    tries = [far] if operation == "cut" else _rounder(far, not above)
+    tol = 1e-7 * solid.Volume + 1e-6
+    found = None
+    for value in tries:
+        lo, hi = (h, value) if above else (value, h)
+        if hi - lo < 1e-6:
+            continue
+        try:
+            prism = _extrude_faces(ends, plane, lo, hi)
+            if piece.cut(prism).Volume > tol:
+                continue  # the extrude would miss some of the piece
+            more = prism.common(solid) if operation == "cut" else prism.cut(solid)
+            if more.Volume > tol:
+                continue  # it would take (add) more than the piece
+        except Exception:
+            continue
+        found = (lo, hi)
+        break
+    if found is None:
+        return None
+    lo, hi = found
+    op = _op(operation, ends, plane, lo, hi)
+    if op is None:
+        return None
+    if operation == "cut" and lo <= part_lo + 1e-6 and hi >= part_hi - 1e-6:
+        op["extrude"] = {"through_all": True, "operation": "cut", "flip": True}
+        op["offset"] = hi
+    return [op]
+
+
+def _rounder(value, down):
+    """value and rounder values beyond it (below it when down), roundest first: the origin
+    plane, then multiples of 10, 5 and 1, then value itself."""
+    out = []
+    if (0.0 <= value + 1e-9) if down else (0.0 >= value - 1e-9):
+        out.append(0.0)
+    for unit in (10.0, 5.0, 1.0):
+        if down:
+            v = math.floor(value / unit + 1e-9) * unit
+        else:
+            v = math.ceil(value / unit - 1e-9) * unit
+        if all(abs(v - o) > 1e-9 for o in out):
+            out.append(v)
+    if all(abs(value - o) > 1e-9 for o in out):
+        out.append(value)
     return out
 
 

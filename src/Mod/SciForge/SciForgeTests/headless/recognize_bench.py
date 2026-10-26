@@ -299,6 +299,108 @@ EXTRA_MODELS = {
             {"op": "extrude", "id": "e2", "profile": "s2", "distance": 8},
         ],
     },
+    "bench_keyed_shaft": {
+        "title": "Shaft d20 x 60 along X with a keyway 6 wide, 26 long, 3.5 deep in its top and "
+        "a flat 2 deep on its last 15 mm",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "YZ", "geometry": [{"circle": [0, 0, 10]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 60},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 10,
+                "geometry": [{"slot": [15, 0, 35, 0, 6]}],
+            },
+            {
+                "op": "extrude",
+                "id": "c1",
+                "profile": "s2",
+                "operation": "cut",
+                "distance": 3.5,
+                "flip": True,
+            },
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "XY",
+                "offset": 10,
+                "geometry": [{"rect": [45, -12, 60, 12]}],
+            },
+            {
+                "op": "extrude",
+                "id": "c2",
+                "profile": "s3",
+                "operation": "cut",
+                "distance": 2,
+                "flip": True,
+            },
+        ],
+    },
+    "bench_pipe_port": {
+        "title": "Pipe d30 x 60 along Z with a d24 bore, a side port d12 out to x = 25 and a "
+        "d6 hole down the port into the bore (not through the far wall)",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"circle": [0, 0, 15]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 60},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "YZ",
+                "geometry": [{"circle": [0, 30, 6]}],
+            },
+            {"op": "extrude", "id": "e2", "profile": "s2", "distance": 25},
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "XY",
+                "offset": 60,
+                "geometry": [{"circle": [0, 0, 12]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s3", "diameter": 24, "through_all": True},
+            {
+                "op": "sketch",
+                "id": "s4",
+                "plane": "YZ",
+                "offset": 25,
+                "geometry": [{"circle": [0, 30, 3]}],
+            },
+            {"op": "hole", "id": "h2", "sketch": "s4", "diameter": 6, "depth": 20},
+        ],
+    },
+    "bench_clevis": {
+        "title": "U bracket (clevis) 40 x 30 x 30, 5 thick, with a d8 hole through one side "
+        "only",
+        "steps": [
+            {
+                "op": "sketch",
+                "id": "s1",
+                "plane": "XZ",
+                "geometry": [
+                    {
+                        "polyline": [
+                            [0, 0],
+                            [40, 0],
+                            [40, 30],
+                            [35, 30],
+                            [35, 5],
+                            [5, 5],
+                            [5, 30],
+                            [0, 30],
+                        ]
+                    }
+                ],
+            },
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 30, "flip": True},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "YZ",
+                "geometry": [{"circle": [15, 20, 4]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s2", "diameter": 8, "depth": 5},
+        ],
+    },
     "bench_turned_bracket": {
         "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
         "placed in an assembly)",
@@ -382,6 +484,9 @@ BENCH = [
     ("bench_shaft_cross_hole", {"base": "extrude", "holes": [4]}),
     ("bench_vex_channel", {"base": "extrude", "holes": []}),
     ("bench_side_boss", {"base": "extrude", "holes": []}),
+    ("bench_keyed_shaft", {"base": "extrude", "holes": []}),
+    ("bench_pipe_port", {"base": "extrude", "holes": [6, 24]}),
+    ("bench_clevis", {"base": "extrude", "holes": [8]}),
     ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
