@@ -17,7 +17,9 @@ E  Prescribed Displacement: Ux ticked, 0.2 mm typed, on the arm's top face; OK.
 F  MANAGE > Local Mesh Control: Body Selection, a click on the bracket picks the whole body,
    Length 3 mm typed; OK; "Local Mesh Control 1" under the Mesh row, green dots drawn.
 G  SOLVE > Generate Mesh: the progress shows the two mesh stages; the mesh is shown on the
-   model; the Mesh row gives its node and element counts; DISPLAY > Show Mesh hides it.
+   model; the Mesh row gives its node and element counts; DISPLAY > Show Mesh hides it and
+   shows it again; Workspace > Design: the mesh is not drawn over the design; back to
+   Simulation.
 H  Solve, then Cancel in the progress window: the solve stops (cancelled), the study keeps no
    results, nothing is left running.
 """
@@ -310,6 +312,26 @@ def g_hidden():
     from sciforge import simulation_solve_dialog as sd
 
     h.check("Show Mesh hid it", not sd.mesh_shown())
+    s.menu_item("DISPLAY", "Show Mesh")
+
+
+def g_again():
+    from sciforge import simulation_solve_dialog as sd
+
+    h.check("Show Mesh shows it again", sd.mesh_shown())
+    s.workspace("Design")
+
+
+def g_design():
+    from sciforge import simulation_solve_dialog as sd
+
+    mesh = sd.mesh_object(s.active_study())
+    h.check("DESIGN shows", s.tab_visible("solid"))
+    h.check(
+        "the mesh is not drawn over the design",
+        not sd.mesh_shown() and mesh is not None and not mesh.ViewObject.Visibility,
+    )
+    s.workspace("Simulation")
 
 
 # -- H ------------------------------------------------------------------------------------------
@@ -385,6 +407,8 @@ h.run(
         s.wait_solved("wait_meshed"),
         g_check,
         g_hidden,
+        g_again,
+        g_design,
         h_solve,
         h_go,
         h_cancel,

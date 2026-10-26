@@ -91,6 +91,11 @@ def set_active_study(study):
         STATE["active"][study.Document.Name] = study.Name
         log("active study: %s" % study.Label)
         _setup_tab_without_results(study)
+        from . import simulation_solve_dialog
+
+        shown = simulation_solve_dialog.MESH["shown"]
+        if shown is not None and shown != (study.Document.Name, study.Name):
+            simulation_solve_dialog.hide_mesh()  # (another study's mesh)
     except Exception as exc:
         warn("active study: %s" % exc)
     refresh()
@@ -236,6 +241,12 @@ def _apply(on, tab=None):
     _timeline(on)
     if not on:
         _results_hide()
+        try:  # the mesh Generate Mesh showed is a SIMULATION display: not over the design
+            from . import simulation_solve_dialog
+
+            simulation_solve_dialog.hide_mesh()
+        except Exception as exc:
+            warn("simulation mesh: %s" % exc)
     try:
         from . import simulation_glyphs
 

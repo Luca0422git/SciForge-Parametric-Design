@@ -445,12 +445,15 @@ def _finish_all():
 
 def cancel():
     """Cancel the solve running now and the ones waiting (Fusion: Cancel in Job Status)."""
-    RUN["queue"] = []
-    job = RUN["job"]
-    if job is not None:
-        job.cancel()
-        log("solve cancelled")
-    _update_status()
+    try:
+        RUN["queue"] = []
+        job = RUN["job"]
+        if job is not None:
+            job.cancel()
+            log("solve cancelled")
+        _update_status()
+    except Exception as exc:
+        warn("cancel: %s" % exc)
 
 
 # -- progress window (Fusion's Job Status, research 3.10) ----------------------------------------

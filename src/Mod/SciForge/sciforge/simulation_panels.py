@@ -1027,7 +1027,17 @@ class GravityPanel(pickpanel.PickPanel):
         if not bodies.alive(self.study):
             self.message.setText("The study is gone (undone or deleted).")
             return False
-        _sim().set_settings(self.study, {"gravity": values})
+        try:
+            _sim().set_settings(self.study, {"gravity": values})
+        except core.SimulationError as exc:
+            self.message.setStyleSheet(ERROR_STYLE)
+            self.message.setText(str(exc))
+            return False
+        except Exception as exc:
+            warn("%s: %s" % (self.title, exc))
+            self.message.setStyleSheet(ERROR_STYLE)
+            self.message.setText("It could not be kept: %s" % exc)
+            return False
         self.finish_ok()
         _ui().refresh()
         return True
