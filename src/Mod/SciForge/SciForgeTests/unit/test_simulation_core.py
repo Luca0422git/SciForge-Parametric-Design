@@ -529,6 +529,14 @@ class MorePrecheck(unittest.TestCase):
         loose = core.precheck(self.summary(loose=["Body2"], remove_rigid=True))
         self.assertTrue(core.can_solve(loose))
 
+    def test_linear_elements_warned(self):
+        checks = core.precheck(self.summary(order="linear"))
+        self.assertTrue(core.can_solve(checks))
+        self.assertTrue(any("Linear elements" in t for _l, t in checks))
+        self.assertFalse(
+            any("Linear elements" in t for _l, t in core.precheck(self.summary(order="parabolic")))
+        )
+
     def test_loose_overlaps_twice(self):
         checks = core.precheck(self.summary(loose=["Body2"]))
         self.assertFalse(core.can_solve(checks))

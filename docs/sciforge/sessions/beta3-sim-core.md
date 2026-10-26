@@ -165,3 +165,8 @@ sections Engine and Benchmarks.
 - 22:10 the model turn of the plate fixed at its 120 holes took 7.6 s: mapping each pick onto
   the model asked every model face for its box (120 x 366 times). The model's faces and boxes
   are now listed once per solve: 3.3 s.
+- 22:15 linear elements: the steel cantilever bends 0.082 mm at the default mesh (beam theory
+  0.200; 0.161 at 3 %): linear tetrahedra lock in bending, as everywhere. The pre-check now
+  warns when a study uses them (Fusion's help says parabolic is the accurate choice).
+  Integration again with the latest engine: sim_setup_dialogs 76, sim_setup_workspace 43,
+  simres_linear 27 checks pass.

@@ -1107,6 +1107,7 @@ def precheck(study):
         "lost": [i.Label for i in lost_items(study)],
         "remove_rigid": bool(opts["remove_rigid"]),
         "twice": _twice(study),
+        "order": opts["mesh"]["order"],
     }
     for body in found:
         name, props, _source = study_material(study, body)
