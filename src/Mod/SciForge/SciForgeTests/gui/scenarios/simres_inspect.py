@@ -58,6 +58,11 @@ def results_check():
     h.check("results shown", s.session() is not None)
     state["undo"] = s.undo_count()
     state["modified"] = s.modified()
+    command = Gui.Command.get("SciForge_SimResultsConvergence")
+    h.check(
+        "Convergence Plot greyed (solved without adaptive mesh refinement)",
+        command is not None and not command.isActive(),
+    )
 
 
 # -- A Solver Data

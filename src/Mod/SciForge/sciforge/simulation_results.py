@@ -527,6 +527,16 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None,
                 core.fmt(row["displacement_max"]),
             )
         )
+    convergence = None
+    adaptive = done.get("adaptive") or {}
+    if adaptive.get("passes"):
+        try:
+            plan = sim.adaptive_plan(simulation.settings(study).get("adaptive"))
+        except Exception:
+            plan = None
+        key = adaptive.get("result")
+        unit = unit_of(key) if unit_of is not None and key in core.result_keys() else None
+        convergence = core.convergence(adaptive, plan[1] if plan else None, unit)
     lower, upper = core.targets(lower, upper)
     notes = []
     if done.get("solved"):
@@ -548,6 +558,7 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None,
         "loads": loads,
         "contacts": "Bodies that touch are bonded (glued) automatically.",
         "mesh": mesh_rows,
+        "convergence": convergence,
         "results": results,
         "bodies": bodies_rows,
         "verdict": core.verdict(min_safety(study), lower, upper),

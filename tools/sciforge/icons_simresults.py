@@ -225,6 +225,20 @@ def _():
     return out + line(22, 16, 22, 40, GREY[2], 1.2)
 
 
+@icon("simr_convergence")
+def _():
+    # a chart: a line settling down towards a level band, the last point green
+    out = rect(6, 6, 36, 36, WHITE, 1.0, 'stroke="%s" stroke-width="1.2"' % STROKE)
+    out += rect(11, 17, 30, 8, GREEN, 0, 'fill-opacity="0.45"')
+    out += line(10, 40, 10, 8, DARK, 1.2) + line(10, 40, 40, 40, DARK, 1.2)
+    points = [(14, 36), (22, 15), (30, 24), (37, 21)]
+    for (xa, ya), (xb, yb) in zip(points, points[1:]):
+        out += line(xa, ya, xb, yb, BLUE[2], 2.2)
+    for x, y in points[:-1]:
+        out += circle(x, y, 2.4, BLUE[2], DARK, 0.8)
+    return out + circle(37, 21, 3.2, GREEN, DARK, 0.9)
+
+
 @icon("simr_finish")
 def _():
     return circle(24, 24, 16, GREEN) + path("M15 24 L22 31 L34 17", WHITE, 4)

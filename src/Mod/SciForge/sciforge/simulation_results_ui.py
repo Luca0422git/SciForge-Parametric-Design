@@ -2214,6 +2214,32 @@ class SolverDataCommand(_ResultsCommand):
         panels.solver_data(session)
 
 
+class ConvergenceCommand(_ResultsCommand):
+    menu = "Convergence Plot"
+    tip = (
+        "How the result settled solve after solve while adaptive mesh refinement made the mesh "
+        "finer"
+    )
+    icon = "simr_convergence"
+
+    def IsActive(self):
+        if compare_on():
+            return False
+        session = current()
+        if session is None or session.study is None:
+            return False
+        try:
+            adaptive = simulation.summary(session.study).get("adaptive") or {}
+            return bool(adaptive.get("passes"))
+        except Exception:
+            return False
+
+    def run(self, session):
+        from . import simulation_results_panels as panels
+
+        panels.convergence_plot(session)
+
+
 class SliceCommand(_ResultsCommand):
     menu = "Slice Plane"
     tip = "Cut the result with a plane to see inside it"
@@ -2270,6 +2296,7 @@ COMMANDS = {
     "SciForge_SimResultsPointProbes": PointProbesCommand,
     "SciForge_SimResultsIso": IsoCommand,
     "SciForge_SimResultsSolverData": SolverDataCommand,
+    "SciForge_SimResultsConvergence": ConvergenceCommand,
     "SciForge_SimResultsReactions": ReactionsCommand,
     "SciForge_SimResultsFinish": FinishCommand,
 }

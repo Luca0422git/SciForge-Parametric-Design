@@ -650,6 +650,73 @@ class SolverDataTests(unittest.TestCase):
         self.assertEqual(core.fmt_mm(None), "-")
 
 
+class ConvergenceTests(unittest.TestCase):
+    ADAPTIVE = {
+        "result": "von_mises",
+        "passes": [
+            {"nodes": 459, "elements": 200, "value": 50.0},
+            {"nodes": 1200, "elements": 600, "value": 58.0},
+            {"nodes": 2900, "elements": 1500, "value": 60.0},
+        ],
+    }
+
+    def test_each_solve_and_its_change(self):
+        data = core.convergence(self.ADAPTIVE, 5.0)
+        self.assertEqual(data["title"], "Stress: Von Mises")
+        self.assertEqual(data["extreme"], "highest")
+        self.assertEqual(data["unit"], "MPa")
+        self.assertEqual([s["solve"] for s in data["solves"]], [1, 2, 3])
+        self.assertEqual([s["nodes"] for s in data["solves"]], [459, 1200, 2900])
+        self.assertIsNone(data["solves"][0]["change"])
+        # the engine's own rule (simulation_core.converged): % of the larger of the two
+        self.assertAlmostEqual(data["solves"][1]["change"], 8.0 / 58.0 * 100.0)
+        self.assertAlmostEqual(data["solves"][2]["change"], 2.0 / 60.0 * 100.0)
+        self.assertTrue(data["converged"])
+        self.assertTrue(sim.converged(58.0, 60.0, 5.0))
+        self.assertIn("Converged", data["sentence"])
+        self.assertIn("3.33 %", data["sentence"])
+        self.assertIn("5 % tolerance", data["sentence"])
+
+    def test_not_converged_says_what_to_do(self):
+        data = core.convergence(self.ADAPTIVE, 2.0)
+        self.assertFalse(data["converged"])
+        self.assertFalse(sim.converged(58.0, 60.0, 2.0))
+        self.assertIn("Not converged", data["sentence"])
+        self.assertIn("Adaptive Mesh Refinement", data["sentence"])
+
+    def test_units_and_odd_cases(self):
+        inches = core.convergence(
+            {"result": "displacement", "passes": [{"nodes": 9, "value": 2.54}]}, 5.0, "in"
+        )
+        self.assertEqual(inches["unit"], "in")
+        self.assertAlmostEqual(inches["solves"][0]["value"], 0.1)
+        self.assertIsNone(inches["converged"])
+        self.assertIn("One solve", inches["sentence"])
+        wrong = core.convergence({"result": "von_mises", "passes": [{"value": 1.0}]}, None, "in")
+        self.assertEqual(wrong["unit"], "MPa")  # (inches are no stress unit)
+        lowest = core.convergence(
+            {"result": "principal_3", "passes": [{"value": -10.0}, {"value": -10.2}]}, None
+        )
+        self.assertEqual(lowest["extreme"], "lowest")
+        self.assertIsNone(lowest["converged"])  # (no tolerance known)
+        self.assertIn("changed by 1.96 %", lowest["sentence"])
+        self.assertIsNone(core.convergence(None))
+        self.assertIsNone(core.convergence({"result": "von_mises", "passes": []}))
+
+    def test_round_ticks(self):
+        self.assertEqual(core.nice_ticks(98.3, 112.7), [95.0, 100.0, 105.0, 110.0, 115.0])
+        self.assertEqual(core.nice_ticks(-30.0, -10.0), [-30.0, -25.0, -20.0, -15.0, -10.0])
+        ticks = core.nice_ticks(0.1995, 0.2005)
+        self.assertLessEqual(ticks[0], 0.1995)
+        self.assertGreaterEqual(ticks[-1], 0.2005)
+        self.assertIn(0.2, ticks)
+        same = core.nice_ticks(5.0, 5.0)  # one value: a range around it
+        self.assertLess(same[0], 5.0)
+        self.assertGreater(same[-1], 5.0)
+        self.assertEqual(core.change_pct(None, 1.0), None)
+        self.assertEqual(core.change_pct(0.0, 0.0), 0.0)
+
+
 class ReportTests(unittest.TestCase):
     def test_report_has_the_numbers(self):
         text = core.report_html(
@@ -707,6 +774,16 @@ class ReportTests(unittest.TestCase):
     def test_empty_report(self):
         text = core.report_html({})
         self.assertIn("Static Stress report", text)
+        self.assertNotIn("Adaptive mesh refinement", text)
+
+    def test_adaptive_refinement_in_the_report(self):
+        adaptive = ConvergenceTests.ADAPTIVE
+        text = core.report_html({"study": "S", "convergence": core.convergence(adaptive, 5.0)})
+        self.assertIn("<h3>Adaptive mesh refinement</h3>", text)
+        self.assertIn("Stress: Von Mises, highest (MPa)", text)
+        self.assertIn("<td>2,900</td>", text)
+        self.assertIn("<td>3.33 %</td>", text)
+        self.assertIn("Converged: the result changed by 3.33 %", text)
 
 
 if __name__ == "__main__":

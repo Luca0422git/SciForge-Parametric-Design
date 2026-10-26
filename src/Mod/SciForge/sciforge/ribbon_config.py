@@ -1505,6 +1505,12 @@ SIMR_TOOLS = group(
         ),  # owner: sim-results
         item("Results Details", "SciForge_SimResultsDetails", "simr_details"),  # owner: sim-results
         item(
+            "Convergence Plot",
+            "SciForge_SimResultsConvergence",
+            "simr_convergence",
+            note="Only for a study solved with adaptive mesh refinement (Settings)",
+        ),  # owner: sim-results
+        item(
             "Legend Min/Max",
             "SciForge_SimResultsRange",
             "simr_range",

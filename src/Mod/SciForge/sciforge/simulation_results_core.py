@@ -1312,6 +1312,104 @@ def solver_text(rows):
     return "\n".join(out)
 
 
+# -- the convergence plot (adaptive mesh refinement) -----------------------------------------------
+def nice_ticks(lo, hi, count=5):
+    """Round values about `count` steps apart (1, 2, 2.5 or 5 x 10^k) covering lo .. hi: the
+    convergence plot's value axis. [first, ..., last] with first <= lo and last >= hi."""
+    lo, hi = float(lo), float(hi)
+    if hi < lo:
+        lo, hi = hi, lo
+    if hi - lo <= max(abs(lo), abs(hi)) * 1e-9 or hi - lo < 1e-300:
+        pad = abs(hi) * 0.1 or 1.0
+        lo, hi = lo - pad, hi + pad
+    raw = (hi - lo) / max(int(count), 1)
+    power = 10.0 ** math.floor(math.log10(raw))
+    step = 10.0 * power
+    for factor in (1.0, 2.0, 2.5, 5.0, 10.0):
+        if factor * power >= raw * (1.0 - 1e-9):
+            step = factor * power
+            break
+    first = math.floor(lo / step + 1e-9) * step
+    last = math.ceil(hi / step - 1e-9) * step
+    count = int(round((last - first) / step))
+    return [float("%.12g" % (first + k * step)) for k in range(count + 1)]
+
+
+def change_pct(previous, current):
+    """How much `current` differs from `previous`, in % of the larger of the two (the rule the
+    engine's adaptive refinement stops by: simulation_core.converged)."""
+    if previous is None or current is None:
+        return None
+    scale = max(abs(previous), abs(current))
+    if scale <= 1e-300:
+        return 0.0
+    return abs(current - previous) / scale * 100.0
+
+
+def convergence(adaptive, tolerance=None, unit=None):
+    """Adaptive mesh refinement's convergence plot (Fusion: the 2D convergence plots of a study
+    solved with adaptive refinement, research 5.3) from a summary's "adaptive"
+    ({"result": key, "passes": [{"nodes", "elements", "value"}, ...]}) and the tolerance (%) of
+    the study's settings; values in `unit` (the result's base unit when None).
+
+    {"result", "title" ("Stress: Von Mises"), "extreme" ("highest" / "lowest"), "unit",
+    "solves": [{"solve", "nodes", "elements", "value", "change" (% to the solve before)}],
+    "tolerance", "converged" (None for one solve or no tolerance), "sentence"}; None when the
+    study was not solved with adaptive refinement."""
+    adaptive = adaptive or {}
+    passes = [p for p in adaptive.get("passes") or [] if isinstance(p, dict)]
+    if not passes:
+        return None
+    key = adaptive.get("result") or "von_mises"
+    known = key in result_keys()
+    if unit is None or not known or not unit_ok(key, unit):
+        unit = base_unit(key) if known else ""
+    solves = []
+    previous = None
+    for number, step in enumerate(passes, 1):
+        value = step.get("value")
+        value = None if value is None else float(value)
+        solves.append(
+            {
+                "solve": number,
+                "nodes": int(step.get("nodes") or 0),
+                "elements": int(step.get("elements") or 0),
+                "value": convert(value, unit) if unit else value,
+                "change": change_pct(previous, value),
+            }
+        )
+        previous = value
+    last = solves[-1]["change"]
+    converged = None
+    if last is not None and tolerance is not None:
+        converged = last <= float(tolerance) + 1e-9
+    if len(solves) == 1:
+        sentence = "One solve only: there is no second solve to compare it with."
+    elif converged is None:
+        sentence = "The result changed by %s %% between the last two solves." % fmt(last, 3)
+    elif converged:
+        sentence = (
+            "Converged: the result changed by %s %% between the last two solves, within the "
+            "%s %% tolerance. A finer mesh would change it little." % (fmt(last, 3), fmt(tolerance))
+        )
+    else:
+        sentence = (
+            "Not converged: the result still changed by %s %% between the last two solves, more "
+            "than the %s %% tolerance. Allow more refinements (Settings > Adaptive Mesh "
+            "Refinement) for a more accurate result." % (fmt(last, 3), fmt(tolerance))
+        )
+    return {
+        "result": key,
+        "title": result_name(key) if known else str(key),
+        "extreme": "lowest" if key == "principal_3" else "highest",
+        "unit": unit,
+        "solves": solves,
+        "tolerance": None if tolerance is None else float(tolerance),
+        "converged": converged,
+        "sentence": sentence,
+    }
+
+
 # -- the report ------------------------------------------------------------------------------------
 def _cell(value):
     return "<td>%s</td>" % html.escape(str(value))
@@ -1462,6 +1560,37 @@ def _study_html(data):
 
     parts.append("<h2>Mesh</h2>")
     parts.append(_table(["", "Value"], data.get("mesh") or []))
+    convergence = data.get("convergence")
+    if convergence:
+        unit = convergence.get("unit") or ""
+        parts.append("<h3>Adaptive mesh refinement</h3>")
+        parts.append(
+            _table(
+                [
+                    "Solve",
+                    "Nodes",
+                    "Elements",
+                    "%s, %s%s"
+                    % (
+                        convergence["title"],
+                        convergence["extreme"],
+                        " (%s)" % unit if unit else "",
+                    ),
+                    "Change",
+                ],
+                [
+                    (
+                        step["solve"],
+                        "{:,}".format(step["nodes"]),
+                        "{:,}".format(step["elements"]),
+                        fmt(step["value"]),
+                        "-" if step["change"] is None else "%s %%" % fmt(step["change"], 3),
+                    )
+                    for step in convergence["solves"]
+                ],
+            )
+        )
+        parts.append("<p>%s</p>" % esc(convergence["sentence"]))
 
     parts.append("<h2>Results</h2>")
     result_rows = [

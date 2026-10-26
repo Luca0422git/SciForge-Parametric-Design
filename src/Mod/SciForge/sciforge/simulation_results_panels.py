@@ -34,6 +34,7 @@ OPEN = {
     "range": None,
     "compare": None,
     "solver": None,
+    "convergence": None,
 }
 
 PANEL_STYLE = """
@@ -2076,6 +2077,315 @@ def solver_data(session):
     return dialog
 
 
+# -- Convergence Plot (adaptive mesh refinement) ---------------------------------------------------
+def convergence_data(session):
+    """The convergence plot's data (simulation_results_core.convergence) of the session's
+    study, in the unit the legend uses for that kind of result; None when the study was not
+    solved with adaptive mesh refinement."""
+    study = session.study
+    if study is None:
+        return None
+    adaptive = (simulation.summary(study) or {}).get("adaptive") or {}
+    if not adaptive.get("passes"):
+        return None
+    tolerance = None
+    try:
+        plan = sim.adaptive_plan(simulation.settings(study).get("adaptive"))
+        if plan is not None:
+            tolerance = plan[1]
+    except Exception:
+        tolerance = None
+    key = adaptive.get("result") or "von_mises"
+    unit = None
+    try:
+        if key in core.result_keys():
+            unit = session.unit(key)
+    except Exception:
+        unit = None
+    return core.convergence(adaptive, tolerance, unit)
+
+
+class ConvergenceChart(QtWidgets.QWidget):
+    """The convergence plot: the result's value at each solve, left to right, joined by a line,
+    over a shaded band (the tolerance around the last solve's value: inside it, the last change
+    was small enough)."""
+
+    MARGINS = (72, 22, 18, 44)  # left, top, right, bottom (px)
+    LINE = "#3d8fd6"
+    BAND = (60, 196, 106, 55)
+    GOOD = "#3cc46a"
+    NOT_YET = "#f2a03d"
+
+    def __init__(self, data, parent=None):
+        super().__init__(parent)
+        self.setObjectName("SciForgeSimConvergenceChart")
+        self.data = data or {"solves": []}
+        self.setMinimumSize(460, 250)
+
+    def band(self):
+        """(low, high) of the tolerance band around the last value, or None."""
+        solves = self.data.get("solves") or []
+        tolerance = self.data.get("tolerance")
+        if not solves or tolerance is None or solves[-1]["value"] is None:
+            return None
+        last = float(solves[-1]["value"])
+        half = abs(last) * float(tolerance) / 100.0
+        return last - half, last + half
+
+    def ticks(self):
+        values = [s["value"] for s in self.data.get("solves") or [] if s["value"] is not None]
+        if not values:
+            return []
+        lo, hi = min(values), max(values)
+        band = self.band()
+        if band is not None:
+            lo, hi = min(lo, band[0]), max(hi, band[1])
+        return core.nice_ticks(lo, hi, 5)
+
+    def _area(self):
+        left, top, right, bottom = self.MARGINS
+        return QtCore.QRectF(
+            left, top, max(self.width() - left - right, 1), max(self.height() - top - bottom, 1)
+        )
+
+    def _y(self, value, ticks, area):
+        span = (ticks[-1] - ticks[0]) or 1.0
+        return area.bottom() - area.height() * (value - ticks[0]) / span
+
+    def _x(self, index, area):
+        count = max(len(self.data.get("solves") or []), 1)
+        return area.left() + area.width() * (index + 0.5) / count
+
+    def points(self):
+        """Each solve's dot in the widget: [(x, y) or None]."""
+        ticks = self.ticks()
+        area = self._area()
+        out = []
+        for index, solve in enumerate(self.data.get("solves") or []):
+            if not ticks or solve["value"] is None:
+                out.append(None)
+                continue
+            out.append((self._x(index, area), self._y(solve["value"], ticks, area)))
+        return out
+
+    def paintEvent(self, _event):
+        painter = QtGui.QPainter(self)
+        try:
+            self._paint(painter)
+        except Exception as exc:
+            warn("Convergence Plot: %s" % exc)
+        finally:
+            painter.end()
+
+    def _paint(self, painter):
+        from . import theme
+
+        painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+        text = QtGui.QColor(theme.TEXT or "#f5f5f5")
+        base = QtGui.QColor(theme.FIELD or "#2f3540")
+        grid = QtGui.QColor(text)
+        grid.setAlpha(45)
+        area = self._area()
+        painter.fillRect(self.rect(), base)
+        ticks = self.ticks()
+        solves = self.data.get("solves") or []
+        metrics = painter.fontMetrics()
+        if not ticks:
+            painter.setPen(text)
+            painter.drawText(self.rect(), QtCore.Qt.AlignCenter, "No values to plot.")
+            return
+        band = self.band()
+        if band is not None:  # the tolerance around the last solve's value
+            top = self._y(band[1], ticks, area)
+            bottom = self._y(band[0], ticks, area)
+            painter.fillRect(
+                QtCore.QRectF(area.left(), top, area.width(), bottom - top),
+                QtGui.QColor(*self.BAND),
+            )
+            painter.setPen(text)
+            painter.drawText(
+                QtCore.QRectF(area.left() + 4, top + 2, area.width() - 8, metrics.height()),
+                QtCore.Qt.AlignRight | QtCore.Qt.AlignTop,
+                "within %s %% of the last solve" % core.fmt(self.data.get("tolerance")),
+            )
+        for value in ticks:  # the value grid and its labels
+            y = self._y(value, ticks, area)
+            painter.setPen(QtGui.QPen(grid, 1))
+            painter.drawLine(QtCore.QPointF(area.left(), y), QtCore.QPointF(area.right(), y))
+            painter.setPen(text)
+            painter.drawText(
+                QtCore.QRectF(0, y - 9, area.left() - 8, 18),
+                QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter,
+                core.fmt(value),
+            )
+        painter.setPen(QtGui.QPen(text, 1))
+        painter.drawLine(area.bottomLeft(), area.bottomRight())
+        painter.drawLine(area.bottomLeft(), area.topLeft())
+        slot = area.width() / max(len(solves), 1)
+        for index, solve in enumerate(solves):  # the solves along the bottom
+            x = self._x(index, area)
+            label = "Solve %d" % solve["solve"]
+            nodes = "{:,} nodes".format(solve["nodes"])
+            if metrics.horizontalAdvance(nodes) > slot - 4:
+                label, nodes = str(solve["solve"]), ""
+            painter.drawText(
+                QtCore.QRectF(x - slot / 2, area.bottom() + 4, slot, metrics.height()),
+                QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop,
+                label,
+            )
+            if nodes:
+                painter.drawText(
+                    QtCore.QRectF(
+                        x - slot / 2, area.bottom() + 4 + metrics.height(), slot, metrics.height()
+                    ),
+                    QtCore.Qt.AlignHCenter | QtCore.Qt.AlignTop,
+                    nodes,
+                )
+        dots = [QtCore.QPointF(*p) for p in self.points() if p is not None]
+        if len(dots) > 1:
+            painter.setPen(QtGui.QPen(QtGui.QColor(self.LINE), 2))
+            painter.drawPolyline(QtGui.QPolygonF(dots))
+        converged = self.data.get("converged")
+        for index, place in enumerate(self.points()):
+            if place is None:
+                continue
+            last = index == len(solves) - 1
+            colour = self.LINE
+            if last and converged is not None:
+                colour = self.GOOD if converged else self.NOT_YET
+            painter.setPen(QtGui.QPen(base, 1.5))
+            painter.setBrush(QtGui.QColor(colour))
+            radius = 6.0 if last else 4.5
+            painter.drawEllipse(QtCore.QPointF(*place), radius, radius)
+            painter.setPen(text)
+            painter.drawText(
+                QtCore.QRectF(place[0] - slot / 2, place[1] - 10 - metrics.height(), slot, 16),
+                QtCore.Qt.AlignHCenter | QtCore.Qt.AlignBottom,
+                core.fmt(solves[index]["value"]),
+            )
+
+
+class ConvergenceDialog(QtWidgets.QDialog):
+    """Convergence Plot (Fusion: the 2D convergence plot of a study solved with adaptive mesh
+    refinement): the judged result at each solve (a chart and a table with the nodes and the
+    change between solves) and whether it converged within the settings' tolerance."""
+
+    def __init__(self, session, data):
+        super().__init__(_main())
+        self.setObjectName("SciForgeSimConvergence")
+        self.session = session
+        self.data = data
+        study = session.study
+        self.setWindowTitle("Convergence Plot")
+        self.setStyleSheet(PANEL_STYLE)
+        box = QtWidgets.QVBoxLayout(self)
+        heading = QtWidgets.QLabel(study.Label if study is not None else "")
+        heading.setObjectName("SciForgeSimConvergenceStudy")
+        font = heading.font()
+        font.setBold(True)
+        heading.setFont(font)
+        box.addWidget(heading)
+        unit = data.get("unit") or ""
+        axis = QtWidgets.QLabel(
+            "%s: the %s value in the part%s, at each solve of the adaptive mesh refinement"
+            % (data["title"], data["extreme"], " (%s)" % unit if unit else "")
+        )
+        axis.setObjectName("SciForgeSimConvergenceAxis")
+        axis.setWordWrap(True)
+        box.addWidget(axis)
+        self.chart = ConvergenceChart(data, self)
+        box.addWidget(self.chart, 1)
+        self.table = QtWidgets.QTableWidget(len(data["solves"]), 5)
+        self.table.setObjectName("SciForgeSimConvergenceTable")
+        self.table.setHorizontalHeaderLabels(
+            [
+                "Solve",
+                "Nodes",
+                "Elements",
+                "Value (%s)" % unit if unit else "Value",
+                "Change",
+            ]
+        )
+        self.table.horizontalHeaderItem(3).setToolTip(
+            "%s: the %s value in the part" % (data["title"], data["extreme"])
+        )
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.table.setSelectionMode(QtWidgets.QAbstractItemView.NoSelection)
+        for row, solve in enumerate(data["solves"]):
+            cells = (
+                str(solve["solve"]),
+                "{:,}".format(solve["nodes"]),
+                "{:,}".format(solve["elements"]),
+                core.fmt(solve["value"]),
+                "-" if solve["change"] is None else "%s %%" % core.fmt(solve["change"], 3),
+            )
+            for column, value in enumerate(cells):
+                item = QtWidgets.QTableWidgetItem(value)
+                item.setTextAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+                self.table.setItem(row, column, item)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        rows = len(data["solves"])
+        height = min(
+            260,
+            header.sizeHint().height()
+            + (self.table.verticalHeader().defaultSectionSize() * rows)
+            + 6,
+        )
+        self.table.setMinimumHeight(height)
+        self.table.setMaximumHeight(height)
+        box.addWidget(self.table)
+        self.sentence = QtWidgets.QLabel(data["sentence"])
+        self.sentence.setObjectName("SciForgeSimConvergenceSentence")
+        self.sentence.setWordWrap(True)
+        if data.get("converged") is False:
+            self.sentence.setProperty("role", "warning")
+        box.addWidget(self.sentence)
+        stale = QtWidgets.QLabel(core.OUT_OF_DATE)
+        stale.setProperty("role", "warning")
+        stale.setWordWrap(True)
+        stale.setVisible(study is not None and results_data.out_of_date(study))
+        box.addWidget(stale)
+        row = QtWidgets.QHBoxLayout()
+        row.addStretch(1)
+        close = QtWidgets.QPushButton("Close")
+        close.setObjectName("SciForgeSimConvergenceClose")
+        close.clicked.connect(self.close)
+        row.addWidget(close)
+        box.addLayout(row)
+        self.resize(560, 560)
+
+    def closeEvent(self, event):
+        OPEN["convergence"] = None
+        super().closeEvent(event)
+
+
+def convergence_plot(session):
+    """Open the Convergence Plot of the session's study (None and a sentence when it was not
+    solved with adaptive mesh refinement)."""
+    dialog = OPEN.get("convergence")
+    try:
+        if dialog is not None:
+            dialog.close()
+    except RuntimeError:
+        pass
+    data = convergence_data(session)
+    if data is None:
+        from . import commands
+
+        commands.tell(
+            "This study was solved without adaptive mesh refinement: there is no convergence "
+            "plot (Settings > Adaptive Mesh Refinement, then solve)."
+        )
+        return None
+    dialog = ConvergenceDialog(session, data)
+    OPEN["convergence"] = dialog
+    dialog.show()
+    log("Convergence Plot opened")
+    return dialog
+
+
 # -- Report ----------------------------------------------------------------------------------------
 PICTURES = ("safety", "von_mises", "displacement")
 
@@ -2550,8 +2860,8 @@ def solve_here(session):
 
 def close_all(session=None):
     """Close the results' own windows (Results Details, Report, Reaction Force, Legend Min/Max,
-    Solver Data, Save Animation): those of `session`, or all of them."""
-    for key in ("details", "report", "reactions", "range", "solver", "animation"):
+    Solver Data, Save Animation, Convergence Plot): those of `session`, or all of them."""
+    for key in ("details", "report", "reactions", "range", "solver", "animation", "convergence"):
         dialog = OPEN.get(key)
         if dialog is None:
             continue
