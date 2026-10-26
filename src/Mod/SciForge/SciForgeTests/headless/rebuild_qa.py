@@ -32,6 +32,9 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
   (a section and a boolean per level along X, two booleans on 506 coincident faces).
 * bossed plate: a plate with a boss and 60 holes in the face the boss stands on: no hole was
   closed by its rim (Face.cutHoles answers None), all went to defeaturing (12.7 s).
+* text: a plate with a hole and raised (or engraved) text: the free-form letters made the whole
+  part unreadable (base 'none', a plan of a sketch and a hole that failed); now the plate and
+  the hole are read and the letters are said, with what to do.
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -840,6 +843,78 @@ def bossed_plate(agent, folder):
     agent.check("bossed plate: the plan rebuilds it (done)", result.get("done"), result)
 
 
+# -- raised and engraved text on a plate -----------------------------------------------------------
+def _font():
+    """A font FreeCAD itself ships (DejaVu Sans Bold when there), None when none is found."""
+    from sciforge import text
+
+    files = text.freecad_font_files()
+    for name in ("DejaVuSans-Bold.ttf", "DejaVuSans.ttf"):
+        for path in files:
+            if os.path.basename(path) == name:
+                return path
+    return files[0] if files else None
+
+
+def text_plate(agent, folder):
+    import FreeCAD as App
+    import Part
+
+    from . import rebuild_e2e as e2e
+
+    font = _font()
+    agent.check("text: a font FreeCAD ships is found", font is not None, font)
+    if font is None:
+        return
+    V = App.Vector
+    for mode in ("raised", "engraved"):
+        plate = Part.makeBox(80, 30, 5).cut(Part.makeCylinder(3, 5, V(70, 15, 0)))
+        letters = []
+        for char in Part.makeWireString("VEX OK", font, 10, 0):
+            if char:
+                face = Part.makeFace(list(char), "Part::FaceMakerBullseye")
+                face.translate(V(6, 10, 5))
+                letters.append(face.extrude(V(0, 0, 1 if mode == "raised" else -1)))
+        text = Part.makeCompound(letters)
+        part = (plate.fuse(text) if mode == "raised" else plate.cut(text)).removeSplitter()
+        path = os.path.join(folder, "qa_text_%s.step" % mode)
+        part.exportStep(path)
+        agent.call("new_design", {"name": "QaText_" + mode})
+        agent.call("import_file", {"path": path})
+        agent.call("start_rebuild", {"body": "Body001"})
+        answer, error = agent.call("describe_reference", {})
+        data = _json(answer) or {}
+        plan = data.get("plan") or []
+        tools = [s["tool"] for s in plan]
+        why = " ".join(u.get("why", "") for u in data.get("unrecognized") or [])
+        agent.check(
+            "%s text: the plate and its hole are read, the free-form letters said (not read) "
+            "with what to do (the base was 'none': every face unrecognized, a plan of a sketch "
+            "and a hole that failed)" % mode,
+            not error
+            and (data.get("base") or {}).get("kind") == "extrude"
+            and "hole" in tools
+            and ("%s free-form shape" % mode) in why
+            and "sketch_text" in why,
+            (tools, data.get("base"), why[:300], data.get("notes")),
+        )
+        made, failed = {}, []
+        for step in plan:
+            args = agent._with_ids(step, made, plan)
+            answer, error = agent.call(step["tool"], args)
+            if error:
+                failed.append((step["tool"], answer[:200]))
+            elif e2e.made_id(answer):
+                made[step.get("step")] = e2e.made_id(answer)
+        answer, error = agent.call("compare_to_reference", {})
+        result = _json(answer) or {}
+        agent.check(
+            "%s text: every plan step runs; the rebuild matches but for the letters" % mode,
+            not failed and result.get("match", 0) > 0.98,
+            (failed, result.get("verdict")),
+        )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -855,6 +930,7 @@ CHECKS = (
     chamfered_rim,
     vex_channel,
     bossed_plate,
+    text_plate,
 )
 
 

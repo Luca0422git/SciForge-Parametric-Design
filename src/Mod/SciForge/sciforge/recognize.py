@@ -530,12 +530,18 @@ class _Reader:
         timing = {}
         holes = self.find_holes()
         threads = self.thread_walls(holes)  # (beta 3 QA)
+        islands = self.free_islands(holes)  # (beta 3 QA: raised / engraved text, logos)
         timing["holes"] = time.time() - t0
         t = time.time()
-        blends = self.find_fillets(holes)
-        chamfers = self.find_chamfers(holes, blends)
+        blends = self.find_fillets(holes + islands)  # (an island's faces are its own)
+        chamfers = self.find_chamfers(holes + islands, blends)
         timing["blends"] = time.time() - t
-        free = self._free_form(holes + chamfers + blends)
+        free = self._free_form(holes + chamfers + blends + islands)
+        if free and islands:
+            # other free-form faces: nothing is taken off, the islands' faces are listed
+            # with the rest, as before (beta 3 QA)
+            islands = []
+            free = self._free_form(holes + chamfers + blends)
         if free:
             # no extrude or revolve makes these faces: the base cannot be read, so the
             # features are not taken off (defeaturing such parts can take minutes)
@@ -562,7 +568,7 @@ class _Reader:
             self.base_shape = self.shape
         else:
             t = time.time()
-            removed = self.defeature(holes, chamfers, blends)
+            removed = self.defeature(holes + islands, chamfers, blends)
             timing["defeaturing"] = time.time() - t
             t = time.time()
             self.base_shape = removed["base"]
@@ -605,6 +611,7 @@ class _Reader:
             explained.update(f.get("_faces", []))
         explained.update(base.get("faces", []))
         threaded = self._thread_notes(threads, removed["ok"])  # (beta 3 QA)
+        threaded |= self._island_notes(islands, removed["ok"])
         explained.update(threaded)
         for f in features:
             f.pop("_faces", None)
@@ -1270,6 +1277,126 @@ class _Reader:
             found.append(h)
         return found
 
+    def free_islands(self, holes):
+        """Raised or engraved text and logos: groups of faces with free-form ones among them
+        that meet the rest of the part only along whole inner loops of flat faces (the face
+        they stand on or are cut into). They are taken off like holes (that face closed over
+        them), so the base is read without them, and listed as not read (never guessed).
+        Returns [{"id", "kind": "island", "_faces", "_hosts", "_island_volume", "raised"}]."""
+        claimed = set()
+        for h in holes:
+            claimed.update(_wall(h))
+        free = [
+            f.index
+            for f in self.facts
+            if f.index not in claimed and f.kind not in _ANALYTIC and _flat_normal(f.face) is None
+        ]
+        if not free:
+            return []
+        inner = {}  # flat face -> hashes of the edges of its inner loops
+        for f in self.facts:
+            if f.kind == "plane" and len(f.face.Wires) > 1:
+                outer = f.face.OuterWire
+                keys = set()
+                for wire in f.face.Wires:
+                    if not wire.isSame(outer):
+                        keys.update(e.hashCode() for e in wire.Edges)
+                inner[f.index] = keys
+        out, seen = [], set(claimed)
+        limit = 0.6 * len(self.facts)
+        for first in free:
+            if first in seen:
+                continue
+            island, todo, hosts, ok = {first}, [first], set(), True
+            while todo and ok:
+                i = todo.pop()
+                for key in self.topo.face_edges[i]:
+                    for j in self.topo.edge_faces.get(key, []):
+                        if j == i or j in island:
+                            continue
+                        if key in inner.get(j, ()):
+                            hosts.add(j)  # (it stands on / is cut into j: not crossed)
+                            continue
+                        if j in claimed or len(island) >= limit:
+                            ok = False
+                            break
+                        island.add(j)
+                        todo.append(j)
+                    if not ok:
+                        break
+            seen |= island
+            hosts -= island  # (a floor reached first by its inner loop: it is the island's)
+            if not ok or not hosts:
+                continue
+            box = None
+            for i in island:
+                b = self.facts[i].face.BoundBox
+                if box is None:
+                    box = _box_copy(b)
+                else:
+                    box.add(b)
+            host = self.facts[min(hosts)]
+            centre = (box.Center.x, box.Center.y, box.Center.z)
+            raised = core.dot(centre, host.normal) > host.h
+            out.append(
+                {
+                    "id": "island%d" % len(out),
+                    "kind": "island",
+                    "_faces": sorted(island),
+                    "_hosts": sorted(hosts),
+                    "_island_volume": box.XLength * box.YLength * box.ZLength,
+                    "raised": raised,
+                    "_box": box,
+                }
+            )
+        if out:
+            # only the islands their host faces close over (milliseconds): one that does not
+            # close leaves its free-form faces to the free-form rule, as before
+            _solid, closed, _left = self._drop_holes(out)
+            closed_ids = {g["id"] for g in closed}
+            out = [g for g in out if g["id"] in closed_ids]
+            for g in out:
+                g["id"] = self.new_id()
+        return out
+
+    def _island_notes(self, islands, planned):
+        """The islands taken off said in unrecognized; their faces (said, not read)."""
+        out = set()
+        for g in islands:
+            if g["id"] not in planned:
+                continue
+            out.update(g["_faces"])
+            box = g["_box"]
+            self.unrecognized.append(
+                {
+                    "faces": self.face_refs(g["_faces"]),
+                    "why": "%s (%d faces, %d free-form) %s the flat face %s, about %s x %s x %s "
+                    "mm at (%s, %s, %s): not read. The plan builds the part without it; a "
+                    "text can be made with sketch_text and an extrude (operation %s), a logo "
+                    "by hand, then compare again (finish with even_if_different if it stays a "
+                    "little off)."
+                    % (
+                        (
+                            "a raised free-form shape (a text, a logo...)"
+                            if g["raised"]
+                            else "an engraved free-form shape (a text, a logo...)"
+                        ),
+                        len(g["_faces"]),
+                        sum(1 for i in g["_faces"] if self.facts[i].kind not in _ANALYTIC),
+                        "standing on" if g["raised"] else "cut into",
+                        self.facts[g["_hosts"][0]].name,
+                        core.fmt(round(box.XLength, 2)),
+                        core.fmt(round(box.YLength, 2)),
+                        core.fmt(round(box.ZLength, 2)),
+                        core.fmt(round(box.Center.x, 2)),
+                        core.fmt(round(box.Center.y, 2)),
+                        core.fmt(round(box.Center.z, 2)),
+                        "join" if g["raised"] else "cut",
+                    ),
+                }
+            )
+        return out
+
     def _thread_notes(self, threads, planned):
         """The threads of planned holes said in unrecognized; their faces (counted as said,
         not as read)."""
@@ -1390,12 +1517,16 @@ class _Reader:
             solid = Part.Solid(Part.Shell(faces))
             if solid.isNull() or not solid.isValid():
                 raise ValueError("not a valid solid")
-            expected = self.shape.Volume + sum(_hole_void(self, h) for h in good)
+            expected = self.shape.Volume + sum(
+                _hole_void(self, h) for h in good if h.get("kind") != "island"
+            )
             # a thread's grooves add a little void its bore's cylinder does not count: at most
-            # the ring out to the thread's widest point (beta 3 QA)
+            # the ring out to the thread's widest point; a raised / engraved island takes or
+            # gives at most its box (beta 3 QA)
             grooves = sum(h.get("_thread_void", 0.0) for h in good)
+            islands = sum(h.get("_island_volume", 0.0) for h in good)
             tol = 1e-6 * max(1.0, expected)
-            if not (expected - tol <= solid.Volume <= expected + grooves + tol):
+            if not (expected - islands - tol <= solid.Volume <= expected + grooves + islands + tol):
                 raise ValueError("%.6g mm3, %.6g expected" % (solid.Volume, expected))
         except Exception as exc:
             warn("recognize: holes not closed by their rims (%s)" % exc)
@@ -1440,6 +1571,12 @@ class _Reader:
         once, else by halves). The ones that cannot be taken off stay in the base and are
         listed as such. Returns {"base": shape, "ok": {feature ids}, "accepted": [features]}."""
         start, holes_ok, left = self._drop_holes(holes)
+        for g in [h for h in left if h.get("kind") == "island"]:
+            self.notes.append(
+                "The free-form island %s (a text or a logo) could not be taken off the base "
+                "shape: the part is read with it." % g["id"]
+            )
+        left = [h for h in left if h.get("kind") != "island"]
         threaded = [h for h in left if h.get("_thread")]
         left = [h for h in left if not h.get("_thread")]
         for h in threaded:  # (beta 3 QA: 210 s on one M6 thread, then no base anyway)
@@ -2403,6 +2540,13 @@ class _Reader:
 
 
 _ANALYTIC = ("plane", "cylinder", "cone", "sphere", "torus")
+
+
+def _box_copy(box):
+    """A copy of a FreeCAD BoundBox (add() changes it in place)."""
+    import FreeCAD as App
+
+    return App.BoundBox(box)
 
 
 def _wall(h):
