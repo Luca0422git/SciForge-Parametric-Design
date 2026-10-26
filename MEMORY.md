@@ -4,6 +4,24 @@ This file is the project's memory across work sessions. **Read it first, every s
 `docs/sciforge/feature-outline.md` (the spec). Update it at the end of every session: what was
 done, what was learned, what is next. Newest session goes at the top of the log.
 
+**2026-10-26: Luca's beta 3 list, split in two** (newest session log "Beta 3 list"):
+
+- **Patch `0.1.0-beta.2.2` (a separate Claude session that does patches; Luca hands it over):**
+  the joint-delete bug (MAJOR: deleting a Revolute joint from the browser leaves a body that
+  shows nothing or whose fillet cannot be edited), drag a joint to set its Minimum / Maximum,
+  a ghost of a hidden body when its browser row is hovered, diagonal drag arrows on Fillet and
+  Chamfer. Everything that session needs: `docs/sciforge/dev/briefs/patch-beta2.2.md`. Status:
+  [ ] joint delete bug  [ ] drag to set limits  [ ] hover ghost  [ ] diagonal arrows
+  [ ] released.
+- **Beta 3 (`0.1.0-beta.3`, this line of sessions): Auto Timeline and Simulation.** Auto
+  Timeline = tools and instructions so a connected AI turns a model with no timeline (an
+  imported STEP body; simple meshes) into a real parametric one. Simulation = Fusion's Static
+  Stress study only (spec changed: outline 7.18, sections 0 and 8). Notes and starting points in
+  the "Beta 3" block under Phase 1 below. Status: [ ] Auto Timeline  [ ] Static Stress  [ ] released.
+- **VEX robotics (not assigned to the patch or beta 3 yet; asked Luca):** STEP parts imported in
+  large numbers into one assembly, and Align / Joint snapping to the centre of a square hole.
+- Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
+
 **2026-10-23: `experimental` is merged into `develop`, for the second beta, 0.1.0-beta.2**
 (Luca: "Experimental looks stable ... time to merge all 3 into our second beta release";
 newest session log "Merge for 0.1.0-beta.2"). Everything `experimental` had is on `develop` now
@@ -129,6 +147,9 @@ Quick updates come from green "SciForge tests" runs on `develop`.
 | 2026-10-21 | AI: expose everything SciForge can do as tools, with all documentation an AI model could use | Luca: "go crazy with 3. give all the tools possible, with absolutely all the documentation available" |
 | 2026-10-20 | Branch `Release` (from develop `a6a5f7bd`): only tested `develop` commits, fast-forwarded and tagged `sciforge-v<version>` on Luca's green light; all work stays on `develop` | Luca: "everything goes on develop until i give the green light" |
 | 2026-10-23 | `experimental` merged into `develop`; the result is **0.1.0-beta.2** (released through `Release` + tag as above) | Luca: "Experimental looks stable. And develop has some good new additions. So I think it's time to merge all 3 into our second beta release" |
+| 2026-10-26 | **Static Stress simulation is in scope** (outline 7.18; sections 0 and 8 changed). Flow / CFD, thermal, modal, nonlinear, event simulation and shape optimization stay out | Luca: "change the spec, stress-only sim is fine" (he first asked for "stress and flow") |
+| 2026-10-26 | Beta 3 = **Auto Timeline** (AI makes a featureless model parametric) **and Static Stress**; the joint-delete bug, drag-to-set joint limits, the hidden-body hover ghost and diagonal Fillet / Chamfer arrows go out first as patch 0.1.0-beta.2.2, built by a separate patch session (`docs/sciforge/dev/briefs/patch-beta2.2.md`) | Luca: "joint bug, dragging joints, ghost bodies, and angled fillet will go into a patch ... Auto Timeline and Sim is what you will work on. timeline and sim will be beta 3" |
+| 2026-10-26 | VEX parts come in as **STEP** files; nothing else is needed from the parts pack | Luca: "if there is a version with step files, we should be good. as long as the step files work and we are able to import large amounts of items into an assembly, thats all we need" |
 | 2026-10-23 | 0.1.0-beta.2 ships without AI tools for wave 6's 26 steps (SHEET METAL, PLASTIC, SURFACE part 4); they are listed in `catalog.AI_TOOLS_TO_COME` and in known-issues.md, and building them is the next job | Luca chose "Release now, AI later" over "Build AI tools first" (a few hours later) |
 - **2026-10-13: full (compiled) builds only for releases or a real C++ change.** Luca asked why
   compile at all when SciForge is an add-on: all 7 core patches are housekeeping or FreeCAD bug
@@ -505,6 +526,41 @@ Quick updates come from green "SciForge tests" runs on `develop`.
       Merge, Move/Copy, Align, Scale, Pattern, Mirror (Join stitches), Split / Replace
       Face. Specs `parity/surface.md`, `parity/surface-modify.md`; scenarios `surface3_*`,
       `surface4_*`.
+
+### Beta 3 (0.1.0-beta.3): Auto Timeline and Static Stress (decided 2026-10-26, not started)
+
+Nothing built yet. Starting points from the 2026-10-26 reading (no code changed):
+
+- [ ] **Auto Timeline.** Luca: "Using a connected AI, I want there to be the tool necessary for
+      the AI to reverse engineer premade models and make them parametric. That means mesh to
+      parametric, or objects with no timeline to have a timeline. In my testing, Claude opus
+      5.5 was able to reverse engineer a pretty complicated model ... A tool call and
+      instructions on how to reverse engineer a model would be cool. or however you think is
+      easier/faster/efficient. I know that mesh to parametric already exists in the mesh tab,
+      but for non complex parts, i want a nicer option to make real parametric objects."
+      What the AI already has: 117 tools, among them `query_geometry` / `inspect_design`
+      (every face's facts and a stable selector, `sciforge/ai/geometry_facts.py`), `render`,
+      `check_geometry`, `diff_design` (compares with a snapshot in time, not with another
+      body). Proposed, most valuable first: (1) a **compare-with-the-original** tool: the
+      imported body stays as a hidden reference and the tool answers how far the rebuild is
+      from it (extra and missing volume, largest gap, faces not matched yet), a score the AI
+      drives to zero; (2) a **feature summary** of a featureless body in one call (overall
+      block, holes with sizes and places, fillets and radii, chamfers, patterns) instead of
+      hundreds of face facts; (3) a **recipe** in the AI docs (big shapes first, cuts and
+      holes, patterns, fillets / chamfers last, key sizes as parameters, compare after every
+      step) and a right-click "rebuild with a timeline (AI)" on a body that opens the chat
+      panel with it; (4) meshes: fit flat / round / spherical regions first so the AI gets
+      numbers, not triangles; the compare tool works against a mesh too (simple parts only).
+- [ ] **Static Stress** (outline 7.18). Luca first asked for "stress and flow"; then "stress-only
+      sim is fine". Research Fusion's Static Stress study (setup, constraints, loads,
+      contacts, mesh, solve, results) from Autodesk's documentation before building. Engine:
+      FreeCAD's FEM module, already built (FreeCAD Tools lists FEM). The solver and meshers
+      already ship: `package/rattler-build/recipe.yaml` has `calculix` and `gmsh`, the
+      Windows bundle copies `ccx.exe` and `gmsh.exe` into `bin`
+      (`package/rattler-build/windows/create_bundle.sh`), and the conda preset builds Netgen
+      (`BUILD_FEM_NETGEN`). So Static Stress may need no compiled change at all; confirm on a
+      real beta.2 install that both programs are there and run. SciForge's own workspace on
+      top; FreeCAD's FEM workbench never shown.
 
 ## Known issues / findings
 
@@ -1542,6 +1598,10 @@ Quick updates come from green "SciForge tests" runs on `develop`.
 
 (See outline section 12. Also:)
 
+- **VEX (2026-10-26):** do the VEX items (square-hole centre snaps for Align and Joint; many
+  STEP parts in one assembly, fast) go into the patch, into beta 3, or later? The snap fix is
+  SciForge's own Python only, so a patch can carry it.
+
 - Merge `sf/home-cloud-ai` (Home, places, AI connector, chat panel: M0-M4) into `develop`?
   The brief says to ask after M3; not merged without your OK.
 - M5 (signing in to Dropbox / Google Drive / OneDrive from inside SciForge) needs your app
@@ -1565,6 +1625,48 @@ Quick updates come from green "SciForge tests" runs on `develop`.
   default; Ruled's default type. Each guess is marked G in the parity docs.
 
 ## Session log
+
+### Session log: Beta 3 list (`develop`, 2026-10-26)
+
+Luca sent six ideas for beta 3 ("dont act, just let me know your thoughts"), then decided how
+to split them. No code changed this session: the spec, this file and a brief.
+
+- **Luca's answers.** Joint bug: deleted from the browser, a Revolute joint, the two bodies on
+  their own (no components), no Report a Problem sent. VEX: he does not know which parts pack
+  the team uses; STEP versions are fine ("as long as the step files work and we are able to
+  import large amounts of items into an assembly, thats all we need"). "Align" means Fusion's
+  Align command, "so yes we will need center points on squares and such". Simulation: "change
+  the spec, stress-only sim is fine".
+- **The split** (Decisions log, 2026-10-26): patch 0.1.0-beta.2.2 = joint-delete bug, drag a
+  joint to set limits, hover ghost of hidden bodies, diagonal Fillet / Chamfer arrows, built by
+  a separate patch session from `docs/sciforge/dev/briefs/patch-beta2.2.md` (Luca's words, what
+  was read, suspects, what to build for each). Beta 3 = Auto Timeline + Static Stress (the
+  "Beta 3" block under Phase 1). The spec: outline 7.18 added, sections 0, 7.10, 8 and Phase 3
+  changed; `make_ai_docs.py` re-run for the AI docs' copy.
+- **Found while reading (for whoever builds these):**
+  - Joint delete: `browser_ui.delete` -> `timeline_ops.delete` (a joint is a step) and
+    `joints._DeleteWatch`; nothing there obviously removes a body. Not reproduced. Suspects in
+    the brief.
+  - Fillet / Chamfer arrows lie on one of the two faces, pointing away from the edge
+    (`fillet_ui._update_arrows`), hence horizontal or vertical on a box.
+  - The browser's hover is FreeCAD's preselection, which only colours what is drawn: a hidden
+    body gets nothing.
+  - Ticking Minimum / Maximum in the joint limits already takes the joint's position now
+    (`joints_ui._Limits._toggled`); Component Drag works only outside commands.
+  - **Square holes:** the snap points of a face (`joints._shape_snaps`: face centre, corners,
+    round-edge centres, straight-edge middles) have no centre of a square hole, and Align's
+    `align.snap_points` uses the same list. VEX metal is square holes on a 1/2" grid, so both
+    Joint and Align need a snap at the centre of any closed hole outline.
+  - VEX: VEX publishes a STEP file for every part on its product pages; the Fusion kit
+    Autodesk made for VEX is F3Z (Fusion's own format, not readable). A STEP export loses any
+    Fusion joint origins, which is why the square-hole snaps matter. For "large amounts":
+    insert as linked copies (one shape shared by many screws) and time a whole robot (open,
+    orbit, drive a joint).
+  - Simulation: the build already ships CalculiX (`ccx.exe`) and Gmsh (`gmsh.exe`), and builds
+    Netgen (`package/rattler-build/recipe.yaml`, `windows/create_bundle.sh`, `CMakePresets.json`).
+- **Next:** the patch session builds 0.1.0-beta.2.2; this line of sessions starts beta 3
+  (research and a plan for Auto Timeline and Static Stress first). Luca still has to say where
+  the VEX items go (Questions waiting for Luca).
 
 ### Session log: Patch release button (`develop`, 2026-10-24)
 

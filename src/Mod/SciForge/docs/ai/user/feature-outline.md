@@ -14,7 +14,7 @@ Handoff document for the implementing model. Read sections 0-5 fully before writ
 2. **Press/Pull is mandatory** and is a centerpiece (see 7.0). The single smart tool that offsets faces, moves faces, and edits fillets and chamfers by dragging or typing a value, with live preview, recorded in the timeline.
 3. **A fork of FreeCAD is explicitly allowed and expected** wherever an add-on cannot reach Fusion parity. Do not stop at "the add-on API doesn't allow it." Go into the C++ core.
 4. **This is a long-term moonshot, not a quick win.** Do not trade parity for speed of delivery. Order the work by dependency and risk, and do the hard parts first rather than last.
-5. **Out of scope** (do not build): sculpting / T-spline, simulation and FEA, generative design, rendering and animation, CAM, electronics, cloud collaboration. See section 8.
+5. **Out of scope** (do not build): sculpting / T-spline, simulation and FEA other than the Static Stress study (7.18), generative design, rendering and animation, CAM, electronics, cloud collaboration. See section 8.
 6. **Everything stays local and open.** No telemetry, no accounts, no cloud dependency. Project files live on the owner's NAS.
 7. **Copy behavior, never assets.** No Autodesk icons, artwork, wording, code, or binaries. Black-box observation of how Fusion behaves is the method; reverse engineering Fusion's software is forbidden (see 2.5).
 8. **Honesty over optimism.** If something cannot reach parity with the OpenCASCADE kernel, say so with evidence (a failing benchmark), and propose the real fix (kernel work, a different algorithm), not a workaround that quietly lowers the bar.
@@ -186,7 +186,7 @@ Patch, stitch, unstitch, trim, extend, offset surface, ruled surface, boundary f
 
 ### 7.10 Assemble [P1]
 - Components, new component from bodies, activate component, external references to other design files (local files).
-- Joints: rigid, revolute, slider, cylindrical, pin-slot, planar, ball; joint origins with the same picker behavior; as-built joints; joint limits; rigid group; ground; contact sets (basic). Basic joint-driven motion preview is in scope; **no simulation**.
+- Joints: rigid, revolute, slider, cylindrical, pin-slot, planar, ball; joint origins with the same picker behavior; as-built joints; joint limits; rigid group; ground; contact sets (basic). Basic joint-driven motion preview is in scope; **no dynamic (motion) simulation**.
 - Decide early whether to base this on FreeCAD's Assembly workbench or write a new assembly layer (spike in Phase 2).
 
 ### 7.11 Inspect [P1]
@@ -213,6 +213,17 @@ Local project browser with thumbnails, named versions via git (works with the ow
 ### 7.16 Drawings [P2]
 One command to make a drawing from a body (standard views, dimensions, title block, original templates), built on the existing TechDraw code where practical.
 
+### 7.18 Simulation: Static Stress only [P1, L2] (added 2026-10-26, Luca: "stress-only sim is fine")
+Fusion's Simulation workspace, limited to its **Static Stress** study (research Fusion's documented behavior first, as for every area):
+- A study on a body, component or the design: study materials (from each body's physical material, with yield strength), constraints on faces/edges/points (fixed, pin, frictionless, prescribed displacement), loads (force, pressure, moment, gravity), contacts between touching bodies (bonded at least), mesh settings.
+- Pre-check and solve **locally** (no cloud, no account), with progress and Cancel.
+- Results like Fusion's: safety factor, von Mises and principal stress, displacement, reaction force; colour plot with legend, min/max markers, probes, deformation scale and animation; studies saved in the design and listed in the browser.
+- Built on FreeCAD's FEM module (CalculiX solver, a mesher such as Gmsh or Netgen bundled with the build) behind SciForge's own Fusion-style workspace. The person never sees FreeCAD's FEM workbench.
+- The interface states the limits plainly: linear static, isotropic materials (3D-printed parts are not), results are a guide.
+- Still out of scope: flow / CFD, thermal, modal, buckling, nonlinear, event simulation, shape optimization, generative design.
+
+*Acceptance:* golden studies (a cantilever beam, a plate with a hole under tension, a pressurized part) match hand calculations within a few percent, and the study's steps match Fusion's.
+
 ### 7.17 Quality and packaging [P0]
 Installer, portable zip, side-by-side install with FreeCAD, Linux package, docs (cheat sheet, "Fusion to SciForge" mapping), update mechanism, compatibility notes.
 
@@ -220,7 +231,7 @@ Installer, portable zip, side-by-side install with FreeCAD, Linux package, docs 
 
 ## 8. Explicitly out of scope
 
-Sculpt (T-spline), simulation and FEA, generative design, rendering and animation, CAM and manufacturing toolpaths, PCB/electronics, cloud collaboration, accounts, cloud storage, team data management, mobile apps. Do not spend time on them and do not design the architecture around them.
+Sculpt (T-spline), simulation and FEA other than the Static Stress study of 7.18 (no flow / CFD, thermal, modal, nonlinear or event simulation, no shape optimization), generative design, rendering and animation, CAM and manufacturing toolpaths, PCB/electronics, cloud collaboration, accounts, cloud storage, team data management, mobile apps. Do not spend time on them and do not design the architecture around them.
 
 ## 9. Hard technical programs
 
@@ -254,7 +265,7 @@ Define how history capture on/off, rollback marker insertion, suppression, group
 
 **Phase 2: Press/Pull and direct editing.** 7.0 and 7.13 to parity, fillet robustness to the agreed success rate, sweep/loft, reference-stability work. *Exit:* all 40 Press/Pull scenarios pass; the "edit an early step" tests pass.
 
-**Phase 3: Breadth.** Remaining Create/Modify/Construct, surface basics, Inspect, Insert/Export, assemblies and joints, files and versioning, drawings basics. *Exit:* the owner completes a real multi-part project (e.g., a robotics mechanism) end to end in SciForge and does not need to open Fusion.
+**Phase 3: Breadth.** Remaining Create/Modify/Construct, surface basics, Inspect, Insert/Export, assemblies and joints, files and versioning, drawings basics, Static Stress simulation (7.18). *Exit:* the owner completes a real multi-part project (e.g., a robotics mechanism) end to end in SciForge and does not need to open Fusion.
 
 **Phase 4: Polish and daily-driver quality.** Performance, stability, installer, docs, Linux release, second round of parity review against fresh captures.
 
