@@ -274,7 +274,7 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
 
 | What | SciForge |
 |---|---|
-| Where | **Rebuild with Timeline (AI)...** on a body's (and a mesh body's) right-click in the browser, on the 3D view's right-click list when a body is under the mouse (a small hook in `marking_menu.py`: `CONTEXT_ITEMS`), and in UTILITIES > AI (with Compare with Reference and Finish Rebuild). On a body being rebuilt the 3D view's list offers Compare with Reference, Finish Rebuild and Stop Rebuild... instead, for that body's rebuild (beta 3 QA: they took the active body's). |
+| Where | **Rebuild with Timeline (AI)...** on a body's (and a mesh body's) right-click in the browser, on the 3D view's right-click list when a body is under the mouse (a small hook in `marking_menu.py`: `CONTEXT_ITEMS`), and in UTILITIES > AI (with Compare with Reference and Finish Rebuild). On a body being rebuilt the 3D view's list and the browser's right-click offer Compare with Reference, Finish Rebuild and Stop Rebuild... instead, for that body's rebuild (beta 3 QA: the 3D view's took the active body's; the browser's offered Rebuild with Timeline (AI)..., which refused). |
 | Start | one undo step "Rebuild with Timeline"; a refusal (a broken mesh, a body without a solid) is said in a small window with the reason and what to do. |
 | The AI | when SciForge's own chat has an AI set up (a key kept, or a local model's address), the AI panel opens on its Chat tab with the message in the box, not sent: the person reads it, may change it, and presses Send. Otherwise a window says how to ask an AI app (Claude Desktop, Gemini CLI, Claude Code...: add it, turn AI control on, paste the message), with the message in an editable box, already on the clipboard, Copy Message, Add an AI... and Close. The message names the body, the rebuilt body, the recipe and the four tools. |
 | Compare with Reference | a window with the match, the volumes (missing red, extra green), the faces matched, the largest gap, the verdict (the AI's, said with the buttons' names instead of the tools') and one row per difference; the 3D view shows the missing material red and the extra green, see-through, until the window closes (Close or Esc), the next compare, or Finish. Compare Again; Finish Rebuild... opens Finish. |
@@ -411,7 +411,6 @@ Known gaps found by the QA pass (not fixed):
   of its through cuts: at-recognize's reading).
 - Deleting the rebuilt body by hand (Delete) leaves the rebuild going on (the ghost, the
   hidden original) until it is started again (a new rebuilt body) or stopped (Stop
-  Rebuild...). The browser's own right-click on a rebuilt body has no Stop Rebuild entry (the
-  3D view's and UTILITIES > AI have).
+  Rebuild... in UTILITIES > AI: the rebuilt body's right-click is gone with it).
 - A thread rebuilt with SciForge's thread tool on the planned hole matches every face but the
   bore's (its seam differs): finish with even_if_different.

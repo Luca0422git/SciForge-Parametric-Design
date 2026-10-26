@@ -100,6 +100,9 @@ Commits on `sf/autotimeline-qa` (oldest first):
 25. An original Finish kept (hidden, under its rebuild) is no overlap in check_design /
     interference (it said NOT OK, and an AI could move a body to "fix" it). Check
     `follower` (its check_design).
+26. The browser's right-click on a rebuilt body offers Compare with Reference, Finish Rebuild
+    and Stop Rebuild... (it offered Rebuild with Timeline (AI)..., which refused it).
+    Scenario `rebuild_qa_joints` D.
 
 `SciForgeTests/headless/rebuild_qa.py` is run by `rebuild_e2e.main()` (so by
 `run_tests.sh --only headless / base`); `SCIFORGE_REBUILD_FILTER=qa` runs only it. On the code

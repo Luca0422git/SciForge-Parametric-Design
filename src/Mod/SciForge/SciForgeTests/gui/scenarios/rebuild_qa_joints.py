@@ -20,8 +20,9 @@ C  The base rebuilt next: half way (its base block built), saved (Ctrl+S), close
    steps go into it and the comparison says done; Finish keeps the joint (now on two rebuilt
    bodies) and the ground.
 D  The base rebuilt once more (its block built), and the arm too (its rebuilt body active):
-   the 3D view's right-click on the rebuilt base: Compare with Reference and Finish Rebuild
-   are the base's (they took the active body's rebuild, the arm's); Stop Rebuild... (there
+   the browser's right-click on the rebuilt base has the rebuild's entries (Compare compares
+   the base); the 3D view's right-click on the rebuilt base: Compare with Reference and Finish
+   Rebuild are the base's (they took the active body's rebuild, the arm's); Stop Rebuild... (there
    was no way back but Undo) names the base > Stop Rebuild: the base is shown
    again and is the active body, its rebuilt body is gone, the joint still holds it, the arm's
    rebuild goes on; one undo step; Undo brings the base's rebuild back (hidden base, ghost),
@@ -436,6 +437,40 @@ def d_two_rebuilds():
 d_two_rebuilds.wait_ms = 2000
 
 
+def d_browser_entries():
+    """The browser's right-click on the rebuilt base (the arm's rebuilt body is active)."""
+    target = App.ActiveDocument.getObject(s["stop_target"])
+    label = target.Label if target is not None else ""
+    entries = r.browser_entries(label)
+    h.check(
+        "the browser's right-click on a rebuilt body has Compare with Reference, Finish Rebuild "
+        "and Stop Rebuild... (it had Rebuild with Timeline (AI)..., which refused)",
+        all(x in entries for x in ("Compare with Reference", "Finish Rebuild", "Stop Rebuild..."))
+        and ENTRY not in entries,
+        entries,
+    )
+    r.browser_menu(label, "Compare with Reference")
+
+
+d_browser_entries.wait_ms = 2500
+
+
+def d_browser_compare():
+    import FreeCADGui as Gui
+
+    box = r.dialog("SciForgeRebuildCompare")
+    h.check(
+        "... its Compare with Reference compares the base (not the active body's rebuild)",
+        _about_base(box),
+        getattr(getattr(box, "ref", None), "SourceName", None),
+    )
+    r.close_dialogs()
+    Gui.Selection.clearSelection()
+
+
+d_browser_compare.wait_ms = 1500
+
+
 def _base_point():
     """A point on the top of the rebuilt base's block (away from its hole), or None."""
     from sciforge import bodies
@@ -645,6 +680,8 @@ h.run(
         c_both_rebuilt,
         d_start_again,
         d_two_rebuilds,
+        d_browser_entries,
+        d_browser_compare,
         d_compare_click,
         d_compare_shown,
         d_finish_shown,
