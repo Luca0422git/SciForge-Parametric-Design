@@ -180,3 +180,11 @@ engine fixes.
   a design change made while comparing; default report / animation file names safe on Windows;
   Compare's odd ends explored (leaving the workspace, closing the design: no error); merged
   sim-core and sim-ui a fifth time (the generated parity checklist made again after the merge).
+- 22:45-23:00 the safety factor sentence (Results Details, the report) names the body with the
+  lowest safety factor when a study has several. Final runs: unit tests 2 597 (OK, 9 skipped;
+  56 of them the results core's); scenarios all PASS: simres_adaptive 37, simres_cantilever 80,
+  simres_compare 76, simres_deformation 70, simres_inspect 94, simres_linear 31,
+  simres_out_of_date 32, simres_probes_slice 84, simres_reopen 21, simres_report 61,
+  simres_workspace 65 (651 checks), and with them sim-core's / sim-ui's sim_core_job 29,
+  sim_setup_bracket 80, sim_setup_components 42, sim_setup_documents 71, sim_setup_glyphs 20,
+  sim_setup_mesh 42, sim_setup_two 40, sim_setup_workspace 70.
