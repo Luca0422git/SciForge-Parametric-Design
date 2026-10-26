@@ -139,6 +139,7 @@ G = guess (the SciForge choice when the sources are silent).
 | `sim_setup_components` | an empty design, moved components, a model held by one edge (DOF View: it can still turn about the edge, one turning arrow; not held enough) |
 | `sim_setup_glyphs` | the glyphs rendered off screen: drawn, hidden on request, same screen size after a zoom, gone in DESIGN; DOF View's arrows drawn over the model and gone when it is off |
 | `sim_setup_canvas` | the right-click marking menu in SIMULATION (the setup's commands, none of the design's; Structural Loads from the ring; Repeat Structural Loads), Delete and E on a face picked in the view change nothing, the design's ring and keys back in DESIGN |
+| `sim_setup_more` | Frictionless on a side face, Force Per Entity on two faces, Moment about a typed axis (Vector), gravity along a typed vector, Local Mesh Control edited from the browser + undo |
 | `sim_setup_units` | Document Settings > Units: Inch from the SIMULATION browser; a force typed as 50 (lbf) kept as 222.4 N, the browser and Load Case Attributes in lbf, Edit + OK changes nothing, psi, inches for Local Mesh Control, the mesh size and the contact tolerance (0.1 mm kept exactly); back to Millimeter |
 
 ### Known gaps
