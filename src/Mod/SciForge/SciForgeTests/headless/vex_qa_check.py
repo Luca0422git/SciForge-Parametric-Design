@@ -163,6 +163,82 @@ def check_duplicate_rigid_group():
         _close(doc)
 
 
+def check_duplicate_limits():
+    """Duplicate With Joints of a shaft on a revolute joint with limits (-30 .. 60 degrees,
+    rest 10) and Offset Z: the copy's joint is a revolute with the same limits and offsets,
+    and the copy goes through its new hole."""
+    from SciForgeTests.fixtures.vex import vex_parts as vp
+    from sciforge import duplicate_joints as dj
+    from sciforge import joints
+
+    files = _files(["c_channel_1x2x1x5", "shaft_3in"])
+    doc = App.newDocument("VexQaLimits")
+    try:
+        channel = _insert(doc, files["c_channel_1x2x1x5"]).top
+        shaft = _insert(doc, files["shaft_3in"], App.Placement(V(-20, 60, 0), App.Rotation())).top
+        t, p = vp.AL, vp.PITCH
+
+        def hole(i, j):
+            return V(p / 2 + i * p, p / 2 + j * p, t)
+
+        web = _face(
+            doc,
+            channel,
+            lambda f: f.Surface.TypeId == "Part::GeomPlane"
+            and abs(f.BoundBox.ZMin - t) < 1e-9
+            and f.BoundBox.ZLength < 1e-9
+            and f.BoundBox.YLength > 20,
+        )
+        top = _face(
+            doc,
+            shaft,
+            lambda f: f.Surface.TypeId == "Part::GeomPlane" and abs(f.BoundBox.ZMin - 76.2) < 1e-6,
+        )
+        p1 = joints.Pick(shaft, _body(doc, shaft), top)
+        p2 = joints.Pick(channel, _body(doc, channel), web, hole(1, 1))
+        s1 = [c for c in joints.snap_candidates(p1) if c["kind"] == "centre"][0]
+        s2 = joints.nearest_snap(
+            [c for c in joints.snap_candidates(p2) if c["kind"] == "loop"], hole(1, 1)
+        )
+        doc.openTransaction("Joint")
+        joint = joints.create_joint(doc, "revolute", p1, s1, p2, s2)
+        joints.set_offset(joint, z=-38.1)
+        joints.set_limits(joint, angle={"min": -30.0, "max": 60.0, "rest": 10.0})
+        joints.align(joint, first=True)
+        doc.commitTransaction()
+        doc.recompute()
+        pick = joints.Pick(channel, _body(doc, channel), web, hole(3, 1))
+        snap = joints.nearest_snap(
+            [c for c in joints.snap_candidates(pick) if c["kind"] == "loop"], hole(3, 1)
+        )
+        doc.openTransaction("Duplicate With Joints")
+        copies, made = dj.duplicate(doc, [shaft], joint, 0, pick, snap)
+        doc.commitTransaction()
+        doc.recompute()
+        box = _gbox(doc, copies[0])
+        centre = V((box.XMin + box.XMax) / 2.0, (box.YMin + box.YMax) / 2.0, 0)
+        want = hole(3, 1)
+        _out(
+            "duplicate_limits",
+            joints.fusion_type(made[0]) == "revolute"
+            and joints.limits(made[0]) == joints.limits(joint)
+            and joints.offsets(made[0]) == joints.offsets(joint)
+            and abs(centre.x - want.x) < 1e-4
+            and abs(centre.y - want.y) < 1e-4
+            and abs(box.ZMin - (t - 38.1)) < 1e-3,
+            "type %s, limits %s (want %s), offsets %s, the copy %s"
+            % (
+                joints.fusion_type(made[0]),
+                joints.limits(made[0]),
+                joints.limits(joint),
+                joints.offsets(made[0]),
+                box,
+            ),
+        )
+    finally:
+        _close(doc)
+
+
 # -- the first occurrence deleted ----------------------------------------------------------------
 def _parts_list(doc):
     from sciforge import drawing, drawing_core
@@ -288,12 +364,151 @@ def check_same_file_again():
         _close(doc)
 
 
+def check_real_parts_snaps():
+    """Hole centres on parts with real VEX files' traits (vex_real.py: inch STEP files,
+    holes with tiny rounded corners, holes cut in halves, a motor assembly with a blind square
+    socket): every hole's centre is offered on the face, on each piece of a split outline and
+    (start, half-way, end) on its walls, at the true centre."""
+    from SciForgeTests.fixtures.vex import vex_parts as vp
+    from SciForgeTests.fixtures.vex import vex_real as vr
+    from sciforge import hole_snaps
+
+    files = vr.write_all(os.path.join(_folder(), "real"))
+    doc = App.newDocument("VexQaReal")
+    bad = []
+    try:
+        t, p, half = vp.AL, vp.PITCH, vp.HOLE / 2.0
+        for name in ("real_channel_fillet", "real_channel_split"):
+            made = _insert(doc, files[name])
+            shape = _body(doc, made.top).Shape
+            centres = [V(p / 2 + i * p, p / 2 + j * p, t) for i in range(5) for j in range(2)]
+            top = max(
+                (
+                    (i, f)
+                    for i, f in enumerate(shape.Faces)
+                    if f.Surface.TypeId == "Part::GeomPlane"
+                    and abs(f.BoundBox.ZMin - t) < 1e-6
+                    and abs(f.BoundBox.ZMax - t) < 1e-6
+                ),
+                key=lambda pair: len(pair[1].Wires),
+            )
+            found = [
+                s["point"]
+                for s in hole_snaps.snaps(shape, "Face%d" % (top[0] + 1))
+                if s["kind"] == "loop"
+            ]
+            for c in centres:
+                if not any((q - c).Length < 1e-6 for q in found):
+                    bad.append("%s: no centre at %s on the web" % (name, c))
+            c = centres[3]
+            for i, e in enumerate(shape.Edges):
+                box = e.BoundBox
+                on = (
+                    abs(box.ZMin - t) < 1e-6
+                    and abs(box.ZMax - t) < 1e-6
+                    and box.XMin > c.x - half - 1e-6
+                    and box.XMax < c.x + half + 1e-6
+                    and box.YMin > c.y - half - 1e-6
+                    and box.YMax < c.y + half + 1e-6
+                )
+                if on:
+                    snaps = hole_snaps.snaps(shape, "Edge%d" % (i + 1))
+                    if not any(
+                        s["kind"] == "loop" and (s["point"] - c).Length < 1e-6 for s in snaps
+                    ):
+                        bad.append("%s: Edge%d of a hole does not offer its centre" % (name, i + 1))
+            for i, f in enumerate(shape.Faces):
+                box = f.BoundBox
+                wall = (
+                    f.Surface.TypeId == "Part::GeomPlane"
+                    and box.ZLength > t - 1e-6
+                    and box.XMin > c.x - half - 1e-6
+                    and box.XMax < c.x + half + 1e-6
+                    and box.YMin > c.y - half - 1e-6
+                    and box.YMax < c.y + half + 1e-6
+                )
+                if wall:
+                    got = sorted(
+                        round(s["point"].z, 6)
+                        for s in hole_snaps.snaps(shape, "Face%d" % (i + 1))
+                        if s["kind"].startswith("hole_")
+                        and (s["point"] - V(c.x, c.y, s["point"].z)).Length < 1e-6
+                    )
+                    if got != [0.0, round(t / 2.0, 6), round(t, 6)]:
+                        bad.append("%s: wall Face%d gives %s" % (name, i + 1, got))
+        made = _insert(doc, files["real_motor"])
+        x, y, z = vr.socket_top()
+        found = False
+        from sciforge import components
+
+        for body in components.bodies_in(doc, made.top, recursive=True):
+            shape = body.Shape
+            for i, f in enumerate(shape.Faces):
+                if f.Surface.TypeId != "Part::GeomPlane" or len(f.Wires) < 2:
+                    continue
+                for s in hole_snaps.snaps(shape, "Face%d" % (i + 1)):
+                    if s["kind"] in ("loop", "centre") and (s["point"] - V(x, y, z)).Length < 1e-6:
+                        found = True
+        if not found:
+            bad.append("the motor's socket: no centre on the boss's top")
+        _out("real_parts_snaps", not bad, "; ".join(bad[:6]))
+    finally:
+        _close(doc)
+
+
+def check_big_channel_snaps():
+    """A part with a huge face count (the steel 1x5x1x35 C-channel with rounded hole corners:
+    about 2000 faces and 6000 edges): every one of its web's 175 square holes offers its centre,
+    at the true centre, and the web's dots come in a few seconds at most the first time."""
+    import time
+
+    from SciForgeTests.fixtures.vex import vex_parts as vp
+    from sciforge import hole_snaps
+
+    shape = vp.make("c_channel_1x5x1x35")
+    t = vp.STEEL
+    web = max(
+        (
+            (i, f)
+            for i, f in enumerate(shape.Faces)
+            if f.Surface.TypeId == "Part::GeomPlane"
+            and abs(f.BoundBox.ZMin - t) < 1e-6
+            and abs(f.BoundBox.ZMax - t) < 1e-6
+        ),
+        key=lambda pair: len(pair[1].Wires),
+    )
+    hole_snaps.forget()
+    t0 = time.perf_counter()
+    found = [
+        s["point"] for s in hole_snaps.snaps(shape, "Face%d" % (web[0] + 1)) if s["kind"] == "loop"
+    ]
+    took = time.perf_counter() - t0
+    missing = [
+        c
+        for c in (
+            V(vp.PITCH / 2 + i * vp.PITCH, vp.PITCH / 2 + j * vp.PITCH, t)
+            for i in range(35)
+            for j in range(5)
+        )
+        if not any((q - c).Length < 1e-6 for q in found)
+    ]
+    _out(
+        "big_channel_snaps",
+        len(shape.Faces) > 1500 and len(found) == 175 and not missing and took < 10.0,
+        "faces %d, centres %d, missing %s, first time %.2f s"
+        % (len(shape.Faces), len(found), missing[:3], took),
+    )
+
+
 # -- the run -------------------------------------------------------------------------------------
 CHECKS = [
     check_duplicate_rigid_group,
+    check_duplicate_limits,
     check_parts_list_original_deleted,
     check_occurrence_names_after_delete,
     check_same_file_again,
+    check_real_parts_snaps,
+    check_big_channel_snaps,
 ]
 
 
