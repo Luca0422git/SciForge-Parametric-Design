@@ -648,8 +648,14 @@ def default_report_path(study):
     """Next to the design file when it was saved, else in the home folder."""
     doc = study.Document
     folder = os.path.dirname(doc.FileName) if doc.FileName else os.path.expanduser("~")
-    safe = "".join(c if c.isalnum() or c in " -_" else "_" for c in study.Label).strip()
-    return os.path.join(folder, "%s - %s.html" % (doc.Label, safe or "Study"))
+
+    def safe(text, default):  # (no character Windows refuses in a file name: ": ? * ...")
+        out = "".join(c if c.isalnum() or c in " -_." else "_" for c in str(text)).strip(" .")
+        return out or default
+
+    return os.path.join(
+        folder, "%s - %s.html" % (safe(doc.Label, "Design"), safe(study.Label, "Study"))
+    )
 
 
 def design_length_unit(doc):
