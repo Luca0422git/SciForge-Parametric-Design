@@ -198,6 +198,7 @@ session log).
 | A face split in two in the original (a split face, a face cut for a sketch region) | the plan rebuilds it as one face | volume exact; the bench's face check fails on those golden models (`direct_split_face_*`) |
 | Meshes | only parts that are prismatic or turned once their holes are closed, from CAD-quality meshes (not scans); fillets across a mesh are not recovered | open meshes are refused with repair advice; the rest is read as the faceted solid and listed |
 | Speed of fillet-heavy and complex parts | OpenCASCADE's defeaturing: one call for all fillets (in chunks it is slower), which cannot be interrupted | a 202-face part with 98 fillet faces takes about 19 s (15 s of it defeaturing); a 434-face connector about 45 s |
+| A fillet the original made before a cut that trims it (the root fillets of a 3D-printer part's uprights, cut short by the opening in its plate) | the plan rounds edges last, as Fusion users do; the fillet then runs into the cut's edge and OpenCASCADE refuses it | the step stops with the largest radius that fits (nothing is rounded wrongly); the volume is short by the fillet's material |
 | A fillet or chamfer step whose short selector ("the edge along X at the top") finds more edges on the rebuilt part | the edges are picked on the part as it will be; when an earlier step rebuilt something slightly differently, more edges can match | the step stops with a count error (never rounds the wrong edges); pick the edges with query_geometry |
 
 ## Reference, compare and finish

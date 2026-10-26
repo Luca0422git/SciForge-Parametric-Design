@@ -117,6 +117,10 @@
   in stacked pieces still is one). The same part's central bore, crossed by a ring of 13 slots,
   then took 181 s (266 s on the refined copy) in one defeaturing call: a hole whose faces meet
   more than 16 other faces is left in the base without trying (7 s for the whole describe()).
+- The BREP files in the repository (FreeCAD's model-refine test shapes: unrefined booleans, two
+  3D-printer parts) were swept too: 27 solids, 18 rebuilt exactly, no crash after the fix
+  above. The Y rod mount's root fillets (r 3.997) were made before the opening in its plate cut
+  them short: the plan rounds edges last, OpenCASCADE refuses the fillet there (a Known gap).
 - The QA builder found that `Face.cutHoles` answers None (it changes the face in place):
   `_drop_holes` took the answer, so every face that keeps another loop failed and its holes
   went to defeaturing; I took their fix and fixed the same mistake in `_fill_copies`.
