@@ -301,9 +301,8 @@ def sync():
     """The active design changed (another tab, a design closed): show its own workspace."""
     try:
         want = in_workspace()
+        _finish_sim_dialog()
         if want != STATE["on"]:
-            if not want:
-                _finish_sim_dialog()
             _apply(want)
         elif want:
             refresh()
@@ -398,8 +397,14 @@ def _tick():
     try:
         if not STATE["on"]:
             return
-        from . import doc_epoch, simulation_glyphs
+        from . import doc_epoch, shell, simulation_glyphs
 
+        if not shell.is_on():
+            # SciForge's interface is off (FreeCAD's own workbench): no glyphs in its view
+            if simulation_glyphs.STATE["root"] is not None:
+                simulation_glyphs.clear()
+            STATE["glyph_key"] = None
+            return
         if doc_epoch.busy():
             return
         doc = _doc()
