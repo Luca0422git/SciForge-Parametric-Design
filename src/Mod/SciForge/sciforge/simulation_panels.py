@@ -313,6 +313,7 @@ class ItemPanel(pickpanel.PickPanel):
             self.opts = core.options(category, self.kind, data["options"])
             self.picks = [(o, s) for o, s in sim._picks(item.References)]
             self.whole = any(not sub for _o, sub in self.picks)
+            self._picks_as_now(item)
         else:
             built = [k for k, info in table.items() if info.get("built")]
             self.kind = kind if kind in table and table[kind].get("built") else built[0]
@@ -439,6 +440,7 @@ class ItemPanel(pickpanel.PickPanel):
                 self.picks.append(found)
             changed = True
         if changed:
+            self.gone = 0  # (picked again)
             self._update_text()
         return changed
 
@@ -774,6 +776,25 @@ class ItemPanel(pickpanel.PickPanel):
         return core.options(self.category, self.kind, opts), None
 
     # -- preview and checks --------------------------------------------------------------------
+    def _picks_as_now(self, item):
+        """Editing after the design changed: the picks as the design is now (a face found again
+        by its shape under its new name), and the ones that are gone left out with a sentence
+        (Fusion marks them; the person picks again)."""
+        self.gone = 0
+        try:
+            resolved = _sim().resolve_picks(item)
+            if len(resolved) != len(self.picks):
+                return
+            picks = []
+            for obj, names, _moved in resolved:
+                if not names:
+                    self.gone += 1
+                    continue
+                picks += [(obj, name) for name in names]
+            self.picks = picks
+        except Exception as exc:
+            warn("%s: %s" % (self.title, exc))
+
     def _bearing_across(self):
         """A Bearing Load presses across its hole: when the direction is still the default
         and runs along the picked hole's axis (a hole drilled along Z and the default -Z: no
@@ -823,6 +844,16 @@ class ItemPanel(pickpanel.PickPanel):
         )
         if problems:
             self.say(" ".join(problems), error=True)
+        elif getattr(self, "gone", 0):
+            self.say(
+                "%d of what it was on %s gone (the design changed): pick %s again."
+                % (
+                    self.gone,
+                    "is" if self.gone == 1 else "are",
+                    "it" if self.gone == 1 else "them",
+                ),
+                error=True,
+            )
         elif not self.picks:
             words = " / ".join(
                 {"faces": "faces", "edges": "edges", "vertices": "corners", "bodies": "bodies"}[t]

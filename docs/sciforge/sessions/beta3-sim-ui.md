@@ -32,7 +32,7 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 - **Glyphs** (`simulation_glyphs.py`), **browser** (`simulation_browser.py` + hooks in
   `browser_ui.py`), **ribbon** (the SETUP entries in `ribbon_config.py`, DISPLAY > Show Mesh,
   a big button in every group), **icons** (`tools/sciforge/icons_simulation.py`, 43 icons, also
-  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 35), eleven GUI
+  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 35), twelve GUI
   scenarios `sim_setup_*.py`.
 - **The design's units** (Fusion's Simulation follows the document's units, research 6): the
   value fields, the browser's texts, Load Case Attributes, Study Materials' properties and the
@@ -52,6 +52,10 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
   `marking_menu._open_for_state`), Repeat only repeats a setup command; the design's keys are
   off while SIMULATION shows (`simulation_ui.DESIGN_KEYS`: a face clicked in the view and Delete
   made a Delete Face step in the design; E opened Extrude).
+- **Exercising every option end to end** found two more: a Bearing Load's default direction
+  ran along a hole drilled along Z (no arrow, a failed solve: now turned across the hole), and
+  editing a load whose face a design change removed kept the gone pick (now left out with a
+  sentence; the faces the engine finds again by shape come under their new names).
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
@@ -74,6 +78,7 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
 | `sim_setup_more` | 39 | PASS |
+| `sim_setup_lost` | 20 | PASS |
 
 Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser`,
 `drawing_new`, `browser_opacity_hover`, `ribbon_sweep` and `hole_qa_more` (the marking menu) pass; unit tests 2534 OK.
