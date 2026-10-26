@@ -118,8 +118,12 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
 - Fusion's **Find Features** (recognize fillets / holes / chamfers in place, in direct
   modeling) is not built: Auto Timeline rebuilds the part instead. Its reading is
   at-recognize's (see Recognition).
-- `compare` takes 2 to 6 s on a part of 200+ faces with a hundred regions left (OpenCASCADE's
-  General Fuse alone is about 1 s there): fine after each feature, slow for a tight loop.
+- `compare` on a 298-face plate (96 chamfered holes), in this sandbox shared by six builders
+  (load about 4.5): the same solid 0.3 to 0.6 s (no boolean), the base plate only (96 holes
+  left) 1.5 s, 10 holes left 2.2 s, every chamfer and 4 holes left (188 regions) 3.7 s.
+  OpenCASCADE's General Fuse alone is 0.5 to 2.4 s of that (more when the two parts share
+  many faces); the brief's 2 s holds for the same solid and a few regions, not for 200
+  regions at this load.
 - A region is said in words for holes, bosses, rounded edges, chamfers, blocks and layers;
   anything else is "a piece of material about a x b x c". Ready calls exist for holes and
   fillets / chamfers of equal distances only (a pocket or a boss is described, not built).

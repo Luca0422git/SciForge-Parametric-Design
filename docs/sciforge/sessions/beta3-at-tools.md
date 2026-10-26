@@ -24,14 +24,17 @@ and documentation", "The command a person uses", the at-tools tests and known ga
   boss, rounded edge, chamfer, block, layer, a mesh's faceted hole), equal regions grouped in
   Fusion's order, faces in words, size notes, the verdict (for an AI, and in a person's
   words for the dialogs), the chat message. 20 unit tests.
-- Compare, in short: one General Fuse; each piece put inside / outside each solid from the
-  orientation of its faces (a point test only as a fallback); the pieces must add up to both
-  volumes (else fuzzy, else sampled); regions with "fix" calls (a Single Hole on the right
-  face, a fillet / chamfer of exactly the rebuild's sharp edges, grouped); faces matched by
-  surface + coverage (mesh references within the mesh's tolerance); deviation; `done`;
-  the verdict ("Match 0.9497 ...; Next: 4 round holes about 6 mm across, 10 deep (along Z)
-  are not cut yet, at (10, 10), (50, 10), (10, 30), (50, 30). 4 rounded edges of radius about
-  3 are still sharp in the rebuild (the fillet call is ready in groups[1].fix).").
+- Compare, in short: faces matched first, by surface + coverage (mesh references within the
+  mesh's tolerance); when every face of each part lies on a face of the other and the
+  volumes agree it is the same solid (no boolean); else one General Fuse, each piece put
+  inside / outside each solid from the orientation of its faces (a point test only as a
+  fallback), the pieces must add up to both volumes (else fuzzy, else sampled); regions with
+  "fix" calls (a Single Hole on the right face, a fillet / chamfer of exactly the rebuild's
+  sharp edges, grouped); deviation; `done`; the verdict ("Match 0.9497 ...; Next: 4 round
+  holes about 6 mm across, 10 deep (along Z) are not cut yet, at (10, 10), (50, 10), (10,
+  30), (50, 30). 4 rounded edges of radius about 3 are still sharp in the rebuild (the
+  fillet call is ready in groups[1].fix)."). What it measures of the reference is kept for
+  the next compare (the reference never changes).
 - AI tools (category "Rebuild with a timeline", need "reference"): `start_rebuild`,
   `describe_reference`, `compare_to_reference`, `finish_rebuild` (refuses a rebuild that is
   not done unless `even_if_different`); in the headless runner (`rebuild_e2e.RUNNER_SESSION`,
@@ -78,15 +81,25 @@ and documentation", "The command a person uses", the at-tools tests and known ga
 - Cone faces of a revolve and of the same STEP cone can carry opposite axis directions:
   compare cones / tori by apex (centre), |axis . axis| and angle, and let the cover test
   decide; measure analytically (no `distToShape`).
+- FreeCAD measures `Shape.Area`, `Volume`, `BoundBox` and `CenterOfMass` on every access
+  (nothing is kept): sorting a 300-face piece's faces by area cost 0.34 s, a box test per
+  pair of 96 pieces 0.25 s. Measure once and keep the number.
+- `Face.isPartOfDomain`, `Face.isInside` and `distToShape` on a face with 96 holes cost 1 to 2
+  ms a call (OpenCASCADE's classifier is built again on each call). A plane or cylinder face
+  that is its whole parameter rectangle (area = du dv, or R du dv) needs no classifier: test
+  the point on its surface and its parameters against the range.
 - The harness fails a scenario on "failed" / "error" / "invalid" in any Report-view line,
   including SciForge's own log lines: log words were chosen for it.
 
 ## Numbers measured
 
-compare in this sandbox (4 CPUs, six builders, load 3 to 10): the e2e parts 0.05 to 0.6 s,
-the meshed plate (150 faces) 1.9 s; a 220-face plate with 70 chamfered holes 1.7 s identical,
-2.7 s with 10 holes missing, 5.4 s with 136 regions (at load 4; up to 2x that at load 10);
-the General Fuse alone 0.9 to 1.7 s. describe_reference is at-recognize's (0.06 to 6.5 s).
+compare in this sandbox (4 CPUs, six builders, load about 4.5), after the second round of
+speed-ups: the e2e parts' last compare 13 to 130 ms (the same solid: no boolean), the meshed
+plate (150 faces) 1.6 s; a 298-face plate with 96 chamfered holes: the same solid 0.3 to
+0.6 s, the base plate only (96 regions) 1.5 s (was 3.5 s), 10 holes missing 2.2 s (was
+3.2 s), every chamfer and 4 holes missing (188 regions) 3.7 s (was 6.5 s); the General Fuse
+alone 0.5 to 2.4 s of that. The six e2e parts: 11 s in all (was 25 s). describe_reference is
+at-recognize's (0.06 to 6.5 s).
 
 ## Notes for whoever merges
 
@@ -110,6 +123,7 @@ the General Fuse alone 0.9 to 1.7 s. describe_reference is at-recognize's (0.06 
 ## Gaps
 
 In the parity doc's "Known gaps (at-tools)": no Fusion **Find Features** (in-place recognition
-in direct modeling); compare is 2 to 6 s on a 200-face part with a hundred regions left;
+in direct modeling); compare is 2 to 4 s on a 300-face part with many regions left (the
+General Fuse alone is up to 2.4 s there at this load);
 ready calls only for holes and fillets / chamfers; a mesh's "done" is within the mesh's
 tolerance.

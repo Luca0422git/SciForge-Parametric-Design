@@ -759,8 +759,10 @@ class _PiecePoints:
         faces = piece.Faces
         # curved faces first: they lie on small faces of the solids (holes, fillets), whose
         # inside test is quick; a flat face often lies on a big face with many holes
-        flat = [f for f in faces if f.Surface.TypeId == "Part::GeomPlane"]
-        self.faces = [f for f in faces if f.Surface.TypeId != "Part::GeomPlane"] + flat
+        flat = [_is_flat(f) for f in faces]
+        self.faces = [f for f, x in zip(faces, flat) if not x] + [
+            f for f, x in zip(faces, flat) if x
+        ]
         self.found = {}
 
     def __len__(self):
@@ -772,6 +774,13 @@ class _PiecePoints:
             got = _face_points(face, 1) or _face_points(face, 3)
             self.found[i] = got[0] if got else None
         return self.found[i]
+
+
+def _is_flat(face):
+    try:
+        return face.Surface.TypeId == "Part::GeomPlane"
+    except Exception:
+        return False
 
 
 def _membership(points, rows, tol):
