@@ -567,7 +567,7 @@ class _Reader:
             )
             base = {"public": {"kind": "none"}, "ops": [], "faces": [], "volume_error": 0.0}
             self.base_shape = self.shape
-        elif not self._some_axis_fits(holes + chamfers + blends):
+        elif not self._some_axis_fits(holes + chamfers + blends + islands):
             # the faces left would fit no extrude or revolve even without the features:
             # defeaturing (seconds to minutes) would not make the base readable
             removed = {
@@ -593,7 +593,7 @@ class _Reader:
             base = self.find_base(removed["base"])
             timing["base"] = time.time() - t
         if base["public"].get("kind") == "none" and not free:
-            self._axis_hint(holes + chamfers + blends)
+            self._axis_hint(holes + chamfers + blends + islands)
         t = time.time()
         plan = core.Plan(self.options.get("taken_ids") or ())
         features = []
@@ -676,7 +676,7 @@ class _Reader:
         [{"axis", "odd" (area that fits no level, wall or draft along it), "total", "turned"
         (all could be a revolve about it), "faces" (the odd ones), "unknown" (a kind this
         check does not know)}]. (Optimistic: defeaturing only extends these faces.)"""
-        used = set(i for g in groups for i in g["_faces"])
+        used = set(i for g in groups for i in _wall(g))  # (a hole's thread is its own)
         rest = [f for f in self.facts if f.index not in used]
         total = sum(f.area for f in rest) or 1.0
         out = []
@@ -1078,10 +1078,14 @@ class _Reader:
                     }
             elif beyond:
                 out = {"kind": "open", "t": t, "t_open": t, "face": j}
-            elif fj.axis is None or not core.parallel(fj.axis, axis, 1e-6):
+            elif fj.kind in _ANALYTIC and (
+                fj.axis is None or not core.parallel(fj.axis, axis, 1e-6)
+            ):
                 # a face across the end that faces back into the bore: a round or slanted
                 # floor (a tube's bore that ends on the eye it was extruded up to); the
-                # Hole tool makes no such floor (an opening on a round face faces outward)
+                # Hole tool makes no such floor (an opening on a round face faces outward).
+                # (Not a free-form face: a modelled thread's flanks meet the bore's ends
+                # facing back into it, and the threaded hole was no hole any more: beta 3 QA)
                 n = _normal_near(fj.face, core.add(origin, core.mul(axis, t)))
                 if n is not None and core.dot(n, axis) * sign < -0.5:
                     return {"kind": "closed", "t": t, "t_open": t, "face": j}
