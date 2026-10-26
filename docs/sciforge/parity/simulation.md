@@ -105,7 +105,7 @@ G = guess (the SciForge choice when the sources are silent).
 | S5 | Leaving: Design in the same drop-down; studies and results stay | Same; the command or sketch open is finished first (as when a command starts), the selection is cleared | A[71] A[65] |
 | S6 | New Study: study types as pictures, the picked one described, Settings gear, Create Study | Tiles of all 11 types; Static Stress available; the others greyed "Not in SciForge yet"; the gear opens Study Settings for the new study; the limits sentence (linear, isotropic, a guide) | A[79] A[6]; outline 7.18 |
 | S7 | Study named "Study 1 - Static Stress", renamed in the browser | Same (the engine numbers it); F2 / Rename in the browser | G (mem) |
-| S8 | Study Settings: General (Remove rigid body modes, off), Mesh (Average Element Size 10 %, Parabolic, curved, turn angle, adjacent ratio, aspect ratio, minimum size, Scale Mesh Size Per Part), Adaptive Mesh Refinement (None), contacts tolerance | All of these, plus an absolute element size and "keep the results in the design file"; Adaptive Mesh Refinement greyed (engine not wired yet, see gaps) | A[6] A[37] A[39] T[107] |
+| S8 | Study Settings: General (Remove rigid body modes, off), Mesh (Average Element Size 10 %, Parabolic, curved, turn angle, adjacent ratio, aspect ratio, minimum size, Scale Mesh Size Per Part), Adaptive Mesh Refinement (None), contacts tolerance | All of these, plus an absolute element size and "keep the results in the design file"; Adaptive Mesh Refinement: None / Low / Medium / High (their numbers shown) / Custom (refinements, convergence tolerance, portion refined, the result watched) | A[6] A[37] A[39] T[107] |
 | S9 | Study Materials: a row per body, "(Same as Model)" default, a material for this study only, safety factor on Yield (default) or Ultimate; double-click shows the properties | A row per body with In Study, the model's material and the study material; the properties used (E, nu, density, yield, UTS) shown, saying which value SciForge filled in where FreeCAD's card had none; the basis is per study (see gaps) | A[9] A[29] A[30] |
 | S10 | Structural Constraints: one dialog, Type Fixed / Pin / Frictionless / Prescribed Displacement | Same; picks with the type's filter (Pin: round faces only); Fixed Ux Uy Uz toggles (on), Pin Radial / Axial on, Tangential off, Prescribed Displacement per-axis values | A[7] A[13] A[14] A[15] A[16] |
 | S11 | Structural Loads: Force (Normal / Vector, Flip, Force Per Entity), Pressure, Moment, Bearing Load, Remote Force | Same; Vector force typed as Fx, Fy, Fz (Normal and Vector carry the values over); Moment Normal / Vector with per entity; Bearing direction; Remote Force point; every value field takes a unit (100 N, 0.5 kN, 2 MPa, 10 lbf, 2 N m) | A[18] A[19]-A[23] |
@@ -144,8 +144,6 @@ G = guess (the SciForge choice when the sources are silent).
   study instead). Load case clone / activate are absent.
 - **Safety factor basis per body**: Fusion chooses it per row of Study Materials; the engine
   keeps one basis per study, so the dialog has one Safety Factor choice under the table.
-- **Adaptive Mesh Refinement**: the engine stores its settings but does not run it yet
-  (sim-core); the tab is greyed with the reason.
 - **Manual contacts** (Separation, Sliding, Rough, Offset Bonded), Bolt and Rigid Body
   Connectors, Linear / Angular Global Load, Point Mass: greyed (CalculiX contact is nonlinear;
   outline 7.18 keeps Static Stress linear).

@@ -16,7 +16,7 @@ scenarios, Known gaps). Engine: sim-core's `simulation.py` / `simulation_core.py
 - **Dialogs** (`simulation_dialogs.py`): New Study (11 study types as tiles, Static Stress
   available, the gear's settings before the study exists), Study Settings (General: Remove
   rigid body modes, keep results; Mesh: % or absolute size, per part, order, curved, turn
-  angle, adjacent / aspect ratio, minimum; Adaptive greyed; Contacts: Bonded, tolerance), Study
+  angle, adjacent / aspect ratio, minimum; Adaptive: levels or custom; Contacts: Bonded, tolerance), Study
   Materials (In Study, model material, study material, properties with "filled in by SciForge"
   notes, safety basis), gravity on / off, Automatic Contacts, Contact Manager, Load Case
   Attributes, Pre-check list, DOF View.
@@ -76,5 +76,5 @@ scenarios, Known gaps). Engine: sim-core's `simulation.py` / `simulation_core.py
 ## Gaps
 
 See the parity doc's Known gaps (Simplify, several load cases, per-body safety basis, adaptive
-refinement, manual contacts / connectors / global loads / point mass, force Angle and Limit
+manual contacts / connectors / global loads / point mass, force Angle and Limit
 Target, document units, Repair, glyph look unverified on screen).
