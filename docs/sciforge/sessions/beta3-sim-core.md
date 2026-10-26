@@ -92,3 +92,19 @@ sections Engine and Benchmarks.
 - FreeCAD facts: `obj.Shape` is read-only in 1.1 (`copy(False)` shares the geometry and can be
   re-placed); freecadcmd crashes in PySide at exit when a FreeCAD GmshTools (it owns a QProcess
   with a connected signal) is still referenced: drop it when done.
+- 20:00-20:20 the default mesh of the same plate took 268 s in Gmsh (10 % size; 6 %: 334 s),
+  2.5 % only 16 s: Gmsh's high-order optimisation (`HighOrderOptimize`, which SciForge had
+  switched on so curved elements would not turn inside out at small holes) merged the 278 bad
+  elements into patches of 15 000 elements. Without it Gmsh takes 10 s; its other modes do not
+  help (elastic: 31 s and 137 elements still inside out; fast curving: none fixed; fewer
+  layers / passes: 148 s). Now SciForge checks every curved element of the solver input where
+  CalculiX integrates it (and at its corners and middle), in the background thread before
+  CalculiX starts, and makes only the elements inside out or nearly (Jacobian below 1 % of the
+  straight element's) straight-sided, with a note ("SciForge made 12 curved mesh elements
+  straight-sided ..."). Straightening every element below Gmsh's own 10 % aim made a coarse
+  shaft 18 % too soft in torsion (each straight element flattens a bit of the curved face);
+  the 1 % rule: 1.2 % at the default mesh, 0.01 % at the finer one. The plate solves in 115 s
+  instead of 375 s. The straight-sided retry stays as the fallback.
+- Fixed in review: a mesh made again after a failed solve looked for Netgen's old mesh when
+  Netgen had been used (Gmsh is tried first again now); switching Keep results in the file made
+  the results out of date (it changes nothing they say).
