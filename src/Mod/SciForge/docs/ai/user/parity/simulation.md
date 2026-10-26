@@ -168,13 +168,14 @@ machine shared with five other builds):
 
 | Mesh | Nodes / elements | Gmsh | CalculiX | Whole solve | Longest pause of the window (model / mesh / input / results turn) | Notes |
 |---|---|---|---|---|---|---|
-| 10 % (the default) | 131 174 / 73 561 | 9 s | 81 s | 106 s | 1.6 / 2.6 / 2.7 / 2.6 s | 286 curved elements made straight-sided; max von Mises 253.4 MPa, max displacement 3.012 mm |
+| 10 % (the default) | 131 174 / 73 561 | 11 s | 84 s | 112 s | 1.3 / 3.2 / 2.6 / 3.3 s | 286 curved elements made straight-sided; max von Mises 253.4 MPa, max displacement 3.012 mm |
 | 2.5 % | 142 756 / 80 047 | 9 s | 106 s | 134 s | 1.7 / 2.8 / 3.1 / 3.0 s | none made straight; 261.1 MPa, 3.031 mm |
 
 Before this build: the same 2.5 % solve froze the window for 84 s writing the input and for
 almost 10 minutes reading the results; earlier in this build, with Gmsh's own repair of curved
 elements, the default mesh took 268 s in Gmsh (375 s in all) and the window paused up to 7-12 s
-while the input was written and the results read (now split over two and three turns).
+while the input was written and the results read (now split over two and three turns). The
+times vary by about a fifth from run to run on this shared machine.
 
 The window stays usable: Gmsh and CalculiX run in the background thread, and so do the
 reading of the solver's result file and the check of the curved elements; the work on the
