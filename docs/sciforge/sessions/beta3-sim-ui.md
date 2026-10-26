@@ -44,7 +44,7 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
   still move (three slides and three turns when nothing holds it; the turn about a held edge
   for a model held by one edge, from the engine's not-held analysis), the bodies selected and
   named; the arrows follow the setup until it is switched off. **Job Status** also lists this
-  session's earlier solves and meshes. **OK right after a click** keeps that pick (pickpanel
+  session's earlier solves and meshes (a solved one's row shows its results on a double-click). **OK right after a click** keeps that pick (pickpanel
   handles a click 30 ms later; my dialogs take the queued click first: a busy machine once lost
   it in `sim_setup_dialogs`).
 - **The 3D view in SIMULATION**: the right-click marking menu offers the setup's commands
@@ -64,18 +64,18 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 | Scenario | Checks | Result |
 |---|---|---|
 | `sim_setup_bracket` | 74 | PASS |
-| `sim_setup_dialogs` | 76 | PASS |
-| `sim_setup_browser` | 58 | PASS |
-| `sim_setup_documents` | 45 | PASS |
+| `sim_setup_dialogs` | 78 | PASS |
+| `sim_setup_browser` | 61 | PASS |
+| `sim_setup_documents` | 49 | PASS |
 | `sim_setup_kinds` | 58 | PASS |
 | `sim_setup_workspace` | 54 | PASS |
-| `sim_setup_components` | 36 | PASS |
-| `sim_setup_glyphs` | 12 | PASS |
+| `sim_setup_components` | 42 | PASS |
+| `sim_setup_glyphs` | 20 | PASS |
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 28 | PASS |
 
-Shared files touched (`browser_ui.py`, `ribbon_config.py`): `timeline_browser`, `drawing_new`,
-`browser_opacity_hover` and `ribbon_sweep` pass; unit tests 2534 OK.
+Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser`,
+`drawing_new`, `browser_opacity_hover`, `ribbon_sweep` and `hole_qa_more` (the marking menu) pass; unit tests 2534 OK.
 
 ## Contract with sim-results (agreed by reading its branch)
 
