@@ -235,6 +235,8 @@ def study_settings(ctx, args):
                 change.setdefault(group, {})[name] = value
             else:
                 change[name] = value
+    if "adaptive_refinement" in args:
+        change.setdefault("adaptive", {})["level"] = args["adaptive_refinement"]
     if "gravity" in args:
         change.setdefault("gravity", {})["on"] = bool(args["gravity"])
     if "gravity_direction" in args:
@@ -263,6 +265,7 @@ def study_settings(ctx, args):
         "contact_tolerance": s["contact_tolerance"],
         "safety_basis": s["safety_basis"],
         "keep_results": s["keep_results"],
+        "adaptive_refinement": s["adaptive"]["level"],
         "local_mesh_controls": [i.Label for i in sim.items(study, "mesh")],
     }
     return json_result(out, text)
