@@ -38,6 +38,8 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   first thing to fix, with a sentence (`simulation_setup_core.repair_step`: a lost item's Edit
   dialog, Structural Constraints, DOF View, Study Materials, else the Pre-check list: a study
   whose body was deleted has nothing to pick); a red Pre-check list has the same Repair.
+  A design closed (or a study deleted) while it solves: the solver is stopped and the progress
+  window says the study is gone (`simulation_solve_dialog._gone`).
 - **Glyphs** (`simulation_glyphs.py`), **browser** (`simulation_browser.py` + hooks in
   `browser_ui.py`), **ribbon** (the SETUP entries in `ribbon_config.py`, DISPLAY > Show Mesh,
   a big button in every group), **icons** (`tools/sciforge/icons_simulation.py`, 43 icons, also
@@ -79,9 +81,9 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_bracket` | 80 | PASS |
 | `sim_setup_dialogs` | 85 | PASS |
 | `sim_setup_browser` | 61 | PASS |
-| `sim_setup_documents` | 59 | PASS |
+| `sim_setup_documents` | 61 | PASS |
 | `sim_setup_kinds` | 70 | PASS |
-| `sim_setup_workspace` | 59 | PASS |
+| `sim_setup_workspace` | 70 | PASS |
 | `sim_setup_components` | 42 | PASS |
 | `sim_setup_glyphs` | 20 | PASS |
 | `sim_setup_units` | 39 | PASS |

@@ -21,6 +21,9 @@ H  Solve Study 1 again (a finer mesh, so it takes a few seconds) and at once Wor
    Design: the solve goes on; when it ends, DESIGN stays in front (a person working on the
    design is not taken away) and a message says where the results are; Workspace > Simulation:
    the results are up to date.
+I  Solve again, and the design (the only one open) closed while it solves: the solver stops,
+   the progress window says the study is gone (Cancelled), no error; a new design opens in
+   DESIGN.
 """
 
 import FreeCAD as App
@@ -260,6 +263,43 @@ def h_back():
     study = s.active_study()
     h.check("Study 1 has results", bool(s.sim().summary(study)))
     h.check("up to date", not s.sim().out_of_date(study))
+    h.ribbon("Solve")
+
+
+# -- I ------------------------------------------------------------------------------------------
+def i_go():
+    dialog = s.solve_dialog()
+    if h.check("Solve dialog (again)", dialog is not None):
+        s.click_widget(dialog.go)
+
+
+def i_close():
+    h.check("solving again", s.solving())
+    state["closed"] = App.ActiveDocument.Name
+    App.closeDocument(state["closed"])  # (a person: the tab's close button, Don't Save)
+
+
+def i_check():
+    from sciforge import simulation_solve_dialog as sd
+
+    h.check("the design closed", state["closed"] not in App.listDocuments())
+    h.check("the solve stopped", not s.solving() and sd.RUN["job"] is None)
+    status = s.status_dialog()
+    if h.check("the progress window is there", status is not None):
+        title = status.title.text()
+        h.check("it says Cancelled", title == "Study 1 - Static Stress: Cancelled", title)
+        text = status.message.text()
+        h.check("it says the study is gone", "is gone" in text, text)
+        rows = [status.studies.item(i).text() for i in range(status.studies.count())]
+        h.check("its row", "Study 1 - Static Stress: Cancelled" in rows, rows)
+        h.check("no Cancel left", not status.cancel_button.isVisible())
+    s.close_popup("SciForgeSimJobStatus")
+    App.newDocument("SimAfterClose")
+
+
+def i_new():
+    h.check("a new design opens in DESIGN", s.tab_visible("solid"), s.current_tab())
+    h.check("not in SIMULATION", not s.tab_visible("sim_setup"))
 
 
 h.run(
@@ -302,5 +342,10 @@ h.run(
         s.wait_solved("wait_solved_in_design"),
         h_check,
         h_back,
+        i_go,
+        i_close,
+        s.wait_solved("wait_stopped", 60),
+        i_check,
+        i_new,
     ],
 )

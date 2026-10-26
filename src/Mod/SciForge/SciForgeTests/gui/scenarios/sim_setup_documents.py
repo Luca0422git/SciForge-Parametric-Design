@@ -237,7 +237,20 @@ def g_after_close():
 
 
 def g_reopened():
+    from SciForgeTests.gui import dialog_input as ui
+
     h.check("reopened in DESIGN", s.tab_visible("solid") and not s.tab_visible("sim_setup"))
+    labels = s.browser_labels()
+    leaked = [
+        x
+        for x in labels
+        if x.startswith(("Study 1", "Fixed 1", "Force 1", "SimRun", "SimModel", "SimMesh"))
+        or x in ("Simulation Model", "Load Case 1", "Study Materials")
+    ]
+    h.check("reopened: no study, item or run in the design browser", not leaked, leaked)
+    titles = ui.timeline_titles()
+    leaked = [x for x in titles if "Sim" in x or "Study" in x or "Fixed" in x or "Force" in x]
+    h.check("reopened: none in the timeline", not leaked, titles)
     s.workspace("Simulation")
 
 

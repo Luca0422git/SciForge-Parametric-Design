@@ -359,6 +359,7 @@ def _next():
         if not bodies.alive(study):
             continue
         RUN["study"] = study
+        RUN["label"] = study.Label  # (said when the study goes while it solves)
         RUN["started"] = time.time()
         try:
             RUN["signature"] = sim.signature(study)
@@ -420,6 +421,7 @@ def _poll():
             job.cancel()
             RUN.setdefault("draining", []).append(job)
             RUN["job"] = None
+            _gone(RUN.get("label") or "The study")
             _after(None, "cancelled", "The study is gone.")
             return
         thread = job._thread
@@ -478,6 +480,20 @@ def _after(study, state, message):
     _update_status()
     if _next() is None:
         _finish_all()
+
+
+def _gone(label):
+    """The study being solved went (its design was closed, or the study deleted): the solver
+    is stopped; the progress window says so and keeps it in its list of earlier ones."""
+    RUN["results"][label] = (
+        "cancelled",
+        "%s is gone (its design was closed or the study deleted): its solve stopped." % label,
+    )
+    RUN.setdefault("history", []).insert(
+        0, (RUN.get("run", 0), time.strftime("%H:%M"), RUN["kind"], label, "cancelled", None)
+    )
+    del RUN["history"][20:]
+    log("%s is gone: its solve stopped" % label)
 
 
 def _remember(study, state):
