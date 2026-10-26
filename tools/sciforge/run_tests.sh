@@ -7,8 +7,11 @@
 #                           building and checking a part only through MCP)
 #   3. GUI smoke test      (real FreeCAD GUI on a virtual screen via xvfb-run)
 #
+#   2c. simulation benchmarks (Static Stress against hand calculations, real FreeCAD:
+#                           SciForgeTests/headless/sim_benchmarks.py)
+#
 #   tools/sciforge/run_tests.sh [--freecad DIR] [--out DIR]
-#                               [--only unit|golden|headless|gui|scenarios|base]
+#                               [--only unit|golden|headless|sim|gui|scenarios|base]
 #                               [--scenario NAME[,NAME...]]   (files of SciForgeTests/gui/
 #                                                   scenarios; several share one profile)
 #                               [--shard K/N]       (every N-th scenario, from the K-th)
@@ -17,7 +20,7 @@
 #            an unpacked SciForge AppImage, or a SciForge install prefix containing
 #            bin/SciForgeCmd (bin/FreeCADCmd for a build before the branding pass)
 # --out      where reports and the screenshot go (default .sciforge-cache/test-output)
-# --only     base = everything but the scenarios (unit, golden, headless, smoke, journey)
+# --only     base = everything but the scenarios (unit, golden, headless, sim, smoke, journey)
 # --shard    splits the scenarios over N runs (CI runs them side by side): 1/4 runs the
 #            1st, 5th, 9th... scenario in name order, 2/4 the 2nd, 6th... (N runs cover all)
 #
@@ -171,6 +174,24 @@ EOF3
     grep -aoE "\[SciForge\] agent (FAIL|summary).*" "${OUT}/agent-e2e.log"
 }
 
+# The Static Stress engine against hand calculations (beta 3, sim-core): every case at the
+# default mesh and a finer one (SciForgeTests/headless/sim_benchmarks.py).
+run_sim() {
+    echo "== [SciForge] simulation benchmarks"
+    need_freecad sim || return
+    SCIFORGE_HEADLESS_OUT="${OUT}" OMP_NUM_THREADS=1 timeout 1500 "${FC_CMD[@]}" -c \
+        "from SciForgeTests.headless import sim_benchmarks; sim_benchmarks.main()" > "${OUT}/sim.log" 2>&1
+    grep -aoE "\[SciForge\] sim (FAIL|summary).*" "${OUT}/sim.log"
+    python3 - "${OUT}/sim-benchmarks.json" <<'EOF4' || FAILED+=("sim")
+import json, sys
+try:
+    report = json.load(open(sys.argv[1]))
+except Exception as exc:
+    print("no simulation report: %s" % exc); sys.exit(1)
+sys.exit(0 if report.get("passed") else 1)
+EOF4
+}
+
 # run_gui_script NAME SCRIPT LOG RESULT: one GUI test in a real FreeCAD window.
 run_gui_script() {
     local name="$1" script="$2" log="$3" result="$4"
@@ -307,11 +328,12 @@ case "${ONLY}" in
     unit) run_unit ;;
     golden) run_golden ;;
     headless) run_headless ;;
+    sim) run_sim ;;
     gui) run_gui ;;
     scenarios) run_scenarios ;;
-    base) run_unit; run_golden; run_headless; run_gui_base ;;
-    "") run_unit; run_golden; run_headless; run_gui ;;
-    *) echo "--only must be unit, golden, headless, gui, scenarios or base" >&2; exit 2 ;;
+    base) run_unit; run_golden; run_headless; run_sim; run_gui_base ;;
+    "") run_unit; run_golden; run_headless; run_sim; run_gui ;;
+    *) echo "--only must be unit, golden, headless, sim, gui, scenarios or base" >&2; exit 2 ;;
 esac
 
 echo "== [SciForge] reports in ${OUT}"
