@@ -3,7 +3,7 @@
 Builder sim-ui of beta 3 (2026-10-26/27). Brief: `docs/sciforge/dev/briefs/beta3-sim-ui.md`.
 Spec: `docs/sciforge/parity/simulation.md` section "Setup" (behaviour table S1-S25 with sources,
 scenarios, Known gaps). Engine: sim-core's `simulation.py` / `simulation_core.py`, merged into
-this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
+this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30a6).
 
 ## What was built
 
@@ -70,7 +70,7 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 | `sim_setup_bracket` | 74 | PASS |
 | `sim_setup_dialogs` | 85 | PASS |
 | `sim_setup_browser` | 61 | PASS |
-| `sim_setup_documents` | 49 | PASS |
+| `sim_setup_documents` | 59 | PASS |
 | `sim_setup_kinds` | 70 | PASS |
 | `sim_setup_workspace` | 59 | PASS |
 | `sim_setup_components` | 42 | PASS |
@@ -102,15 +102,17 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
 1. Fixed by sim-core: `simulation._link_list` dropped a whole-body pick (`(body, [])` is stored
    as nothing in a PropertyLinkSubListGlobal; it now writes `(body, [""])`). The UI's
    `simulation_panels._keep_whole_bodies` stays as a harmless check.
-2. Open: the result summary keys bodies by **label** (`summary["bodies"][body.Label]`): two
-   components' first bodies are both "Body1" in Fusion's numbering and share one entry.
+2. Fixed by sim-core (merged at 42dd30a6): the result summary keyed bodies by **label**: two
+   components' first bodies are both "Body1" in Fusion's numbering and shared one entry; the
+   key is now unique (`simulation.body_key`). The UI does not read per-body entries.
 3. Fixed by sim-core: a model held by one straight edge solved "done" with 1.4e10 mm of
    displacement (CalculiX found a mechanism); the pre-check and the job now say "not held
    enough". The UI still refuses to hand over results that moved more than half the model's
    size (`simulation_solve_dialog.loose_result`).
-4. Open: `_finish` takes `signature(study)` when the solve ends: a design change made while it
-   ran looks up to date. The UI stores the fingerprint from the start
-   (`simulation_solve_dialog._keep_out_of_date`); the engine could take it in `_stage_model`.
+4. Fixed by sim-core (merged at 42dd30a6): `_finish` took `signature(study)` when the solve
+   ended, so a design change made while it ran looked up to date; the engine now keeps the
+   fingerprint from the start (`Job._fingerprints`). The UI's
+   `simulation_solve_dialog._keep_out_of_date` (the same idea) stays as a harmless check.
 5. Open (cosmetic): `simulation_core.describe_free_mode` prints the rounding noise of the axis
    point ("turn about an axis along X through (5, 8.882e-16, 8.882e-16)"), which reaches the
    pre-check's sentences. DOF View cleans it (`simulation_dialogs.describe_motion`); the engine
@@ -123,6 +125,11 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
    The UI turns a default that runs along the picked hole's axis across it and refuses a
    direction along the axis (`simulation_panels.ItemPanel._bearing_across`); the pre-check
    could say it too.
+8. Fixed by sim-core (merged at 42dd30a6): `signature()` counted the `keep_results` setting,
+   so unticking "Keep the results in the design file" made up-to-date results look out of
+   date (found by `sim_setup_documents` part H). Also: with it off, the saved design keeps an
+   emptied result object, so the browser's Results row asks `results_dropped(study)` rather
+   than whether a result object exists.
 
 ## FreeCAD / Qt facts and traps
 
