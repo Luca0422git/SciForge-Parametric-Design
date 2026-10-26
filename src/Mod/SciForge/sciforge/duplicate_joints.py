@@ -12,7 +12,8 @@ SciForge: each duplicate is an occurrence of the component (instances.make_insta
 "Screw:2"), placed by a new joint of the open joint's type, offsets, axes and limits from
 the occurrence's copy of the open joint's snap to the clicked one (the occurrence moves, as
 component 1 of a Joint does); the other selected components' occurrences keep where they
-were relative to it, and the enclosed joints are made again between the occurrences.
+were relative to it, and the enclosed joints (and Rigid Groups that hold two or more of the
+selected components together) are made again between the occurrences.
 """
 
 import FreeCAD as App
@@ -46,6 +47,22 @@ def enclosed_joints(members):
         p1, p2 = joints.part1(joint), joints.part2(joint)
         if p1 is not None and p2 is not None and p1.Name in names and p2.Name in names:
             found.append(joint)
+    return found
+
+
+def enclosed_groups(members):
+    """The Rigid Groups that hold two or more of `members` together (a screw and its nut
+    put in a Rigid Group instead of a joint): [(group, those members in the group's order)].
+    (Fusion lists Rigid Groups with the joints; the copies are held together the same way,
+    else a later move of a screw's copy left its nut's copy behind: beta 3 QA.)"""
+    names = {m.Name for m in members}
+    found = []
+    for group in joints.rigid_groups(members[0].Document) if members else []:
+        if getattr(group, "Suppressed", False):
+            continue
+        inside = [m for m in (group.Members or []) if m is not None and m.Name in names]
+        if len(inside) >= 2:
+            found.append((group, inside))
     return found
 
 
@@ -197,6 +214,11 @@ def _duplicate(doc, members, joint, side, pick, snap, copies, made):
         _copy_settings(enclosed, new)
         joints.refresh_placements(new)
         made.append(new)
+    for group, inside in enclosed_groups(members):
+        held = joints.create_rigid_group(
+            doc, [copies[m.Name] for m in inside], bool(getattr(group, "IncludeChildren", True))
+        )
+        made.append(held)
     code = joints.solve(doc)
     text = joints.solve_message(code)
     if text:
