@@ -4,7 +4,7 @@ materials, gravity, contacts, Load Case Attributes, and undo / redo of setup cha
 sim-ui).
 
 A  New Study opens on entering; Esc closes it and makes nothing; New Simulation Study again:
-   the gear opens Study Settings (General, Mesh, Adaptive Mesh Refinement greyed, Contacts);
+   the gear opens Study Settings (General, Mesh, Adaptive Mesh Refinement, Contacts);
    an Average Element Size of 8 % is kept by the study made with Create Study.
 B  A refusal: Solve with nothing holding the model: the Solve dialog says why (the
    pre-check's sentence) and no solve starts.
@@ -13,7 +13,8 @@ C  Structural Constraints, Esc: nothing made; Structural Loads, Cancel: nothing 
 D  Study Materials: Aluminium for the bracket in this study, Ultimate Tensile Strength as the
    safety factor's basis, the properties shown; OK. Undo: back to (Same as Model); Redo:
    Aluminium again. The body's own material in the design did not change.
-E  Settings: Mesh > Element Order Linear, OK; Undo brings Parabolic back.
+E  Settings: Mesh > Element Order Linear; Adaptive Mesh Refinement Low (its numbers shown,
+   greyed), then Custom with 3 refinements; OK; Undo brings Parabolic and no refinement back.
 F  LOADS > Toggle Gravity On/Off: gravity on, a Gravity row under Loads; right-click Gravity >
    Edit Gravity: Flip Direction, OK: it points up; Undo: down again.
 G  Automatic Contacts on one body: Generate finds none; Contact Manager says no bodies
@@ -107,7 +108,7 @@ def a_create():
         state.get("tabs") == ["General", "Mesh", "Adaptive Mesh Refinement", "Contacts"],
         state.get("tabs"),
     )
-    h.check("adaptive refinement greyed (not built)", state.get("adaptive") is False)
+    h.check("adaptive refinement offered (the engine runs it)", state.get("adaptive") is True)
     dialog = s.new_study_dialog()
     if dialog is not None:
         h.check(
@@ -248,16 +249,33 @@ def e_linear():
 
     p.tabs.setCurrentIndex(1)
     ui.choose(p.tabs.order, "Linear")
+    p.tabs.setCurrentIndex(2)
+    ui.choose(p.tabs.adaptive, "Low")
+    h.check(
+        "a named level brings its own numbers (greyed)",
+        not p.tabs.passes.isEnabled() and abs(p.tabs.passes.value() - 2) < 1e-9,
+        (p.tabs.passes.isEnabled(), p.tabs.passes.value()),
+    )
+    ui.choose(p.tabs.adaptive, "Custom")
+    h.check("Custom: the numbers can be typed", p.tabs.passes.isEnabled())
+    ui.type_into(p.tabs.passes, "3")
     s.ok()
 
 
 def e_check():
     h.check("linear elements kept", settings()["mesh"]["order"] == "linear", settings()["mesh"])
+    adaptive = settings()["adaptive"]
+    h.check(
+        "custom refinement, 3 passes",
+        adaptive["level"] == "custom" and adaptive["passes"] == 3,
+        adaptive,
+    )
     s.undo()
 
 
 def e_undone():
     h.check("Undo: parabolic again", settings()["mesh"]["order"] == "parabolic")
+    h.check("Undo: no refinement again", settings()["adaptive"]["level"] == "none")
 
 
 # -- F ------------------------------------------------------------------------------------------

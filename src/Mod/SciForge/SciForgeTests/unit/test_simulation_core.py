@@ -466,6 +466,36 @@ class SolverText(unittest.TestCase):
         self.assertEqual(q["over_limit"], 1)
 
 
+class ProgramText(unittest.TestCase):
+    def test_solver_failures_become_sentences(self):
+        self.assertIn("not held enough", core.solver_failure(" *ERROR: zero pivot in node 12"))
+        self.assertIn("distorted", core.solver_failure("nonpositive jacobian determinant"))
+        self.assertIn("memory", core.solver_failure("allocation of 9 GB failed"))
+        self.assertIn("same corner", core.solver_failure("*ERROR in mpc: dependent dof"))
+        other = core.solver_failure("a\nb\nc\nd\ne\nsomething odd")
+        self.assertTrue(other.startswith("CalculiX could not solve the study."))
+        self.assertIn("something odd", other)
+        self.assertNotIn("a b", other)  # the last four lines only
+
+    def test_gmsh_errors(self):
+        out = (
+            "Info    : Meshing 2D...\n"
+            "Error   : Invalid boundary mesh (overlapping facets) on surface 12 surface 15\n"
+            "Warning : something\n"
+            "Error   : No elements in volume 1\n"
+        )
+        errors, numbers = core.gmsh_errors(out)
+        self.assertEqual(len(errors), 2)
+        self.assertEqual(numbers, [12, 15])
+        self.assertEqual(core.gmsh_errors(""), ([], []))
+
+    def test_contact_types(self):
+        self.assertTrue(core.contact_type_available("bonded"))
+        self.assertFalse(core.contact_type_available("sliding"))
+        self.assertEqual(len(core.CONTACT_TYPES), 6)
+        self.assertIn("nonlinear", core.CONTACT_NOT_AVAILABLE)
+
+
 class MorePrecheck(unittest.TestCase):
     STEEL = (
         "Steel",

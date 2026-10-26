@@ -998,6 +998,62 @@ def check_netgen(doc, out):
     )
 
 
+@engine_check("adaptive mesh refinement")
+def check_adaptive(doc, out):
+    """The plate with a hole of the accuracy cases, without a local mesh control, at the
+    default mesh: adaptive refinement makes the elements where the stress changes the most
+    smaller, solve after solve, until the peak stress settles; it ends nearer Peterson's Kt
+    than the first solve."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    W, L, t, d, s = 100.0, 200.0, 5.0, 20.0, 10.0
+    plate = Part.makeBox(L, W, t).cut(Part.makeCylinder(d / 2, t, App.Vector(L / 2, W / 2, 0)))
+    body = make_body(doc, plate)
+    study = sim.create_study(doc)
+    sim.set_settings(
+        study,
+        {
+            "remove_rigid": True,
+            "adaptive": {
+                "level": "custom",
+                "passes": 4,
+                "tolerance": 2.0,
+                "portion": 10.0,
+                "result": "principal_1",
+            },
+        },
+    )
+    ends = faces(body, lambda f: near(f.CenterOfMass.x, 0) or near(f.CenterOfMass.x, L))
+    sim.add_item(study, "load", "pressure", [(body, e) for e in ends], {"magnitude": -s})
+    ratio = d / W
+    kt = 3.0 - 3.14 * ratio + 3.667 * ratio**2 - 1.527 * ratio**3
+    expected = kt * s * W / (W - d)
+    summary = sim.solve(study, timeout=1200)
+    passes = (summary.get("adaptive") or {}).get("passes") or []
+    out.append(("several solves", len(passes) >= 2, passes))
+    out.append(
+        (
+            "each solve on a finer mesh",
+            all(b["nodes"] > a["nodes"] for a, b in zip(passes, passes[1:])),
+            [p["nodes"] for p in passes],
+        )
+    )
+    first = abs(passes[0]["value"] - expected) / expected if passes else 1.0
+    last = abs(summary["stats"]["principal_1"]["max"] - expected) / expected
+    out.append(
+        (
+            "the peak stress ends nearer Kt: first %.1f %% off, last %.1f %% (within 5 %%)"
+            % (first * 100, last * 100),
+            last < first and last <= 0.05,
+            [p["value"] for p in passes],
+        )
+    )
+    out.append(("a note says so", any("Adaptive" in n for n in summary["notes"]), summary["notes"]))
+
+
 @engine_check("contacts and loose bodies")
 def check_contacts(doc, out):
     import FreeCAD as App

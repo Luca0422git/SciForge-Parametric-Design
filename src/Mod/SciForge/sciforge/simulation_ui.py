@@ -90,9 +90,22 @@ def set_active_study(study):
     try:
         STATE["active"][study.Document.Name] = study.Name
         log("active study: %s" % study.Label)
+        _setup_tab_without_results(study)
     except Exception as exc:
         warn("active study: %s" % exc)
     refresh()
+
+
+def _setup_tab_without_results(study):
+    """A study without results made active while the RESULTS tab is in front (a new or cloned
+    study): Fusion shows its SETUP tab."""
+    from . import simulation
+
+    ribbon = _ribbon()
+    if ribbon is None or not STATE["on"] or not in_workspace(study.Document):
+        return
+    if ribbon.current_tab() == "sim_results" and not simulation.summary(study):
+        ribbon.set_simulation_mode(True, "sim_setup")
 
 
 def require_study(doc=None):
@@ -240,7 +253,11 @@ def _apply(on, tab=None):
     refresh_light()
     _refresh_browser()
     if was != STATE["on"]:
-        log("%s workspace" % ("simulation" if on else "design"))
+        doc = _doc()
+        log(
+            "%s workspace%s"
+            % ("simulation" if on else "design", (": %s" % doc.Label) if doc is not None else "")
+        )
 
 
 def _timeline(on):
@@ -284,9 +301,8 @@ def sync():
     """The active design changed (another tab, a design closed): show its own workspace."""
     try:
         want = in_workspace()
+        _finish_sim_dialog()
         if want != STATE["on"]:
-            if not want:
-                _finish_sim_dialog()
             _apply(want)
         elif want:
             refresh()
@@ -381,8 +397,14 @@ def _tick():
     try:
         if not STATE["on"]:
             return
-        from . import doc_epoch, simulation_glyphs
+        from . import doc_epoch, shell, simulation_glyphs
 
+        if not shell.is_on():
+            # SciForge's interface is off (FreeCAD's own workbench): no glyphs in its view
+            if simulation_glyphs.STATE["root"] is not None:
+                simulation_glyphs.clear()
+            STATE["glyph_key"] = None
+            return
         if doc_epoch.busy():
             return
         doc = _doc()

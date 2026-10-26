@@ -110,6 +110,7 @@ STATE_WORDS = {
     "failed": "Stopped",
     "cancelled": "Cancelled",
     "waiting": "Waiting",
+    "suspect": "Not held enough",
 }
 
 
@@ -457,7 +458,7 @@ def menu_for(node):
 
 
 # -- glyph geometry (simulation_glyphs.py draws them with Coin) ---------------------------------
-GLYPH_PIXELS = 34.0  # the length of a load arrow on the screen
+GLYPH_PIXELS = 46.0  # the length of a load arrow on the screen
 GLYPH_MIN_MM = 0.2
 
 

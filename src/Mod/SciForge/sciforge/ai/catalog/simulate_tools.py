@@ -374,7 +374,10 @@ define(
     "gravity_direction; remove_rigid_body_modes: for a model held by nothing whose loads "
     "balance (off by default); contact_tolerance: bodies closer than this (mm, default 0.1) "
     "are glued; safety_basis yield / ultimate; keep_results: keep the mesh and results in the "
-    "design file (on; off keeps only the numbers, the file stays small). " + STUDY_HELP,
+    "design file (on; off keeps only the numbers, the file stays small); adaptive_refinement "
+    "(Fusion's Adaptive Mesh Refinement, none by default): solve, refine where the stress "
+    "changes the most, solve again until the peak von Mises stress changes by less than "
+    "10 / 5 / 2 % (low / medium / high). " + STUDY_HELP,
     schema(
         {
             "study": _study(),
@@ -392,6 +395,11 @@ define(
             ),
             "safety_basis": enum(("yield", "ultimate"), "what the safety factor divides"),
             "keep_results": boolean("keep the mesh and results in the design file"),
+            "adaptive_refinement": enum(
+                ("none", "low", "medium", "high"),
+                "solve again on a mesh made finer where the stress changes the most, until "
+                "the peak stress settles (low 2, medium 4, high 6 solves at most)",
+            ),
         }
     ),
     id_base="StudySettings",

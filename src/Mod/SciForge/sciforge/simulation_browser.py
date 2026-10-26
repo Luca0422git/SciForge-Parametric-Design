@@ -70,7 +70,8 @@ def _study_row(study):
     settings = sim.settings(study)
     gravity = settings["gravity"]
     summary = sim.summary(study)
-    solved = bool(summary) and sim.result_object(study) is not None
+    solved = bool(summary)
+    kept = solved and sim.result_object(study) is not None
     mesh = settings["mesh"]
     mesh_text = "Average element size %s %% of the model size, %s elements; made when it solves" % (
         core.fmt(mesh["size_pct"]),
@@ -91,6 +92,11 @@ def _study_row(study):
     if stats.get("safety", {}).get("min") is not None:
         results_text = "Lowest safety factor %s; double-click to show the results" % core.fmt(
             stats["safety"]["min"], 3
+        )
+    if solved and not kept:
+        results_text = (
+            "Only the summary of the last solve is kept in the file (Study Settings > General): "
+            "solve again to see the coloured results"
         )
     return {
         "name": study.Name,
@@ -196,6 +202,23 @@ def selection(doc, node):
             order.append(target.Name)
         out[target.Name][1].append(sub)
     return [out[n] for n in order]
+
+
+def hover(doc, node):
+    """(object, element) a hover on a row lights up in the 3D view: a constraint's or load's
+    first face (Fusion lights up what it is on), a body; None for the other rows."""
+    for obj, subs in selection(doc, node):
+        if not bodies.alive(obj):
+            continue
+        try:
+            if obj.ViewObject is None or not obj.ViewObject.Visibility:
+                body = bodies.body_of(obj)
+                if body is None or body.ViewObject is None or not body.ViewObject.Visibility:
+                    continue
+        except Exception:
+            continue
+        return (obj, subs[0] if subs else "")
+    return None
 
 
 # -- actions ---------------------------------------------------------------------------------------

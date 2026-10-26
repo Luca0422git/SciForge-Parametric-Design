@@ -23,7 +23,7 @@ import FreeCADGui as Gui
 from . import bodies, log, ui_icon, warn
 from . import simulation_setup_core as score
 from .compat import QtCore, QtWidgets
-from .simulation_dialogs import FocusBack
+from .simulation_dialogs import FocusBack, tick_style
 
 RUN = {
     "queue": [],  # studies waiting
@@ -93,6 +93,7 @@ class SolveDialog(FocusBack, QtWidgets.QDialog):
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
         self.table.horizontalHeader().setStretchLastSection(True)
+        tick_style(self.table)
         self.studies = _sim().studies(doc)
         active = _ui().active_study(doc)
         self.table.setRowCount(len(self.studies))
@@ -120,7 +121,7 @@ class SolveDialog(FocusBack, QtWidgets.QDialog):
         )
         where.setObjectName("SciForgeSimSolveWhere")
         where.setWordWrap(True)
-        where.setStyleSheet("color: #9aa7b4;")
+        where.setStyleSheet("color: #9aa4b2;")
         layout.addWidget(where)
         self.message = QtWidgets.QLabel("")
         self.message.setObjectName("SciForgeSimSolveMessage")
@@ -235,12 +236,14 @@ def start(studies, kind="solve"):
     RUN["results"] = {}
     RUN["last_done"] = None
     show_status()
-    _next()
     if RUN["timer"] is None:
         timer = QtCore.QTimer()
         timer.setInterval(150)
         timer.timeout.connect(_poll)
         RUN["timer"] = timer
+    if _next() is None:  # no job could start (each study's reason is in the progress window)
+        _finish_all()
+        return False
     RUN["timer"].start()
     return True
 
@@ -287,15 +290,35 @@ def _dialog_open(doc):
         return False
 
 
+def _drain():
+    """Jobs cancelled because their study or design went: polled until their thread ends, so
+    the solver is stopped and their temporary folder removed (nothing of the design is
+    touched: the job is cancelled)."""
+    left = []
+    for job in RUN.get("draining", []):
+        try:
+            if job.poll() == "running":
+                left.append(job)
+        except Exception:
+            pass
+    RUN["draining"] = left
+    if not left and RUN["job"] is None and RUN["timer"] is not None and not RUN["queue"]:
+        RUN["timer"].stop()
+
+
 def _poll():
     try:
+        if RUN.get("draining"):
+            _drain()
         job = RUN["job"]
         if job is None:
-            _finish_all()
+            if RUN["study"] is not None or RUN["queue"]:
+                _finish_all()
             return
         study = RUN["study"]
         if study is None or not bodies.alive(study):
             job.cancel()
+            RUN.setdefault("draining", []).append(job)
             RUN["job"] = None
             _after(None, "cancelled", "The study is gone.")
             return
@@ -338,8 +361,14 @@ def _after(study, state, message):
             if RUN["kind"] == "mesh":
                 show_mesh(study)
             else:
-                RUN["last_done"] = study
                 _keep_out_of_date(study)
+                loose = loose_result(study)
+                if loose:
+                    state, message = "suspect", loose
+                    RUN["results"][study.Name] = (state, message)
+                    log("%s: %s" % (study.Label, loose))
+                else:
+                    RUN["last_done"] = study
             log("%s %s" % (study.Label, "meshed" if RUN["kind"] == "mesh" else "solved"))
         try:
             sim.summary(study)
@@ -348,6 +377,40 @@ def _after(study, state, message):
     _update_status()
     if _next() is None:
         _finish_all()
+
+
+def model_size(study):
+    """The diagonal of the study's bodies (mm)."""
+    box = None
+    for body in _sim().study_bodies(study):
+        b = bodies.global_shape(body, copy=False).BoundBox
+        if box is None:
+            box = b
+        else:
+            box.add(b)
+    return box.DiagonalLength if box is not None else 0.0
+
+
+def loose_result(study):
+    """A sentence when a solve "worked" but the model moved further than half its own size:
+    it was not held enough (a part could still turn about a held edge or slide), CalculiX
+    found a mechanism instead of an error, and the numbers mean nothing. None otherwise."""
+    try:
+        data = _sim().summary(study) or {}
+        moved = (data.get("stats", {}).get("displacement", {}) or {}).get("max")
+        size = model_size(study)
+        if moved is None or size <= 0 or moved <= 0.5 * size:
+            return None
+        from . import simulation_core as core
+
+        return (
+            "Solved, but the model moved %s mm, more than half its own size (%s mm): it is not "
+            "held enough (a part can still turn or slide about what holds it). Check the "
+            "constraints (DOF View), then solve again: these results are not meaningful."
+            % (core.fmt(moved, 3), core.fmt(size, 3))
+        )
+    except Exception:
+        return None
 
 
 def _keep_out_of_date(study):
@@ -366,7 +429,7 @@ def _keep_out_of_date(study):
 
 def _finish_all():
     timer = RUN["timer"]
-    if timer is not None:
+    if timer is not None and not RUN.get("draining"):
         timer.stop()
     RUN["job"] = None
     RUN["study"] = None
@@ -437,6 +500,8 @@ class StatusDialog(FocusBack, QtWidgets.QDialog):
         self.close_button = QtWidgets.QPushButton("Close")
         self.close_button.setObjectName("SciForgeSimJobClose")
         self.close_button.clicked.connect(self.hide)
+        self.close_button.setAutoDefault(False)
+        self.cancel_button.setAutoDefault(False)
         buttons.addWidget(self.cancel_button)
         buttons.addWidget(self.close_button)
         layout.addLayout(buttons)
@@ -485,8 +550,12 @@ def _update_status(final=False):
             dialog.message.setText(note)
             _fill_stages(dialog, rows)
             dialog.cancel_button.setEnabled(True)
+            dialog.cancel_button.setVisible(True)
         elif final or job is None:
+            # nothing left to cancel: only Close stays (Enter closes it)
             dialog.cancel_button.setEnabled(False)
+            dialog.cancel_button.setVisible(False)
+            dialog.close_button.setDefault(True)
             results = RUN["results"]
             failed = [(n, r) for n, r in results.items() if r[0] != "done"]
             if failed:
@@ -494,7 +563,9 @@ def _update_status(final=False):
                 study = App.ActiveDocument.getObject(name) if App.ActiveDocument else None
                 label = study.Label if study is not None else name
                 dialog.title.setText("%s: %s" % (label, score.STATE_WORDS.get(state, state)))
-                dialog.message.setStyleSheet("color: #ff8a80;" if state == "failed" else "")
+                dialog.message.setStyleSheet(
+                    "color: #ff8a80;" if state in ("failed", "suspect") else ""
+                )
                 dialog.message.setText(message or "")
                 dialog.bar.setValue(0)
             elif results:
@@ -595,7 +666,10 @@ def show_mesh(study):
         hide_mesh()
         vobj = mesh.ViewObject
         try:
-            vobj.DisplayMode = "Faces & Wireframe"
+            # the element edges over the model's own faces (mesh faces drawn at the same
+            # place as the body's would flicker through them)
+            modes = list(vobj.listDisplayModes())
+            vobj.DisplayMode = "Wireframe" if "Wireframe" in modes else modes[0]
         except Exception:
             pass
         vobj.Visibility = True

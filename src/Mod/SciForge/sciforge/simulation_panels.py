@@ -136,15 +136,47 @@ def _number_field(name, value, family, tip=""):
     return field
 
 
+# An on / off button must look on when it is on (the theme draws push buttons alike either
+# way): blue with white text, like Fusion's toggles. Written with the dark look's colours (the
+# theme's style sheet hook swaps them in the light look).
+TOGGLE_STYLE = (
+    "QPushButton:checked { background: #2f7fd1; color: white; border: 1px solid #3fa9f5; }"
+)
+
+
 def _toggle(name, text, on, tip=""):
     button = QtWidgets.QPushButton(text)
     button.setObjectName("SciForgeSim_" + name)
     button.setCheckable(True)
     button.setChecked(bool(on))
+    button.setStyleSheet(TOGGLE_STYLE)
     if tip:
         button.setToolTip(tip)
     return button
 
+
+# Types Fusion lists that SciForge does not build (research 9.2): shown greyed in the Type list.
+LATER = {
+    "constraint": (
+        (
+            "Remote",
+            "remote",
+            "Not in SciForge yet: hold the faces themselves (Fixed, Pin or Frictionless).",
+        ),
+    ),
+    "load": (
+        (
+            "Remote Moment",
+            "remote_moment",
+            "Not in SciForge yet: a Moment on the faces, or a Remote Force at a point.",
+        ),
+        (
+            "Hydrostatic Pressure",
+            "hydrostatic",
+            "Not in SciForge yet: a Pressure is the same everywhere on its faces.",
+        ),
+    ),
+}
 
 TITLES = {
     "constraint": "Structural Constraints",
@@ -246,6 +278,9 @@ class ItemPanel(pickpanel.PickPanel):
         for key, info in table.items():
             tip = "" if info.get("built") else "%s is not in SciForge yet." % info["title"]
             rows.append((info["title"], key, bool(info.get("built")), tip))
+        for title, key, tip in LATER.get(category, ()):
+            if key not in table:  # Fusion lists them; greyed, with the reason (research 9.2)
+                rows.append((title, key, False, tip))
         self.type_box = pickpanel.combo(rows, self.kind)
         self.type_box.setObjectName("SciForgeSimItemType")
         self.type_box.setEnabled(not self.editing)
@@ -264,6 +299,7 @@ class ItemPanel(pickpanel.PickPanel):
             self.body_mode.setObjectName("SciForgeSim_body_selection")
             self.body_mode.setCheckable(True)
             self.body_mode.setChecked(self.whole)
+            self.body_mode.setStyleSheet(TOGGLE_STYLE)
             self.body_mode.setToolTip("On: a click picks a whole body; off: faces and edges")
             self.body_mode.toggled.connect(self._body_mode)
             self.layout.addRow(self.body_mode)

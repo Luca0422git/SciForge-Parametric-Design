@@ -1067,6 +1067,76 @@ def describe_free_mode(mode):
     )
 
 
+# -- what the programs say, in sentences -----------------------------------------------------------
+def solver_failure(output):
+    """CalculiX's complaint (its printed output) as a sentence a person can act on."""
+    text = (output or "").lower()
+    if "zero pivot" in text or "singular" in text:
+        return (
+            "The model is not held enough: a part can still move or spin freely. Add constraints "
+            "so every body is held in X, Y and Z (a Fixed face is the simplest), or switch on "
+            "Remove rigid body modes if the loads balance each other."
+        )
+    if "nonpositive jacobian" in text or "negative jacobian" in text:
+        return "The mesh has distorted elements: make the Average Element Size smaller."
+    if (
+        "dependent dof" in text
+        or "is used as dependent" in text
+        or ("mpc" in text and "error" in text)
+    ):
+        return (
+            "Two constraints hold the same corner or edge in ways that cannot both be true: "
+            "suppress one of them, or move one to a different face."
+        )
+    if "not enough memory" in text or ("allocation" in text and "fail" in text):
+        return (
+            "The computer ran out of memory for this mesh: make the Average Element Size "
+            "larger, or use local mesh controls only where the stress matters."
+        )
+    if "material" in text and ("not defined" in text or "no elastic" in text):
+        return "A body has no usable material: check the study materials."
+    lines = [line.strip() for line in (output or "").splitlines() if line.strip()]
+    return ("CalculiX could not solve the study. %s" % " ".join(lines[-4:])).strip()
+
+
+def gmsh_errors(output):
+    """(Gmsh's error lines, the surface numbers they name): Gmsh numbers the model's faces
+    in order, so surface 12 is the model's Face12."""
+    import re
+
+    errors = [line.strip() for line in (output or "").splitlines() if "Error" in line]
+    numbers = []
+    for line in errors:
+        for match in re.finditer(r"[Ss]urfaces?\s+(\d+)", line):
+            if int(match.group(1)) not in numbers:
+                numbers.append(int(match.group(1)))
+    return errors, numbers
+
+
+# -- contacts --------------------------------------------------------------------------------------
+# Fusion's contact types (research 3.6) and what SciForge does with each: bodies that touch or
+# come closer than the contact tolerance are glued (Bonded, made automatically at solve time,
+# Fusion's default); the others make the solve nonlinear (the bodies may open, slide or press
+# harder as the load grows), which a linear Static Stress solve cannot do.
+CONTACT_TYPES = (
+    ("bonded", "Bonded", True),
+    ("offset_bonded", "Offset Bonded", False),
+    ("separation", "Separation", False),
+    ("sliding", "Sliding", False),
+    ("rough", "Rough", False),
+    ("no_contact", "No Contact", False),
+)
+CONTACT_NOT_AVAILABLE = (
+    "Not in SciForge yet: only bonded contacts, found automatically (bodies that touch or are "
+    "closer than the contact tolerance are glued). Separation, sliding and rough contacts make "
+    "the solve nonlinear, which a linear Static Stress study cannot do."
+)
+
+
+def contact_type_available(key):
+    return any(k == key and ok for k, _t, ok in CONTACT_TYPES)
+
+
 # -- mesh statistics -------------------------------------------------------------------------------
 def mesh_quality(edge_lengths, aspect_ratios, limit):
     """{"smallest", "largest" (mm, element edge lengths), "worst_aspect", "over_limit" (how

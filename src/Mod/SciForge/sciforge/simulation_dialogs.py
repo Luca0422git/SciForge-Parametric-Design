@@ -20,7 +20,7 @@ from .compat import QtCore, QtWidgets
 from .taskui import Panel
 
 OPEN = {"new_study": None, "dialogs": []}  # the open windows (tests, and to keep them alive)
-NOTE_STYLE = "color: #9aa7b4;"
+NOTE_STYLE = "color: #9aa4b2;"
 ERROR_STYLE = "color: #ff8a80;"
 
 
@@ -92,6 +92,25 @@ class FocusBack:
     def hideEvent(self, event):
         give_back_focus()
         super().hideEvent(event)
+
+
+def tick_style(table):
+    """A table's tick boxes drawn like the theme's check boxes: on the dark panels an unticked
+    one showed nothing at all (only a ticked one showed its tick). Written with the dark look's
+    colours (the theme's style sheet hook swaps them in the light look)."""
+    try:
+        from . import ui_icon_path
+
+        icon = ui_icon_path("palette_check").replace("\\", "/")
+        table.setStyleSheet(
+            "QTableView::indicator { width: 13px; height: 13px; border: 1px solid #8a94a3; "
+            "border-radius: 2px; background: #2b313b; } "
+            "QTableView::indicator:hover { border-color: #3fa9f5; } "
+            "QTableView::indicator:checked { background: #3fa9f5; border-color: #3fa9f5; "
+            "image: url(%s); }" % icon
+        )
+    except Exception as exc:
+        log("simulation: tick boxes: %s" % exc)
 
 
 def _note(text, style=NOTE_STYLE):
@@ -334,7 +353,19 @@ def _spin(name, low, high, value, decimals=1, suffix="", step=1.0, tip=""):
 
 # Adaptive refinement is wired in the engine when simulation_core says so (sim-core).
 def _adaptive_built():
-    return bool(getattr(core, "ADAPTIVE_BUILT", False))
+    """True once the engine runs adaptive refinement (sim-core's Job._adapt)."""
+    try:
+        return hasattr(_sim().Job, "_adapt") and hasattr(core, "adaptive_plan")
+    except Exception:
+        return False
+
+
+ADAPTIVE_RESULT_NAMES = (
+    ("von_mises", "Von Mises Stress"),
+    ("displacement", "Displacement"),
+    ("principal_1", "1st Principal Stress"),
+    ("principal_3", "3rd Principal Stress"),
+)
 
 
 class SettingsForm(QtWidgets.QTabWidget):
@@ -455,11 +486,49 @@ class SettingsForm(QtWidgets.QTabWidget):
             ("Custom", "custom"),
         ):
             self.adaptive.addItem(label, key)
-        level = (self.base.get("adaptive") or {}).get("level", "none")
-        index = self.adaptive.findData(level)
+        adaptive = self.base.get("adaptive") or {}
+        index = self.adaptive.findData(adaptive.get("level", "none"))
         self.adaptive.setCurrentIndex(max(index, 0))
         self.adaptive.setEnabled(_adaptive_built())
+        self.adaptive.currentIndexChanged.connect(self._adaptive_changed)
         form.addRow("Refinement", self.adaptive)
+        self.passes = _spin(
+            "SciForgeSimAdaptivePasses",
+            1,
+            10,
+            adaptive.get("passes", 4),
+            0,
+            tip="The most solves, the first one included",
+        )
+        form.addRow("Number of refinements", self.passes)
+        self.converge = _spin(
+            "SciForgeSimAdaptiveTolerance",
+            0.1,
+            50.0,
+            adaptive.get("tolerance", 5.0),
+            1,
+            " %",
+            tip="It stops when the result changes by less than this between two solves",
+        )
+        form.addRow("Results convergence tolerance", self.converge)
+        self.portion = _spin(
+            "SciForgeSimAdaptivePortion",
+            1.0,
+            100.0,
+            adaptive.get("portion", 10.0),
+            0,
+            " %",
+            tip="The share of the elements made smaller at each pass",
+        )
+        form.addRow("Portion of elements to refine", self.portion)
+        self.judge = QtWidgets.QComboBox()
+        self.judge.setObjectName("SciForgeSimAdaptiveResult")
+        for key, label in ADAPTIVE_RESULT_NAMES:
+            self.judge.addItem(label, key)
+        index = self.judge.findData(adaptive.get("result", "von_mises"))
+        self.judge.setCurrentIndex(max(index, 0))
+        form.addRow("Result to watch", self.judge)
+        self._adaptive_changed()
         if not _adaptive_built():
             form.addRow(
                 _note(
@@ -473,12 +542,22 @@ class SettingsForm(QtWidgets.QTabWidget):
         form = QtWidgets.QFormLayout(page)
         kind = QtWidgets.QComboBox()
         kind.setObjectName("SciForgeSimContactType")
-        kind.addItem("Bonded")
-        for other in ("Separation", "Sliding", "Rough", "Offset Bonded"):
-            kind.addItem(other)
+        types = getattr(core, "CONTACT_TYPES", None) or (
+            ("bonded", "Bonded", True),
+            ("separation", "Separation", False),
+            ("sliding", "Sliding", False),
+            ("rough", "Rough", False),
+            ("offset_bonded", "Offset Bonded", False),
+        )
+        refused = getattr(
+            core, "CONTACT_NOT_AVAILABLE", "Not in SciForge yet: bodies that touch are bonded"
+        )
+        for key, title, available in types:
+            kind.addItem(title, key)
             item = kind.model().item(kind.count() - 1)
-            item.setEnabled(False)
-            item.setToolTip("Not in SciForge yet: bodies that touch are bonded")
+            if not available:
+                item.setEnabled(False)
+                item.setToolTip(refused)
         form.addRow("Automatic Contacts", kind)
         self.tolerance = _spin(
             "SciForgeSimContactTolerance",
@@ -491,9 +570,40 @@ class SettingsForm(QtWidgets.QTabWidget):
         )
         form.addRow("Contact Detection Tolerance", self.tolerance)
         self.addTab(page, "Contacts")
+        self._fit_narrow()
+
+    def _fit_narrow(self):
+        """Fit the task panel's width (the four tab names and the long Mesh labels pushed it
+        past the window's edge): the tab names scroll, a long label puts its field on the next
+        line, and a list box no longer asks for its longest entry's width."""
+        self.setUsesScrollButtons(True)
+        self.setElideMode(QtCore.Qt.ElideNone)
+        for form in self.findChildren(QtWidgets.QFormLayout):
+            form.setRowWrapPolicy(QtWidgets.QFormLayout.WrapLongRows)
+        for box in self.findChildren(QtWidgets.QComboBox):
+            box.setSizeAdjustPolicy(QtWidgets.QComboBox.AdjustToMinimumContentsLengthWithIcon)
+            box.setMinimumContentsLength(12)
 
     def _order_changed(self, *_a):
         self.curved.setEnabled(self.order.currentData() == "parabolic")
+
+    def _adaptive_changed(self, *_a):
+        """Fusion: the numbers are typed for Custom; a named level brings its own."""
+        level = self.adaptive.currentData()
+        built = _adaptive_built()
+        custom = built and level == "custom"
+        for widget in (self.passes, self.converge, self.portion):
+            widget.setEnabled(custom)
+        self.judge.setEnabled(built and level != "none")
+        plan = None
+        try:
+            if built and level not in ("none", "custom"):
+                plan = core.adaptive_plan({"level": level})
+        except Exception:
+            plan = None
+        if plan is not None:
+            for widget, value in zip((self.passes, self.converge, self.portion), plan):
+                widget.setValue(float(value))
 
     def _size_kind_changed(self, *_a):
         absolute = self.size_kind.currentData() == "mm"
@@ -526,6 +636,11 @@ class SettingsForm(QtWidgets.QTabWidget):
             out["keep_results"] = bool(self.keep.isChecked())
         if _adaptive_built() and isinstance(out.get("adaptive"), dict):
             out["adaptive"]["level"] = self.adaptive.currentData()
+            out["adaptive"]["result"] = self.judge.currentData()
+            if self.adaptive.currentData() == "custom":
+                out["adaptive"]["passes"] = int(self.passes.value())
+                out["adaptive"]["tolerance"] = float(self.converge.value())
+                out["adaptive"]["portion"] = float(self.portion.value())
         return out
 
 
@@ -1112,7 +1227,8 @@ class PrecheckDialog(FocusBack, QtWidgets.QDialog):
         buttons.addWidget(self.solve)
         buttons.addWidget(close)
         layout.addLayout(buttons)
-        self.resize(520, 260)
+        # as tall as its list (one line when nothing is missing)
+        self.resize(520, 130 + 34 * min(max(len(checks), 1), 8))
 
     def _solve(self):
         try:

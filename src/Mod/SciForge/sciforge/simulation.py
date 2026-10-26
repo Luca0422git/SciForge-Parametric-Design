@@ -460,6 +460,14 @@ def _signature(element):
     return out
 
 
+def _local_shape(obj):
+    """The object's shape in its own coordinates (its placement and its component's left
+    out), so a pick's remembered shape does not change when the body or its component moves."""
+    shape = obj.Shape.copy(False)  # (FreeCAD's own is read-only; this copy shares geometry)
+    shape.Placement = App.Placement()
+    return shape
+
+
 def _signatures(refs):
     """[[object name, element name, signature]] of picks, in the order of the picks (FreeCAD
     may rename a pick it lost, "?Face1" for what was Face8, but keeps their order)."""
@@ -469,18 +477,18 @@ def _signatures(refs):
         sig = None
         if name:
             try:
-                sig = _signature(bodies.global_shape(obj, copy=False).getElement(name))
+                sig = _signature(_local_shape(obj).getElement(name))
             except Exception:
                 sig = None
         out.append([obj.Name, name, sig])
     return out
 
 
-def _signature_of(sigs, index, obj, name):
+def _signature_of(sigs, index, obj, name, positional=True):
     """The remembered shape of the index-th pick (by its place in the list when the list
     still matches the picks, else by its name)."""
     if isinstance(sigs, list):
-        if index < len(sigs) and sigs[index][0] == obj.Name:
+        if positional and index < len(sigs) and sigs[index][0] == obj.Name:
             return sigs[index][2]
         for owner, element, sig in sigs:
             if owner == obj.Name and element == name.lstrip("?"):
@@ -602,8 +610,9 @@ def resolve_picks(item):
     data = item_data(item)
     sigs = data.get("sigs")
     picks = _picks(item.References)
-    if isinstance(sigs, list) and len(sigs) != len(picks):
-        sigs = [row for row in sigs if row[1]]  # (whole-body picks: no shape to remember)
+    # (the remembered shapes follow the picks' order, unless the picks were changed without
+    # update_item: then they are matched by name)
+    positional = isinstance(sigs, list) and len(sigs) == len(picks)
     out = []
     for index, (obj, sub) in enumerate(picks):
         if not bodies.alive(obj):
@@ -613,9 +622,9 @@ def resolve_picks(item):
             out.append((obj, [""] if bodies.has_solid(obj) else [], False))
             continue
         name = sub.split(".")[-1]
-        sig = _signature_of(sigs, index, obj, name)
+        sig = _signature_of(sigs, index, obj, name, positional)
         try:
-            shape = bodies.global_shape(obj, copy=False)
+            shape = _local_shape(obj)
         except Exception:
             out.append((obj, [], False))
             continue
@@ -637,6 +646,20 @@ def resolve_picks(item):
         found = _refind(shape, sig, tol)
         out.append((obj, found, bool(found)))
     return out
+
+
+def refresh_signatures(study):
+    """Remember every resolved pick's shape as it is now (so the next edit is followed from
+    here); items whose picks are lost are left as they are."""
+    for item in items(study):
+        resolved = resolve_picks(item)
+        if not resolved or any(not names for _obj, names, _moved in resolved):
+            continue
+        data = item_data(item)
+        fresh = _signatures(_picks(item.References))
+        if fresh != data.get("sigs"):
+            data["sigs"] = fresh
+            _save(item, ITEM_PROP, data)
 
 
 def _shape_size(shape):
@@ -1436,13 +1459,18 @@ def _fem_objects(doc, item, model, subs):
 
 # -- what SciForge writes into CalculiX's input ----------------------------------------------------
 class _MeshData:
-    """The mesh's nodes and the lookups the solver cards need, made once per solve."""
+    """The mesh's nodes and the lookups the solver cards need, made once per solve. `groups`
+    ({"Face": {12: (elements, nodes)}, "Edge": ..., "Solid": ...}: what Gmsh put on each model
+    face, edge and solid, read before the groups were dropped) answers at once what FreeCAD's
+    search by geometry takes minutes for on a big mesh (getNodesByFace: 31 s for one face of
+    a 366-face part at 2.5 % mesh)."""
 
-    def __init__(self, femmesh):
+    def __init__(self, femmesh, groups=None):
         from femmesh import meshtools
 
         self.femmesh = femmesh
         self.nodes = femmesh.Nodes
+        self.groups = groups or {}
         self._elements = None
         self._meshtools = meshtools
 
@@ -1452,7 +1480,16 @@ class _MeshData:
             self._elements = self._meshtools.get_femelement_table(self.femmesh)
         return self._elements
 
+    def _group(self, sub):
+        for kind in ("Face", "Edge", "Solid"):
+            if sub.startswith(kind) and sub[len(kind) :].isdigit():
+                return self.groups.get(kind, {}).get(int(sub[len(kind) :]))
+        return None
+
     def nodes_of(self, model, sub):
+        group = self._group(sub)
+        if group is not None:
+            return list(group[1])
         element = _model_element(model, sub)
         kind = element.ShapeType
         if kind == "Face":
@@ -1465,18 +1502,30 @@ class _MeshData:
             return list(self.femmesh.getNodesBySolid(element))
         return []
 
-    def face_weights(self, face):
+    def face_weights(self, model, sub):
         """{node: area share} of a model face (FreeCAD's consistent shares for a uniform
         load: on a 6-node triangle the corners get 0, the mid-side nodes a third each)."""
         mt = self._meshtools
-        table = mt.get_ref_facenodes_table(self.femmesh, self.elements, face)
+        group = self._group(sub)
+        if group is not None and group[0]:
+            table = {e: self.femmesh.getElementNodes(e) for e in group[0]}
+        else:
+            table = mt.get_ref_facenodes_table(
+                self.femmesh, self.elements, _model_element(model, sub)
+            )
         if not table:
             return {}
         return mt.get_ref_shape_node_sum_geom_table(mt.get_ref_facenodes_areas(self.nodes, table))
 
-    def edge_weights(self, edge):
+    def edge_weights(self, model, sub):
         mt = self._meshtools
-        table = mt.get_ref_edgenodes_table(self.femmesh, self.elements, edge)
+        group = self._group(sub)
+        if group is not None and group[0]:
+            table = {e: self.femmesh.getElementNodes(e) for e in group[0]}
+        else:
+            table = mt.get_ref_edgenodes_table(
+                self.femmesh, self.elements, _model_element(model, sub)
+            )
         if not table:
             return {}
         return mt.get_ref_shape_node_sum_geom_table(mt.get_ref_edgenodes_lengths(self.nodes, table))
@@ -1484,6 +1533,37 @@ class _MeshData:
     def point(self, node):
         p = self.nodes[node]
         return (p.x, p.y, p.z)
+
+
+def _mesh_groups(mesh):
+    """{"Face" / "Edge" / "Solid": {index: (element ids, node ids)}} of the groups Gmsh named
+    after the model's faces, edges and solids ("Face12"; the mesh reader adds a suffix such
+    as "Face12_Faces" or "Face12_Nodes" when a group has nodes too); {} without groups."""
+    import re
+
+    pattern = re.compile(r"^(Edge|Face|Solid)(\d+)(?:_\w+)?$")
+    found = {"Face": {}, "Edge": {}, "Solid": {}}
+    try:
+        for group in mesh.Groups:
+            match = pattern.match(mesh.getGroupName(group))
+            if not match:
+                continue
+            kind, number = match.group(1), int(match.group(2))
+            elements, nodes = found[kind].setdefault(number, ([], set()))
+            ids = list(mesh.getGroupElements(group))
+            if mesh.getGroupElementType(group) == "Node":
+                nodes.update(ids)
+            else:
+                elements.extend(ids)
+                for element in ids:
+                    nodes.update(mesh.getElementNodes(element))
+    except Exception as exc:
+        log("simulation: the mesh's groups could not be read (%s): searching by geometry" % exc)
+        return {}
+    return {
+        kind: {n: (elements, sorted(nodes)) for n, (elements, nodes) in table.items()}
+        for kind, table in found.items()
+    }
 
 
 def _face_normal_at(face, point):
@@ -1534,13 +1614,12 @@ def _weights_on(mesh, model, subs):
     faces = [s for s in subs if s.startswith("Face")]
     edges = [s for s in subs if s.startswith("Edge")]
     for sub in faces:
-        face = _model_element(model, sub)
-        for node, w in mesh.face_weights(face).items():
+        for node, w in mesh.face_weights(model, sub).items():
             weights[node] = weights.get(node, 0.0) + w
             owner.setdefault(node, sub)
     if not faces:
         for sub in edges:
-            for node, w in mesh.edge_weights(_model_element(model, sub)).items():
+            for node, w in mesh.edge_weights(model, sub).items():
                 weights[node] = weights.get(node, 0.0) + w
                 owner.setdefault(node, sub)
     return weights, owner
@@ -1737,18 +1816,18 @@ def _rigid_rows(study, model, mesh, held_nodes):
     for members in groups.values():
         nodes = set()
         for i in members:
-            nodes.update(mesh.femmesh.getNodesBySolid(solids[i]))
+            nodes.update(mesh.nodes_of(model, "Solid%d" % (i + 1)))
         if nodes & held_nodes:
             continue
         rows += core.three_two_one([(n, mesh.point(n)) for n in sorted(nodes)])
     return rows
 
 
-def _solver_cards(study, model, femmesh, subs):
+def _solver_cards(study, model, femmesh, subs, groups=None):
     """The constraints, loads and reaction outputs SciForge writes into CalculiX's input:
     {"model": lines before *STEP, "step": lines inside the step, "reactions": {set name: item
     label}, "notes": [sentences]}."""
-    mesh = _MeshData(femmesh)
+    mesh = _MeshData(femmesh, groups)
     rows, reactions, notes = [], {}, []
     held = set()
     model_lines, step_lines = [], []
@@ -1825,7 +1904,7 @@ def _inject(path, cards):
 
 
 # -- the mesh: Gmsh's size fields, Netgen when Gmsh fails, statistics ------------------------------
-def _size_fields(study, model, owners, subs, global_size):
+def _size_fields(study, model, owners, subs, global_size, view=None):
     """Gmsh .geo lines for the local mesh controls and Scale Mesh Size Per Part: a size
     field per control (the picked faces / edges / bodies get the control's size, which grows
     back to the global size at the study's adjacent size ratio), combined with Min."""
@@ -1882,6 +1961,16 @@ def _size_fields(study, model, owners, subs, global_size):
                 "Field[%d].IncludeBoundary = 1;" % n,
             ]
             finals.append(n)
+    if view:
+        # adaptive refinement: the sizes of the last pass's elements, smaller where the
+        # result changed the most (a Gmsh post-processing view used as a size field)
+        n += 1
+        lines += [
+            'Merge "%s";' % view,
+            "Field[%d] = PostView;" % n,
+            "Field[%d].ViewIndex = 0;" % n,
+        ]
+        finals.append(n)
     if not finals:
         return []
     n += 1
@@ -1891,6 +1980,43 @@ def _size_fields(study, model, owners, subs, global_size):
         "Background Field = %d;" % n,
     ]
     return ["// SciForge: local mesh controls"] + lines + [""]
+
+
+def _write_size_view(path, mesh, result, key, portion):
+    """A Gmsh view (.pos) of the element sizes for the next adaptive pass: every element of
+    this mesh with its size at its corners, halved on the `portion` % of the elements where
+    the result `key` changes the most across the element."""
+    values = Results(result)
+    by_node = dict(zip(values.node_ids, values.values(key)))
+    nodes = mesh.Nodes
+    elements = []
+    for e in mesh.Volumes:
+        ids = mesh.getElementNodes(e)
+        corners = ids[:4]
+        pts = [nodes[n] for n in corners]
+        size = sum((pts[i] - pts[j]).Length for i in range(4) for j in range(i + 1, 4)) / 6.0
+        found = [by_node[n] for n in ids if n in by_node]
+        change = (max(found) - min(found)) if found else 0.0
+        elements.append((change, size, corners))
+    count = max(1, int(round(len(elements) * portion / 100.0)))
+    marked = set(
+        i
+        for _c, i in sorted(((c, i) for i, (c, _s, _n) in enumerate(elements)), reverse=True)[
+            :count
+        ]
+    )
+    target = {}
+    for i, (_change, size, corners) in enumerate(elements):
+        want = size / 2.0 if i in marked else size
+        for n in corners:
+            if n not in target or want < target[n]:
+                target[n] = want
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write('View "sizes" {\n')
+        for _change, _size, corners in elements:
+            xyz = ",".join("%.9g,%.9g,%.9g" % (nodes[n].x, nodes[n].y, nodes[n].z) for n in corners)
+            handle.write("SS(%s){%s};\n" % (xyz, ",".join("%.9g" % target[n] for n in corners)))
+        handle.write("};\n")
 
 
 def _write_fields(geo_path, lines):
@@ -1915,13 +2041,7 @@ def _write_fields(geo_path, lines):
 def _gmsh_problem(output, model, owners):
     """A sentence about what Gmsh could not mesh, naming the bodies of the surfaces it
     reported (Gmsh numbers the model's faces in order)."""
-    import re
-
-    errors = [line.strip() for line in (output or "").splitlines() if "Error" in line]
-    numbers = []
-    for line in errors:
-        for match in re.finditer(r"[Ss]urface[s]?\s+(\d+)", line):
-            numbers.append(int(match.group(1)))
+    errors, numbers = core.gmsh_errors(output)
     names = []
     for number in numbers:
         if 1 <= number <= len(model.Faces):
@@ -1973,7 +2093,7 @@ def _mesh_stats(femmesh, limit):
     mesh is measured on an even sample of its elements)."""
     nodes = femmesh.Nodes
     volumes = list(femmesh.Volumes)
-    step = max(1, len(volumes) // 40000)
+    step = max(1, len(volumes) // 15000)
     lengths, ratios = [], []
     for e in volumes[::step]:
         corners = femmesh.getElementNodes(e)[:4]
@@ -2085,6 +2205,11 @@ class Job:
         self._netgen_out = None
         self._gmsh_problem = None
         self._straight = False  # mesh again with straight-sided elements (bad curved ones)
+        self._solid_nodes = {}  # model solid index -> its mesh nodes (from Gmsh's groups)
+        self._groups = {}  # Gmsh's groups: model faces / edges / solids -> elements, nodes
+        self._previous_run = None  # adaptive refinement: the last pass's run, until the next
+        self._pos = None  # adaptive refinement: the element sizes Gmsh meshes to next
+        self._frd_data = None  # the solver's results, read in the background
 
     # -- public
     def poll(self):
@@ -2157,6 +2282,10 @@ class Job:
                 "The design changed, so SciForge found again the faces of %s by their shape."
                 % ", ".join(repaired)
             )
+        try:
+            refresh_signatures(self.study)
+        except Exception as exc:
+            warn("simulation: remembering picks: %s" % exc)
         checks = precheck(self.study)
         if self.mesh_only:
             errors = [
@@ -2194,7 +2323,7 @@ class Job:
         size = _global_size(self.study, self._model_shape)
         _write_fields(
             tools.temp_file_geo,
-            _size_fields(self.study, self._model_shape, self._owners, self._subs, size),
+            _size_fields(self.study, self._model_shape, self._owners, self._subs, size, self._pos),
         )
         self._mesh_tools = tools
         self._background([tools.gmsh_bin, "-", tools.temp_file_geo], "mesh")
@@ -2231,8 +2360,30 @@ class Job:
         if self.stage == "mesh":
             self._after_mesh()
         elif self.stage == "solve":
-            self.stage, self.message = "results", "Reading the results"
+            self._start_read()
+        elif self.stage == "results":
             self._stage_results()
+
+    def _start_read(self):
+        """The solver's result file read (parsed) in the background: the slow part of
+        reading results (tens of MB for a big mesh), done without the document."""
+        self.stage, self.message = "results", "Reading the results"
+        frd = os.path.join(self.work, self._input + ".frd")
+        if self._returncode not in (0, None) or not os.path.isfile(frd) or not os.path.getsize(frd):
+            self._frd_data = None
+            self._stage_results()
+            return
+        from feminout import importCcxFrdResults as frd_module
+
+        def work():
+            quiet, real = _Quiet(), frd_module.Console
+            frd_module.Console = quiet  # (no printing from this thread)
+            try:
+                self._frd_data = frd_module.read_frd_result(frd)
+            finally:
+                frd_module.Console = real
+
+        self._background_call(work, "results")
 
     def _after_mesh(self):
         t = time.time()
@@ -2265,6 +2416,10 @@ class Job:
         # finds none and reports an error before searching the mesh itself. SciForge does
         # not use the groups: drop them, so the search runs straight away.
         mesh = self._mesh.FemMesh
+        self._groups = _mesh_groups(mesh)
+        solids = self._groups.get("Solid", {})
+        if len(solids) == len(self._model_shape.Solids):
+            self._solid_nodes = {i: nodes for i, (_elements, nodes) in solids.items()}
         if mesh.GroupCount:
             for group in list(mesh.Groups):
                 mesh.removeGroup(group)
@@ -2298,8 +2453,8 @@ class Job:
             self.summary = dict(self.mesh_info)
             self._analysis = None  # (kept)
             return self._stop("done", "Done")
+        # (the input is written on the next turn: the window gets a moment between the two)
         self.stage, self.message = "input", "Writing the solver input"
-        self._stage_input()
 
     def _stage_input(self):
         t = time.time()
@@ -2307,18 +2462,55 @@ class Job:
         from femsolver.calculix import writer
         from femtools import membertools
 
+        from femmesh import meshtools
+
         solver = next(o for o in self._analysis.Group if o.Name.startswith("SimSolver"))
-        getter = meshsetsgetter.MeshSetsGetter(
-            self._analysis, solver, self._mesh, membertools.AnalysisMember(self._analysis)
-        )
-        getter.get_mesh_sets()
-        w = writer.FemInputWriterCcx(
-            self._analysis, solver, self._mesh, getter.member, self.work, getter.mat_geo_sets
-        )
-        path = w.write_solver_input()
+        groups = getattr(self, "_groups", None) or {}
+        real_search = meshtools.get_femnodes_by_refshape
+        model = self._model
+
+        def search(femmesh, ref):
+            # the nodes of the model's faces / solids from Gmsh's groups (FreeCAD's search by
+            # geometry takes minutes on a big mesh)
+            obj, names = ref
+            if groups and getattr(obj, "Name", None) == model.Name:
+                found = []
+                for name in names:
+                    kind = next((k for k in ("Face", "Edge", "Solid") if name.startswith(k)), None)
+                    group = groups.get(kind, {}).get(int(name[len(kind) :])) if kind else None
+                    if group is None:
+                        return real_search(femmesh, ref)
+                    found += group[1]
+                return found
+            return real_search(femmesh, ref)
+
+        meshtools.get_femnodes_by_refshape = search
+        try:
+            getter = meshsetsgetter.MeshSetsGetter(
+                self._analysis, solver, self._mesh, membertools.AnalysisMember(self._analysis)
+            )
+            getter.get_mesh_sets()
+            # the writer makes a second getter of its own "for compatibility" that CalculiX's
+            # writer never reads (4 s of tables on a big mesh): it gets this one
+            getter_class = meshsetsgetter.MeshSetsGetter
+            meshsetsgetter.MeshSetsGetter = lambda *args, **kwargs: getter
+            try:
+                w = writer.FemInputWriterCcx(
+                    self._analysis,
+                    solver,
+                    self._mesh,
+                    getter.member,
+                    self.work,
+                    getter.mat_geo_sets,
+                )
+            finally:
+                meshsetsgetter.MeshSetsGetter = getter_class
+            path = w.write_solver_input()
+        finally:
+            meshtools.get_femnodes_by_refshape = real_search
         if not path or not os.path.isfile(path):
             raise SimulationError("The solver input could not be written.")
-        cards = _solver_cards(self.study, self._model_shape, self._mesh.FemMesh, self._subs)
+        cards = _solver_cards(self.study, self._model_shape, self._mesh.FemMesh, self._subs, groups)
         _inject(path, cards)
         self._reactions = cards["reactions"]
         self.notes += cards["notes"]
@@ -2354,7 +2546,30 @@ class Job:
         from feminout import importCcxFrdResults
 
         before = set(o.Name for o in self.doc.Objects)
-        importCcxFrdResults.importFrd(frd, self._analysis, "Sim")
+        data = getattr(self, "_frd_data", None)
+        real_read, real_pipeline = (
+            importCcxFrdResults.read_frd_result,
+            importCcxFrdResults.setupPipeline,
+        )
+        if data is not None:  # (parsed in the background already)
+            importCcxFrdResults.read_frd_result = lambda _path: data
+        # no VTK results pipeline: SciForge draws the results itself (it doubled the time and
+        # the size of the results in the file); von Mises and the principal stresses for every
+        # node at once with numpy (FreeCAD's loop over the nodes took 9 s for 140 000 nodes)
+        from femresult import resulttools
+
+        real_vm, real_principal = resulttools.add_von_mises, resulttools.add_principal_stress_std
+        importCcxFrdResults.setupPipeline = lambda *args, **kwargs: None
+        resulttools.add_von_mises = _fast_von_mises
+        resulttools.add_principal_stress_std = _fast_principal_stresses
+        try:
+            importCcxFrdResults.importFrd(frd, self._analysis, "Sim")
+        finally:
+            importCcxFrdResults.read_frd_result = real_read
+            importCcxFrdResults.setupPipeline = real_pipeline
+            resulttools.add_von_mises = real_vm
+            resulttools.add_principal_stress_std = real_principal
+            self._frd_data = None
         made = [o for o in self.doc.Objects if o.Name not in before]
         result = next((o for o in made if o.isDerivedFrom("Fem::FemResultObject")), None)
         if result is None:
@@ -2392,6 +2607,9 @@ class Job:
                 "so a part can still move or spin freely. Add constraints so every body is held "
                 "in X, Y and Z (a Fixed face is the simplest)."
             )
+        plan = core.adaptive_plan(settings(self.study)["adaptive"])
+        if plan is not None and self._adapt(result, plan):
+            return  # (another pass, on a mesh refined where the result changes the most)
         _close_open_transaction(self.doc)
         self.summary = _finish(self.study, result, self._mesh, self._owners, self, reactions)
         _remove_run(self.study, "SimRun")
@@ -2402,7 +2620,69 @@ class Job:
         self._analysis = None  # (kept)
         self._stop("done", "Done")
 
+    def _adapt(self, result, plan):
+        """Fusion's adaptive mesh refinement, one pass: True when another solve starts on a
+        mesh made finer where the result changes the most across an element, False when it
+        is done (the change of the result's extreme between two passes is within the
+        tolerance, or the passes are used up)."""
+        passes, tolerance, portion = plan
+        key = settings(self.study)["adaptive"]["result"]
+        values = Results(result).values(key)
+        extreme = min(values) if key == "principal_3" else max(values)
+        mesh = self._mesh.FemMesh
+        self.passes.append(
+            {"nodes": mesh.NodeCount, "elements": mesh.VolumeCount, "value": extreme}
+        )
+        previous = self.passes[-2]["value"] if len(self.passes) > 1 else None
+        if core.converged(previous, extreme, tolerance) or len(self.passes) >= passes:
+            if self._previous_run is not None:
+                _remove_objects(self.doc, list(reversed(_run_members(self._previous_run))))
+                self._previous_run = None
+            self.notes.append(
+                "Adaptive mesh refinement: %d solves, %s %s (%s)."
+                % (
+                    len(self.passes),
+                    core.result_title(key),
+                    " -> ".join(core.fmt(p["value"]) for p in self.passes),
+                    (
+                        "converged within %s %%" % core.fmt(tolerance)
+                        if core.converged(previous, extreme, tolerance)
+                        else "not converged within %s %% after %d solves"
+                        % (core.fmt(tolerance), passes)
+                    ),
+                )
+            )
+            return False
+        t = time.time()
+        path = os.path.join(self.work, "sizes%d.pos" % len(self.passes))
+        _write_size_view(path, mesh, result, key, portion)
+        self.timings["refine"] = self.timings.get("refine", 0.0) + time.time() - t
+        if self._previous_run is not None:
+            _remove_objects(self.doc, list(reversed(_run_members(self._previous_run))))
+        self._previous_run, self._analysis = self._analysis, None
+        self._pos = os.path.basename(path)
+        self.stage = "model"
+        self.message = "Refining the mesh (solve %d of up to %d)" % (len(self.passes) + 1, passes)
+        return False if self._cancel else True
+
     # -- helpers
+    def _background_call(self, fn, stage):
+        """fn() in the background thread (Python work that needs no document)."""
+        self.stage = stage
+        self._run_error = None
+        t = time.time()
+
+        def work():
+            try:
+                fn()
+            except Exception as exc:
+                self._run_error = "Could not read the solver's results: %s" % exc
+            finally:
+                self.timings[stage + "_read"] = time.time() - t
+
+        self._thread = threading.Thread(target=work, name="SciForge %s" % stage, daemon=True)
+        self._thread.start()
+
     def _background(self, command, stage, env=None):
         self.stage = stage
         self._output, self._returncode, self._run_error = "", None, None
@@ -2436,12 +2716,13 @@ class Job:
         self.state, self.message = state, message
         if state != "done":
             log("simulation %s: %s" % (state, message))
-        if self._analysis is not None:  # a run that did not make it: nothing left behind
-            try:
-                _remove_objects(self.doc, list(reversed(_run_members(self._analysis))))
-            except Exception:
-                pass
-            self._analysis = None
+        for run in (self._analysis, self._previous_run):
+            if run is not None:  # a run that did not make it: nothing left behind
+                try:
+                    _remove_objects(self.doc, list(reversed(_run_members(run))))
+                except Exception:
+                    pass
+        self._analysis = self._previous_run = None
         shutil.rmtree(self.work, ignore_errors=True)
         return state
 
@@ -2450,6 +2731,71 @@ MESH_ADVICE = (
     "Try a larger Average Element Size in the mesh settings, or look for tiny gaps, slivers "
     "and very short edges in the model."
 )
+
+
+def _stress_arrays(res_obj):
+    import numpy as np
+
+    return np.array(
+        [
+            res_obj.NodeStressXX,
+            res_obj.NodeStressYY,
+            res_obj.NodeStressZZ,
+            res_obj.NodeStressXY,
+            res_obj.NodeStressXZ,
+            res_obj.NodeStressYZ,
+        ],
+        dtype=float,
+    )
+
+
+def _fast_von_mises(res_obj):
+    """FreeCAD's resulttools.add_von_mises, for every node at once (the same formula)."""
+    import numpy as np
+
+    s = _stress_arrays(res_obj)
+    normal, shear = s[:3], s[3:]
+    pressure = normal.mean(axis=0)
+    vm = np.sqrt(1.5 * ((normal - pressure) ** 2).sum(axis=0) + 3.0 * (shear**2).sum(axis=0))
+    res_obj.vonMises = vm.tolist()
+    return res_obj
+
+
+def _fast_principal_stresses(res_obj):
+    """FreeCAD's resulttools.add_principal_stress_std, for every node at once (a node with a
+    NaN stress gets NaN, as there; the nonlinear material part does not apply here)."""
+    import numpy as np
+
+    s = _stress_arrays(res_obj)
+    n = s.shape[1]
+    bad = np.isnan(s).any(axis=0)
+    s = np.where(bad, 0.0, s)
+    sigma = np.empty((n, 3, 3))
+    sigma[:, 0, 0], sigma[:, 1, 1], sigma[:, 2, 2] = s[0], s[1], s[2]
+    sigma[:, 0, 1] = sigma[:, 1, 0] = s[3]
+    sigma[:, 0, 2] = sigma[:, 2, 0] = s[4]
+    sigma[:, 1, 2] = sigma[:, 2, 1] = s[5]
+    eig = np.linalg.eigvalsh(sigma) if n else np.zeros((0, 3))  # ascending
+    big, mid, small = eig[:, 2].copy(), eig[:, 1].copy(), eig[:, 0].copy()
+    for values in (big, mid, small):
+        values[bad] = np.nan
+    res_obj.PrincipalMax = big.tolist()
+    res_obj.PrincipalMed = mid.tolist()
+    res_obj.PrincipalMin = small.tolist()
+    res_obj.MaxShear = ((big - small) / 2.0).tolist()
+    return res_obj
+
+
+class _Quiet:
+    """Stands in for FreeCAD's Console in a background thread (it must not print there)."""
+
+    def __init__(self):
+        self.lines = []
+
+    def _keep(self, text):
+        self.lines.append(text)
+
+    PrintMessage = PrintLog = PrintWarning = PrintError = _keep
 
 
 def _no_window():
@@ -2464,34 +2810,8 @@ def _last_lines(text, count=4):
 
 
 def _solver_failure(output):
-    """CalculiX's complaint as a sentence a person can act on."""
-    text = (output or "").lower()
-    if "zero pivot" in text or "singular" in text or "numerically singular" in text:
-        return (
-            "The model is not held enough: a part can still move or spin freely. Add constraints "
-            "so every body is held in X, Y and Z (a Fixed face is the simplest), or switch on "
-            "Remove rigid body modes if the loads balance each other."
-        )
-    if "nonpositive jacobian" in text or "negative jacobian" in text:
-        return "The mesh has distorted elements: make the Average Element Size smaller."
-    if (
-        "dependent dof" in text
-        or "is used as dependent" in text
-        or "mpc" in text
-        and "error" in text
-    ):
-        return (
-            "Two constraints hold the same corner or edge in ways that cannot both be true: "
-            "suppress one of them, or move one to a different face."
-        )
-    if "not enough memory" in text or "allocation" in text and "fail" in text:
-        return (
-            "The computer ran out of memory for this mesh: make the Average Element Size "
-            "larger, or use local mesh controls only where the stress matters."
-        )
-    if "material" in text and ("not defined" in text or "no elastic" in text):
-        return "A body has no usable material: check the study materials."
-    return "CalculiX could not solve the study. %s" % _last_lines(output)
+    """CalculiX's complaint as a sentence a person can act on (simulation_core)."""
+    return core.solver_failure(output)
 
 
 def solve(study, timeout=None):
@@ -2546,10 +2866,7 @@ def mesh_signature(study):
     h.update(json.dumps(settings(study)["mesh"], sort_keys=True).encode())
     h.update(json.dumps(settings(study)["contact_tolerance"]).encode())
     for item in items(study, "mesh"):
-        refs = [(o.Name, s) for o, s in _picks(item.References)]
-        h.update(
-            json.dumps([item_data(item), refs, bool(item.Suppressed)], sort_keys=True).encode()
-        )
+        h.update(json.dumps(_item_key(item), sort_keys=True).encode())
     return h.hexdigest()
 
 
@@ -2717,11 +3034,16 @@ def signature(study):
         h.update(json.dumps([name, props], sort_keys=True, default=str).encode())
     h.update(json.dumps(study_data(study), sort_keys=True).encode())
     for item in items(study):
-        refs = [(o.Name, s) for o, s in _picks(item.References)]
-        h.update(
-            json.dumps([item_data(item), refs, bool(item.Suppressed)], sort_keys=True).encode()
-        )
+        h.update(json.dumps(_item_key(item), sort_keys=True).encode())
     return h.hexdigest()
+
+
+def _item_key(item):
+    """What of an item a solve depends on (its kind, options, picks; not the shapes its picks
+    remember, which are refreshed at every solve)."""
+    data = {k: v for k, v in item_data(item).items() if k != "sigs"}
+    refs = [(o.Name, s) for o, s in _picks(item.References)]
+    return [data, refs, bool(item.Suppressed)]
 
 
 def out_of_date(study):
@@ -2739,14 +3061,20 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
     position = {n: i for i, n in enumerate(node_ids)}
     strengths = [None] * len(node_ids)
     per_body = {}
+    grouped = getattr(job, "_solid_nodes", None) or {}
     if model is not None:
         for index, (solid, body) in enumerate(zip(model.Solids, owners)):
             name, props, _source = study_material(study, body)
             s = core.strength(props, basis)
-            try:
-                nodes = mesh.getNodesBySolid(solid)
-            except Exception:
-                nodes = []
+            nodes = grouped.get(index + 1)
+            if nodes is None:
+                if len(owners) == 1:
+                    nodes = list(mesh.Nodes)  # (one body: every node is its)
+                else:
+                    try:
+                        nodes = mesh.getNodesBySolid(solid)
+                    except Exception:
+                        nodes = []
             per_body.setdefault(body.Label, {"nodes": set(), "strength": s, "material": name})
             per_body[body.Label]["nodes"].update(nodes)
             for n in nodes:
@@ -2756,6 +3084,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
                 if s is not None and (strengths[i] is None or s < strengths[i]):
                     strengths[i] = s
     vm = list(result.vonMises)
+    lengths = list(result.DisplacementLengths)  # (read once: each read copies every value)
     # Fusion: yield strength / von Mises, or ultimate tensile strength / 1st principal stress
     divided = vm if basis == "yield" else list(result.PrincipalMax)
     safety = []
@@ -2786,7 +3115,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
         bodies_out[label] = {
             "material": entry["material"],
             "von_mises_max": max(vm[i] for i in idx),
-            "displacement_max": max(result.DisplacementLengths[i] for i in idx),
+            "displacement_max": max(lengths[i] for i in idx),
             "safety_min": min(sf) if sf else None,
         }
     out = {
@@ -2808,6 +3137,14 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
         "reactions": reactions or {},
         "notes": list(job.notes),
         "results_kept": bool(data["settings"]["keep_results"]),
+        "adaptive": (
+            {
+                "result": data["settings"]["adaptive"]["result"],
+                "passes": list(job.passes),
+            }
+            if job.passes
+            else None
+        ),
         "seconds": round(time.time() - job.started, 2),
         "timings": {k: round(v, 3) for k, v in job.timings.items()},
     }
