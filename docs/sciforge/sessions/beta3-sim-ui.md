@@ -45,7 +45,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   a big button in every group; SOLVE > Job Status opens the progress window any time), **icons**
   (`tools/sciforge/icons_simulation.py`, 44 icons, also for the greyed commands; written one by
   one so the other builders' icons are untouched), unit tests (`test_simulation_setup_core.py`,
-  37), fourteen GUI scenarios `sim_setup_*.py`.
+  37), fifteen GUI scenarios `sim_setup_*.py`.
 - **The design's units** (Fusion's Simulation follows the document's units, research 6): the
   value fields, the browser's texts, Load Case Attributes, Study Materials' properties and the
   mesh / contact lengths show N, MPa, N mm, mm in a metric design and lbf, psi, lbf in, in in an
@@ -74,7 +74,9 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   fingerprint counted it: fixed by sim-core) and the Results row then said they were kept;
   with another design in front, Job Status named a study by its internal name and its
   double-click said the results were gone; a design closed during its solve left the progress
-  window saying "Solving...".
+  window saying "Solving..."; a new load dialog opened after a click on another load's row
+  started on that load's face (the row lights it up: `simulation_browser.only_highlight`); a
+  deleted study whose mesh showed left Show Mesh ticked (and Undo drew the mesh again).
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
@@ -100,8 +102,9 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_lost` | 54 | PASS |
 | `sim_setup_two` | 40 | PASS |
 | `sim_setup_mesh` | 42 | PASS |
+| `sim_setup_odd` | 44 | PASS |
 
-All fourteen in one batch (22:35-22:57 UTC, with the five below): every one passes. Shared
+The first fourteen in one batch (22:35-22:57 UTC, with the five below): every one passes. Shared
 files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser` (92),
 `drawing_new` (63), `browser_opacity_hover` (46), `ribbon_sweep` (221) and `hole_qa_more` (363,
 the marking menu) pass. `--only base` (23:05): unit tests 2541 OK, golden models 614 + 2 xfail,

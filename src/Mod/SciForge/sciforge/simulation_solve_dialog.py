@@ -932,8 +932,21 @@ def hide_mesh():
 
 
 def mesh_shown():
-    """True while Generate Mesh's mesh is shown on the model (the menu's tick)."""
-    return MESH["shown"] is not None
+    """True while Generate Mesh's mesh is shown on the model (the menu's tick); False once its
+    study or mesh is gone (deleted by a script, the AI, a closed design)."""
+    shown = MESH["shown"]
+    if shown is None:
+        return False
+    try:
+        doc = App.getDocument(shown[0]) if shown[0] in App.listDocuments() else None
+        study = doc.getObject(shown[1]) if doc is not None else None
+        mesh = mesh_object(study) if study is not None and bodies.alive(study) else None
+        if mesh is not None and mesh.ViewObject is not None and mesh.ViewObject.Visibility:
+            return True
+    except Exception:
+        pass
+    MESH["shown"] = None
+    return False
 
 
 def toggle_mesh():

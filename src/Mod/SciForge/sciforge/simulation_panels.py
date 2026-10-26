@@ -1067,8 +1067,13 @@ def _keep_whole_bodies(item, picks):
 
 
 def _initial_picks(doc):
+    """What the person picked before the command: a new item's first picks (not the faces a
+    click on another item's row in the browser lit up)."""
     try:
-        return [p for p in hole_common.picks(doc) if p[1]]
+        from . import simulation_browser
+
+        found = [p for p in hole_common.picks(doc) if p[1]]
+        return [] if simulation_browser.only_highlight(doc, found) else found
     except Exception:
         return []
 
