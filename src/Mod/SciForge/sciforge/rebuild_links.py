@@ -235,11 +235,22 @@ class Follow:
         return self._elements[key]
 
     def swap_names(self):
-        """{old name: new name or ""} for a path through the original: the body's name
-        swapped, a step inside it dropped (the rebuilt body holds the whole shape)."""
+        """{old name: new name, "" or None} for a path through the original: the body and
+        its origin swapped for the rebuild's, a solid step inside it dropped (the rebuilt
+        body holds the whole shape), anything else (a sketch, a datum) None: no counterpart."""
         if self._swap_names is None:
-            names = {n: "" for n in self.old_names}
-            names[self.original.Name] = self.rebuilt.Name
+            names = {}
+            for name in self.old_names:
+                obj = self.doc.getObject(name)
+                if obj is None:
+                    names[name] = None
+                elif obj is self.original:
+                    names[name] = self.rebuilt.Name
+                elif _is_solid_step(obj):
+                    names[name] = ""
+                else:
+                    new = self.counterpart(obj)
+                    names[name] = new.Name if new is not None else None
             self._swap_names = names
         return self._swap_names
 
@@ -279,8 +290,8 @@ class Follow:
             text, moved = core.rewrite_sub(sub, self.swap_names(), self._path_elements(sub))
             if text is None:
                 raise _Stuck(
-                    "it uses %s of the original, and the rebuild has no face, edge or corner "
-                    "there" % core.split_sub(sub)[1]
+                    "it uses %s of the original, which the rebuild has not"
+                    % (core.split_sub(sub)[1] or sub)
                 )
             out.append(text)
             changed = changed or moved

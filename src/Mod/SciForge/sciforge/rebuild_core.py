@@ -755,9 +755,10 @@ def split_sub(sub):
 
 def rewrite_sub(sub, names, element_for):
     """`sub` with the original's objects swapped for the rebuild's. names: {old object name:
-    new name, or "" to drop it from the path (a step inside the original: the rebuilt body
-    itself holds the shape)}; element_for(old element name) -> the rebuild's element name
-    or None. Returns (new sub, changed); new sub None when the element has no counterpart.
+    new name, "" to drop it from the path (a step inside the original: the rebuilt body
+    itself holds the shape), or None when it has no counterpart (a sketch of the original)};
+    element_for(old element name) -> the rebuild's element name or None. Returns (new sub,
+    changed); new sub None when something on the path or the element has no counterpart.
     A path that does not pass through the original stays as it is."""
     path, element = split_sub(sub)
     if not any(p in names for p in path):
@@ -765,6 +766,8 @@ def rewrite_sub(sub, names, element_for):
     out = []
     for p in path:
         if p in names:
+            if names[p] is None:
+                return None, True
             if names[p]:
                 out.append(names[p])
         else:

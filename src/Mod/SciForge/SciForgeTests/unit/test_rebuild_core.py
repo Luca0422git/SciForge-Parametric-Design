@@ -398,6 +398,11 @@ class FollowTest(unittest.TestCase):
         self.assertEqual(core.rewrite_sub("Body001.", names, self.element_for), ("Body003.", True))
         # an element the rebuild has not: it cannot follow
         self.assertEqual(core.rewrite_sub("Body001.Face1", names, self.element_for), (None, True))
+        # an object of the original with no counterpart (its sketch): it cannot follow
+        names_sketch = dict(names, Sketch=None)
+        self.assertEqual(
+            core.rewrite_sub("Body001.Sketch.Edge12", names_sketch, self.element_for), (None, True)
+        )
         # a path that does not reach the original stays as it is
         self.assertEqual(
             core.rewrite_sub("Body002.Face7", names, self.element_for), ("Body002.Face7", False)
