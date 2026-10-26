@@ -4,9 +4,10 @@ Branch `sf/sim-results` (from `beta3`), 2026-10-26/27. Brief:
 `docs/sciforge/dev/briefs/beta3-sim-results.md`. Spec: outline 7.18; Fusion's behaviour:
 `docs/sciforge/dev/research/fusion-simulation.md` section 5; parity:
 `docs/sciforge/parity/simulation.md` section Results (behaviour table with sources, known gaps).
-Merged `sf/sim-core` and `sf/sim-ui` (four times) to work against their newer engine and SETUP
+Merged `sf/sim-core` and `sf/sim-ui` (five times) to work against their newer engine and SETUP
 tab; the merges brought adaptive mesh refinement, the results read in the background, the
-per-body keys of same-named bodies and the last engine fixes.
+per-body keys of same-named bodies, sim-ui's Repair and Job Status opening results, and the last
+engine fixes.
 
 ## What was built
 
@@ -175,3 +176,7 @@ per-body keys of same-named bodies and the last engine fixes.
   when its study is out of date; the report's pictures include the convergence chart (drawn on
   white paper whatever the look); the periodic look for shown-again objects takes 60 in turn
   (5 ms instead of 56-69 ms on a design of 800 objects).
+- 22:30-22:45 FINISH RESULTS works during Compare; Compare's out-of-date marks and units follow
+  a design change made while comparing; default report / animation file names safe on Windows;
+  Compare's odd ends explored (leaving the workspace, closing the design: no error); merged
+  sim-core and sim-ui a fifth time (the generated parity checklist made again after the merge).
