@@ -239,7 +239,8 @@ of memory); all fixed (see the session log).
   through recognize_mesh; the contract on odd input, with the part that crashed FreeCAD once
   answered in under 30 s; describe() on a 300-face part under 5 s), run by
   `tools/sciforge/run_tests.sh --only recognize` and at the end of `--only headless` / `--only
-  base`. Scratch sweeps (not in the suite) found the bugs listed in the session log: every
-  golden model that builds one solid (505 described, 406 rebuilt exactly, 420 with a base read,
-  no crash, no regression between runs; the rest are free-form, sheet metal bent both ways or
-  split faces), the 71 real solids and the 27 BREP solids above.
+  base`. Scratch sweeps (not in the suite) found the bugs listed in the session log: the 27
+  BREP solids above, every golden model that builds one solid (505 described, 406 rebuilt
+  exactly, 420 with a base read, no crash and no regression between runs;
+  the rest are free-form, sheet metal bent both ways or split faces) and the 71 real solids
+  above.
