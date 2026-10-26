@@ -20,6 +20,8 @@ H  Structural Loads open with a face picked, and the design closed: the dialog e
 I  Fixed 1 and Force 1 selected together in the browser (Ctrl+click), Delete: both gone in one
    undo step; Undo: both back. Fixed 1 suppressed: red; the Pre-check list's Repair opens
    Structural Constraints and says Fixed 1 is suppressed; Esc; Unsuppress: not red.
+J  The Solve dialog and Load Case Attributes open, and their design closed: both close with it
+   (a click in them would work on nothing); a new design's New Study is its own.
 """
 
 import FreeCAD as App
@@ -335,6 +337,46 @@ def i_unsuppress():
 
 def i_check():
     h.check("not red again", s.light() in ("green", "yellow"), s.light())
+    state["third"] = App.ActiveDocument.Name
+    s.menu_item("MANAGE", "Load Case Attributes")
+
+
+# -- J ------------------------------------------------------------------------------------------
+def j_solve():
+    h.check("Load Case Attributes open", s.popup_named("SciForgeSimAttributes") is not None)
+    h.ribbon("Solve")
+
+
+def j_close():
+    h.check("the Solve dialog open", s.solve_dialog() is not None)
+    App.closeDocument(state["third"])
+
+
+def j_closed():
+    h.check("the Solve dialog closed with its design", s.solve_dialog() is None)
+    h.check(
+        "Load Case Attributes closed with its design",
+        s.popup_named("SciForgeSimAttributes") is None,
+    )
+    s.new_bracket("SimOddFour")()
+
+
+def j_enter():
+    s.workspace("Simulation")
+
+
+def j_new_study():
+    dialog = s.new_study_dialog()
+    if h.check("New Study for the new design", dialog is not None):
+        h.check("its own design", dialog.doc is App.ActiveDocument)
+        s.click_widget(dialog.create_button)
+
+
+def j_made():
+    found = s.studies()
+    h.check(
+        "a study in the new design", len(found) == 1 and found[0].Document is App.ActiveDocument
+    )
 
 
 h.run(
@@ -387,5 +429,11 @@ h.run(
         i_constraints,
         i_unsuppress,
         i_check,
+        j_solve,
+        j_close,
+        j_closed,
+        j_enter,
+        j_new_study,
+        j_made,
     ],
 )

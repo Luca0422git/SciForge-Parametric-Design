@@ -395,6 +395,12 @@ def sync():
         _finish_sim_dialog()
         closed = STATE.get("closed_doc")
         if closed:
+            try:
+                from . import simulation_dialogs
+
+                simulation_dialogs.close_for_closed_designs()
+            except Exception as exc:
+                warn("simulation windows: %s" % exc)
             if time.time() - closed > 5.0 or _close_leftover_step():
                 STATE["closed_doc"] = None
             else:

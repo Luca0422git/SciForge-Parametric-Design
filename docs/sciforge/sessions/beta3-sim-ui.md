@@ -87,7 +87,10 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   waiting for an undo step open with no dialog after 2 s). Two rows picked with Ctrl and Delete
   deleted only the last one: the browser's view-to-rows selection sync let go of a load's row
   (it selects faces, not an object); now the rows stay picked while the view shows just what
-  they lit up (`simulation_browser.keep_selected`, a hook in `browser_ui._sync_selection`).
+  they lit up (`simulation_browser.keep_selected`, a hook in `browser_ui._sync_selection`). The
+  Solve dialog, Pre-check list, Load Case Attributes and Contact Manager stayed open after their
+  design closed (a click in them worked on a deleted study): they now close with it
+  (`simulation_dialogs.close_for_closed_designs`); New Study reopens for the design in front.
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
@@ -113,7 +116,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_lost` | 60 | PASS |
 | `sim_setup_two` | 52 | PASS |
 | `sim_setup_mesh` | 42 | PASS |
-| `sim_setup_odd` | 71 | PASS |
+| `sim_setup_odd` | 80 | PASS |
 | `sim_setup_during` | 30 | PASS |
 
 The first fourteen in one batch (22:35-22:57 UTC, with the five below): every one passes. Shared
