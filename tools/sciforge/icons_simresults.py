@@ -228,3 +228,20 @@ def _():
 @icon("simr_finish")
 def _():
     return circle(24, 24, 16, GREEN) + path("M15 24 L22 31 L34 17", WHITE, 4)
+
+
+@icon("simr_range")
+def _():
+    # the legend's colour bar with its two ends set by hand (two little sliders)
+    out = ""
+    colours = (RED, GOLD[1], GREEN, BLUE[2])
+    for k, c in enumerate(colours):
+        out += rect(18, 8 + k * 8, 10, 8, c)
+    return (
+        out
+        + rect(18, 8, 10, 32, "none", 0, 'stroke="%s" stroke-width="1.2"' % STROKE)
+        + poly([(8, 13), (15, 16), (8, 19)], WHITE)
+        + line(8, 16, 34, 16, WHITE, 1.4)
+        + poly([(8, 29), (15, 32), (8, 35)], WHITE)
+        + line(8, 32, 34, 32, WHITE, 1.4)
+    )

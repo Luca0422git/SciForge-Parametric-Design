@@ -1475,6 +1475,12 @@ SIMR_TOOLS = group(
         ),  # owner: sim-results
         item("Results Details", "SciForge_SimResultsDetails", "simr_details"),  # owner: sim-results
         item(
+            "Legend Min/Max",
+            "SciForge_SimResultsRange",
+            "simr_range",
+            note="The values the legend's colours run between (not for the safety factor)",
+        ),  # owner: sim-results
+        item(
             "Compare",
             None,
             "simr_compare",

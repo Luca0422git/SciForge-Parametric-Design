@@ -7,7 +7,8 @@ A  INSPECT > Surface Probes: a click on the result's top face reads the value of
    the legend's Stress makes the probes read the stress there; Clear All removes them; Close.
    Esc in the dialog closes it and keeps the probes.
 B  Slice Plane: the result is cut across X at the middle and the cut face is coloured with the
-   values inside (each between the result's min and max); Across Y at 2 mm puts the cut face on
+   values inside (each between the result's min and max); dragging the plane's arrow moves the
+   cut along X; Across Y at 2 mm puts the cut face on
    that plane; Flip keeps the other half; a probe click on the cut face reads the value inside;
    Slice alone shows the cut face inside the whole result drawn see-through; OK keeps it.
 C  Slice Plane again, Cancel: the slice stays as it was; again, Remove Slice: the result is whole.
@@ -172,6 +173,35 @@ def b_slice_check():
     h.check("on the plane x = 50", abs(xs.min() - 50) < 1e-6 and abs(xs.max() - 50) < 1e-6)
 
 
+def b_drag():
+    from SciForgeTests.gui import arrow_input as ai
+
+    panel = s.task_panel()
+    arrow = getattr(panel, "arrow", None)
+    h.check("a drag arrow on the plane", arrow is not None)
+    if arrow is None:
+        return
+    state["offset0"] = panel.offset.value()
+    start = ai.head_point(arrow)
+    h.drag_points(start, start + V(20, 0, 0))
+
+
+b_drag.wait_ms = 900
+
+
+def b_drag_check():
+    sess = s.session()
+    panel = s.task_panel()
+    moved = panel.offset.value() - state["offset0"]
+    h.check("dragging the arrow moves the plane along X", 8.0 < moved < 32.0, moved)
+    h.check("the slice follows", abs(sess.slice["offset"] - panel.offset.value()) < 1e-9)
+    xs = sess.display.cap_points[:, 0] if len(sess.display.cap_points) else None
+    h.check(
+        "the cut face at the new place",
+        xs is not None and abs(xs.mean() - panel.offset.value()) < 1e-6,
+    )
+
+
 def b_axis_y():
     ui.choose(s.panel_field("SciForgeSimSliceAxis", QtWidgets.QComboBox), "Across Y (XZ plane)")
     # Tab away from the field (Enter would be the dialog's OK, as in Fusion's dialogs)
@@ -322,6 +352,8 @@ h.run(
         a_esc_check,
         b_slice,
         b_slice_check,
+        b_drag,
+        b_drag_check,
         b_axis_y,
         b_axis_y_check,
         b_axis_x_flip,

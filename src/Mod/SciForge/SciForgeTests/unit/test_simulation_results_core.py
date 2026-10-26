@@ -33,8 +33,12 @@ class ResultListTests(unittest.TestCase):
         import numpy as np
 
         big, small = core.principal(
-            np.array([1.0, 2.0]), np.array([0.0, 2.0]), np.array([0.0, 2.0]),
-            np.array([0.0, 1.0]), np.array([0.0, 0.0]), np.array([0.0, 0.0]),
+            np.array([1.0, 2.0]),
+            np.array([0.0, 2.0]),
+            np.array([0.0, 2.0]),
+            np.array([0.0, 1.0]),
+            np.array([0.0, 0.0]),
+            np.array([0.0, 0.0]),
         )
         self.assertAlmostEqual(big[0], 1.0)
         self.assertAlmostEqual(small[0], 0.0)
@@ -89,6 +93,22 @@ class LegendTests(unittest.TestCase):
         self.assertFalse(leg["reverse"])
         # a unit the result does not have falls back to the base unit
         self.assertEqual(core.legend("von_mises", {"min": 0, "max": 1}, unit="in")["unit"], "MPa")
+
+    def test_legend_min_max(self):
+        leg = core.legend("von_mises", {"min": 1.0, "max": 59.0}, span=(0.0, 40.0))
+        self.assertTrue(leg["custom"])
+        self.assertEqual((leg["lo"], leg["hi"]), (0.0, 40.0))
+        self.assertEqual(leg["ticks"][0][1], "40")
+        self.assertEqual(leg["max_text"], "59 MPa")  # the result's own max still shown
+        self.assertIn("0 MPa to 40 MPa", leg["span_text"])
+        # never for the safety factor (Fusion offers no legend range for it)
+        sf = core.legend("safety", {"min": 2.0, "max": 15.0}, span=(0.0, 4.0))
+        self.assertFalse(sf["custom"])
+        self.assertEqual(sf["hi"], sim.SAFETY_CAP)
+        # a range given upside down is turned round; an empty one is ignored
+        self.assertEqual(core.span_ok((40, 0)), (0.0, 40.0))
+        self.assertEqual(core.span_ok((5, 5), 1, 2), (1, 2))
+        self.assertEqual(core.span_ok(None, 1, 2), (1, 2))
 
     def test_target_bands_in_the_legend(self):
         leg = core.legend("safety", {"min": 2, "max": 15}, targets=(3.0, 6.0))

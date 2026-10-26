@@ -10,15 +10,20 @@ B  A click on the RESULTS tab: the safety factor shows first (Fusion), red-ish a
    on the view only (its Visibility, the undo history and the modified mark do not change),
    the min / max tags sit at the solve's places (drawn on the bent shape).
 C  Legend > Stress (Von Mises, then 1st Principal) and Displacement: the colours change, the
-   legend's values are the solve's; the unit drop-down (in) converts them.
+   legend's values are the solve's; the unit drop-down (in) converts them. Legend Min/Max (not
+   for the safety factor): the colours run from 0 to 100 MPa, values above take the top colour,
+   the legend says so; Reset from RESULT TOOLS.
 D  The legend's Results Details button: the lowest safety factor against the targets in a
    sentence, one row per body with its material; Close.
 E  Finish Results: back to SETUP, the beam shows again, nothing of the results is left on the
    view. RESULTS again shows the same result; Workspace > Design takes it all away.
 """
 
+from PySide import QtWidgets
+
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import simres_steps as s
+from SciForgeTests.gui import widget_input as w
 
 state = {}
 
@@ -147,6 +152,70 @@ def c_unit_check():
     h.check("max label in inches", s.legend_text("SciForgeSimLegendMax").endswith(" in"))
 
 
+def c_range_safety():
+    s.choose_result("Safety Factor")
+
+
+def c_range_safety_check():
+    lg = s.legend()
+    h.check("no legend range for the safety factor", not s.results_ui().RangeCommand().IsActive())
+    h.check("its menu entry greyed", lg is not None and not lg.range_action.isEnabled())
+
+
+def c_range_open():
+    s.choose_result("Stress")
+    lg = s.legend()
+    button = lg.findChild(QtWidgets.QToolButton, "SciForgeSimLegendOptions")
+    h.check("legend options open Legend Min/Max", w.click_menu(button, "Legend Min/Max..."))
+
+
+def c_range_type():
+    dialog = s.dialog("SciForgeSimRange")
+    h.check("Legend Min/Max open", dialog is not None)
+    if dialog is None:
+        return
+    for name, text in (("SciForgeSimRangeMin", "0"), ("SciForgeSimRangeMax", "100")):
+        spin = dialog.findChild(QtWidgets.QDoubleSpinBox, name)
+        spin.lineEdit().selectAll()
+        w.type_text(spin, text)
+    s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimRangeOK"))
+
+
+def c_range_check():
+    sess = s.session()
+    info = sess.legend_info
+    vm = s.stats("von_mises")
+    h.check("the colours run from 0 to 100 MPa", info["custom"] and info["hi"] == 100.0, info)
+    h.check("the top value 100", info["ticks"][0][1] == "100", info["ticks"][0])
+    h.check("the result's own max still shown", abs(info["max"] - vm["max"]) < 1e-9)
+    h.check("the legend says so", s.legend().range_label.isVisible(), s.legend().range_label.text())
+    above = [
+        t
+        for n, t in sess.display.node_positions().items()
+        if sess.data.values("von_mises")[n] > 100.0
+    ]
+    h.check("values above 100 take the top colour", above and min(above) > 0.999, above[:5])
+
+
+def c_range_reset():
+    s.menu("RESULT TOOLS", "Legend Min/Max")
+
+
+def c_range_reset_click():
+    dialog = s.dialog("SciForgeSimRange")
+    h.check("Legend Min/Max from the ribbon", dialog is not None)
+    if dialog is not None:
+        s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimRangeReset"))
+
+
+def c_range_reset_check():
+    sess = s.session()
+    vm = s.stats("von_mises")
+    h.check("Reset: the result's own range again", not sess.legend_info["custom"])
+    h.check("up to the max von Mises", abs(sess.legend_info["hi"] - vm["max"]) < 1e-9)
+    s.choose_result("Displacement")
+
+
 def d_details():
     s.click_widget(s.legend_widget("SciForgeSimDetailsButton"))
 
@@ -226,6 +295,14 @@ h.run(
         c_displacement_check,
         c_unit,
         c_unit_check,
+        c_range_safety,
+        c_range_safety_check,
+        c_range_open,
+        c_range_type,
+        c_range_check,
+        c_range_reset,
+        c_range_reset_click,
+        c_range_reset_check,
         d_details,
         d_check,
         d_close,

@@ -17,7 +17,7 @@ from . import simulation_results as results_data
 from . import simulation_results_core as core
 from .compat import QtCore, QtGui, QtWidgets
 
-OPEN = {"details": None, "report": None, "reactions": None, "solve": None}
+OPEN = {"details": None, "report": None, "reactions": None, "solve": None, "range": None}
 
 PANEL_STYLE = """
 QLabel[role="dim"] { color: #c3cad4; }
@@ -255,7 +255,60 @@ class SlicePanel:
             warn("Slice Plane: keys unavailable: %s" % exc)
         session.panels.append(self)
         taskui.set_current(self)
+        self.arrow = None
         self._changed()
+        self._make_arrow()
+
+    # the drag arrow on the plane (Fusion's slice plane manipulator)
+    def _make_arrow(self):
+        self._drop_arrow()
+        try:
+            axis = self.spec["axis"]
+            i = "xyz".index(axis)
+            lo, _hi = self._range()
+            centre = [(float(a) + float(b)) / 2.0 for a, b in zip(self.low, self.high)]
+            centre[i] = lo
+            direction = [0.0, 0.0, 0.0]
+            direction[i] = 1.0
+            self.arrow = taskui.ArrowDragger(
+                App.Vector(*centre),
+                App.Vector(*direction),
+                float(self.offset.value()) - lo,
+                on_drag=self._dragged,
+                on_release=self._dragged,
+            )
+        except Exception as exc:
+            self.arrow = None
+            warn("Slice Plane: no drag arrow: %s" % exc)
+
+    def _drop_arrow(self):
+        arrow, self.arrow = getattr(self, "arrow", None), None
+        if arrow is not None:
+            try:
+                arrow.remove()
+            except Exception:
+                pass
+
+    def _dragged(self, distance):
+        try:
+            if self._closed:
+                return
+            lo, _hi = self._range()
+            self.offset.setValue(lo + float(distance))
+        except Exception as exc:
+            warn("Slice Plane: %s" % exc)
+
+    def _follow_arrow(self):
+        arrow = getattr(self, "arrow", None)
+        if arrow is None:
+            return
+        try:
+            lo, _hi = self._range()
+            want = float(self.offset.value()) - lo
+            if abs(arrow.distance() - want) > 1e-9:
+                arrow.set_distance(want)
+        except Exception:
+            pass
 
     def _range(self):
         i = "xyz".index(self.spec["axis"])
@@ -285,6 +338,7 @@ class SlicePanel:
         self.offset.blockSignals(False)
         self._sync_slider()
         self._changed()
+        self._make_arrow()
 
     def _offset_changed(self, _value):
         self._sync_slider()
@@ -308,6 +362,7 @@ class SlicePanel:
                 "style": self.style_box.currentData(),
             }
             self.session.set_slice(self.spec)
+            self._follow_arrow()
         except Exception as exc:
             warn("Slice Plane: %s" % exc)
 
@@ -326,6 +381,13 @@ class SlicePanel:
         return getattr(buttons, "value", buttons)
 
     def accept(self):
+        try:
+            before = self.offset.value()
+            self.offset.interpretText()  # a position typed and not yet taken
+            if self.offset.value() != before:
+                self._changed()
+        except Exception as exc:
+            warn("Slice Plane: %s" % exc)
         log("results: slice plane %s at %s mm" % (self.spec["axis"], core.fmt(self.spec["offset"])))
         return self._close_dialog()
 
@@ -346,6 +408,7 @@ class SlicePanel:
         if self._closed:
             return True
         self._closed = True
+        self._drop_arrow()
         for guard in self._guards:
             try:
                 guard.remove()
@@ -577,6 +640,105 @@ def details(session):
     OPEN["details"] = dialog
     dialog.show()
     log("Results Details opened")
+    return dialog
+
+
+# -- Legend Min/Max --------------------------------------------------------------------------------
+class RangeDialog(QtWidgets.QDialog):
+    """Legend Min/Max (Fusion's legacy legend range): the values the colours run between, in the
+    legend's unit; values beyond them take the end colours. Reset goes back to the result's own
+    min and max. Not for the safety factor (Fusion offers none for it)."""
+
+    def __init__(self, session):
+        super().__init__(_main())
+        self.setObjectName("SciForgeSimRange")
+        self.session = session
+        self.setWindowTitle("Legend Min/Max")
+        self.unit = session.unit()
+        key = session.result
+        stats = session.data.stats(key)
+        lo, hi, _reverse = session.scale()
+        layout = QtWidgets.QFormLayout(self)
+        layout.addRow(QtWidgets.QLabel(core.result_name(key)))
+        self.low = QtWidgets.QDoubleSpinBox()
+        self.low.setObjectName("SciForgeSimRangeMin")
+        self.high = QtWidgets.QDoubleSpinBox()
+        self.high.setObjectName("SciForgeSimRangeMax")
+        span = max(abs(stats.get("max") or 0.0), abs(stats.get("min") or 0.0), 1e-9) * 10.0
+        for spin in (self.low, self.high):
+            spin.setDecimals(6)
+            spin.setRange(-core.convert(span, self.unit), core.convert(span, self.unit))
+            spin.setKeyboardTracking(False)
+            spin.setSuffix(" " + self.unit if self.unit else "")
+        self.low.setValue(core.convert(lo, self.unit))
+        self.high.setValue(core.convert(hi, self.unit))
+        layout.addRow("Min", self.low)
+        layout.addRow("Max", self.high)
+        own = QtWidgets.QLabel(
+            "The result runs from %s to %s."
+            % (
+                core.with_unit(core.convert(stats.get("min"), self.unit), self.unit),
+                core.with_unit(core.convert(stats.get("max"), self.unit), self.unit),
+            )
+        )
+        own.setWordWrap(True)
+        layout.addRow(own)
+        self.message = QtWidgets.QLabel("")
+        self.message.setWordWrap(True)
+        layout.addRow(self.message)
+        buttons = QtWidgets.QHBoxLayout()
+        reset = QtWidgets.QPushButton("Reset")
+        reset.setObjectName("SciForgeSimRangeReset")
+        reset.setAutoDefault(False)
+        reset.clicked.connect(self._reset)
+        ok = QtWidgets.QPushButton("OK")
+        ok.setObjectName("SciForgeSimRangeOK")
+        ok.setDefault(True)
+        ok.clicked.connect(self._ok)
+        cancel = QtWidgets.QPushButton("Cancel")
+        cancel.setObjectName("SciForgeSimRangeCancel")
+        cancel.setAutoDefault(False)
+        cancel.clicked.connect(self.reject)
+        buttons.addWidget(reset)
+        buttons.addStretch(1)
+        buttons.addWidget(ok)
+        buttons.addWidget(cancel)
+        layout.addRow(buttons)
+
+    def _base(self, value):
+        factor = core.convert(1.0, self.unit) or 1.0
+        return float(value) / factor
+
+    def _ok(self):
+        try:
+            for spin in (self.low, self.high):
+                spin.interpretText()  # what was typed and not yet taken (no Enter, no Tab)
+            lo, hi = self.low.value(), self.high.value()
+            if abs(hi - lo) < 1e-12:
+                self.message.setText("Min and Max must differ.")
+                return
+            self.session.set_range((self._base(lo), self._base(hi)))
+            self.accept()
+        except Exception as exc:
+            warn("Legend Min/Max: %s" % exc)
+
+    def _reset(self):
+        try:
+            self.session.set_range(None)
+            self.accept()
+        except Exception as exc:
+            warn("Legend Min/Max: %s" % exc)
+
+    def done(self, code):
+        OPEN["range"] = None
+        super().done(code)
+
+
+def legend_range(session):
+    dialog = RangeDialog(session)
+    OPEN["range"] = dialog
+    dialog.show()
+    log("Legend Min/Max opened")
     return dialog
 
 
@@ -887,7 +1049,7 @@ def solve_here(session):
 
 
 def close_all():
-    for key in ("details", "report", "reactions"):
+    for key in ("details", "report", "reactions", "range"):
         dialog = OPEN.get(key)
         if dialog is None:
             continue

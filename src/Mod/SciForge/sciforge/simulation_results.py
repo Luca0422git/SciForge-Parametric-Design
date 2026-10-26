@@ -87,9 +87,7 @@ class ResultData:
                 else:
                     raw = self.results.values(key)
             except Exception as exc:
-                raise SimulationError(
-                    "No %s in these results: %s" % (core.result_name(key), exc)
-                )
+                raise SimulationError("No %s in these results: %s" % (core.result_name(key), exc))
             out = np.asarray([float("nan") if v is None else float(v) for v in raw], dtype=float)
             if len(out) != len(self.points):
                 raise SimulationError(
@@ -184,10 +182,30 @@ def forget(doc_name=None):
 
 
 def has_results(study):
+    """True when the study's last results are here to show (solved, and kept with the design
+    if it was reopened: sim-core's keep_results)."""
     try:
-        return study is not None and simulation.result_object(study) is not None
+        if study is None or simulation.result_object(study) is None:
+            return False
+        return not results_dropped(study)
     except Exception:
         return False
+
+
+def results_dropped(study):
+    """Solved, but its results were not saved with the design (the study's Keep results
+    setting off): only the numbers are left; solve again to see them."""
+    dropped = getattr(simulation, "results_dropped", None)
+    try:
+        return bool(dropped(study)) if dropped is not None else False
+    except Exception:
+        return False
+
+
+DROPPED = (
+    "The results of this study were not kept with the design (Study Settings: Keep results "
+    "in the file): solve it again to see them."
+)
 
 
 def out_of_date(study):

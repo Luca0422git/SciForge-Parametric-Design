@@ -107,7 +107,8 @@ def show(study):
         if study is None or not simulation.is_study(study):
             return False
         if not results_data.has_results(study):
-            commands.tell(core.NO_RESULTS)
+            dropped = results_data.results_dropped(study)
+            commands.tell(results_data.DROPPED if dropped else core.NO_RESULTS)
             return False
         doc = study.Document
         if _ui_active_study(doc) is not study:
@@ -385,6 +386,7 @@ class Session:
         self.minmax = True
         self.banded = False
         self.bands = False  # the safety factor target bands
+        self.ranges = {}  # result key -> (lo, hi) set in Legend Min/Max (base unit)
         self.targets = core.DEFAULT_TARGETS
         self.probes = []  # {"node": index} or {"point": (x, y, z), "values": {...}}
         self.slice = None  # {"axis": "x"|"y"|"z", "offset": mm, "flip": bool, "style": ...}
@@ -454,6 +456,7 @@ class Session:
                     "details": open_details,
                     "solve": solve_again,
                     "banded": lambda on: self.set_option("banded", on),
+                    "range": open_range,
                 },
             )
             self.tags = view_mod.TagLayer(gl, self.view)
@@ -609,7 +612,7 @@ class Session:
         np = view_mod._np()
         values = self.data.values(self.result)
         stats = self.data.stats(self.result)
-        lo, hi, reverse = core.scale(self.result, stats.get("min"), stats.get("max"))
+        lo, hi, reverse = self.scale()
         surface_values = values[self.display.nodes]
         self.display.set_positions(_positions(np, surface_values, lo, hi, reverse))
         bands = self.result == "safety" and self.bands
@@ -627,6 +630,7 @@ class Session:
             self.unit(),
             banded=self.banded,
             targets=self.targets if bands else None,
+            span=self.ranges.get(self.result),
         )
         info["targets"] = self.targets
         self.legend_info = info
@@ -635,6 +639,29 @@ class Session:
         self.update_tags()
         self._glyphs()
         self._redraw()
+
+    def scale(self, result=None):
+        """(lo, hi, reverse) of the colours of a result as drawn: its own min .. max (the
+        safety factor 0 .. 15), or the range set in Legend Min/Max."""
+        result = result or self.result
+        stats = self.data.stats(result)
+        lo, hi, reverse = core.scale(result, stats.get("min"), stats.get("max"))
+        span = self.ranges.get(result)
+        if span is not None and result != "safety":
+            lo, hi = core.span_ok(span, lo, hi)
+        return lo, hi, reverse
+
+    def set_range(self, span):
+        """Legend Min/Max: the colours of the result shown run over `span` (lo, hi in the
+        base unit); None goes back to the result's own min and max."""
+        if self.result == "safety":
+            return
+        if span is None:
+            self.ranges.pop(self.result, None)
+        else:
+            self.ranges[self.result] = core.span_ok(span)
+        self.apply()
+        log("results: legend range %s" % ("reset" if span is None else "set"))
 
     def _study_text(self):
         study = self.study
@@ -655,7 +682,7 @@ class Session:
         if self.data is not None and self.display is not None:
             values = self.data.values(self.result)
             stats = self.data.stats(self.result)
-            lo, hi, reverse = core.scale(self.result, stats.get("min"), stats.get("max"))
+            lo, hi, reverse = self.scale()
             unit = self.unit()
             if self.minmax:
                 for kind in ("max", "min"):
@@ -862,8 +889,7 @@ class Session:
         np = view_mod._np()
         data = self.data
         values = data.values(self.result)
-        stats = data.stats(self.result)
-        lo, hi, reverse = core.scale(self.result, stats.get("min"), stats.get("max"))
+        lo, hi, reverse = self.scale()
         tris, vals = core.cut(
             data.deformed(self.display.factor), values, data.straight(), origin, normal
         )
@@ -999,6 +1025,11 @@ class Session:
             self._ticks += 1
             if self._ticks % 6 == 0:
                 self._keep_design_hidden()
+            if _picking_dialog_open():
+                # a command that picks faces of the design (a load or constraint edited from the
+                # browser, Local Mesh Control) opened: the model is needed, back to SETUP
+                log("results put away: a setup command needs the model")
+                QtCore.QTimer.singleShot(0, _to_setup)
         except Exception as exc:
             warn("results: %s" % exc)
 
@@ -1036,6 +1067,27 @@ def _glyph_module():
     except Exception:
         pass
     return None
+
+
+def _picking_dialog_open():
+    """A task dialog that picks on the design (pickpanel.PickPanel) is open, not one of ours."""
+    try:
+        from . import pickpanel, taskui
+
+        current = taskui.current()
+        return current is not None and isinstance(current, pickpanel.PickPanel)
+    except Exception:
+        return False
+
+
+def _to_setup():
+    try:
+        ribbon = _ribbon()
+        if ribbon is not None and _current_tab(ribbon) == RESULTS_TAB:
+            ribbon.select_tab(SETUP_TAB)
+        sync()
+    except Exception as exc:
+        warn("results: %s" % exc)
 
 
 def glyphs_available():
@@ -1081,6 +1133,25 @@ def open_details():
         panels.details(session)
     except Exception as exc:
         warn("Results Details: %s" % exc)
+
+
+def open_range():
+    try:
+        from . import simulation_results_panels as panels
+
+        session = current()
+        if session is None:
+            commands.tell(core.NO_RESULTS)
+            return
+        if session.result == "safety":
+            commands.tell(
+                "The safety factor's legend always runs from 0 to 15: choose another result to "
+                "set its range."
+            )
+            return
+        panels.legend_range(session)
+    except Exception as exc:
+        warn("Legend Min/Max: %s" % exc)
 
 
 def solve_again():
@@ -1227,6 +1298,19 @@ class DetailsCommand(_ResultsCommand):
         open_details()
 
 
+class RangeCommand(_ResultsCommand):
+    menu = "Legend Min/Max"
+    tip = "Set the values the legend's colours run between (not for the safety factor)"
+    icon = "simr_range"
+
+    def IsActive(self):
+        session = current()
+        return session is not None and session.result != "safety"
+
+    def run(self, session):
+        open_range()
+
+
 class ReportCommand(_ResultsCommand):
     menu = "Report"
     tip = "Write the study's setup, results and pictures to an HTML report"
@@ -1327,6 +1411,7 @@ COMMANDS = {
     "SciForge_SimResultsAnimate": AnimateCommand,
     "SciForge_SimResultsDetails": DetailsCommand,
     "SciForge_SimResultsReport": ReportCommand,
+    "SciForge_SimResultsRange": RangeCommand,
     "SciForge_SimResultsUndeformed": _deform_command("undeformed", "simr_deform_none"),
     "SciForge_SimResultsActual": _deform_command("actual", "simr_deform_actual"),
     "SciForge_SimResultsAdjustedHalf": _deform_command("adjusted_half", "simr_deform_half"),

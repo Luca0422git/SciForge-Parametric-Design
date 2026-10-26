@@ -286,18 +286,23 @@ def texture_coordinate(t):
 
 
 # -- the legend ------------------------------------------------------------------------------------
-def legend(result, stats, unit=None, count=9, banded=False, targets=None):
+def legend(result, stats, unit=None, count=9, banded=False, targets=None, span=None):
     """What the legend shows for a result: {"title", "group", "component", "unit", "ticks":
     [(value in unit, text, position 0..1 from the bottom)], "min", "max" (in unit, texts),
     "reverse", "lo", "hi" (the colour scale, base unit), "bands"}.
 
     `stats`: {"min", "max"} of the result in SciForge's base unit (simulation.summary()'s
     stats). The safety factor's scale is 0 .. SAFETY_CAP whatever its values (Fusion shows it
-    capped at 15); with `targets` its bar shows the three target bands."""
+    capped at 15); with `targets` its bar shows the three target bands. `span` (lo, hi in the
+    base unit): the colours run over that range instead of the result's own (Legend Min/Max;
+    never for the safety factor, as in Fusion)."""
     unit = unit if unit is not None and unit_ok(result, unit) else base_unit(result)
     lo_v = stats.get("min") if stats else None
     hi_v = stats.get("max") if stats else None
     lo, hi, reverse = scale(result, lo_v, hi_v)
+    custom = span is not None and result != "safety"
+    if custom:
+        lo, hi = span_ok(span, lo, hi)
     if result == "safety":
         count = 11  # 0, 1.5, 3 ... 15: round numbers on the capped scale
     ticks = []
@@ -323,6 +328,13 @@ def legend(result, stats, unit=None, count=9, banded=False, targets=None):
         "reverse": reverse,
         "banded": bool(banded),
         "bands": None,
+        "custom": custom,
+        "span_text": (
+            "Colours from %s to %s"
+            % (with_unit(convert(lo, unit), unit), with_unit(convert(hi, unit), unit))
+            if custom
+            else ""
+        ),
     }
     if result == "safety" and targets is not None:
         out["bands"] = [
@@ -331,6 +343,17 @@ def legend(result, stats, unit=None, count=9, banded=False, targets=None):
             ("below", "Below %s" % fmt(targets[0]), BAND_COLOURS["below"]),
         ]
     return out
+
+
+def span_ok(span, lo=None, hi=None):
+    """A valid colour range (lo < hi) from a set one, else the result's own (lo, hi)."""
+    try:
+        a, b = float(span[0]), float(span[1])
+    except (TypeError, ValueError, IndexError):
+        return lo, hi
+    if not (math.isfinite(a) and math.isfinite(b)) or a == b:
+        return lo, hi
+    return (a, b) if a < b else (b, a)
 
 
 # -- the safety factor target ----------------------------------------------------------------------
