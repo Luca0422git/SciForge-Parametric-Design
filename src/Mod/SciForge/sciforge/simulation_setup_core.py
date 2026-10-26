@@ -155,6 +155,63 @@ def solve_button_text(count):
     return "Solve %d %s" % (count, "Study" if count == 1 else "Studies")
 
 
+def repair_step(info):
+    """Fusion's Repair button (research 3.10) for a study that cannot solve: where to take the
+    person first, as (what, name, sentence). `info`: {"lost": [item labels that lost their
+    picks], "held": count of constraints not suppressed, "remove_rigid": bool, "loose": [body
+    labels nothing holds], "materials": [body labels whose study material lacks what the solve
+    needs], "outside": [(item label, body label) of items on bodies the study leaves out]}.
+    what: "edit" (the item's dialog), "constraints" (Structural Constraints), "dof" (DOF View
+    shows how the bodies move), "materials" (Study Materials) or "precheck" (the list)."""
+    lost = info.get("lost") or []
+    if lost:
+        return (
+            "edit",
+            lost[0],
+            "%s lost what it was on (the design changed): pick it again and press OK." % lost[0],
+        )
+    if not info.get("held") and not info.get("remove_rigid"):
+        return (
+            "constraints",
+            None,
+            "Nothing holds the model: pick where it is held (a Fixed face is the simplest) and "
+            "press OK.",
+        )
+    loose = info.get("loose") or []
+    if loose and not info.get("remove_rigid"):
+        return (
+            "dof",
+            loose[0],
+            "%s %s not held: DOF View shows how %s can move; add a constraint on %s, or leave "
+            "%s out of the study."
+            % (
+                ", ".join(loose),
+                "is" if len(loose) == 1 else "are",
+                "it" if len(loose) == 1 else "they",
+                "it" if len(loose) == 1 else "them",
+                "it" if len(loose) == 1 else "them",
+            ),
+        )
+    materials = info.get("materials") or []
+    if materials:
+        return (
+            "materials",
+            materials[0],
+            "%s: its study material lacks a value the solve needs: choose another material for "
+            "it." % materials[0],
+        )
+    outside = info.get("outside") or []
+    if outside:
+        item, body = outside[0]
+        return (
+            "materials",
+            body,
+            "%s is on %s, which the study leaves out: tick %s In Study (or suppress %s)."
+            % (item, body, body, item),
+        )
+    return "precheck", None, "The pre-check lists what stops the study from solving."
+
+
 # -- forces typed as components (Fusion's Vector direction: Fx, Fy, Fz) ----------------------
 def force_from_components(fx, fy, fz):
     """(magnitude, unit direction) of a force typed as its X, Y and Z parts (N)."""
@@ -172,6 +229,22 @@ def components_of(magnitude, vector):
     except core.SimulationError:
         unit = [0.0, 0.0, -1.0]
     return [float(magnitude) * c for c in unit]
+
+
+# -- Fusion's Angle direction type (a force or a moment turned from the face's normal) ------------
+def turned(vector, angles):
+    """`vector` turned by `angles` (degrees) about the design's X axis, then Y, then Z: the
+    direction of a load whose Direction Type is Angle (it starts from the first picked face's
+    normal). Values within 1e-12 of 0 are 0."""
+    x, y, z = [float(c) for c in vector]
+    ax, ay, az = [math.radians(float(a or 0.0)) for a in angles]
+    c, s = math.cos(ax), math.sin(ax)
+    y, z = c * y - s * z, s * y + c * z
+    c, s = math.cos(ay), math.sin(ay)
+    x, z = c * x + s * z, c * z - s * x
+    c, s = math.cos(az), math.sin(az)
+    x, y = c * x - s * y, s * x + c * y
+    return [0.0 if abs(v) < 1e-12 else v for v in (x, y, z)]
 
 
 # -- the study tree of the browser (research 4) -----------------------------------------------

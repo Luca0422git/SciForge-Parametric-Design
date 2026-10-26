@@ -1161,7 +1161,7 @@ def _where(item):
     return "; ".join(parts) or "nothing"
 
 
-def _direction_text(data):
+def _direction_text(data, item=None):
     opts = core.options(data["category"], data["kind"], data["options"])
     if data["category"] != "load":
         return ""
@@ -1173,7 +1173,21 @@ def _direction_text(data):
             v = core.unit_vector(vector)
             if opts.get("flip"):
                 v = [-c for c in v]
-            return "(%s)" % ", ".join(core.fmt(c, 3) for c in v)
+            text = "(%s)" % ", ".join(core.fmt(c, 3) for c in v)
+            angles = None
+            if item is not None:
+                from . import simulation_panels
+
+                angles = simulation_panels.stored_angles(item, opts)
+            if angles:
+                turns = ", ".join(
+                    "%s %s deg" % (a, core.fmt(d, 4)) for a, d in zip("XYZ", angles) if d
+                )
+                text = "Angle from the face%s: %s" % (
+                    (" (" + turns + ")") if turns else "",
+                    text,
+                )
+            return text
         except Exception:
             return ""
     return "Into the faces" if not opts.get("flip") else "Out of the faces"
@@ -1204,7 +1218,7 @@ def attribute_rows(study):
                 title,
                 _where(item),
                 size if data["category"] == "load" else size.replace(title, "").strip(" ()") or "-",
-                _direction_text(data),
+                _direction_text(data, item),
                 status,
             )
         )

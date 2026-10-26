@@ -325,7 +325,12 @@ def clone_study(doc, study):
     made = {}
 
     def change():
-        made["study"] = _sim().clone_study(study)
+        sim = _sim()
+        made["study"] = sim.clone_study(study)
+        from . import simulation_panels
+
+        for source, target in zip(sim.items(study), sim.items(made["study"])):
+            simulation_panels.copy_angles(source, target)
 
     _transaction(doc, "Clone Study", change)
     log("cloned %s as %s" % (study.Label, made["study"].Label))

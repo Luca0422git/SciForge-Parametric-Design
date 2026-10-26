@@ -25,14 +25,19 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 - **Pick dialogs** (`simulation_panels.py`, on `pickpanel.PickPanel`): Structural Constraints,
   Structural Loads and Local Mesh Control (one item dialog, category constraint / load / mesh),
   Edit Gravity. Every kind's options; values with units; the live glyph preview; Fusion's types
-  SciForge does not build listed greyed with a sentence.
+  SciForge does not build listed greyed with a sentence. Force and Moment have Fusion's three
+  Direction Types: Normal, **Angle** (About X, Y, Z in degrees, turned from the first picked
+  face's normal: `simulation_setup_core.turned`; the engine gets the vector, the turns are kept
+  beside it in the item's `SimDirectionAngles` with that vector, so Edit, Load Case Attributes
+  and Clone Study show Angle again, and an item whose vector changed another way shows Vector)
+  and Vector.
 - **Solve** (`simulation_solve_dialog.py`): the Solve dialog, the progress window (stages,
   elapsed time, Cancel; only Close once it ended), studies one after another, the hand-over to
   RESULTS, Generate Mesh with the engine's mesh-only job, Show Mesh, the "not held enough" guard.
 - **Glyphs** (`simulation_glyphs.py`), **browser** (`simulation_browser.py` + hooks in
   `browser_ui.py`), **ribbon** (the SETUP entries in `ribbon_config.py`, DISPLAY > Show Mesh,
   a big button in every group), **icons** (`tools/sciforge/icons_simulation.py`, 43 icons, also
-  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 35), fourteen GUI
+  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 37), fourteen GUI
   scenarios `sim_setup_*.py`.
 - **The design's units** (Fusion's Simulation follows the document's units, research 6): the
   value fields, the browser's texts, Load Case Attributes, Study Materials' properties and the
@@ -77,7 +82,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_glyphs` | 20 | PASS |
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
-| `sim_setup_more` | 39 | PASS |
+| `sim_setup_more` | 61 | PASS |
 | `sim_setup_lost` | 20 | PASS |
 | `sim_setup_two` | 32 | PASS |
 | `sim_setup_mesh` | 34 | PASS |
@@ -159,5 +164,5 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
 ## Gaps
 
 See the parity doc's Known gaps (Simplify, several load cases, per-body safety basis, manual
-contacts / connectors / global loads / point mass, force Angle and Limit Target, Repair and the
-Job Status history, the glyph look is SciForge's own).
+contacts / connectors / global loads / point mass, Limit Target, Repair and the Job Status
+history, the glyph look is SciForge's own; an Angle direction is worked out when OK is pressed).

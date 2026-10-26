@@ -118,7 +118,7 @@ G = guess (the SciForge choice when the sources are silent).
 | S8 | Study Settings: General (Remove rigid body modes, off), Mesh (Average Element Size 10 %, Parabolic, curved, turn angle, adjacent ratio, aspect ratio, minimum size, Scale Mesh Size Per Part), Adaptive Mesh Refinement (None), contacts tolerance | All of these, plus an absolute element size and "keep the results in the design file"; Adaptive Mesh Refinement: None / Low / Medium / High (their numbers shown) / Custom (refinements, convergence tolerance, portion refined, the result watched) | A[6] A[37] A[39] T[107] |
 | S9 | Study Materials: a row per body, "(Same as Model)" default, a material for this study only, safety factor on Yield (default) or Ultimate; double-click shows the properties | A row per body with In Study, the model's material and the study material; the properties used (E, nu, density, yield, UTS) shown, saying which value SciForge filled in where FreeCAD's card had none; the basis is per study (see gaps) | A[9] A[29] A[30] |
 | S10 | Structural Constraints: one dialog, Type Fixed / Pin / Frictionless / Prescribed Displacement | Same; picks with the type's filter (Pin: round faces only); Fixed Ux Uy Uz toggles (on), Pin Radial / Axial on, Tangential off, Prescribed Displacement per-axis values | A[7] A[13] A[14] A[15] A[16] |
-| S11 | Structural Loads: Force (Normal / Vector, Flip, Force Per Entity), Pressure, Moment, Bearing Load, Remote Force | Same; Vector force typed as Fx, Fy, Fz (Normal and Vector carry the values over); Moment Normal / Vector with per entity; Bearing direction (a default that runs along the picked hole's axis is turned across it, and a direction along the axis is refused with a sentence); Remote Force point; every value field takes a unit (100 N, 0.5 kN, 2 MPa, 10 lbf, 2 N m) | A[18] A[19]-A[23] |
+| S11 | Structural Loads: Force (Normal / Angle / Vector, Flip, Force Per Entity), Pressure, Moment (Normal / Angle / Vectors), Bearing Load, Remote Force | Same; Vector force typed as Fx, Fy, Fz (Normal, Angle and Vector carry the direction over); Angle: About X, Y, Z (degrees) from the first picked face's normal, turned about X, then Y, then Z (the engine solves the vector it gives; the turns are kept beside it so Edit, Load Case Attributes and Clone Study show Angle again); Moment Normal / Angle / Vector with per entity; Bearing direction (a default that runs along the picked hole's axis is turned across it, and a direction along the axis is refused with a sentence); Remote Force point; every value field takes a unit (100 N, 0.5 kN, 2 MPa, 10 lbf, 2 N m) | A[18] A[19]-A[23] |
 | S12 | Glyphs on the model for each load and constraint | Cones (Fixed), pins (Pin), balls (Frictionless), arrows (Force, Displacement, Bearing), short arrows (Pressure), a curved arrow (Moment), a big arrow (gravity), green dots (local mesh); same screen size at any zoom; never picked; only in SIMULATION; a lighter live preview while picking | G (mem) |
 | S13 | Gravity: off in a new study; Toggle Gravity On / Off; Edit Gravity (Normal from a face or edge, or angles; Flip) | LOADS > Toggle Gravity On/Off (a tick shows the state); the browser's Gravity row: Edit Gravity (on/off, Vector or Normal from a flat face / straight edge, Flip, magnitude in m/s^2) | A[26] A[28] |
 | S14 | Automatic contacts made bonded at solve time; Automatic Contacts dialog (tolerance, Generate); Contact Manager | Same (0.1 mm); Generate lists the bonded pairs with their gap; Contact Manager is a read-only list; Manual Contacts and connectors greyed | A[33] A[34] A[35]; T[106] |
@@ -152,7 +152,7 @@ G = guess (the SciForge choice when the sources are silent).
 | `sim_setup_canvas` | the right-click marking menu in SIMULATION (the setup's commands, none of the design's; Structural Loads from the ring; Repeat Structural Loads), Delete and E on a face picked in the view change nothing, the design's ring and keys back in DESIGN |
 | `sim_setup_lost` | a design change takes a load's face away: its row marked with the reason, pre-check red, Load Case Attributes "Lost its faces"; Edit Load says the face is gone, a new pick, OK: fine again |
 | `sim_setup_mesh` | Generate Mesh, an absolute 3 mm size (the Mesh row out of date, a finer mesh), Adaptive Mesh Refinement Low solved in several passes, a second study held by nothing with two balanced forces (the view turned to reach the far end): red, then Remove rigid body modes: solved |
-| `sim_setup_more` | Frictionless on a side face, Force Per Entity on two faces, Moment about a typed axis (Vector), gravity along a typed vector, Local Mesh Control edited from the browser + undo |
+| `sim_setup_more` | Frictionless on a side face, Force Per Entity on two faces, Moment about a typed axis (Vector), gravity along a typed vector, Local Mesh Control edited from the browser + undo, a Force by Angle (About X 30: turned, kept, shown again by Edit and Load Case Attributes, carried to Vector, kept by Clone Study) |
 | `sim_setup_two` | two bodies 0.5 mm apart: no contact at 0.1 mm, bonded with the tolerance typed as 1 mm (kept), DOF View: held through the contact, Clone Study with Aluminium for one body, In Study unticked + undo, "Solve 2 Studies": both solved, each body in its study's material |
 | `sim_setup_units` | Document Settings > Units: Inch from the SIMULATION browser; a force typed as 50 (lbf) kept as 222.4 N, the browser and Load Case Attributes in lbf, Edit + OK changes nothing, psi, inches for Local Mesh Control, the mesh size and the contact tolerance (0.1 mm kept exactly); back to Millimeter |
 
@@ -168,9 +168,11 @@ G = guess (the SciForge choice when the sources are silent).
 - **Manual contacts** (Separation, Sliding, Rough, Offset Bonded), Bolt and Rigid Body
   Connectors, Linear / Angular Global Load, Point Mass: greyed (CalculiX contact is nonlinear;
   outline 7.18 keeps Static Stress linear).
-- **Force direction by Angle** and **Limit Target** are not in the Structural Loads dialog
-  (Normal and Vector only: the engine stores a direction as normal or a vector); Remote Moment,
-  Hydrostatic Pressure and the Remote constraint are listed greyed with a sentence.
+- **Limit Target** (a force on a circle inside the face) is not in the Structural Loads dialog
+  (the engine loads whole faces); Remote Moment, Hydrostatic Pressure and the Remote constraint
+  are listed greyed with a sentence. An Angle direction is worked out from the face's normal
+  when OK is pressed: a later design change that turns the face does not turn the load (Normal
+  does follow the face).
 - **Repair** (Fusion's button for a study with serious input errors) is not built; the Job
   Status list of earlier solves covers this session only (Fusion's cloud keeps its jobs).
 - **Glyph look**: SciForge's own (Fusion's are unknown here; research 3.12 is G). xvfb shows no
@@ -180,9 +182,10 @@ G = guess (the SciForge choice when the sources are silent).
   `docs/sciforge/sessions/beta3-sim-ui.md`): fixed by sim-core since: a whole-body pick dropped by
   the engine's link list, a model held by one edge that "solved" with 1e10 mm of movement (now
   "not held enough" in the pre-check; the UI still refuses such results:
-  `simulation_solve_dialog.loose_result`). Still open: the result summary keys bodies by label,
-  so two components' "Body1" share one entry; the result fingerprint is taken when the solve
-  ends, so the UI records the one from its start (`simulation_solve_dialog._keep_out_of_date`).
+  `simulation_solve_dialog.loose_result`), the result summary keyed bodies by label (two
+  components' "Body1" shared one entry), the result fingerprint was taken when the solve ended,
+  and "Keep the results in the design file" made results look out of date. Still open: the
+  Bearing Load's default direction along a hole drilled along Z (the UI turns it across).
 
 ## Results
 
