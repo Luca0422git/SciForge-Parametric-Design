@@ -1309,6 +1309,18 @@ def iso_panel(session):
 
 
 # -- Results Details -------------------------------------------------------------------------------
+def _fit_rows(table, most):
+    """A table as high as its rows (at most `most` of them, then it scrolls): no empty space
+    under a short table."""
+    header = table.horizontalHeader()
+    rows = min(table.rowCount(), most)
+    height = header.sizeHint().height() + 2 * table.frameWidth() + 2
+    height += sum(table.rowHeight(r) for r in range(rows)) if rows else 24
+    if table.horizontalScrollBar().isVisible():
+        height += table.horizontalScrollBar().sizeHint().height()
+    table.setFixedHeight(height)
+
+
 class DetailsDialog(QtWidgets.QDialog):
     """Results Details (Fusion opens it from the legend): the lowest safety factor against the
     targets in a sentence with advice, the targets (and their bands on the model), per body the
@@ -1321,7 +1333,7 @@ class DetailsDialog(QtWidgets.QDialog):
         self.session = session
         self.setWindowTitle("Results Details")
         self.setModal(False)
-        self.setMinimumWidth(620)
+        self.setMinimumWidth(720)
         self.setStyleSheet(PANEL_STYLE)
         box = QtWidgets.QVBoxLayout(self)
         self.headline = QtWidgets.QLabel("")
@@ -1380,6 +1392,7 @@ class DetailsDialog(QtWidgets.QDialog):
         )
         self.bodies.verticalHeader().setVisible(False)
         self.bodies.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
+        self.bodies.horizontalHeader().setStretchLastSection(True)
         box.addWidget(self.bodies)
         box.addWidget(QtWidgets.QLabel("Every result"))
         self.results = QtWidgets.QTableWidget(0, 4)
@@ -1387,7 +1400,8 @@ class DetailsDialog(QtWidgets.QDialog):
         self.results.setHorizontalHeaderLabels(["Result", "Min", "Max", "Unit"])
         self.results.verticalHeader().setVisible(False)
         self.results.setEditTriggers(QtWidgets.QAbstractItemView.NoEditTriggers)
-        box.addWidget(self.results)
+        self.results.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.Stretch)
+        box.addWidget(self.results, 1)
         self.mesh = QtWidgets.QLabel("")
         self.mesh.setProperty("role", "dim")
         self.mesh.setWordWrap(True)
@@ -1431,16 +1445,31 @@ class DetailsDialog(QtWidgets.QDialog):
         self.advice.setText("\n".join("- " + a for a in advice))
         self.stale.setVisible(results_data.out_of_date(study))
         rows = results_data.body_rows(study)
+        stress = session.unit("von_mises") or "MPa"
+        length = session.unit("displacement") or "mm"
+        self.bodies.setHorizontalHeaderLabels(
+            [
+                "Body",
+                "Material",
+                "Strength (%s)" % stress,
+                "Max von Mises (%s)" % stress,
+                "Min safety factor",
+                "Max displacement (%s)" % length,
+            ]
+        )
         self.bodies.setRowCount(len(rows))
         for r, row in enumerate(rows):
             cells = (
                 row["body"],
                 row["material"] or "-",
                 "%s (%s)"
-                % (core.fmt(row["strength"]), "yield" if row["basis"] == "yield" else "ultimate"),
-                core.fmt(row["von_mises_max"]),
+                % (
+                    core.fmt(core.convert(row["strength"], stress)),
+                    "yield" if row["basis"] == "yield" else "ultimate",
+                ),
+                core.fmt(core.convert(row["von_mises_max"], stress)),
                 core.fmt(row["safety_min"]),
-                core.fmt(row["displacement_max"]),
+                core.fmt(core.convert(row["displacement_max"], length)),
             )
             for c, text in enumerate(cells):
                 self.bodies.setItem(r, c, QtWidgets.QTableWidgetItem(str(text)))
@@ -1458,6 +1487,7 @@ class DetailsDialog(QtWidgets.QDialog):
                     }[band]
                 )
         self.bodies.resizeColumnsToContents()
+        _fit_rows(self.bodies, 6)
         stats = simulation.summary(study).get("stats") or {}
         keys = [k for k in core.result_keys() if k in stats]
         self.results.setRowCount(len(keys))
@@ -1472,7 +1502,6 @@ class DetailsDialog(QtWidgets.QDialog):
             )
             for c, text in enumerate(cells):
                 self.results.setItem(r, c, QtWidgets.QTableWidgetItem(str(text)))
-        self.results.resizeColumnsToContents()
         done = simulation.summary(study)
         mesh = done.get("mesh") or {}
         self.mesh.setText(

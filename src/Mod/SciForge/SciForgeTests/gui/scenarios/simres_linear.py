@@ -11,11 +11,12 @@ C  Strain > 1st Principal: on the top face away from the support it equals the s
 D  Stress in psi and ksi: the legend's values are the MPa values converted (1 MPa = 145.04 psi).
 E  The design in inches (the browser's Units row > Inch): the displacement shown at once in
    inches, the design's units (Fusion's Simulation follows them); stress stays in ksi, the unit
-   chosen in the legend.
+   chosen in the legend; Results Details' per-body table in ksi and inches too.
 """
 
 import FreeCAD as App
 import FreeCADGui as Gui
+from PySide import QtWidgets
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import simres_steps as s
@@ -186,6 +187,30 @@ def e_check():
 
 def e_stress_check():
     h.check("stress in the unit chosen before", s.session().legend_info["unit"] == "ksi")
+    s.menu("RESULT TOOLS", "Results Details")
+
+
+def e_details_check():
+    dialog = s.dialog("SciForgeSimDetails")
+    h.check("Results Details open", dialog is not None)
+    if dialog is None:
+        return
+    table = dialog.bodies
+    heads = [table.horizontalHeaderItem(c).text() for c in range(table.columnCount())]
+    h.check(
+        "per body in ksi and inches",
+        heads[3] == "Max von Mises (ksi)" and heads[5] == "Max displacement (in)",
+        heads,
+    )
+    core = s.results_core()
+    vm, disp = s.stats("von_mises"), s.stats("displacement")
+    h.check(
+        "the values converted",
+        table.item(0, 3).text() == core.fmt(core.convert(vm["max"], "ksi"))
+        and table.item(0, 5).text() == core.fmt(core.convert(disp["max"], "in")),
+        (table.item(0, 3).text(), table.item(0, 5).text()),
+    )
+    s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimDetailsClose"))
 
 
 h.run(
@@ -206,5 +231,6 @@ h.run(
         e_inch,
         e_check,
         e_stress_check,
+        e_details_check,
     ],
 )
