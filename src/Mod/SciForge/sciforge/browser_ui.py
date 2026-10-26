@@ -15,7 +15,8 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 from . import _remember, browser_core as core
-from . import commands, components, doc_epoch, theme, timeline_ops as ops, ui_icon, warn
+from . import commands, components, doc_epoch, hover_ghost, theme, timeline_ops as ops
+from . import ui_icon, warn
 from .compat import QtCore, QtGui, QtWidgets
 from .inline_edit import InlineEditor
 
@@ -857,6 +858,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
                 warn("browser selection sync unavailable: %s" % exc)
 
     def stop(self):
+        hover_ghost.hide()
         self._timer.stop()
         if self._observer is not None:
             try:
@@ -939,6 +941,9 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             _remember("info", "browser refresh skipped: %s" % exc)
 
     def _rebuild(self, tree):
+        # the design changed: a hovered row's ghost would show it as it was
+        hover_ghost.hide()
+        self._hover = None
         self._building = True
         selected = {i.data(1, ROLE_NODE)["key"] for i in self.selectedItems()}
         try:
@@ -1132,7 +1137,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             self._syncing = False
 
     def _entered(self, item, column):
-        """Hover: light the object up in the 3D view, like Fusion."""
+        """Hover: light the object up in the 3D view, like Fusion; a hidden body, component
+        or mesh body shows as a faint ghost (hover_ghost)."""
         try:
             obj = self._object(item.data(1, ROLE_NODE))
             if obj is self._hover:
@@ -1141,6 +1147,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             self._hover = obj
             if obj is not None and obj.ViewObject is not None and obj.ViewObject.Visibility:
                 Gui.Selection.setPreselection(obj, "")
+            hover_ghost.show(obj)
         except Exception:
             pass
 
@@ -1201,6 +1208,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
         return self._view_hover
 
     def leaveEvent(self, event):
+        hover_ghost.hide()
         if self._hover is not None:
             self._hover = None
             try:
@@ -1261,6 +1269,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
 
     def _clicked(self, item, column):
         node = item.data(1, ROLE_NODE)
+        hover_ghost.hide()  # the click acts on the row: the ghost has done its job
+        self._hover = None
         try:
             if column == 0 and node["visible"] is not None:
                 self._set_visible(node, not node["visible"])

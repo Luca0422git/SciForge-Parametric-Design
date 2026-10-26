@@ -681,6 +681,251 @@ def _json_ready(value):
     return value
 
 
+# -- references that follow the geometry -------------------------------------------------------
+# A joint names its elements as FreeCAD numbers them on the body as it is ("Face6"). A later
+# step on that body (a fillet, Luca 2026-10-26) numbers them anew: FreeCAD marks the reference
+# lost ("?Face6") and the joint fails, or another face takes the number and the component
+# jumps. Fusion finds the same face again. So each side keeps, per element, where it lies and
+# how (its signature, in the shape's own coordinates), and repair_references finds the element
+# there again on the new shape.
+SIG_TOL = 1e-4
+
+
+def _vec(values):
+    return App.Vector(*values)
+
+
+def _face_point(face):
+    """A point that lies on the face (its centre of mass can be in a hole of it)."""
+    centre = face.CenterOfMass
+    try:
+        u, v = face.Surface.parameter(centre)
+        on = face.valueAt(u, v)
+        if face.isInside(on, 1e-6, True):
+            return on
+        u0, u1, v0, v1 = face.ParameterRange
+        for i in range(1, 6):
+            for k in range(1, 6):
+                p = face.valueAt(u0 + (u1 - u0) * i / 6.0, v0 + (v1 - v0) * k / 6.0)
+                if face.isInside(p, 1e-6, True):
+                    return p
+    except Exception:
+        pass
+    return centre
+
+
+def element_signature(shape, element):
+    """{"type", ...}: where `element` of `shape` lies and how, or None."""
+    try:
+        el = shape.getElement(element)
+    except Exception:
+        return None
+    kind = element.rstrip("0123456789")
+    try:
+        if kind == "Face":
+            point = _face_point(el)
+            u, v = el.Surface.parameter(point)
+            return {
+                "type": "Face",
+                "surface": el.Surface.TypeId,
+                "point": list(_tuple(point)),
+                "normal": list(_tuple(el.normalAt(u, v))),
+            }
+        if kind == "Edge":
+            mid = el.valueAt(0.5 * (el.FirstParameter + el.LastParameter))
+            sig = {"type": "Edge", "curve": el.Curve.TypeId, "point": list(_tuple(mid))}
+            if _is_circle(el):
+                sig["centre"] = list(_tuple(el.Curve.Center))
+                sig["axis"] = list(_tuple(el.Curve.Axis))
+                sig["radius"] = float(el.Curve.Radius)
+            else:
+                middle = 0.5 * (el.FirstParameter + el.LastParameter)
+                sig["dir"] = list(_tuple(el.tangentAt(middle)))
+            return sig
+        if kind == "Vertex":
+            return {"type": "Vertex", "point": list(_tuple(el.Point))}
+    except Exception:
+        return None
+    return None
+
+
+def _fits(shape, element, sig):
+    """True when `element` of `shape` is the one `sig` describes (a face may have grown or
+    shrunk: a later step trimmed it, but it stays in its place and faces the same way)."""
+    import Part
+
+    other = element_signature(shape, element)
+    if other is None or sig is None or other["type"] != sig["type"]:
+        return False
+    try:
+        el = shape.getElement(element)
+        point = _vec(sig["point"])
+        if sig["type"] == "Face":
+            if other["surface"] != sig["surface"]:
+                return False
+            if el.distToShape(Part.Vertex(point))[0] > SIG_TOL:
+                return False
+            if sig["surface"] == "Part::GeomPlane":
+                return _vec(other["normal"]).dot(_vec(sig["normal"])) > 1.0 - 1e-6
+            return True
+        if sig["type"] == "Edge":
+            if other["curve"] != sig["curve"]:
+                return False
+            if "radius" in sig:
+                return (
+                    (_vec(other.get("centre", (0, 0, 0))) - _vec(sig["centre"])).Length <= SIG_TOL
+                    and abs(other.get("radius", 0.0) - sig["radius"]) <= SIG_TOL
+                    and abs(_vec(other["axis"]).dot(_vec(sig["axis"]))) > 1.0 - 1e-6
+                )
+            if el.distToShape(Part.Vertex(point))[0] > SIG_TOL:
+                return False
+            if "dir" in sig and "dir" in other:
+                return abs(_vec(other["dir"]).dot(_vec(sig["dir"]))) > 1.0 - 1e-6
+            return True
+        return (_vec(other["point"]) - point).Length <= SIG_TOL
+    except Exception:
+        return False
+
+
+def find_element(shape, sig):
+    """The name of the element of `shape` that `sig` describes, or None."""
+    if not sig:
+        return None
+    kind = sig.get("type")
+    items = {"Face": shape.Faces, "Edge": shape.Edges, "Vertex": shape.Vertexes}.get(kind, [])
+    for i in range(1, len(items) + 1):
+        name = "%s%d" % (kind, i)
+        if _fits(shape, name, sig):
+            return name
+    return None
+
+
+def _record_elements(record):
+    names = []
+    for name in [record.get("element", "")] + list(record.get("faces") or []) + list(
+        record.get("edges") or []
+    ):
+        if name and name not in names:
+            names.append(name)
+    return names
+
+
+def _owner_and_path(ref):
+    """(the object whose shape holds the referenced element, the sub path before the
+    element) of a joint reference, also when the element itself is lost ("?Face6")."""
+    part = ref[0]
+    subs = list(ref[1]) if len(ref) > 1 else []
+    sub = subs[0] if subs else ""
+    path = sub[: len(sub) - len(element_name(sub))]
+    obj = part
+    for name in [n for n in path.split(".") if n]:
+        child = part.Document.getObject(name)
+        if child is None:
+            return None, path
+        if child.isDerivedFrom("PartDesign::Feature"):
+            continue
+        obj = child
+    return obj, path
+
+
+def repair_side(joint, index):
+    """Make one side of a joint name the elements it was made on, on the shape as it is now
+    (see above); keeps the signatures of elements that have none yet. True when the
+    reference was changed."""
+    prop = "Reference1" if index == 0 else "Reference2"
+    key = PROPS["snap1" if index == 0 else "snap2"]
+    ref = getattr(joint, prop, None)
+    record = _json(joint, key)
+    if not ref or record.get("kind") in ("asbuilt", "origin"):
+        return False
+    obj, path = _owner_and_path(ref)
+    if obj is None:
+        return False
+    try:
+        shape, _to_local = geometry(obj)
+        if shape.isNull():
+            return False
+    except Exception:
+        return False
+    sigs = dict(record.get("sigs") or {})
+    subs = list(ref[1])
+    wanted = _record_elements(record)
+    for sub in subs:
+        name = element_name(sub).lstrip("?")
+        if name and name not in wanted:
+            wanted.append(name)
+    rename, changed = {}, False
+    for name in wanted:
+        sig = sigs.get(name)
+        if sig is None:
+            # an element named before signatures were kept: its own place now, while it is
+            # still found (a lost one cannot be told without it)
+            lost = any(element_name(s) == "?" + name for s in subs)
+            if not lost:
+                sig = element_signature(shape, name)
+                if sig is not None:
+                    sigs[name] = sig
+                    changed = True
+            continue
+        if _fits(shape, name, sig) and not any(element_name(s) == "?" + name for s in subs):
+            continue
+        found = find_element(shape, sig)
+        if found is None:
+            continue  # gone for good: the joint shows red, as before
+        rename[name] = found
+    if rename:
+        for old, new in rename.items():
+            sigs[new] = element_signature(shape, new) or sigs.pop(old)
+            if new != old:
+                sigs.pop(old, None)
+        record["element"] = rename.get(record.get("element", ""), record.get("element", ""))
+        for list_key in ("faces", "edges"):
+            if record.get(list_key):
+                record[list_key] = [rename.get(n, n) for n in record[list_key]]
+        new_subs = []
+        for sub in subs:
+            name = element_name(sub).lstrip("?")
+            new_subs.append(path + rename.get(name, name))
+        log(
+            "joint %s: %s found again on %s (%s)"
+            % (joint.Label, ", ".join(rename), obj.Label, ", ".join(rename.values()))
+        )
+        record["sigs"] = sigs
+        _set_json(joint, key, record)
+        setattr(joint, prop, [ref[0], new_subs])
+        return True
+    if changed:
+        record["sigs"] = sigs
+        _set_json(joint, key, record)
+    return False
+
+
+def repair_references(doc):
+    """repair_side on both sides of every joint; the joints whose references moved."""
+    fixed = []
+    for joint in joints(doc):
+        try:
+            if getattr(joint, "Suppressed", False):
+                continue
+            moved = False
+            for index in (0, 1):
+                if repair_side(joint, index):
+                    moved = True
+            if moved and any(
+                element_name(s).startswith("?")
+                for ref in (joint.Reference1, joint.Reference2)
+                if ref
+                for s in ref[1]
+            ):
+                continue  # still lost somewhere: leave its helper alone
+            if moved:
+                fixed.append(joint)
+                sync_helper(joint)
+        except Exception as exc:
+            warn("joint %s: references not repaired: %s" % (getattr(joint, "Label", "?"), exc))
+    return fixed
+
+
 # -- position modes: Between Two Faces, Two Edge Intersection -------------------------------------
 def _plane_of(shape, element):
     face = shape.getElement(element) if element.startswith("Face") else None

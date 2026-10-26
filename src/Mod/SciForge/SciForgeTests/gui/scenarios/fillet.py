@@ -72,10 +72,11 @@ def radius_3_preview():
     p = b.blend_panel()
     v = h.solid_volume()
     h.check("typed radius 3 previews", b.close(v, one_edge(3)), (v, one_edge(3)))
+    # the diagonal arrow stands on the round's middle: 3 x per_unit from the edge
     h.check(
         "arrow follows the typed radius",
-        p and abs(p.arrows[0][0].distance() - 3.0) < 1e-6,
-        p and p.arrows[0][0].distance(),
+        p and abs(p.arrows[0][0].distance() - 3.0 * p.arrows[0][1]["per_unit"]) < 1e-6,
+        p and (p.arrows[0][0].distance(), p.arrows[0][1]["per_unit"]),
     )
 
 

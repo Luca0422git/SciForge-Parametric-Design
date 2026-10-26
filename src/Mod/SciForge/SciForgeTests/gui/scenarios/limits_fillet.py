@@ -46,14 +46,17 @@ def note(p):
 
 
 def held_drag(along, name):
-    """Drag the first arrow `along` mm (negative: back toward the edge) like a hand does."""
+    """Drag the first arrow `along` mm the way the size grows (negative: back) like a hand does."""
     p = panel()
     if p is None or not p.arrows:
         h.check("%s: an arrow to drag" % name, False)
         return
-    dragger, _spot, _origin, direction = p.arrows[0]
+    dragger, spot, _origin, direction = p.arrows[0]
     head = a.head_point(dragger)
-    start, end = h.screen_point(head), h.screen_point(head + direction * along)
+    # the way the size grows: a diagonal arrow on an outside edge grows the round (or the
+    # bevel) pushed into the part (its per_unit is a minus, blend.fillet_per_unit)
+    grow = direction * (-1.0 if spot.get("per_unit", 1.0) < 0 else 1.0)
+    start, end = h.screen_point(head), h.screen_point(head + grow * along)
     s["samples"] = []
     s["searches"] = p.limits.searches
 
@@ -139,7 +142,10 @@ dragged_far.wait_ms = 2500
 
 
 def drag_back():
-    held_drag(-4.0, "drag back")
+    # 4 mm of radius back (the diagonal arrow moves per_unit mm per mm of radius)
+    p = panel()
+    per_unit = abs(p.arrows[0][1].get("per_unit", 1.0)) if p is not None and p.arrows else 1.0
+    held_drag(-4.0 * per_unit, "drag back")
 
 
 def dragged_back():

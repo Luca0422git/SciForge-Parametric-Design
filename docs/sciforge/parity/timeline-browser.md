@@ -89,6 +89,23 @@ hovering the body); SciForge had the browser > 3D view direction only.
 - Scenario `browser_opacity_hover` P4 (real mouse moves over the 3D view); unit tests
   `test_browser_core.HoverTests`.
 
+### A hidden body shows as a ghost while its row is hovered (0.1.0-beta.2.2)
+
+Luca: "If i hover over a body in the browser that is hidden, I should get a preview of that
+body in the workspace. A ghost body if you will." Hovering a shown body's row lights it through
+FreeCAD's preselection, which colours only what is drawn, so a hidden body showed nothing.
+
+- The mouse over a hidden body's, component's, mesh body's or loose solid's row puts a faint,
+  see-through light-blue copy of it in the 3D view (`hover_ghost.py`: a temporary Coin node,
+  unclickable). It goes when the mouse leaves the row or the browser, the row is clicked, its
+  eye is clicked, or the browser is rebuilt. No document or view property changes (FreeCAD
+  would record those in the undo history and the file): nothing goes into Undo.
+- A body the timeline marker stands before has no solid there: no ghost (nor for a body a
+  component hides because of the marker). Shown bodies get no ghost (they light up as before).
+- The tessellation is kept per object until its shape or place changes (coarse: a ghost needs
+  no detail), so hovering up and down a big design stays quick.
+- Scenario `browser_ghost` (real mouse moves over the rows, the eye clicked).
+
 ## Known gaps
 
 - (Done before polish-2, listed here until then: an Extrude made while rolled back before a

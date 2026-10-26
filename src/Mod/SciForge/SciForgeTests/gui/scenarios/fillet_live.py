@@ -138,7 +138,9 @@ def held_drag(along, label, index=0, moves=30, hold_ms=500):
             q._last_motion = time.perf_counter()  # the check is not a pause of the hand
 
     head = a.head_point(dragger)
-    start, end = h.screen_point(head), h.screen_point(head + direction * along)
+    # the way the size grows: a fillet's diagonal arrow grows the round pushed into the part
+    grow = direction * (-1.0 if spot.get("per_unit", 1.0) < 0 else 1.0)
+    start, end = h.screen_point(head), h.screen_point(head + grow * along)
     s["drag"] = a.HeldDrag(start, end, moves=moves, every_ms=16, hold_ms=hold_ms, sample=sample)
     s["drag"].run()
 
