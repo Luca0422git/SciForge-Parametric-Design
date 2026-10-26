@@ -72,14 +72,14 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 | `sim_setup_browser` | 61 | PASS |
 | `sim_setup_documents` | 49 | PASS |
 | `sim_setup_kinds` | 70 | PASS |
-| `sim_setup_workspace` | 54 | PASS |
+| `sim_setup_workspace` | 59 | PASS |
 | `sim_setup_components` | 42 | PASS |
 | `sim_setup_glyphs` | 20 | PASS |
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
 | `sim_setup_more` | 39 | PASS |
 | `sim_setup_lost` | 20 | PASS |
-| `sim_setup_two` | 26 | PASS |
+| `sim_setup_two` | 32 | PASS |
 | `sim_setup_mesh` | 34 | PASS |
 
 Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser`,

@@ -6,19 +6,21 @@ A  A base block and a top block 0.5 mm above it. Workspace > Simulation. Automat
    Generate finds nothing at 0.1 mm; the tolerance typed as 1 mm, Generate: one bonded pair
    with a 0.5 mm gap; OK keeps 1 mm.
 B  DOF View: every body is held (the top through its contact with the held base); off again.
-C  Clone Study: Study 2, active. Its Study Materials: Aluminium for the top block; OK.
+C  Clone Study: Study 2, active. Its Study Materials: Aluminium for the top block; OK. Again:
+   In Study unticked for the top: Study 2 without it (its row greyed); Undo: back.
 D  Solve with both studies ticked ("Solve 2 Studies"): both solved one after the other, each
    with a result for each body; Study 2 solved the top in aluminium, which moves more (it is
    softer); the progress lists both as done.
 """
 
 import FreeCAD as App
-from PySide import QtCore, QtWidgets
+from PySide import QtCore
 from PySide6 import QtTest
 
 from SciForgeTests.gui import dialog_input as ui
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import simsetup_steps as s
+from SciForgeTests.gui import widget_input as w
 
 state = {}
 
@@ -128,6 +130,33 @@ def c_check():
     doc = App.ActiveDocument
     name, _props, source = s.sim().study_material(s.active_study(), doc.getObject(state["top"]))
     h.check("Aluminium for the top in Study 2", source == "study" and "Alumin" in name, name)
+    h.ribbon("Study Materials")
+
+
+def c_leave_out():
+    from sciforge import simulation_dialogs
+
+    p = simulation_dialogs.MaterialsPanel.last
+    if not h.check("Study Materials opened again", p is not None and not p._closed):
+        return
+    rows = [p.table.item(r, 0).text() for r in range(p.table.rowCount())]
+    if "Top" in rows:
+        tick = p.ticks[rows.index("Top")]
+        w.click(tick, QtCore.QPoint(8, tick.height() // 2))
+        h.check("Top unticked (In Study)", not tick.isChecked())
+    s.ok()
+
+
+def c_left_out():
+    found = [b.Label for b in s.sim().study_bodies(s.active_study())]
+    h.check("Study 2 without the top", found == ["Base"], found)
+    h.check("its row greyed in the browser", (s.row_node("Top") or {}).get("status") is not None)
+    s.undo()
+
+
+def c_back():
+    found = sorted(b.Label for b in s.sim().study_bodies(s.active_study()))
+    h.check("Undo: the top back in Study 2", found == ["Base", "Top"], found)
     h.ribbon("Solve")
 
 
@@ -140,14 +169,7 @@ def d_both():
     for row in range(dialog.table.rowCount()):
         item = dialog.table.item(row, 0)
         if item.checkState() != QtCore.Qt.Checked:
-            rect = dialog.table.visualItemRect(item)
-            QtTest.QTest.mouseClick(
-                dialog.table.viewport(),
-                QtCore.Qt.LeftButton,
-                QtCore.Qt.NoModifier,
-                QtCore.QPoint(rect.left() + 10, rect.center().y()),
-            )
-            QtWidgets.QApplication.processEvents()
+            s.tick_row(dialog.table, row)
     h.check("Solve 2 Studies", dialog.go.text() == "Solve 2 Studies", dialog.go.text())
     s.click_widget(dialog.go)
 
@@ -199,6 +221,9 @@ h.run(
         c_materials,
         c_change,
         c_check,
+        c_leave_out,
+        c_left_out,
+        c_back,
         d_both,
         s.wait_solved(),
         d_check,

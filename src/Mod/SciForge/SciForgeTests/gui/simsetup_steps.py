@@ -236,6 +236,31 @@ def current_tab():
     return ribbon_ui().current_tab()
 
 
+def tick_row(table, row):
+    """Click the tick box at the start of a table row, as a person would (the Solve dialog's
+    studies); the Space key on the row when the click did not take (a table laid out late)."""
+    item = table.item(row, 0)
+    if item is None:
+        return False
+    before = item.checkState()
+    _process()
+    table.scrollToItem(item)
+    rect = table.visualItemRect(item)
+    QtTest.QTest.mouseClick(
+        table.viewport(),
+        QtCore.Qt.LeftButton,
+        QtCore.Qt.NoModifier,
+        QtCore.QPoint(rect.left() + 10, rect.center().y()),
+    )
+    _process()
+    if item.checkState() == before:
+        table.setFocus()
+        table.setCurrentCell(row, 0)
+        QtTest.QTest.keyClick(table, QtCore.Qt.Key_Space)
+        _process()
+    return item.checkState() != before
+
+
 def click_tab(tab_id):
     """Click a ribbon tab (SETUP: "sim_setup", RESULTS: "sim_results") with the mouse."""
     button = ribbon_ui().tab_buttons.get(tab_id)
