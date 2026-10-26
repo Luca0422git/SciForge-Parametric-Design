@@ -4,8 +4,9 @@ Branch `sf/sim-results` (from `beta3`), 2026-10-26/27. Brief:
 `docs/sciforge/dev/briefs/beta3-sim-results.md`. Spec: outline 7.18; Fusion's behaviour:
 `docs/sciforge/dev/research/fusion-simulation.md` section 5; parity:
 `docs/sciforge/parity/simulation.md` section Results (behaviour table with sources, known gaps).
-Merged `sf/sim-core` and `sf/sim-ui` (three times) to work against their newer engine and SETUP
-tab; the last merge brought adaptive mesh refinement and the results read in the background.
+Merged `sf/sim-core` and `sf/sim-ui` (four times) to work against their newer engine and SETUP
+tab; the merges brought adaptive mesh refinement, the results read in the background, the
+per-body keys of same-named bodies and the last engine fixes.
 
 ## What was built
 
@@ -19,8 +20,9 @@ tab; the last merge brought adaptive mesh refinement and the results read in the
   (probes), a level set through straight tetrahedra in numpy (the slice plane and the
   iso-surface; a 10-node element split in 8), the cut's mesh lines, a point found in the mesh
   with its weights (Point Probes), the slice plane's place (axis, face clicked, construction
-  plane), the legend's dragged range, Solver Data's rows, the HTML report (a cover, several
-  studies).
+  plane), the legend's dragged range, Solver Data's rows, the convergence plot's data (each
+  solve's value and change, the verdict, round axis ticks), the HTML report (a cover, several
+  studies, the adaptive refinement's table).
 - `sciforge/simulation_results.py`: `ResultData` (node places, tetrahedra, surface,
   displacements, values, stats, strain components, values and displacement anywhere inside;
   kept per solve, keyed by the result object's ID and the summary's time), Results Details'
@@ -32,16 +34,21 @@ tab; the last merge brought adaptive mesh refinement and the results read in the
   tags (`TagLayer`: min / max, probes, point probes, the value under the mouse), the animation
   bar.
 - `sciforge/simulation_results_ui.py`: the RESULTS tab's controller (`Session` per design,
-  `CompareSession`), `show(study)`, `hide()`, `finish()`, `current()`, the 22 commands
-  (`COMMANDS`).
+  `CompareSession`: the 3D view split in panes through Navigation bar > Viewports' layouts, one
+  study per pane, the panes' cameras turning together), `show(study)`, `hide()`, `finish()`,
+  `current()`, the 23 commands (`COMMANDS`).
 - `sciforge/simulation_results_panels.py`: Surface Probes, Point Probes (grips), Slice Plane and
-  Iso-surface (task panels with no undo step), Results Details, Legend Min/Max, Compare, Report,
-  Reaction Force, Solver Data, Save Animation, a fallback solve.
-- Ribbon: the RESULTS tab's groups wired (`ribbon_config.py`, my lines only), 22 icons
-  (`tools/sciforge/icons_simresults.py`); nothing on the RESULTS tab is greyed any more.
+  Iso-surface (task panels with no undo step), Results Details (per-body lowest safety factor in
+  its band's colour, values in the legend's units), Legend Min/Max, Compare, Report, Reaction
+  Force, Solver Data, Convergence Plot (a chart drawn with QPainter in the theme's colours),
+  Save Animation, a fallback solve.
+- Ribbon: the RESULTS tab's groups wired (`ribbon_config.py`, my lines only), 23 icons
+  (`tools/sciforge/icons_simresults.py`); Convergence Plot is greyed for a study solved without
+  adaptive refinement (its tooltip says so), Reaction Force when the solve has no reactions;
+  nothing else on the RESULTS tab is greyed.
 - Scenarios (`SciForgeTests/gui/scenarios/simres_*.py`, helpers
-  `SciForgeTests/gui/simres_steps.py`): cantilever, compare, deformation, inspect, linear,
-  out_of_date, probes_slice, reopen, report, workspace (check counts in the report).
+  `SciForgeTests/gui/simres_steps.py`): adaptive, cantilever, compare, deformation, inspect,
+  linear, out_of_date, probes_slice, reopen, report, workspace (check counts in the report).
 
 ## Agreed with sim-ui and sim-core (through their logs and code)
 
@@ -60,7 +67,12 @@ tab; the last merge brought adaptive mesh refinement and the results read in the
 - sim-core: `summary["reactions"][label] = {x, y, z, total}` (Reaction Force),
   `results_dropped(study)` (Keep results off: no RESULTS tab, `show()` says to solve again),
   `summary["timings"]`, `["notes"]`, `["mesh"]`, `["adaptive"]["passes"]` and `mesh_summary()`
-  (Solver Data).
+  (Solver Data), `["adaptive"]` with `simulation_core.adaptive_plan()`'s tolerance and
+  `converged()`'s rule (Convergence Plot: the change is % of the larger of two solves, as the
+  engine judges it), `body_key()` (same-named bodies' per-body rows).
+- The nav bar's `viewports_ui` (not a simulation builder's): Compare calls only its public
+  `set_layout(name)`, `panes()`, `current()`, `is_single()` and `area()`; Viewports > Single View
+  during Compare ends Compare.
 
 ## FreeCAD / Qt facts learned (traps)
 
@@ -93,6 +105,16 @@ tab; the last merge brought adaptive mesh refinement and the results read in the
   encoder: the animation is saved as an animated GIF or WebP.
 - A slice exactly through a layer of nodes gave no cut face while corners at zero counted as
   below: they count as above now (the face comes once, from the element below).
+- `QMdiArea.setActiveSubWindow(sub)` makes `Gui.ActiveDocument.ActiveView` that pane's view at
+  once: the way Compare finds each pane's FreeCAD view (a view object gives no widget).
+- Copying a camera node's position, orientation, focal distance and height (or height angle)
+  from one view to another makes the other redraw by itself; a 70 ms timer that copies the
+  moved pane's camera keeps the panes together without a feedback loop.
+- In split views FreeCAD's overlay Tasks panel (`OverlayRight`, empty) draws a thin rectangle
+  over the right-hand panes; it is there with the plain Two Views layout too (not SciForge's
+  results).
+- A body deleted while its results show leaves dead Python objects in cached lists: every
+  `.Name` on them raises; the results keep a key for it and stay drawn.
 
 ## Measured
 
@@ -120,3 +142,17 @@ tab; the last merge brought adaptive mesh refinement and the results read in the
   the cut; the value under the mouse with probe tools; Point Probe grips; Save Animation (GIF /
   WebP); legend drag handles and Grey Outside the Range; the report's cover, several studies and
   setup picture; the design's units in the legend; results windows close with their results.
+- 20:55-21:20 the browser's body eye takes a body's results away (and back); reaction tags on
+  the constraints; displacement arrows on the cut; tags spread so they never overlap; 10-node
+  faces drawn with their quadratic shape functions; Measure from RESULTS brings SETUP back;
+  scenario simres_adaptive; merged sim-core and sim-ui (same-named bodies' keys).
+- 21:20-21:45 all eleven scenarios green after the merge; Results Details colours each body's
+  lowest safety factor by its band; every slot, timer and handler guarded; odd flows explored
+  with real FreeCAD (a study deleted with its panel open, the 3D view closed under the results,
+  a second design, a body deleted and brought back by Undo, a missing animation folder, a
+  report to a folder that does not exist): fixes for the deleted body and new objects; the
+  Convergence Plot and the report's adaptive table.
+- 21:45-22:00 Compare in split views (two panes, or four for three or four studies; cameras
+  turning together; Viewports > Single View ends it); the side-by-side fallback's tags follow a
+  sideways shift; Results Details' tables fit their rows, per-body values in the legend's units
+  (the report's too); merged sim-core and sim-ui again; unit tests (2 591) pass.
