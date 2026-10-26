@@ -133,7 +133,7 @@ G = guess (the SciForge choice when the sources are silent).
 | Scenario | Paths |
 |---|---|
 | `sim_setup_bracket` | enter, New Study, Fixed at the holes, Force on the arm, Pre-check green, Solve, results handed over, leave (tabs, timeline, browser, nothing leaked), enter again |
-| `sim_setup_dialogs` | Esc on New Study, the gear's settings, a refusal (nothing holds), Esc / Cancel in the item dialogs, Study Materials + undo / redo, Settings + undo, gravity on, Edit Gravity, contacts, Load Case Attributes, undo / redo of a constraint |
+| `sim_setup_dialogs` | Esc on New Study, the gear's settings, a refusal (nothing holds), Esc / Cancel in the item dialogs, Study Materials + undo / redo, Settings + undo, gravity on, Edit Gravity (Flip; Normal from a side face), contacts, Load Case Attributes, undo / redo of a constraint |
 | `sim_setup_browser` | solve, Edit Load from the browser, out of date, solve again from the Results row (the progress lists the earlier solve), double-click edit + Cancel, Suppress / Unsuppress, F2 rename + undo, Delete key + undo, Clone Study, Activate, delete a study, a design change makes it out of date |
 | `sim_setup_documents` | two glued bodies (Automatic Contacts, Contact Manager), DOF View on (both free, six arrows) and off once the base is fixed, Exclude / Include, solve with a result per body, design tabs keep their workspaces, save / close / reopen with the study and results |
 | `sim_setup_kinds` | every constraint and load type (Pin filter and defaults, Moment with a unit, vector force components, pressure flip, prescribed displacement), Local Mesh Control with Body Selection, Generate Mesh + Show Mesh (not drawn in DESIGN), Cancel a solve |

@@ -16,7 +16,8 @@ D  Study Materials: Aluminium for the bracket in this study, Ultimate Tensile St
 E  Settings: Mesh > Element Order Linear; Adaptive Mesh Refinement Low (its numbers shown,
    greyed), then Custom with 3 refinements; OK; Undo brings Parabolic and no refinement back.
 F  LOADS > Toggle Gravity On/Off: gravity on, a Gravity row under Loads; right-click Gravity >
-   Edit Gravity: Flip Direction, OK: it points up; Undo: down again.
+   Edit Gravity: Flip Direction, OK: it points up; Undo: down again. Edit Gravity, Direction
+   Type Normal, a click on a side face: OK, gravity points into that face; Undo.
 G  Automatic Contacts on one body: Generate finds none; Contact Manager says no bodies
    touch.
 H  Load Case Attributes lists every item with its place and size.
@@ -310,6 +311,53 @@ def f_check_up():
 def f_undone():
     d = settings()["gravity"]["direction"]
     h.check("Undo: down again", abs(d[2] + 1.0) < 1e-9, d)
+    s.right_click_row("Gravity", "Edit Gravity")
+
+
+def f_normal():
+    from sciforge import simulation_panels
+
+    p = simulation_panels.GravityPanel.last
+    if not h.check("Edit Gravity opened again", p is not None and not p._closed):
+        return
+    s.choose("SciForgeSim_gravity_direction", "Normal")
+    body = s.body()
+    sides = []
+    for i, face in enumerate(body.Shape.Faces, 1):
+        if "Plane" in face.Surface.TypeId:
+            n = face.normalAt(0, 0)
+            if abs(n.z) < 1e-6:
+                sides.append(("Face%d" % i, (n.x, n.y, n.z)))
+    name = s.visible_face(body, [n for n, _v in sides])
+    if h.check("a side face can be clicked", name is not None):
+        state["side_normal"] = dict(sides)[name]
+        s.click_face(body, name)
+
+
+def f_normal_ok():
+    from sciforge import simulation_panels
+
+    p = simulation_panels.GravityPanel.last
+    if p is not None and not p._closed:
+        QtTest.QTest.qWait(120)  # (a pick is handled a moment after the click)
+        h.check("the face gives the direction", p.pick is not None, s.message())
+    s.ok()
+
+
+def f_normal_check():
+    d = settings()["gravity"]["direction"]
+    n = state.get("side_normal") or (0.0, 0.0, 0.0)
+    h.check(
+        "gravity points into the face (Normal)",
+        all(abs(d[i] + n[i]) < 1e-6 for i in range(3)),
+        (d, n),
+    )
+    s.undo()
+
+
+def f_normal_undone():
+    d = settings()["gravity"]["direction"]
+    h.check("Undo: down again", abs(d[2] + 1.0) < 1e-9, d)
 
 
 # -- G ------------------------------------------------------------------------------------------
@@ -446,6 +494,10 @@ h.run(
         f_flip,
         f_check_up,
         f_undone,
+        f_normal,
+        f_normal_ok,
+        f_normal_check,
+        f_normal_undone,
         g_contacts,
         g_generate,
         g_manager,
