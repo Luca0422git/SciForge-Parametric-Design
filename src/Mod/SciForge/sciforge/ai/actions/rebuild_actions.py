@@ -206,6 +206,7 @@ def finish_rebuild(ctx, args):
                 "even_if_different: true to finish it as it is." % data["verdict"]
             )
     original = ref.SourceLabel
+    ref_name = ref.Name
     from ..executor import _broken
 
     before = _broken(doc)  # (steps that used the original and break with it are said)
@@ -227,6 +228,8 @@ def finish_rebuild(ctx, args):
         steps = [i for i in timeline_ops.timeline(doc).items if i.body == body.Name]
     except Exception:
         steps = []
+    report = rebuild.FINISHED.get(ref_name) or {}
+    kept = bool(args.get("keep_original") or report.get("kept_original"))
     text = (
         "Done: %s. %s is now the rebuilt part (id %r) with %d timeline steps; the original "
         % (
@@ -235,15 +238,21 @@ def finish_rebuild(ctx, args):
             body.Name,
             len(steps),
         )
-        + (
-            "is kept hidden as %r" % ("%s (original)" % original)
-            if args.get("keep_original")
-            else "was deleted"
-        )
+        + ("is kept hidden as %r" % ("%s (original)" % original) if kept else "was deleted")
         + (
             ", the reference kept hidden."
             if args.get("keep_reference")
             else ", the reference removed."
         )
     )
+    if report.get("followed"):
+        text += " Now on the rebuilt part instead of the original (they used it): %s." % (
+            ", ".join(report["followed"])
+        )
+    if report.get("kept_because") and not args.get("keep_original"):
+        text += (
+            " The original was kept (hidden) instead of deleted: %s still use%s it and could "
+            "not be moved onto the rebuild."
+            % (", ".join(report["kept_because"]), "" if len(report["kept_because"]) > 1 else "s")
+        )
     return ctx.done(text, doc, before)

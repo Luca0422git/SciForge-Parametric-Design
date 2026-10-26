@@ -1943,8 +1943,28 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
         )
     source = source_of(ref)
     label = getattr(ref, "SourceLabel", "") or (source.Label if source is not None else "")
+    report = {"followed": [], "kept_because": [], "kept_original": bool(keep_original)}
     if source is not None:
         container = components.container_of(source)
+        if components.container_of(target) is not container:
+            components.place(target, container, keep_position=True)
+        _take_looks(source, target)
+        place = _timeline_place(doc, source, target)
+        # what used the original (joints, patterns, sketches on its faces...) follows the
+        # rebuild; what cannot follow keeps the original, hidden (QA: deleting it took the
+        # joints of a jointed part with it)
+        users = []
+        if not insert.is_mesh_body(source):
+            from . import rebuild_links
+
+            follow = rebuild_links.Follow(doc, source, target, ref).plan()
+            follow.apply()
+            report["followed"] = [o.Label for o in follow.moved]
+        users = _still_used(doc, source, target, ref)
+        if users and not keep_original:
+            keep_original = True
+            report["kept_because"] = users
+        report["kept_original"] = bool(keep_original)
         if keep_original:
             new_label = "%s (original)" % label
             if insert.is_mesh_body(source):
@@ -1956,8 +1976,9 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
             bodies.set_shown(source, False)
         else:
             _delete_original(doc, source)
-        if components.container_of(target) is not container:
-            components.place(target, container, keep_position=True)
+        if place is not None:
+            place()
+    FINISHED[ref.Name] = report
     if label:
         target.Label = label
     _HIDDEN.get(doc.Name, {}).pop(ref.Name, None)
@@ -1982,6 +2003,99 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
         )
     )
     return target
+
+
+FINISHED = {}  # reference name -> what its finish did: {"followed", "kept_because", ...}
+
+
+def _still_used(doc, source, target, ref):
+    """Words for what still needs the original after the links followed the rebuild (it is
+    then kept, hidden): objects that link it, and steps of other bodies its extrudes drive."""
+    from . import rebuild_links, timeline_ops
+
+    out = []
+    try:
+        for obj in rebuild_links.still_used(doc, source, target, ref):
+            out.append(obj.Label)
+        own = rebuild_links.own_objects(source)
+        for name in timeline_ops.followers(doc, own):
+            obj = doc.getObject(name)
+            if obj is not None and name not in own and obj.Label not in out:
+                out.append(obj.Label)
+    except Exception as exc:
+        warn("rebuild: %s" % exc)
+    return out
+
+
+def _take_looks(source, target):
+    """The original's material and appearance (an imported STEP's colours, kept by the
+    faces' places) go to the rebuild: it is the same part."""
+    try:
+        from . import appearance
+
+        mat = getattr(source, "ShapeMaterial", None)
+        if mat is not None and "ShapeMaterial" in target.PropertiesList:
+            if getattr(target.ShapeMaterial, "UUID", None) != getattr(mat, "UUID", None):
+                target.ShapeMaterial = mat
+                for step in target.Group:
+                    if "ShapeMaterial" in step.PropertiesList:
+                        step.ShapeMaterial = mat
+        for prop in ("SciForgeUserMaterial", appearance.PROP):
+            text = getattr(source, prop, "") if prop in source.PropertiesList else ""
+            if text and getattr(target, prop, None) != text:
+                bodies.add_prop(target, "App::PropertyString", prop, "Base", "", True)
+                setattr(target, prop, text)
+        if App.GuiUp:
+            appearance.apply(target)
+    except Exception as exc:
+        warn("rebuild: the original's look was not taken over (%s)" % exc)
+
+
+def _timeline_place(doc, source, target):
+    """A function that puts the rebuild's steps where the original's stood in the timeline
+    (whatever used the original comes after it there, as before), or None when they stay
+    at the end (the history marker rolled back, or a step of the rebuild uses a step that
+    came later than the original)."""
+    from . import rebuild_links, timeline_ops
+
+    try:
+        if not timeline_ops.timeline(doc, deps=False).at_end:
+            return None
+        old = rebuild_links.own_objects(source)
+        new = rebuild_links.own_objects(target)
+        rows = [(obj, timeline_ops._key(obj)) for obj, _body in timeline_ops.steps(doc)]
+        theirs = [k for obj, k in rows if obj.Name in old]
+        ours = [obj for obj, _k in rows if obj.Name in new]  # (in the body's own order)
+        if not theirs or not ours:
+            return None
+        low = min(theirs)
+        later = [k for obj, k in rows if obj.Name not in old and obj.Name not in new and k > low]
+        high = min(later) if later else None
+        if high is not None and max(timeline_ops._key(o) for o in ours) < high:
+            return None  # (already there)
+        for obj in ours:
+            for dep in obj.OutList:
+                if dep.Name in new or not timeline_ops._is_step(dep):
+                    continue
+                if timeline_ops._key(dep) > low:
+                    return None  # (it would come before a step it uses)
+        keys = core.keys_between(len(ours), low, high)
+    except Exception as exc:
+        warn("rebuild: the rebuild stays at the end of the timeline (%s)" % exc)
+        return None
+
+    def apply():
+        for obj, key in zip(ours, keys):
+            try:
+                if bodies.alive(obj):
+                    timeline_ops._add_prop(
+                        obj, "App::PropertyFloat", timeline_ops.RANK, "Place in the design timeline"
+                    )
+                    setattr(obj, timeline_ops.RANK, float(key))
+            except Exception as exc:
+                warn("rebuild: %s keeps its place in the timeline (%s)" % (obj.Label, exc))
+
+    return apply
 
 
 def _delete_original(doc, source):

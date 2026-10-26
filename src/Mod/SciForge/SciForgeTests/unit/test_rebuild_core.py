@@ -361,5 +361,64 @@ class FacesAndMessage(unittest.TestCase):
         self.assertIn("mesh body", core.chat_message("Scan", mesh=True))
 
 
+class FollowTest(unittest.TestCase):
+    """Finish moves what used the original onto the rebuild (beta 3 QA): the links' paths
+    and element names."""
+
+    MAP = {"Face7": "Face3", "Edge12": "Edge9"}
+
+    def element_for(self, name):
+        return self.MAP.get(name)
+
+    def test_split_sub(self):
+        self.assertEqual(core.split_sub("Body001.Face7"), (["Body001"], "Face7"))
+        self.assertEqual(core.split_sub("Face7"), ([], "Face7"))
+        self.assertEqual(core.split_sub("Body001."), (["Body001"], ""))
+        self.assertEqual(
+            core.split_sub("Body001.;#7:1;:G0;XTR;:H1:7,F.Face7"), (["Body001"], "Face7")
+        )
+        self.assertEqual(core.split_sub(""), ([], ""))
+
+    def test_a_path_through_the_original(self):
+        names = {"Body001": "Body003", "BaseFeature": ""}
+        self.assertEqual(
+            core.rewrite_sub("Body001.Face7", names, self.element_for), ("Body003.Face3", True)
+        )
+        # a step inside the original is dropped: the rebuilt body holds the whole shape
+        self.assertEqual(
+            core.rewrite_sub("Body001.BaseFeature.Edge12", names, self.element_for),
+            ("Body003.Edge9", True),
+        )
+        # a nested component on the way stays
+        self.assertEqual(
+            core.rewrite_sub("Part2.Body001.Face7", names, self.element_for),
+            ("Part2.Body003.Face3", True),
+        )
+        # the whole body (no element)
+        self.assertEqual(core.rewrite_sub("Body001.", names, self.element_for), ("Body003.", True))
+        # an element the rebuild has not: it cannot follow
+        self.assertEqual(core.rewrite_sub("Body001.Face1", names, self.element_for), (None, True))
+        # a path that does not reach the original stays as it is
+        self.assertEqual(
+            core.rewrite_sub("Body002.Face7", names, self.element_for), ("Body002.Face7", False)
+        )
+
+    def test_links_straight_to_the_original(self):
+        self.assertEqual(
+            core.rewrite_direct(["Face7", "Edge12"], self.element_for), ["Face3", "Edge9"]
+        )
+        self.assertEqual(core.rewrite_direct([""], self.element_for), [""])
+        self.assertIsNone(core.rewrite_direct(["Face7", "Vertex1"], self.element_for))
+
+    def test_keys_between(self):
+        keys = core.keys_between(3, 5.0, 7.0)
+        self.assertEqual(len(keys), 3)
+        self.assertTrue(all(5.0 < k < 7.0 for k in keys))
+        self.assertEqual(keys, sorted(keys))
+        self.assertEqual(core.keys_between(0, 5.0, 7.0), [])
+        keys = core.keys_between(2, 5.0, None)  # nothing after the original
+        self.assertTrue(all(5.0 < k < 6.0 for k in keys))
+
+
 if __name__ == "__main__":
     unittest.main()

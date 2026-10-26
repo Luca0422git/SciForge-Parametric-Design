@@ -739,6 +739,71 @@ def chat_message(body_label, rebuilt_label=None, mesh=False):
     )
 
 
+# -- what used the original follows the rebuild (finish) -----------------------------------------
+def split_sub(sub):
+    """A link's sub-element path in its parts: "Body001.Face7" -> (["Body001"], "Face7");
+    "Face7" -> ([], "Face7"); "Body001." -> (["Body001"], ""). FreeCAD's mapped element
+    names (";#7:1;:G0;XTR;:H1:7,F.Face7": topological naming) are dropped: the plain name
+    after them is what SciForge reads."""
+    parts = (sub or "").split(".")
+    element = parts[-1]
+    path = [p for p in parts[:-1] if p and not p.startswith(";")]
+    if element.startswith(";"):
+        element = ""
+    return path, element
+
+
+def rewrite_sub(sub, names, element_for):
+    """`sub` with the original's objects swapped for the rebuild's. names: {old object name:
+    new name, or "" to drop it from the path (a step inside the original: the rebuilt body
+    itself holds the shape)}; element_for(old element name) -> the rebuild's element name
+    or None. Returns (new sub, changed); new sub None when the element has no counterpart.
+    A path that does not pass through the original stays as it is."""
+    path, element = split_sub(sub)
+    if not any(p in names for p in path):
+        return sub, False
+    out = []
+    for p in path:
+        if p in names:
+            if names[p]:
+                out.append(names[p])
+        else:
+            out.append(p)
+    new_element = ""
+    if element:
+        new_element = element_for(element)
+        if not new_element:
+            return None, True
+    return "".join(p + "." for p in out) + new_element, True
+
+
+def rewrite_direct(subs, element_for):
+    """The element names of a link straight to the original (no path through it): each
+    mapped; None when one of them has no counterpart."""
+    out = []
+    for sub in subs:
+        path, element = split_sub(sub)
+        if not element:
+            out.append("".join(p + "." for p in path))
+            continue
+        new = element_for(element)
+        if not new:
+            return None
+        out.append("".join(p + "." for p in path) + new)
+    return out
+
+
+def keys_between(count, low, high):
+    """`count` increasing timeline keys strictly between low and high (where the rebuild's
+    steps go: the original's place in the timeline)."""
+    if count <= 0:
+        return []
+    if high is None or high <= low:
+        high = low + 1.0
+    step = (high - low) / float(count + 1)
+    return [low + step * (i + 1) for i in range(count)]
+
+
 # -- the same words for a person (the dialogs) -------------------------------------------------
 _PERSON_WORDS = (
     (
