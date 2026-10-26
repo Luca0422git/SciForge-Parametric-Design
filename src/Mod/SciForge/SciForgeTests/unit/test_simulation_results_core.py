@@ -185,6 +185,21 @@ class TargetTests(unittest.TestCase):
         self.assertEqual(core.verdict(float("nan"), 3, 6)[0], "none")
 
 
+class CompareTests(unittest.TestCase):
+    def test_offsets_put_models_side_by_side(self):
+        boxes = [(0, 0, 0, 100, 10, 10), (0, 0, 0, 100, 10, 10), (-10, 0, 0, 40, 10, 10)]
+        shifts = core.compare_offsets(boxes)
+        self.assertEqual(shifts[0], 0.0)
+        self.assertAlmostEqual(shifts[1], 125.0)  # 100 + a quarter of the widest (100)
+        self.assertAlmostEqual(shifts[2] + boxes[2][0], 250.0)  # starts after the second + gap
+        self.assertEqual(core.compare_offsets([]), [])
+
+    def test_shared_scale(self):
+        both = core.combined_stats([{"min": 1, "max": 5}, {"min": 0.5, "max": 3}, None])
+        self.assertEqual(both, {"min": 0.5, "max": 5})
+        self.assertEqual(core.combined_stats([]), {"min": None, "max": None})
+
+
 class AnimationTests(unittest.TestCase):
     def test_modes(self):
         self.assertEqual(core.animation_fraction(0, 5, "once"), 0.0)

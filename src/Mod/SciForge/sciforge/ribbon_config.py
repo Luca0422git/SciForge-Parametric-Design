@@ -1482,10 +1482,11 @@ SIMR_TOOLS = group(
         ),  # owner: sim-results
         item(
             "Compare",
-            None,
+            "SciForge_SimResultsCompare",
             "simr_compare",
-            note=_SIM_LATER + ": compare studies by showing each one's results in turn",
-        ),
+            toggle="simulation_results_ui:comparing",
+            note="Two to four studies side by side on one colour scale",
+        ),  # owner: sim-results
         item("Report", "SciForge_SimResultsReport", "simr_report"),  # owner: sim-results
     ],
 )

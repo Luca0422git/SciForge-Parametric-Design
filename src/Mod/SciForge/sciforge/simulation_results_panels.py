@@ -17,7 +17,14 @@ from . import simulation_results as results_data
 from . import simulation_results_core as core
 from .compat import QtCore, QtGui, QtWidgets
 
-OPEN = {"details": None, "report": None, "reactions": None, "solve": None, "range": None}
+OPEN = {
+    "details": None,
+    "report": None,
+    "reactions": None,
+    "solve": None,
+    "range": None,
+    "compare": None,
+}
 
 PANEL_STYLE = """
 QLabel[role="dim"] { color: #c3cad4; }
@@ -640,6 +647,88 @@ def details(session):
     OPEN["details"] = dialog
     dialog.show()
     log("Results Details opened")
+    return dialog
+
+
+# -- Compare ---------------------------------------------------------------------------------------
+class CompareDialog(QtWidgets.QDialog):
+    """Compare: tick 2 to 4 of the design's studies with results."""
+
+    def __init__(self, session):
+        super().__init__(_main())
+        self.setObjectName("SciForgeSimCompare")
+        self.setWindowTitle("Compare")
+        self.session = session
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.addWidget(QtWidgets.QLabel("Studies to compare (2 to %d):" % core.COMPARE_MOST))
+        self.listing = QtWidgets.QListWidget()
+        self.listing.setObjectName("SciForgeSimCompareStudies")
+        from . import simulation_results_ui as ui
+
+        self.studies = ui.studies_with_results(session.doc)
+        current = session.study
+        for study in self.studies:
+            item = QtWidgets.QListWidgetItem(study.Label)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            ticked = study is current or len(self.studies) <= 2
+            item.setCheckState(QtCore.Qt.Checked if ticked else QtCore.Qt.Unchecked)
+            self.listing.addItem(item)
+        self.listing.itemChanged.connect(lambda *_a: self._count())
+        layout.addWidget(self.listing)
+        note = QtWidgets.QLabel(
+            "The studies show side by side on one colour scale: the same colour is the same "
+            "value in every study."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        buttons = QtWidgets.QHBoxLayout()
+        buttons.addStretch(1)
+        self.go = QtWidgets.QPushButton("Compare")
+        self.go.setObjectName("SciForgeSimCompareGo")
+        self.go.setDefault(True)
+        self.go.clicked.connect(self._go)
+        cancel = QtWidgets.QPushButton("Cancel")
+        cancel.setObjectName("SciForgeSimCompareCancel")
+        cancel.setAutoDefault(False)
+        cancel.clicked.connect(self.reject)
+        buttons.addWidget(self.go)
+        buttons.addWidget(cancel)
+        layout.addLayout(buttons)
+        self._count()
+
+    def chosen(self):
+        out = []
+        for row, study in enumerate(self.studies):
+            item = self.listing.item(row)
+            if item is not None and item.checkState() == QtCore.Qt.Checked:
+                out.append(study)
+        return out
+
+    def _count(self):
+        count = len(self.chosen())
+        self.go.setEnabled(2 <= count <= core.COMPARE_MOST)
+        self.go.setText("Compare %d Studies" % count if count else "Compare")
+
+    def _go(self):
+        try:
+            chosen = self.chosen()
+            self.accept()
+            from . import simulation_results_ui as ui
+
+            ui.start_compare(chosen)
+        except Exception as exc:
+            warn("Compare: %s" % exc)
+
+    def done(self, code):
+        OPEN["compare"] = None
+        super().done(code)
+
+
+def compare(session):
+    dialog = CompareDialog(session)
+    OPEN["compare"] = dialog
+    dialog.show()
+    log("Compare opened")
     return dialog
 
 

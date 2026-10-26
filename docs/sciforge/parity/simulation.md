@@ -26,8 +26,8 @@ Static Stress study. Files (`src/Mod/SciForge/sciforge/`):
 | `simulation_results_core.py` | the rules, no FreeCAD / Qt, unit tested: Fusion's result list (type + component), units, the colour map texture and legend, the safety factor targets and their sentence, deformation and animation, the outer surface of the tetrahedral mesh (10-node faces split in 4, facing out; mesh and outline edges), a ray against it (probes), a plane through it (slice), the HTML report |
 | `simulation_results.py` | the document side, no Qt: a study's results as arrays (kept per solve), strain components, Results Details' numbers, the report's data |
 | `simulation_results_view.py` | the drawing: SciForge's own Coin nodes (never document objects), the legend, the tags and the animation bar floating over the 3D view |
-| `simulation_results_ui.py` | when the results show (the RESULTS tab watcher), `show(study)` for sim-ui's Solve dialog, `hide()`, the 17 commands |
-| `simulation_results_panels.py` | Surface Probes, Slice Plane, Results Details, Report, Reaction Force, a solve from out-of-date results when sim-ui's Solve is missing |
+| `simulation_results_ui.py` | when the results show (the RESULTS tab watcher), `show(study)` for sim-ui's Solve dialog, `hide()`, Compare, the 19 commands |
+| `simulation_results_panels.py` | Surface Probes, Slice Plane, Results Details, Legend Min/Max, Compare, Report, Reaction Force, a solve from out-of-date results when sim-ui's Solve is missing |
 
 Shared files: `ribbon_config.py` (the RESULTS tab's groups: commands, icons, ticks),
 `tools/sciforge/icons_simresults.py` (21 icons), `docs/sciforge/parity-checklist.md`
@@ -70,7 +70,7 @@ drop-down for direction or type, units, legend options with colour bands), guide
 | RESULT TOOLS: Animate (legacy dialog with steps; online viewer: bar at the bottom of the canvas, speed 0.25x - 2x, up to 100 frames, play once / loop / mirror loop, save .webm) | Animate: a bar at the bottom left of the 3D view: Play / Stop, 0.25x - 2x, 10 - 100 steps, Play Once / Loop / Mirror Loop, Close; undeformed to the chosen scale (Adjusted when Undeformed is chosen) | A[52] |
 | RESULT TOOLS: Results Details | The lowest safety factor against the Lower / Upper targets (3 / 6) in a sentence with advice (SciForge's words), the targets editable, **Show the target bands on the model** (the newer viewer's guided bands: below / meets / above), per body: material, strength (yield or ultimate), max von Mises, min safety factor, max displacement; every result's min / max; the mesh; the limits of the study; the deformation scale at the bottom | Autodesk help (Results details), Learn video, A[54] A[71] A[51] |
 | RESULT TOOLS: Report (General, Properties, Studies; Preview / Save; HTML) | Report: title, author, pictures or not, file; Save / Save and Open (the web browser). One HTML page: the sentence, the limits, settings, materials with strengths, constraints and loads with their faces, contacts, mesh, every result's min / max, per body, three pictures with their legend drawn in | A[62] T[107] |
-| RESULT TOOLS: Compare (up to 4 studies) | Greyed: "Not in SciForge yet" (see gaps) | A[61] |
+| RESULT TOOLS: Compare (up to 4 studies; the canvas splits into views; Finish closes it; no probes in the legacy Compare) | Compare: tick 2 to 4 of the design's studies with results; they show **side by side in the one 3D view** (each moved along X beside the one before), each with a tag (study, min, max), on **one colour scale** and one deformation scale (the same colour is the same value; a bigger bend looks bigger: SciForge's choice); the legend's result and unit, DEFORMATION and Show Mesh work on all; probes, slices and the rest rest meanwhile; **Finish Compare** under the legend, Compare again, SETUP or another design end it | A[61] F[86], G |
 | DEFORMATION: Undeformed, Actual, Adjusted x 0.5, Adjusted, x 2, x 5 | Same, ticked in the menu; also in Results Details | A[51] |
 | DISPLAY: Mesh, Wireframe | Show Mesh (element edges); **Undeformed Model** (the unloaded shape see-through: the web viewer's "Show Undeformed model") instead of Wireframe; **Loads and Constraints** (sim-ui's glyphs on the results, off by default) | A[49] A[68], G |
 | INSPECT: Surface Probes | Click the result: a tag with the value of the node under the mouse; as many as wanted; they read the result chosen in the legend; Clear All; Esc / Close keeps them | A[55] |
@@ -83,10 +83,9 @@ drop-down for direction or type, units, legend options with colour bands), guide
 
 ### Known gaps (Results)
 
-- **Compare** (two to four studies side by side, split canvas): greyed. SciForge has one result
-  display per design; showing several studies at once needs one display per viewport
-  (`viewports_ui`) and synchronized cameras. Workaround: activate each study and look at its
-  RESULTS tab in turn.
+- **Compare in split views** (Fusion splits the canvas, one view and legend per study): SciForge
+  puts the studies side by side in one view on one shared colour scale instead (one camera, so
+  they turn together; the same colour is the same value).
 - **Saving the animation as a video (.webm)**: not built; the 3D view can be captured frame by
   frame (`saveImage`) but SciForge has no video encoder in the bundle.
 - **Slice plane at any angle / on a picked face**, the **Vectors** and **Mesh Lines** slice

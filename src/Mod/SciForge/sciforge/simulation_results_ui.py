@@ -27,6 +27,7 @@ RESULTS_TAB = "sim_results"
 SETUP_TAB = "sim_setup"
 SESSIONS = {}  # document name -> Session
 ACTIVE = {"session": None}
+COMPARE = {"session": None}  # RESULT TOOLS > Compare while it shows (CompareSession)
 WATCH = {"ribbon": None, "area": None, "observer": None, "timer": None, "syncing": False}
 # sim-ui's Solve command (the first one that exists): Solve Again on out-of-date results
 SOLVE_COMMANDS = ("SciForge_SimSolve", "SciForge_SimulationSolve", "SciForge_StudySolve")
@@ -192,6 +193,9 @@ def hide():
         if session is not None:
             session.deactivate()
         ACTIVE["session"] = None
+        compare, COMPARE["session"] = COMPARE["session"], None
+        if compare is not None:
+            compare.deactivate()
     except Exception as exc:
         warn("results: %s" % exc)
 
@@ -239,6 +243,27 @@ def sync():
         return
     WATCH["syncing"] = True
     try:
+        compare = COMPARE["session"]
+        if compare is not None:
+            ribbon = _ribbon()
+            here = (
+                ribbon is not None
+                and _sim_on()
+                and _current_tab(ribbon) == RESULTS_TAB
+                and App.ActiveDocument is not None
+                and App.ActiveDocument.Name == compare.doc_name
+                and compare.alive()
+            )
+            if here:
+                shown = ACTIVE["session"]
+                if shown is not None:
+                    shown.deactivate()
+                    ACTIVE["session"] = None
+                compare.activate()
+                refresh_tab()
+                return
+            compare.deactivate()
+            COMPARE["session"] = None
         want = wanted()
         shown = ACTIVE["session"]
         if shown is not None and shown is not want:
@@ -1191,8 +1216,286 @@ def _shown():
     return current() is not None
 
 
+def compare_on():
+    session = COMPARE["session"]
+    return session is not None and session.active
+
+
+def start_compare(studies):
+    """Compare: the studies' results side by side in the 3D view, on one colour scale (2 to 4
+    studies of the design in front, each with results)."""
+    try:
+        studies = [s for s in studies if results_data.has_results(s)][: core.COMPARE_MOST]
+        if len(studies) < 2:
+            commands.tell("Compare needs two studies with results: solve another study first.")
+            return False
+        old = COMPARE["session"]
+        if old is not None:
+            old.deactivate()
+        COMPARE["session"] = CompareSession(studies)
+        ensure_watch()
+        _select_results_tab()
+        sync()
+        log("results: compare %d studies" % len(studies))
+        return compare_on()
+    except Exception as exc:
+        warn("Compare: %s" % exc)
+        return False
+
+
+def finish_compare():
+    try:
+        session, COMPARE["session"] = COMPARE["session"], None
+        if session is not None:
+            session.deactivate()
+        sync()
+        log("results: compare finished")
+    except Exception as exc:
+        warn("Compare: %s" % exc)
+
+
+class CompareSession:
+    """Several studies' results side by side (Fusion's Compare): one colour scale for all of
+    them (the same colour is the same value), the same deformation scale (the largest movement
+    of them all drawn at Adjusted's size, so a bigger bend looks bigger), a tag with each study's
+    name, min and max. No probes or slices meanwhile (Fusion's Compare has none either)."""
+
+    def __init__(self, studies):
+        self.doc_name = studies[0].Document.Name
+        self.study_names = [s.Name for s in studies]
+        self.result = core.DEFAULT_RESULT
+        self.units = {}
+        self.deformation = core.DEFORMATION_DEFAULT
+        self.mesh = False
+        self.loads = False  # (the setup's glyphs stay off, as on the results)
+        self.items = []  # [{"study", "data", "display"}]
+        self.active = False
+        self.view = None
+        self.gl = None
+        self.legend = None
+        self.tags = None
+        self.hidden = {}
+        self.legend_info = None
+        self.tag_list = []
+        self._timer = None
+        self._camera = None
+        self._ticks = 0
+        self._glyphs_before = None
+
+    def alive(self):
+        doc = _doc(self.doc_name)
+        if doc is None:
+            return False
+        for name in self.study_names:
+            study = doc.getObject(name)
+            if study is None or not results_data.has_results(study):
+                return False
+        return True
+
+    def studies(self):
+        doc = _doc(self.doc_name)
+        return [doc.getObject(n) for n in self.study_names] if doc is not None else []
+
+    def activate(self):
+        gl = view_mod.gl_widget_of(self.doc_name)
+        if self.active and gl is not None and gl is self.gl:
+            return
+        if self.active:
+            self.deactivate()
+        doc = _doc(self.doc_name)
+        self.items = []
+        boxes = []
+        for study in self.studies():
+            data = results_data.data(study)
+            display = view_mod.ResultDisplay(data)
+            pts = data.points
+            boxes.append(tuple(pts.min(axis=0)) + tuple(pts.max(axis=0)))
+            self.items.append({"study": study, "data": data, "display": display})
+        for item, shift in zip(self.items, core.compare_offsets(boxes)):
+            item["display"].set_offset((shift, 0.0, 0.0))
+        self.view = Gui.getDocument(doc.Name).ActiveView
+        self.gl = gl
+        for item in self.items:
+            item["display"].attach(self.view)
+        Session._hide_design(self)
+        if gl is not None:
+            self.legend = view_mod.Legend(
+                gl,
+                {
+                    "result": self.set_result,
+                    "unit": self.set_unit,
+                    "details": open_details,
+                    "solve": solve_again,
+                    "banded": lambda on: None,
+                    "range": open_range,
+                    "finish_compare": finish_compare,
+                },
+            )
+            self.legend.details_button.setEnabled(False)
+            self.legend.options_button.setEnabled(False)
+            self.tags = view_mod.TagLayer(gl, self.view)
+        self.active = True
+        self.apply()
+        try:
+            self.view.fitAll()
+        except Exception:
+            pass
+        self._timer = QtCore.QTimer()
+        self._timer.setInterval(70)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start()
+        log("results: comparing %s" % ", ".join(i["study"].Label for i in self.items))
+
+    def deactivate(self):
+        if self._timer is not None:
+            try:
+                self._timer.stop()
+            except RuntimeError:
+                pass
+            self._timer = None
+        for widget in (self.legend, self.tags):
+            if widget is None:
+                continue
+            try:
+                if hasattr(widget, "remove"):
+                    widget.remove()
+                else:
+                    widget.hide()
+                    widget.setParent(None)
+                    widget.deleteLater()
+            except RuntimeError:
+                pass
+        self.legend = self.tags = None
+        for item in self.items:
+            item["display"].detach()
+        self.items = []
+        Session._show_design(self)
+        Session._restore_glyphs(self)
+        self.active = False
+        self.gl = None
+        self.view = None
+
+    # what Session's helpers need
+    @property
+    def doc(self):
+        return _doc(self.doc_name)
+
+    def unit(self, result=None):
+        return Session.unit(self, result)
+
+    def factor(self, key=None):
+        """The same scale for every study: Adjusted draws the largest movement of them all at
+        5 % of the largest model."""
+        biggest = max(i["data"].max_displacement for i in self.items)
+        diagonal = max(i["data"].diagonal for i in self.items)
+        return core.deformation_factor(key or self.deformation, biggest, diagonal)
+
+    def scale(self):
+        stats = core.combined_stats([i["data"].stats(self.result) for i in self.items])
+        return stats, core.scale(self.result, stats.get("min"), stats.get("max"))
+
+    def apply(self):
+        if not self.items:
+            return
+        np = view_mod._np()
+        stats, (lo, hi, reverse) = self.scale()
+        factor = self.factor()
+        for item in self.items:
+            display = item["display"]
+            values = item["data"].values(self.result)
+            display.set_positions(_positions(np, values[display.nodes], lo, hi, reverse))
+            display.set_texture(core.texture_rows())
+            display.set_factor(factor)
+            display.set_mesh(self.mesh)
+        info = core.legend(self.result, stats, self.unit())
+        info["targets"] = core.DEFAULT_TARGETS
+        self.legend_info = info
+        if self.legend is not None and view_mod._alive(self.legend):
+            self.legend.fill(
+                info,
+                "Compare: %d studies, one colour scale" % len(self.items),
+                False,
+                "Deformation: %s, the same for every study"
+                % core.deformation_name(self.deformation),
+            )
+            self.legend.compare_button.show()
+        self.update_tags()
+        Session._glyphs(self)
+        try:
+            self.view.redraw()
+        except Exception:
+            pass
+
+    def update_tags(self):
+        tags = []
+        stats_all, (lo, hi, reverse) = self.scale()
+        unit = self.unit()
+        for item in self.items:
+            data, display = item["data"], item["display"]
+            st = data.stats(self.result)
+            top = data.points[:, 2].max()
+            centre = data.points.mean(axis=0)
+            point = (float(centre[0] + display.offset[0]), float(centre[1]), float(top))
+            text = "%s   min %s   max %s" % (
+                item["study"].Label,
+                core.with_unit(core.convert(st.get("min"), unit), unit),
+                core.with_unit(core.convert(st.get("max"), unit), unit),
+            )
+            tags.append(
+                {
+                    "kind": "max",
+                    "node": None,
+                    "value": st.get("max"),
+                    "point": point,
+                    "text": text,
+                    "colour": core.map_colour(core.position(st.get("max"), lo, hi, reverse)),
+                    "study": item["study"].Name,
+                }
+            )
+        self.tag_list = tags
+        if self.tags is not None and view_mod._alive(self.tags):
+            self.tags.set_tags(tags)
+
+    def set_result(self, key):
+        if key in core.result_keys():
+            self.result = key
+            self.apply()
+
+    def set_unit(self, unit):
+        if core.unit_ok(self.result, unit):
+            self.units[core.kind_of(self.result)] = unit
+            self.apply()
+
+    def set_deformation(self, key):
+        self.deformation = key
+        self.apply()
+
+    def set_option(self, name, on):
+        if name == "mesh":
+            self.mesh = bool(on)
+            self.apply()
+
+    def _tick(self):
+        try:
+            if not self.active or self.gl is None:
+                return
+            if not view_mod._alive(self.gl):
+                QtCore.QTimer.singleShot(0, sync)
+                return
+            key = view_mod.camera_key(self.view, self.gl)
+            if key != self._camera:
+                self._camera = key
+                if self.tags is not None and view_mod._alive(self.tags):
+                    self.tags.relayout()
+            self._ticks += 1
+            if self._ticks % 6 == 0:
+                Session._keep_design_hidden(self)
+        except Exception as exc:
+            warn("Compare: %s" % exc)
+
+
 def deformation_is(key):
-    session = current()
+    session = COMPARE["session"] if compare_on() else current()
     if session is None:
         return key == core.DEFORMATION_DEFAULT
     return session.deformation == key
@@ -1223,7 +1526,7 @@ def deform_adjusted_5():
 
 
 def mesh_on():
-    session = current()
+    session = COMPARE["session"] if compare_on() else current()
     return bool(session and session.mesh)
 
 
@@ -1242,6 +1545,10 @@ def minmax_on():
     return session is None or bool(session.minmax)
 
 
+def comparing():
+    return compare_on()
+
+
 def animation_on():
     session = current()
     return bool(session and session.anim["shown"])
@@ -1257,11 +1564,21 @@ class _ResultsCommand:
     def GetResources(self):
         return {"MenuText": self.menu, "ToolTip": self.tip, "Pixmap": ui_icon_path(self.icon)}
 
+    in_compare = False  # also works on Compare's studies
+
     def IsActive(self):
+        if compare_on():
+            return self.in_compare
         return _shown()
 
     def Activated(self):
         try:
+            if compare_on():
+                if self.in_compare:
+                    self.run(COMPARE["session"])
+                else:
+                    commands.tell("Finish Compare first (the button under the legend).")
+                return
             session = current()
             if session is None:
                 commands.tell(core.NO_RESULTS)
@@ -1277,6 +1594,7 @@ class _ResultsCommand:
 def _deform_command(key, icon):
     class DeformCommand(_ResultsCommand):
         menu = core.deformation_name(key)
+        in_compare = True
 
         def run(self, session):
             session.set_deformation(key)
@@ -1324,6 +1642,27 @@ class RangeCommand(_ResultsCommand):
         open_range()
 
 
+class CompareCommand(_ResultsCommand):
+    menu = "Compare"
+    tip = "Two to four studies of this design side by side, on one colour scale (again to finish)"
+    icon = "simr_compare"
+    in_compare = True
+
+    def IsActive(self):
+        if compare_on():
+            return True
+        doc = App.ActiveDocument
+        return _shown() and len(studies_with_results(doc)) >= 2
+
+    def run(self, session):
+        if compare_on():
+            finish_compare()
+            return
+        from . import simulation_results_panels as panels
+
+        panels.compare(session)
+
+
 class ReportCommand(_ResultsCommand):
     menu = "Report"
     tip = "Write the study's setup, results and pictures to an HTML report"
@@ -1348,6 +1687,7 @@ class MeshCommand(_ToggleCommand):
     tip = "Show the mesh's element edges on the result"
     icon = "simr_mesh"
     option = "mesh"
+    in_compare = True
 
 
 class UndeformedCommand(_ToggleCommand):
@@ -1424,6 +1764,7 @@ COMMANDS = {
     "SciForge_SimResultsAnimate": AnimateCommand,
     "SciForge_SimResultsDetails": DetailsCommand,
     "SciForge_SimResultsReport": ReportCommand,
+    "SciForge_SimResultsCompare": CompareCommand,
     "SciForge_SimResultsRange": RangeCommand,
     "SciForge_SimResultsUndeformed": _deform_command("undeformed", "simr_deform_none"),
     "SciForge_SimResultsActual": _deform_command("actual", "simr_deform_actual"),

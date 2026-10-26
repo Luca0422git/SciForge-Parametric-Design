@@ -447,6 +447,32 @@ OUT_OF_DATE = (
 NO_RESULTS = "This study has no results yet: solve it (SETUP > Solve)."
 
 
+# -- compare ---------------------------------------------------------------------------------------
+COMPARE_MOST = 4  # Fusion compares up to 4 studies (research 5.11)
+
+
+def compare_offsets(boxes, gap=0.25):
+    """X shifts that put each model (bounding box (xmin, ymin, zmin, xmax, ymax, zmax)) beside
+    the one before it along +X, `gap` x the widest model apart; the first stays where it is."""
+    if not boxes:
+        return []
+    widest = max(b[3] - b[0] for b in boxes) or 1.0
+    shifts = [0.0]
+    end = boxes[0][3]
+    for box in boxes[1:]:
+        start = end + gap * widest
+        shifts.append(start - box[0])
+        end = start + (box[3] - box[0])
+    return shifts
+
+
+def combined_stats(stats_list):
+    """{"min", "max"} over several studies' stats of one result (the shared colour scale)."""
+    lows = [s.get("min") for s in stats_list if s and s.get("min") is not None]
+    highs = [s.get("max") for s in stats_list if s and s.get("max") is not None]
+    return {"min": min(lows) if lows else None, "max": max(highs) if highs else None}
+
+
 # -- deformation and animation ---------------------------------------------------------------------
 DEFORMATION_DEFAULT = "adjusted"  # Fusion draws Static Stress results Adjusted (research 5.6)
 

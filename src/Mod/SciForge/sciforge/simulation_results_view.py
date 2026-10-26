@@ -104,6 +104,9 @@ class ResultDisplay:
 
         self.root = coin.SoSeparator()
         self.root.setName(ROOT_NAME)
+        self.shift = coin.SoTranslation()  # Compare puts the studies side by side
+        self.offset = np.zeros(3)
+        self.root.addChild(self.shift)
 
         self.part_switch = coin.SoSwitch()  # off for a slice shown alone
         self.part_switch.whichChild = coin.SO_SWITCH_ALL
@@ -288,7 +291,13 @@ class ResultDisplay:
     def node_place(self, index):
         """Where node `index` (of the whole mesh) is drawn now."""
         data = self.data
-        return data.points[index] + self.factor * data.displacement[index]
+        return data.points[index] + self.factor * data.displacement[index] + self.offset
+
+    def set_offset(self, offset):
+        """Draw the whole result moved by `offset` (Compare)."""
+        np = _np()
+        self.offset = np.asarray(offset, dtype=float).reshape(3)
+        self.shift.translation.setValue(*[float(c) for c in self.offset])
 
     def set_mesh(self, on):
         self.mesh_switch.whichChild = self.coin.SO_SWITCH_ALL if on else self.coin.SO_SWITCH_NONE
@@ -747,6 +756,11 @@ class Legend(QtWidgets.QFrame):
         self.warning.setProperty("role", "warning")
         self.warning.setWordWrap(True)
         box.addWidget(self.warning)
+        self.compare_button = QtWidgets.QPushButton("Finish Compare")
+        self.compare_button.setObjectName("SciForgeSimFinishCompare")
+        self.compare_button.clicked.connect(lambda: self._call("finish_compare"))
+        self.compare_button.hide()
+        box.addWidget(self.compare_button)
         self.solve_button = QtWidgets.QPushButton("Solve Again")
         self.solve_button.setObjectName("SciForgeSimSolveAgain")
         self.solve_button.clicked.connect(lambda: self._call("solve"))
