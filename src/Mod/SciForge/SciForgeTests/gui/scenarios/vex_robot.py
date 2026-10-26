@@ -292,6 +292,45 @@ def f_drive():
     h.check(
         "driving stays live (a step well under a second)", statistics.median(tries) < 1.0, tries
     )
+    S["joint"] = joint.Name
+
+
+def f_dialog():
+    """The same in the Drive Joints dialog: the slider moved, the dialog's step (drive,
+    recompute of what changed, the dialog's own reading) and the redraw."""
+    from sciforge import bodies_panel, joints, joints_ui
+
+    joint = App.ActiveDocument.getObject(S["joint"])
+    panel = bodies_panel.start(joints_ui.DrivePanel, joint)  # (as ASSEMBLE > Drive Joints)
+    S["drive_panel"] = panel
+    pump(0.3)
+
+    def step(k):
+        panel.angle_slider.setValue(150 * (k + 1))  # 15 degrees a notch (the slider is x10)
+        panel._timer.stop()  # (its own short wait: the step is timed without it)
+        panel._recompute()
+        QtWidgets.QApplication.processEvents()
+
+    if os.environ.get("SCIFORGE_VEX_PROFILE"):
+        profiled("drive in the dialog", lambda: step(0))
+    tries = []
+    for k in range(8):
+        t0 = time.perf_counter()
+        step(k)
+        tries.append(time.perf_counter() - t0)
+    note("drive in the Drive Joints dialog: one slider step", tries)
+    h.check(
+        "the dialog drives the joint",
+        abs(joints.value(joint)[0] - 120.0) < 1e-6,
+        joints.value(joint),
+    )
+
+
+def f_close():
+    panel = S.pop("drive_panel", None)
+    if panel is not None:
+        h.press(QtCore.Qt.Key_Escape)
+    pump(0.3)
 
 
 # -- G ---------------------------------------------------------------------------------------------
@@ -355,6 +394,8 @@ h.run(
         e_hover,
         e_check,
         f_drive,
+        f_dialog,
+        f_close,
         g_recompute,
         h_twenty,
     ],

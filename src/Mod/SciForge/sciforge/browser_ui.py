@@ -1030,7 +1030,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             item.setToolTip(1, "\n".join(tips))
         for child in node["children"]:
             self._add(item, child)
-        item.setExpanded(self._starts_open(node["key"]))
+        if self._starts_open(node["key"]):  # (vex: a new item is closed already)
+            item.setExpanded(True)
         return item
 
     def _items(self):
