@@ -18,6 +18,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * deleted reference: the reference deleted with delete_step: the original is shown again.
 * driven: the jointed arm turned while it is rebuilt: the reference turns with it (compare
   said match 0.16 and the plan came out turned).
+* vex channel: a VEX C-channel (50 + 50 square holes, 410 faces) was also read along its
+  length (51 levels: a section and booleans each): describe took 37 s.
 * chamfered rim: compare called holes with a chamfered rim "a round hole ... with a pointed
   (drilled) end".
 * midway: check_design while a rebuild goes on took the hidden original under its rebuild for
@@ -746,6 +748,54 @@ def chamfered_rim(agent, folder):
     )
 
 
+# -- a VEX C-channel: square holes in the web and both flanges ---------------------------------
+def vex_channel(agent, folder):
+    import time
+
+    import FreeCAD as App
+    import Part
+
+    from sciforge import recognize
+
+    inch, V = 25.4, App.Vector
+    length, width, height, wall = 12.5 * inch, 1.0 * inch, 0.5 * inch, 0.046 * inch
+    channel = Part.makeBox(length, width, height).cut(
+        Part.makeBox(length, width - 2 * wall, height, V(0, wall, wall))
+    )
+    side = 0.182 * inch
+    cutters = []
+    for i in range(25):
+        x = (0.25 + 0.5 * i) * inch - side / 2
+        for j in range(2):  # the web: two rows
+            cutters.append(
+                Part.makeBox(side, side, 3 * wall, V(x, (0.25 + 0.5 * j) * inch - side / 2, -wall))
+            )
+        for y0 in (-wall, width - 2 * wall):  # the flanges: one row each
+            z = 0.25 * inch + wall / 2 - side / 2
+            cutters.append(Part.makeBox(side, 3 * wall, side, V(x, y0, z)))
+    channel = channel.cut(Part.makeCompound(cutters)).removeSplitter()
+    read = []
+    kept = recognize._prismatic
+
+    def counting(solid, axis_name, lenient=False):
+        read.append(axis_name)
+        return kept(solid, axis_name, lenient)
+
+    recognize._prismatic = counting
+    try:
+        began = time.time()
+        out = recognize.describe(channel, {})
+        took = time.time() - began
+    finally:
+        recognize._prismatic = kept
+    agent.check(
+        "vex channel: the 410-face C-channel is read along two axes, not the one with its 51 "
+        "levels of square holes (describe took 37 s) (%.1f s, read %s)" % (took, read),
+        "X" not in read and out["base"].get("kind") == "extrude" and out["confidence"] >= 0.99,
+        (read, out["base"].get("kind"), out["confidence"]),
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -759,6 +809,7 @@ CHECKS = (
     follower,
     checked_midway,
     chamfered_rim,
+    vex_channel,
 )
 
 

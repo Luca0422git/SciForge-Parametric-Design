@@ -1576,6 +1576,11 @@ class _Reader:
                 b_steps, b_moved, _ops, b_slabs, _a = best[0]
                 if b_steps <= 2 and b_moved <= 0.25 and slabs >= b_slabs + 5:
                     continue
+                # (beta 3 QA) many times more levels than an axis read already: each costs a
+                # section and the cuts' booleans (a VEX C-channel's 50 square holes along X:
+                # 51 levels, describe 37 s), and its reading cannot need fewer steps
+                if slabs > max(8, 4 * b_slabs):
+                    continue
             try:
                 found = _prismatic(solid, axis, lenient)
             except Exception as exc:
