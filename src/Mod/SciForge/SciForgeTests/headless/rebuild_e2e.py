@@ -186,6 +186,22 @@ def _hole_fix(answer, run):
     return None
 
 
+def _original_shown(shown):
+    def check(answer, run):
+        doc = run.doc()
+        original = doc.getObject("Body001")
+        refs = [o for o in doc.Objects if getattr(o, "SciForgeType", "") == "RebuildReference"]
+        if original is None:
+            return "the original Body001 is gone"
+        if bool(original.Visibility) != shown:
+            return "the original is %s" % ("hidden" if shown else "shown")
+        if bool(refs) == shown:
+            return "references: %s" % [r.Name for r in refs]
+        return None
+
+    return check
+
+
 def _kept(answer, run):
     doc = run.doc()
     labels = sorted(o.Label for o in doc.Objects if o.TypeId == "PartDesign::Body")
@@ -220,7 +236,12 @@ RUNNER_SESSION = [
         "expect": "error",
         "contains": ["NoSuchBody"],
     },
-    {"tool": "start_rebuild", "args": {"body": "Body"}, "expect": "error", "contains": ["no solid"]},
+    {
+        "tool": "start_rebuild",
+        "args": {"body": "Body"},
+        "expect": "error",
+        "contains": ["no solid"],
+    },
     {
         "tool": "start_rebuild",
         "args": {"body": "Body001"},
@@ -233,6 +254,9 @@ RUNNER_SESSION = [
         "expect": "error",
         "contains": ["already being rebuilt"],
     },
+    # undo takes the start back and shows the original again; redo hides it again
+    {"tool": "undo", "args": {}, "contains": ["Start rebuild"], "check": _original_shown(True)},
+    {"tool": "redo", "args": {}, "check": _original_shown(False)},
     {"tool": "describe_reference", "args": {}, "contains": ['"plan"', "Body001"]},
     {"tool": "describe_reference", "args": {"detail": "summary"}, "contains": ['"summary"']},
     {"tool": "compare_to_reference", "args": {}, "contains": ["still empty"]},
@@ -255,6 +279,19 @@ RUNNER_SESSION = [
         "contains": ["kept hidden", "the reference kept hidden"],
         "check": _kept,
     },
+    # the rebuilt body deleted while the rebuild goes on: said, and a new start makes a new one
+    {"tool": "new_design", "args": {"name": "RebuildGone"}},
+    {
+        "tool": "create_sketch",
+        "args": {"plane": "XY", "geometry": [{"rect": [0, 0, 20, 20]}]},
+        "save": "rg_sk",
+    },
+    {"tool": "extrude", "args": {"profile": "$rg_sk", "distance": 5}},
+    {"tool": "start_rebuild", "args": {"body": "Body"}, "save": "rg_rebuilt"},
+    {"tool": "delete_bodies", "args": {"bodies": ["$rg_rebuilt"]}},
+    {"tool": "compare_to_reference", "args": {}, "expect": "error", "contains": ["is gone"]},
+    {"tool": "start_rebuild", "args": {"body": "Body"}, "contains": ["is the reference now"]},
+    {"tool": "compare_to_reference", "args": {}, "contains": ["still empty"]},
 ]
 
 

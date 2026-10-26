@@ -197,6 +197,12 @@ CHAT_ORDER = (
     "check_design",
     "render",
     "diff_design",
+    # (beta 3, at-tools: Rebuild with Timeline (AI)... hands the chat a rebuild: its tools must
+    # be there also for a local model that takes only 48)
+    "start_rebuild",
+    "describe_reference",
+    "compare_to_reference",
+    "finish_rebuild",
     "get_timeline",
     "get_step",
     "edit_step",

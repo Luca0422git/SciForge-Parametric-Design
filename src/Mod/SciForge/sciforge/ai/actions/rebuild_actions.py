@@ -206,6 +206,9 @@ def finish_rebuild(ctx, args):
                 "even_if_different: true to finish it as it is." % data["verdict"]
             )
     original = ref.SourceLabel
+    from ..executor import _broken
+
+    before = _broken(doc)  # (steps that used the original and break with it are said)
 
     def work():
         return rebuild.finish(
@@ -243,4 +246,4 @@ def finish_rebuild(ctx, args):
             else ", the reference removed."
         )
     )
-    return ctx.done(text, doc)
+    return ctx.done(text, doc, before)
