@@ -9,6 +9,9 @@ B  Legend > Strain > Normal XX: the beam's top is stretched near the held end (t
 C  Strain > 1st Principal: on the top face away from the support it equals the stretch along the
    beam (one-way stress there), within 5 %.
 D  Stress in psi and ksi: the legend's values are the MPa values converted (1 MPa = 145.04 psi).
+E  The design in inches (the browser's Units row > Inch): the displacement shown at once in
+   inches, the design's units (Fusion's Simulation follows them); stress stays in ksi, the unit
+   chosen in the legend.
 """
 
 import FreeCAD as App
@@ -143,6 +146,48 @@ def d_ksi_check():
     h.check("the max tag in ksi", s.tags("max")[0]["text"].endswith(" ksi"), s.tags("max"))
 
 
+def e_units():
+    from SciForgeTests.gui import timeline_input as ti
+
+    s.choose_result("Displacement")
+    h.check("displacement in mm first (a mm design)", s.session().legend_info["unit"] == "mm")
+    ti.click_row("Units: mm")
+
+
+def e_inch():
+    from PySide import QtWidgets
+
+    from sciforge import browser_ui
+
+    from SciForgeTests.gui import dialog_input as ui
+
+    panel = browser_ui.UnitsPanel.last
+    h.check("Change Active Units opens", panel is not None and not panel._closed)
+    if panel is None:
+        return
+    ui.choose(panel.form.findChild(QtWidgets.QComboBox, "SciForgeUnitType"), "Inch")
+    h.task_button("OK")
+
+
+e_inch.wait_ms = 600
+
+
+def e_check():
+    sess = s.session()
+    disp = s.stats("displacement")
+    h.check("the legend in inches now", sess.legend_info["unit"] == "in", sess.legend_info["unit"])
+    h.check(
+        "converted (25.4 mm to the inch)",
+        abs(sess.legend_info["max"] - disp["max"] / 25.4) < 1e-12 + 1e-9 * disp["max"],
+    )
+    h.check("the max tag in inches", s.tags("max")[0]["text"].endswith(" in"), s.tags("max"))
+    s.choose_result("Stress")
+
+
+def e_stress_check():
+    h.check("stress in the unit chosen before", s.session().legend_info["unit"] == "ksi")
+
+
 h.run(
     "simres_linear",
     [
@@ -157,5 +202,9 @@ h.run(
         d_psi,
         d_check,
         d_ksi_check,
+        e_units,
+        e_inch,
+        e_check,
+        e_stress_check,
     ],
 )

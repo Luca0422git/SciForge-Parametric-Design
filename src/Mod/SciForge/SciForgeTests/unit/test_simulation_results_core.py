@@ -74,6 +74,17 @@ class ResultListTests(unittest.TestCase):
 
 
 class LegendTests(unittest.TestCase):
+    def test_the_design_units_come_first(self):
+        self.assertEqual(core.design_unit("displacement", "in"), "in")
+        self.assertEqual(core.design_unit("dz", "ft"), "in")
+        self.assertEqual(core.design_unit("von_mises", "in"), "psi")
+        self.assertEqual(core.design_unit("von_mises", "cm"), "MPa")
+        self.assertEqual(core.design_unit("displacement", "cm"), "cm")
+        self.assertEqual(core.design_unit("displacement", "m"), "m")
+        self.assertEqual(core.design_unit("safety", "in"), "")
+        self.assertEqual(core.design_unit("strain", "in"), "")
+        self.assertEqual(core.design_unit("displacement", "parsec"), "mm")
+
     def test_safety_factor_scale_is_capped(self):
         leg = core.legend("safety", {"min": 3.5, "max": 15.0})
         self.assertEqual((leg["lo"], leg["hi"], leg["reverse"]), (0.0, sim.SAFETY_CAP, True))

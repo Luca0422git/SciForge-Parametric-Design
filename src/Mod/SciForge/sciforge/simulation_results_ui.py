@@ -351,6 +351,13 @@ class _DocWatch:
     def slotRedoDocument(self, doc):
         _later(doc, "sync")
 
+    def slotChangedDocument(self, doc, prop):
+        try:
+            if prop == "UnitSystem":  # Document Settings > Units: the legend follows
+                _later(doc, "units")
+        except Exception:
+            pass
+
     def slotDeletedObject(self, obj):
         try:
             if simulation.is_study(obj) or simulation.is_simulation_object(obj):
@@ -380,7 +387,7 @@ class _DocWatch:
         results_data.forget(name)
 
 
-_PENDING = {"status": set(), "sync": False, "armed": False}
+_PENDING = {"status": set(), "units": set(), "sync": False, "armed": False}
 
 
 def _later(doc, what):
@@ -388,8 +395,8 @@ def _later(doc, what):
         name = doc.Name
     except Exception:
         return
-    if what == "status":
-        _PENDING["status"].add(name)
+    if what in ("status", "units"):
+        _PENDING[what].add(name)
     else:
         _PENDING["sync"] = True
     if not _PENDING["armed"]:
@@ -400,6 +407,7 @@ def _later(doc, what):
 def _run_later():
     _PENDING["armed"] = False
     names, _PENDING["status"] = _PENDING["status"], set()
+    units, _PENDING["units"] = _PENDING["units"], set()
     again, _PENDING["sync"] = _PENDING["sync"], False
     try:
         if again:
@@ -407,6 +415,9 @@ def _run_later():
         session = current()
         if session is not None and session.doc_name in names:
             session.refresh_status()
+        if session is not None and session.doc_name in units:
+            session.apply()
+            session._panels_follow()
     except Exception as exc:
         warn("results: %s" % exc)
 
@@ -654,10 +665,16 @@ class Session:
 
     # -- what is drawn
     def unit(self, result=None):
+        """The unit a result is shown in: the one chosen in the legend, else the design's
+        (Document Settings > Units: an inch design shows inches and psi)."""
         result = result or self.result
         kind = core.kind_of(result)
         unit = self.units.get(kind)
-        return unit if unit is not None and core.unit_ok(result, unit) else core.base_unit(result)
+        if unit is not None and core.unit_ok(result, unit):
+            return unit
+        doc = self.doc
+        length = results_data.design_length_unit(doc) if doc is not None else "mm"
+        return core.design_unit(result, length)
 
     def factor(self, key=None):
         data = self.data

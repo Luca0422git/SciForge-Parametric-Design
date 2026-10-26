@@ -211,7 +211,7 @@ surface: a Value slider over the result, an opacity).
 
 | Fusion | SciForge | Src |
 |---|---|---|
-| Legend: result drop-down, a second drop-down for the component, a unit drop-down, legend options | Same, at the top left of the 3D view: Safety Factor / Stress / Displacement / Strain, then the component; units MPa, kPa, Pa, psi, ksi or mm, cm, m, in (none for the safety factor and strain) | A[77] A[49], Autodesk legend help; place G |
+| Legend: result drop-down, a second drop-down for the component, a unit drop-down, legend options | Same, at the top left of the 3D view: Safety Factor / Stress / Displacement / Strain, then the component; units MPa, kPa, Pa, psi, ksi or mm, cm, m, in (none for the safety factor and strain), first in **the design's units** (Document Settings > Units: an inch or foot design shows inches and psi, a cm design cm; it follows a change at once), then the one chosen | A[77] A[49] A[67], Autodesk legend help; place G |
 | Result types | Safety Factor; Stress: Von Mises, 1st / 3rd Principal, Normal XX / YY / ZZ, Shear XY / YZ / ZX; Displacement: Total, X, Y, Z; Strain: Equivalent, 1st / 3rd Principal, Normal XX / YY / ZZ (worked out from the solve's strain tensor) | A[48], components G (A[82] Inventor) |
 | A vertical colour bar with min and max | Max above, Min below the bar, 9 values (the safety factor every 1.5); colours blue - cyan - green - yellow - red drawn with a colour map texture, so the colours between two nodes follow the map | G (mem) |
 | Safety factor capped at 15; no legend min / max for it | Scale 0 .. 15, red low, blue high | F[89] F[90] T[107] |

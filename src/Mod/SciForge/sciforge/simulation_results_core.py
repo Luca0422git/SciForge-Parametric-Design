@@ -168,6 +168,22 @@ def convert(value, unit):
     return float(value) * _PER_BASE.get(unit, 1.0)
 
 
+def design_unit(result, length):
+    """The unit a result is shown in first for a design in `length` units (Document Settings >
+    Units: "mm", "cm", "m", "in", "ft"): Fusion's Simulation follows the design's units
+    (research 6): displacement in its length unit (inches for feet), stress in psi for inches
+    and feet, MPa otherwise."""
+    kind = kind_of(result)
+    imperial = length in ("in", "ft")
+    if kind == "displacement":
+        if imperial:
+            return "in"
+        return length if length in UNIT_CHOICES["displacement"] else "mm"
+    if kind == "stress":
+        return "psi" if imperial else "MPa"
+    return base_unit(result)
+
+
 def unit_ok(result, unit):
     return unit in units_for(result)
 

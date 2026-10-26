@@ -477,6 +477,17 @@ def default_report_path(study):
     return os.path.join(folder, "%s - %s.html" % (doc.Label, safe or "Study"))
 
 
+def design_length_unit(doc):
+    """The design's length unit (Document Settings > Units): "mm", "cm", "m", "in" or "ft"."""
+    try:
+        from . import browser_core
+
+        schema = doc.getEnumerationsOfProperty("UnitSystem").index(doc.UnitSystem)
+        return browser_core.unit_label(schema) or "mm"
+    except Exception:
+        return "mm"
+
+
 def default_animation_path(study):
     """Like the report: next to the design file when it was saved, else in the home folder."""
     return default_report_path(study)[: -len(".html")] + " animation.gif"
