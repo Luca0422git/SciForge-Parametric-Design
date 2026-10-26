@@ -894,11 +894,42 @@ def _geometry_key(found, tol):
     return (tuple(rows), round(float(tol), 9))
 
 
+def _touch_kind(cut, sa, sb):
+    """How two touching bodies touch: None on a face, "edge" along a line only, "corner" at a
+    point only. From the section of their shapes (its edges close around a shared area), and
+    when that does not tell (two coincident round faces, a pin in its hole, give only lines),
+    from their faces: a pair of faces with an area in common."""
+    import Part
+
+    kind = "corner" if not cut.Edges else "edge"
+    if cut.Edges:
+        try:
+            for group in Part.sortEdges(cut.Edges):
+                if Part.Wire(group).isClosed():
+                    return None
+        except Exception:
+            return None  # (when in doubt: a face, as before)
+    try:
+        for fa in sa.Faces:
+            box = fa.BoundBox
+            box.enlarge(1e-6)
+            for fb in sb.Faces:
+                if not box.intersect(fb.BoundBox):
+                    continue
+                common = fa.common(fb)
+                if common.Area > 1e-6 * min(fa.Area, fb.Area):
+                    return None
+    except Exception:
+        return None
+    return kind
+
+
 def _contact_data(study):
     """([(body, body, "bonded")] touching or closer than the contact tolerance, [(body, body,
-    volume mm3)] overlapping) of the study's bodies, remembered for the same geometry (at most
-    16 answers kept). Two bodies whose boundaries cross (OpenCASCADE's section: a third of the
-    time of a distance) touch; the others are measured; only touching ones can overlap."""
+    volume mm3)] overlapping, [(body, body, "edge" / "corner")] touching only along an edge or
+    at a corner) of the study's bodies, remembered for the same geometry (at most 16 answers
+    kept). Two bodies whose boundaries cross (OpenCASCADE's section: a third of the time of a
+    distance) touch; the others are measured; only touching ones can overlap."""
     found = study_bodies(study)
     tol = float(settings(study)["contact_tolerance"])
     key = _geometry_key(found, tol)
@@ -909,7 +940,7 @@ def _contact_data(study):
         return tuple([(by_name[a], by_name[b], v) for a, b, v in rows] for rows in hit)
     shapes = [(b, bodies.global_shape(b, copy=False)) for b in found]
     volumes = {}
-    touching, overlapping = [], []
+    touching, overlapping, slight = [], [], []
     for i, (a, sa) in enumerate(shapes):
         box = sa.BoundBox
         near = sa.BoundBox
@@ -918,10 +949,12 @@ def _contact_data(study):
             if not near.intersect(sb.BoundBox):
                 continue
             gap = None
+            kind = None
             try:
                 cut = sa.section(sb)
                 if cut.Edges or cut.Vertexes:
                     gap = 0.0
+                    kind = _touch_kind(cut, sa, sb)
             except Exception:
                 gap = None
             if gap is None:
@@ -931,6 +964,8 @@ def _contact_data(study):
                     continue
             if gap <= tol + 1e-9:
                 touching.append((a, b, "bonded"))
+                if kind is not None:
+                    slight.append((a, b, kind))
             if gap <= 1e-9 and box.intersect(sb.BoundBox):
                 try:
                     volume = sa.common(sb).Volume
@@ -945,9 +980,9 @@ def _contact_data(study):
         if len(_GEOMETRY_CACHE) >= 16:
             _GEOMETRY_CACHE.pop(next(iter(_GEOMETRY_CACHE)))
         _GEOMETRY_CACHE[full] = tuple(
-            [(x.Name, y.Name, v) for x, y, v in rows] for rows in (touching, overlapping)
+            [(x.Name, y.Name, v) for x, y, v in rows] for rows in (touching, overlapping, slight)
         )
-    return touching, overlapping
+    return touching, overlapping, slight
 
 
 def contacts(study):
@@ -959,6 +994,12 @@ def contacts(study):
 def overlaps(study):
     """[(body, body, volume mm3)] of the study's bodies that overlap."""
     return _contact_data(study)[1]
+
+
+def slight_contacts(study):
+    """[(body, body, "edge" / "corner")] of the study's bodies that touch only along an edge or
+    at a corner: glued only there, like a hinge (Fusion's contacts are between faces)."""
+    return _contact_data(study)[2]
 
 
 def loose_bodies(study, touching=None):
@@ -1175,10 +1216,12 @@ def precheck(study):
             summary["constraints" if d["category"] == "constraint" else "loads"].append(row)
         if not item.Suppressed and not info.get("built"):
             summary.setdefault("unbuilt", []).append(item.Label)
+    slight = []
     if len(found) > 1:
         try:
             touching = contacts(study)
             summary["overlaps"] = [(a.Label, b.Label, v) for a, b, v in overlaps(study)]
+            slight = slight_contacts(study)
         except Exception as exc:
             warn("simulation pre-check: %s" % exc)
             touching = []
@@ -1223,6 +1266,16 @@ def precheck(study):
             )
     except Exception as exc:
         warn("simulation pre-check (held enough): %s" % exc)
+    for a, b, kind in slight:
+        checks.append(
+            (
+                "warning",
+                "%s and %s touch only %s: they are glued only there, like a hinge, so one can "
+                "still turn about it (the solve fails, or gives nonsense). Let them share a face, "
+                "or move them apart and hold each one."
+                % (a.Label, b.Label, "along an edge" if kind == "edge" else "at a corner"),
+            )
+        )
     for label in summary.get("unbuilt", []):
         checks.append(("error", "%s is not in SciForge yet: suppress or delete it." % label))
     try:

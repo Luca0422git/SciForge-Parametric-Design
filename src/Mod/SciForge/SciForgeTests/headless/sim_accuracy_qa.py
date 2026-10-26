@@ -2179,6 +2179,41 @@ def out_of_date_same_size(doc, out):
     out.append(("the bar turned a quarter about its axis: out of date", sim.out_of_date(bar), ""))
 
 
+@engine_check("bodies that touch only along an edge or at a corner")
+def edge_contacts(doc, out):
+    """Two cubes that touch only along an edge (or at a corner) are glued only there, like a
+    hinge: the pre-check was green and the solve then failed with "not held enough" (or could
+    give nonsense). The pre-check now warns, naming both; bodies that share a face (a block on
+    a plate, a cube on a cube's face, a pin in a hole) get no such warning."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    def pair(name, b_shape, a_shape=None):
+        a = sb.make_body(doc, a_shape or Part.makeBox(20, 20, 20), name + "A")
+        b = sb.make_body(doc, b_shape, name + "B")
+        study = sim.create_study(doc, study_bodies=[a, b])
+        sim.add_item(
+            study,
+            "constraint",
+            "fixed",
+            [(a, sb.one_face(a, lambda f: sb.near(f.CenterOfMass.z, 0)))],
+        )
+        return [t for level, t in sim.precheck(study) if level == "warning" and "touch only" in t]
+
+    found = pair("Edge", Part.makeBox(20, 20, 20, App.Vector(20, 0, 20)))
+    out.append(("touching along an edge: warned", any("along an edge" in t for t in found), found))
+    found = pair("Corner", Part.makeBox(20, 20, 20, App.Vector(20, 20, 20)))
+    out.append(("touching at a corner: warned", any("at a corner" in t for t in found), found))
+    found = pair("Face", Part.makeBox(10, 10, 10, App.Vector(5, 5, 20)))
+    out.append(("a cube on a cube's face: no such warning", not found, found))
+    pin = Part.makeCylinder(4, 30, App.Vector(10, 10, -5))
+    holed = Part.makeBox(20, 20, 20).cut(Part.makeCylinder(4, 20, App.Vector(10, 10, 0)))
+    found = pair("Pin", pin, holed)
+    out.append(("a pin in its hole: no such warning", not found, found))
+
+
 @engine_check("results kept in and dropped from the file")
 def kept_and_dropped(doc, out):
     """A solved study saved and reopened: the results come back with the same numbers; with
