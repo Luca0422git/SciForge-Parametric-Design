@@ -185,6 +185,18 @@ def b_check():
             dialog.bodies.item(rows["Alu"], 2).text().startswith("95"),
             dialog.bodies.item(rows["Alu"], 2).text(),
         )
+        core = s.results_core()
+        lower, upper = s.session().targets
+        for name in ("Steel", "Alu"):
+            cell = dialog.bodies.item(rows[name], 4)
+            band = core.target_band(float(cell.text()), lower, upper)
+            want = tuple(round(c, 2) for c in core.BAND_COLOURS[band])
+            got = cell.background().color()
+            h.check(
+                "%s's lowest safety factor in its band's colour (%s)" % (name, band),
+                tuple(round(c, 2) for c in (got.redF(), got.greenF(), got.blueF())) == want,
+                (got.name(), band),
+            )
     dialog.close()
 
 

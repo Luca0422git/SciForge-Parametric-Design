@@ -590,39 +590,48 @@ class SlicePanel:
         self.slider.blockSignals(False)
 
     def _axis_changed(self, _index):
-        choice = self.axis_box.currentData()
-        if str(choice).startswith("plane:"):  # a construction plane: the cut on it
-            for label, normal, point in self.planes:
-                if "plane:" + label == choice:
-                    spec = core.plane_slice(normal, point, self.style_box.currentData())
-                    if spec is not None:
-                        spec["lines"] = bool(self.lines.isChecked())
-                        spec["vectors"] = bool(self.vectors.isChecked())
-                        self.use(spec, choice)
-                    return
-            return
-        self.spec["axis"] = choice
-        if self.spec["axis"] == "face":
-            self.spec["normal"] = self.face_normal
-        self._set_range()
-        lo, hi = self._range()
-        self.offset.blockSignals(True)
-        self.offset.setValue((lo + hi) / 2.0)
-        self.offset.blockSignals(False)
-        self._sync_slider()
-        self._changed()
-        self._make_arrow()
+        try:
+            choice = self.axis_box.currentData()
+            if str(choice).startswith("plane:"):  # a construction plane: the cut on it
+                for label, normal, point in self.planes:
+                    if "plane:" + label == choice:
+                        spec = core.plane_slice(normal, point, self.style_box.currentData())
+                        if spec is not None:
+                            spec["lines"] = bool(self.lines.isChecked())
+                            spec["vectors"] = bool(self.vectors.isChecked())
+                            self.use(spec, choice)
+                        return
+                return
+            self.spec["axis"] = choice
+            if self.spec["axis"] == "face":
+                self.spec["normal"] = self.face_normal
+            self._set_range()
+            lo, hi = self._range()
+            self.offset.blockSignals(True)
+            self.offset.setValue((lo + hi) / 2.0)
+            self.offset.blockSignals(False)
+            self._sync_slider()
+            self._changed()
+            self._make_arrow()
+        except Exception as exc:
+            warn("Slice Plane: %s" % exc)
 
     def _offset_changed(self, _value):
-        self._sync_slider()
-        self._changed()
+        try:
+            self._sync_slider()
+            self._changed()
+        except Exception as exc:
+            warn("Slice Plane: %s" % exc)
 
     def _slider_moved(self, value):
-        lo, hi = self._range()
-        self.offset.blockSignals(True)
-        self.offset.setValue(lo + (hi - lo) * value / 1000.0)
-        self.offset.blockSignals(False)
-        self._changed()
+        try:
+            lo, hi = self._range()
+            self.offset.blockSignals(True)
+            self.offset.setValue(lo + (hi - lo) * value / 1000.0)
+            self.offset.blockSignals(False)
+            self._changed()
+        except Exception as exc:
+            warn("Slice Plane: %s" % exc)
 
     def _changed(self, *_args):
         try:
@@ -1188,15 +1197,21 @@ class IsoPanel:
         self.slider.blockSignals(False)
 
     def _value_changed(self, _value):
-        self._sync_slider()
-        self._apply()
+        try:
+            self._sync_slider()
+            self._apply()
+        except Exception as exc:
+            warn("Iso-surface: %s" % exc)
 
     def _slider_moved(self, step):
-        level = self.low + (self.high - self.low) * step / float(self.STEPS)
-        self.value.blockSignals(True)
-        self.value.setValue(core.convert(level, self.unit))
-        self.value.blockSignals(False)
-        self._apply()
+        try:
+            level = self.low + (self.high - self.low) * step / float(self.STEPS)
+            self.value.blockSignals(True)
+            self.value.setValue(core.convert(level, self.unit))
+            self.value.blockSignals(False)
+            self._apply()
+        except Exception as exc:
+            warn("Iso-surface: %s" % exc)
 
     def _apply(self):
         try:
@@ -1428,6 +1443,19 @@ class DetailsDialog(QtWidgets.QDialog):
             )
             for c, text in enumerate(cells):
                 self.bodies.setItem(r, c, QtWidgets.QTableWidgetItem(str(text)))
+            # the lowest safety factor in the colour of its band (below / meets / above)
+            band = core.target_band(row["safety_min"], lower, upper)
+            if band is not None:
+                cell = self.bodies.item(r, 4)
+                cell.setBackground(QtGui.QColor.fromRgbF(*core.BAND_COLOURS[band]))
+                cell.setForeground(QtGui.QColor("#000000"))
+                cell.setToolTip(
+                    {
+                        "below": "Below the lower target",
+                        "meets": "Between the targets",
+                        "above": "Above the upper target",
+                    }[band]
+                )
         self.bodies.resizeColumnsToContents()
         stats = simulation.summary(study).get("stats") or {}
         keys = [k for k in core.result_keys() if k in stats]
@@ -1555,9 +1583,12 @@ class CompareDialog(QtWidgets.QDialog):
         return out
 
     def _count(self):
-        count = len(self.chosen())
-        self.go.setEnabled(2 <= count <= core.COMPARE_MOST)
-        self.go.setText("Compare %d Studies" % count if count else "Compare")
+        try:
+            count = len(self.chosen())
+            self.go.setEnabled(2 <= count <= core.COMPARE_MOST)
+            self.go.setText("Compare %d Studies" % count if count else "Compare")
+        except Exception as exc:
+            warn("Compare: %s" % exc)
 
     def _go(self):
         try:
@@ -2190,6 +2221,12 @@ class ReportDialog(QtWidgets.QDialog):
             warn("Report: %s" % exc)
 
     def _save(self, open_after):
+        try:
+            self._save_now(open_after)
+        except Exception as exc:
+            warn("Report: %s" % exc)
+
+    def _save_now(self, open_after):
         path = self.path_field.text().strip()
         if not path:
             self.message.setText("Choose where to save the report.")

@@ -1137,11 +1137,14 @@ class Legend(QtWidgets.QFrame):
         return False
 
     def place(self):
-        if not _alive(self) or not _alive(self.gl):
-            return
-        self.adjustSize()
-        self.move(in_parent(self.gl, 12, 12))
-        self.raise_()
+        try:
+            if not _alive(self) or not _alive(self.gl):
+                return
+            self.adjustSize()
+            self.move(in_parent(self.gl, 12, 12))
+            self.raise_()
+        except Exception as exc:
+            warn("results legend: %s" % exc)
 
     def fill(self, info, study_label, out_of_date, deformation_text):
         """Show a legend (simulation_results_core.legend())."""
@@ -1205,8 +1208,11 @@ class Legend(QtWidgets.QFrame):
     def _group_chosen(self, _index):
         if self._filling:
             return
-        group = self.group_box.currentData()
-        parts = core.components(group)
+        try:
+            parts = core.components(self.group_box.currentData())
+        except Exception as exc:
+            warn("results legend: %s" % exc)
+            return
         if parts:
             self._call("result", parts[0][0])
 
@@ -1333,11 +1339,14 @@ class AnimationBar(QtWidgets.QFrame):
         return False
 
     def place(self):
-        if not _alive(self) or not _alive(self.gl):
-            return
-        self.adjustSize()
-        self.move(in_parent(self.gl, 12, max(0, self.gl.height() - self.height() - 64)))
-        self.raise_()
+        try:
+            if not _alive(self) or not _alive(self.gl):
+                return
+            self.adjustSize()
+            self.move(in_parent(self.gl, 12, max(0, self.gl.height() - self.height() - 64)))
+            self.raise_()
+        except Exception as exc:
+            warn("results animation: %s" % exc)
 
     def remove(self):
         try:

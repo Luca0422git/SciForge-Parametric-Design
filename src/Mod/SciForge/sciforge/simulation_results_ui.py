@@ -370,21 +370,24 @@ class _DocWatch:
             name = doc.Name
         except Exception:
             return
-        session = SESSIONS.pop(name, None)
-        if session is not None:
-            session.drop()
-            if ACTIVE["session"] is session:
-                ACTIVE["session"] = None
-        compare = COMPARE["session"]
-        if compare is not None and compare.doc_name == name:
-            COMPARE["session"] = None
-            try:
-                if compare._timer is not None:
-                    compare._timer.stop()
-            except RuntimeError:
-                pass
-            compare.active = False
-        results_data.forget(name)
+        try:
+            session = SESSIONS.pop(name, None)
+            if session is not None:
+                if ACTIVE["session"] is session:
+                    ACTIVE["session"] = None
+                session.drop()
+            compare = COMPARE["session"]
+            if compare is not None and compare.doc_name == name:
+                COMPARE["session"] = None
+                try:
+                    if compare._timer is not None:
+                        compare._timer.stop()
+                except RuntimeError:
+                    pass
+                compare.active = False
+            results_data.forget(name)
+        except Exception as exc:
+            warn("results: %s" % exc)
 
 
 _PENDING = {"status": set(), "units": set(), "sync": False, "armed": False}
