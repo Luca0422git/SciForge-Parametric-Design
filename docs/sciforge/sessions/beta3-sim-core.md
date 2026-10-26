@@ -127,3 +127,6 @@ sections Engine and Benchmarks.
   face / edge / corner counts, box and place, its component's place, the tolerance): 0.2 s
   after the first time; a moved or edited body is seen at once (engine check). Only checking
   the faces near the other body did not make OpenCASCADE's distance faster.
+- 21:05-21:15 the pre-check of the big plate fixed at its 120 holes took 8 s: every pick made
+  its own copy of the 366-face shape (27 ms each) to compare its remembered shape. The copy is
+  now made once per object and call, and remembered per shape: 0.4 s.

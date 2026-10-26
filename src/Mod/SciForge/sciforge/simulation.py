@@ -461,11 +461,38 @@ def _signature(element):
     return out
 
 
+_LOCAL_SHAPES = {}
+
+
 def _local_shape(obj):
     """The object's shape in its own coordinates (its placement and its component's left
-    out), so a pick's remembered shape does not change when the body or its component moves."""
-    shape = obj.Shape.copy(False)  # (FreeCAD's own is read-only; this copy shares geometry)
+    out), so a pick's remembered shape does not change when the body or its component moves.
+    Remembered per shape (callers only read it): the copy of a 366-face part takes 27 ms, and
+    every pick asked for it (120 fixed holes: a pre-check of 8 s)."""
+    own = obj.Shape
+    key = None
+    try:
+        box = own.BoundBox
+        key = (
+            obj.Document.Name,
+            obj.Name,
+            own.hashCode(),
+            tuple(
+                round(v, 6) for v in (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)
+            ),
+            tuple(round(x, 9) for x in own.Placement.toMatrix().A),
+        )
+        hit = _LOCAL_SHAPES.get(key)
+        if hit is not None:
+            return hit
+    except Exception:
+        key = None
+    shape = own.copy(False)  # (FreeCAD's own is read-only; this copy shares geometry)
     shape.Placement = App.Placement()
+    if key is not None:
+        if len(_LOCAL_SHAPES) >= 8:
+            _LOCAL_SHAPES.pop(next(iter(_LOCAL_SHAPES)))
+        _LOCAL_SHAPES[key] = shape
     return shape
 
 
@@ -473,12 +500,15 @@ def _signatures(refs):
     """[[object name, element name, signature]] of picks, in the order of the picks (FreeCAD
     may rename a pick it lost, "?Face1" for what was Face8, but keeps their order)."""
     out = []
+    shapes = {}
     for obj, sub in _picks(refs):
         name = sub.split(".")[-1]
         sig = None
         if name:
             try:
-                sig = _signature(_local_shape(obj).getElement(name))
+                if obj.Name not in shapes:  # (once per object)
+                    shapes[obj.Name] = _local_shape(obj)
+                sig = _signature(shapes[obj.Name].getElement(name))
             except Exception:
                 sig = None
         out.append([obj.Name, name, sig])
@@ -615,6 +645,7 @@ def resolve_picks(item):
     # update_item: then they are matched by name)
     positional = isinstance(sigs, list) and len(sigs) == len(picks)
     out = []
+    sizes = {}
     for index, (obj, sub) in enumerate(picks):
         if not bodies.alive(obj):
             out.append((obj, [], False))
@@ -625,11 +656,13 @@ def resolve_picks(item):
         name = sub.split(".")[-1]
         sig = _signature_of(sigs, index, obj, name, positional)
         try:
-            shape = _local_shape(obj)
+            if obj.Name not in sizes:  # (once per object)
+                local = _local_shape(obj)
+                sizes[obj.Name] = (local, max(1e-6 * _shape_size(local), 1e-4))
+            shape, tol = sizes[obj.Name]
         except Exception:
             out.append((obj, [], False))
             continue
-        tol = max(1e-6 * _shape_size(shape), 1e-4)
         element = None
         if not name.startswith("?"):
             try:
