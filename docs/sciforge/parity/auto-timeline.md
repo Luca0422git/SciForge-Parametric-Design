@@ -86,7 +86,25 @@ interrupted: a 434-face connector with 26 chamfers and fillets spends about 40 s
 
 ### Real files from other programs
 
-(filled in from the final run, see Tests)
+Every solid of every STEP file in the repository (made by other programs: the AS1 test
+assembly, a part library of electronic packages, a forged lever, the Pi 5 case) and of four of
+FreeCAD's example documents (the CAM hole puzzle, PartDesignExample, EngineBlock,
+AssemblyExample), 71 distinct solids from 36 files, each described and rebuilt from the plan
+through the headless AI executor (a scratch sweep; four of them are also in the benchmark):
+
+| Result | Solids | Which |
+|---|---|---|
+| rebuilt exactly | 19 | the Pi 5 case (both parts), PartDesignExample, EngineBlock's block, two assembly parts, IDF bodies with chamfers and patterns |
+| exactly, faces split in the file | 12 | the AS1 plates, brackets and nuts (each bore in two half faces), CAM test blocks, an assembly bracket: the same volume and surfaces, whole faces in the rebuild |
+| within 1e-7 of the volume | 4 | a lead with tiny two-distance chamfers, two excavator links whose tangent arcs missed each other by 5e-7 mm |
+| a step stopped | 1 | an excavator bucket (97 faces): a fillet's selector found 5 edges where it expected 1 (the step stops; nothing is rounded wrongly) |
+| base not read (said so) | 35 | free-form bodies (SMD chips, a capacitor, the forged lever), molded IC bodies drafted both ways from a parting line, a CAM test part of turned and hexagonal features, assembly parts where a round boss crosses a rod; their holes, fillets and chamfers are still listed |
+
+Before this sweep: a curve type FreeCAD has no Python class for stopped the whole reading, a
+base ended 1e-6 mm short of the boss on it (two snaps in a row), tangent arcs did not close a
+sketch, a hole whose rim is rounded started below the round, slanted groove faces read as
+chamfers filled the groove (+15 % volume), and three files took 26 to 169 s; all fixed (see the
+session log).
 
 ### Known gaps
 
@@ -121,14 +139,19 @@ interrupted: a 434-face connector with 26 chamfers and fillets spends about 40 s
 
 (builders at-recognize and at-tools, each its own lines)
 
-- **Recognition (at-recognize)**: `SciForgeTests/unit/test_recognize_core.py` (pure Python:
-  numbers and measured values, planes, loops and the create_sketch items they become, exact
-  arc / line closure, patterns with noise, ideal pattern points, the plan's ids and Fusion's
-  order, plan arguments checked by the catalogue, frames and Euler angles, circle / cylinder
-  fits, arcs fitted on mesh sections); `SciForgeTests/headless/recognize_bench.py` (real
-  FreeCAD 1.1.4: parts built, sent through STEP and back as bodies without a timeline,
-  described, rebuilt from the plan by the headless AI executor, compared: volume within 0.1 %
-  and every face of the original matched; meshes of golden models through recognize_mesh;
-  describe() on a 300-face part under 5 s), run by `tools/sciforge/run_tests.sh --only
-  recognize` and at the end of `--only headless` / `--only base`. A sweep over every golden
-  model (a scratch script, not in the suite) found the bugs listed in the session log.
+- **Recognition (at-recognize)**: `SciForgeTests/unit/test_recognize_core.py` (51 tests, pure
+  Python: numbers and measured values, snapping twice is snapping once, planes, loops and the
+  create_sketch items they become, exact arc / line closure and arcs that miss each other by
+  noise, patterns with noise, ideal pattern points, the plan's ids and Fusion's order, plan
+  arguments checked by the catalogue, frames and Euler angles, circle / cylinder fits, arcs
+  fitted on mesh sections, round values beyond a value); `SciForgeTests/headless/recognize_bench.py`
+  (real FreeCAD 1.1.4: 49 parts built, sent through STEP and back as bodies without a
+  timeline, described, rebuilt from the plan by the headless AI executor, compared: volume
+  within 0.1 % and every face of the original matched; 4 solids of STEP files made by other
+  programs, compared surface by surface; 5 meshes of golden models through recognize_mesh;
+  the contract on odd input; describe() on a 300-face part under 5 s), run by
+  `tools/sciforge/run_tests.sh --only recognize` and at the end of `--only headless` / `--only
+  base`. Two scratch sweeps (not in the suite) found the bugs listed in the session log: every
+  golden model that builds one solid (505 described, 404 rebuilt exactly, 418 with a base read;
+  the rest are free-form, sheet metal bent both ways or split faces) and the 71 real solids
+  above.
