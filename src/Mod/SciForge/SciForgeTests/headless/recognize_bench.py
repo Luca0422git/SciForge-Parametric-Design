@@ -529,6 +529,41 @@ EXTRA_MODELS = {
             {"op": "hole", "id": "h2", "sketch": "s3", "diameter": 3, "depth": 8},
         ],
     },
+    "bench_chamfered_boss": {
+        "title": "Plate 40 x 30 x 5 with a round boss d10 x 10 whose top edge has a 1 mm chamfer "
+        "(a cone, not a flat face)",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 5},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 5,
+                "geometry": [{"circle": [20, 15, 5]}],
+            },
+            {"op": "extrude", "id": "e2", "profile": "s2", "distance": 10},
+            {
+                "op": "chamfer",
+                "id": "c1",
+                "distance": 1,
+                "edges": {"type": "circle", "at": {"axis": "z", "value": "max"}, "count": 1},
+            },
+        ],
+    },
+    "bench_chamfered_shaft": {
+        "title": "Shaft d20 x 40 along Z with both end edges chamfered 1.5",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"circle": [0, 0, 10]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 40},
+            {
+                "op": "chamfer",
+                "id": "c1",
+                "distance": 1.5,
+                "edges": {"type": "circle", "count": 2},
+            },
+        ],
+    },
     "bench_turned_bracket": {
         "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
         "placed in an assembly)",
@@ -564,6 +599,35 @@ EXTRA_MODELS = {
                 "quantity2": 14,
                 "distance2": 15,
             },
+        ],
+    },
+    "bench_link_rod": {
+        "title": "Link rod: a tube d20 (bore d12) 150 long along Y, ending in an eye d30 x 30 "
+        "along X with a d14 hole (the bore ends on the eye's round side)",
+        "steps": [
+            {
+                "op": "sketch",
+                "id": "s1",
+                "plane": "XZ",
+                "geometry": [{"circle": [0, 0, 10]}, {"circle": [0, 0, 6]}],
+            },
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 150},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "YZ",
+                "offset": -15,
+                "geometry": [{"circle": [0, 0, 15]}],
+            },
+            {"op": "extrude", "id": "e2", "profile": "s2", "distance": 30},
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "YZ",
+                "offset": 15,
+                "geometry": [{"circle": [0, 0, 7]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s3", "diameter": 14, "through_all": True},
         ],
     },
 }
@@ -619,7 +683,10 @@ BENCH = [
     ("bench_vex_plate", {"base": "extrude", "holes": [], "patterns": 1}),
     ("bench_vex_angle", {"base": "extrude", "holes": [], "patterns": 2}),
     ("bench_shaft_collar", {"base": "extrude", "holes": [3, 8]}),
+    ("bench_chamfered_boss", {"base": "extrude", "holes": [], "chamfers": [1]}),
+    ("bench_chamfered_shaft", {"holes": [], "chamfers": [1.5]}),
     ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
+    ("bench_link_rod", {"base": "extrude", "holes": [14]}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
 MESH_BENCH = [
@@ -947,6 +1014,144 @@ def bench_mesh(model_id, folder):
     return row
 
 
+# STEP files made by other programs that ship in the repository: they split a bore in two
+# half faces, their tangent arcs miss each other by 5e-7 mm, their parts sit anywhere; and parts
+# of FreeCAD's example assembly, placed at angles. Each solid (file, index among its distinct
+# solids or a document object's name) is described, rebuilt from the plan, and checked face by
+# face, else surface by surface (a face split in two in the file is one face in the rebuild),
+# with the volume within 0.1 %.
+REAL_FILES = [
+    ("docs/sciforge/examples/pi5-case/pi5_case.step", 0, "Raspberry Pi 5 case, base"),
+    ("docs/sciforge/examples/pi5-case/pi5_case.step", 1, "Raspberry Pi 5 case, lid"),
+    ("data/tests/Step/as1-ac-214.stp", 0, "AS1 test assembly: plate with six split bores"),
+    ("src/Mod/Idf/Idflibs/EPL22_6_16.stp", 0, "an IDF part library body (chamfers, a pattern)"),
+    ("data/examples/AssemblyExample.FCStd", "Shape016", "a rod with an eye, placed at 45 degrees"),
+    ("data/examples/AssemblyExample.FCStd", "Shape020", "a tube whose bore ends on its eye"),
+    ("data/examples/AssemblyExample.FCStd", "Shape022", "a tube that ends inside its eye"),
+]
+
+
+def repo_root():
+    """The repository's top folder (the bench lives in src/Mod/SciForge/SciForgeTests/headless),
+    or None when SciForge runs from somewhere else (an installed copy)."""
+    root = os.path.normpath(os.path.join(os.path.realpath(HERE), "..", "..", "..", "..", ".."))
+    return root if os.path.isdir(os.path.join(root, "src", "Mod", "SciForge")) else None
+
+
+def distinct_solids(path):
+    """The solids of a STEP file as SciForge's File > Open makes them, each distinct one once
+    (an assembly repeats its parts)."""
+    import FreeCAD as App
+
+    from sciforge import step_import
+
+    doc = App.newDocument("rb_real")
+    try:
+        made = step_import.import_file(doc, path)
+        solids = []
+        for body in made.bodies:
+            solids += list(body.Shape.copy().Solids)
+    finally:
+        App.closeDocument(doc.Name)
+    seen, out = [], []
+    for solid in solids:
+        key = (round(solid.Volume, 3), len(solid.Faces))
+        if key not in seen:
+            seen.append(key)
+            out.append(solid)
+    return out
+
+
+def document_solid(path, name):
+    """The first solid of an object of a FreeCAD document (a part placed in an assembly)."""
+    import FreeCAD as App
+
+    doc = App.openDocument(path)
+    try:
+        return doc.getObject(name).Shape.copy().Solids[0]
+    finally:
+        App.closeDocument(doc.Name)
+
+
+def surfaces_match(reference, rebuilt):
+    """Every surface of the reference carries the same area in the rebuild, and no other
+    surface is there (faces split in two in a STEP file are one face in a rebuild)."""
+    from sciforge import recognize
+
+    def groups(shape):
+        out = []
+        for f in shape.Faces:
+            key = recognize._surface_key(f)
+            for g in out:
+                if g[0] == key and recognize._same_surface(g[1], f, 1e-5):
+                    g[2] += f.Area
+                    break
+            else:
+                out.append([key, f, f.Area])
+        return out
+
+    ga, gb = groups(reference), groups(rebuilt)
+    for key, face, area in ga:
+        other = [g for g in gb if g[0] == key and recognize._same_surface(face, g[1], 1e-5)]
+        if abs(sum(g[2] for g in other) - area) > 1e-4 * max(1.0, area):
+            return False
+    return len(ga) == len(gb)
+
+
+def bench_real(rel, index, title):
+    """One solid of a real STEP file: described, rebuilt, compared surface by surface."""
+    from sciforge import recognize
+
+    name = "%s %s" % (os.path.basename(rel), index if isinstance(index, str) else "#%d" % index)
+    row = {"id": name, "title": title, "status": "fail", "problems": []}
+    start = time.time()
+    try:
+        root = repo_root()
+        path = os.path.join(root, rel) if root else None
+        if not path or not os.path.exists(path):
+            row["status"] = "pass"
+            row["skipped"] = "file not found (an installed copy without the repository)"
+            return row
+        if isinstance(index, str):  # an object of a FreeCAD document
+            solid = document_solid(path, index)
+        else:
+            solid = distinct_solids(path)[index]
+        row["faces"] = len(solid.Faces)
+        t0 = time.time()
+        result = recognize.describe(solid)
+        row["describe_s"] = round(time.time() - t0, 3)
+        row["base"] = result["base"].get("kind")
+        row["found"] = _found(result)
+        row["plan_length"] = len(result["plan"])
+        row["confidence"] = result["confidence"]
+        row["notes"] = result["notes"]
+        row["plan"] = [{"tool": s["tool"], "args": s["args"]} for s in result["plan"]]
+        rebuilt, errors, _made = run_plan(result["plan"], "rbr_%s" % index)
+        for number, text in errors:
+            row["problems"].append("plan step %d failed: %s" % (number, text))
+        if rebuilt is None:
+            row["problems"].append("nothing was rebuilt")
+        else:
+            v0, v1 = solid.Volume, rebuilt.Volume
+            row["volume_diff"] = (v1 - v0) / v0
+            row["faces_matched"], _back = match_faces(solid, rebuilt)
+            if abs(row["volume_diff"]) > VOLUME_TOL:
+                row["problems"].append(
+                    "rebuilt volume %.6g vs %.6g (%+.4f %%)" % (v1, v0, 100 * row["volume_diff"])
+                )
+            if row["faces_matched"] != len(solid.Faces) and not surfaces_match(solid, rebuilt):
+                row["problems"].append(
+                    "%d of %d faces matched and the surfaces differ (an area per surface)"
+                    % (row["faces_matched"], len(solid.Faces))
+                )
+    except Exception as exc:
+        row["problems"].append("%s: %s" % (type(exc).__name__, exc))
+        row["traceback"] = traceback.format_exc()
+    row["seconds"] = round(time.time() - start, 3)
+    row["status"] = "pass" if not row["problems"] else "fail"
+    return row
+
+
 def bench_contract():
     """The contract's promises: only a missing shape is an error; anything else answers the
     dict (what cannot be read in notes / unrecognized); the options work."""
@@ -1023,7 +1228,8 @@ def markdown(report):
         "",
         "FreeCAD %s, %s. %d parts: %d pass, %d fail. Each part: built, exported to STEP, "
         "imported as a body without a timeline, described, rebuilt from the plan through the "
-        "headless AI executor, compared (volume within 0.1 %%, every face matched)."
+        "headless AI executor, compared (volume within 0.1 %%, every face matched; for the STEP "
+        "files made by other programs, every surface: they split faces the rebuild keeps whole)."
         % (
             report["freecad"],
             report["platform"],
@@ -1063,7 +1269,12 @@ def markdown(report):
                 (
                     ""
                     if "faces_matched" not in r
-                    else "%d / %d" % (r["faces_matched"], r.get("faces", 0))
+                    else "%d / %d%s"
+                    % (
+                        r["faces_matched"],
+                        r.get("faces", 0),
+                        " (surfaces all)" if r["id"].count("#") and r["status"] == "pass" else "",
+                    )
                 ),
                 r.get("describe_s", ""),
                 r.get("seconds", ""),
@@ -1117,6 +1328,16 @@ def main():
         )
     if not text_filter or text_filter in "contract":
         row = bench_contract()
+        report["results"].append(row)
+        _write(report, out_dir)
+        App.Console.PrintMessage(
+            "[SciForge] recognize %s %s %s\n"
+            % (row["status"].upper(), row["id"], "; ".join(row["problems"])[:600])
+        )
+    for rel, index, title in REAL_FILES:
+        if text_filter and text_filter not in rel and text_filter != "real":
+            continue
+        row = bench_real(rel, index, title)
         report["results"].append(row)
         _write(report, out_dir)
         App.Console.PrintMessage(

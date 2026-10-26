@@ -22,6 +22,14 @@
   regions in separate sketches; the readings compared by steps, then by the volume the steps
   add or take (a round boss on a block reads as a boss along Z); axes where some faces belong
   to features along another axis are tried only when no axis fits every face.
+- Then, from real files: repeated openings become one cut and a pattern (a VEX plate), moved
+  copies of a piece are read once, drafted blocks with a cavity (molded boxes), chamfers on
+  round edges (narrow cones), holes with a rounded rim, arcs that miss each other by noise,
+  idempotent snapping, a volume check on defeaturing, free-form parts not defeatured, a time
+  budget, guarded curve / surface types, each plan stage on its own.
+- Not mine but touching my file: the QA builder (`sf/autotimeline-qa`) added modelled-thread
+  handling and two speed-ups to `recognize.py` on its branch and merges mine regularly; `git
+  merge-tree` of the two branches shows no conflict (checked at the end).
 - `sciforge/recognize_core.py` (pure Python): snapping, "nice" rounding of measured values,
   origin planes, 2D loops (clean-up, areas, create_sketch items that close exactly), patterns
   (grid / circle / row), the plan's ids, extents, frames and Euler angles, mesh helpers
@@ -82,7 +90,38 @@
   away passed the `<= 1e-6` test), so a base ended 1e-6 before the boss on it started and the
   boss became a body of its own. Snapping is now idempotent (a unit test).
 - `Part.ShapeUpgrade` in FreeCAD 1.1.4 has only `UnifySameDomain` (no `ShapeDivideClosed`).
+- Two tangent arcs of a part in `AssemblyExample.FCStd` missed each other by 5e-7 mm, more than
+  the sketch's 1e-7 closing tolerance ("no closed area"). Arcs that meet are now moved by that
+  noise onto one shared point (the centre put on the perpendicular bisector of the two ends).
+- `edge.Curve` raises `TypeError: undefined curve type` for some edges of the CAM demo part
+  `hole_puzzle.fcstd` (and so does `selectors.edge_type`): every curve / surface type check in
+  recognize.py goes through a guarded helper, and each plan stage fails on its own.
+- A "chamfer" found on the slanted side of a groove made the defeaturing fill the groove
+  (+15 % volume, a wrong plan): a feature is now taken off only when the volume changes by about
+  what such a feature holds. `_hole_void` counted both halves of a split bore as whole bores.
+- OpenCASCADE's defeaturing of 98 fillet faces: 14.4 s at once; in chunks of 49, 11 s for the
+  first chunk alone (and the faces of the rest must be found again): at once is fastest.
 
 ## Tests
 
-(see the parity doc's Tests section for the final numbers)
+- `tools/sciforge/run_tests.sh --freecad /home/user/fc/freecad --only base` on my branch
+  (21:59-22:11 UTC, the code of e59e4f28): golden models 614 pass, 2 xfail (expected);
+  headless AI tools 284 calls, 0 failed (117 tools); documentation examples 141 items, 0
+  failed; AI agent end to end (MCP) 81 checks, 0 failed; **recognition benchmark 61 parts, 0
+  failed**; GUI smoke 79 checks, journey 25, restarts 8 + 9, all pass. The unit stage failed on
+  two AI-docs contract tests: the generated copy of the parity doc
+  (`docs/ai/user/parity/auto-timeline.md`) was stale after my edits; regenerated with
+  `tools/sciforge/make_ai_docs.py`, `--only unit` then passed (2519 tests, 9 skipped).
+- `SciForgeTests/unit/test_recognize_core.py`: 51 tests, OK.
+- Recognition benchmark: 49 parts built from golden steps or my own (the VEX-like channel,
+  plate and angle, a keyed shaft, a pipe with a port, a clevis, opposed blind holes, a shaft
+  collar, chamfered round edges, the 300-face plate...), sent through STEP and back, described,
+  rebuilt by the headless AI executor: every one within 0.1 % volume with every face matched;
+  4 solids of real STEP files from other programs (surface by surface); 5 meshes; the
+  contract on odd input. The 300-face plate: describe 2.1 s (limit 5 s). Table: the parity
+  doc's Benchmark section.
+- Scratch sweeps (not in the suite): every golden model that builds one solid: 505 described,
+  404 rebuilt exactly (391 earlier in the session), 418 with a base read, 0 crashes, no
+  regression between runs; 71 solids of 36 real files: 19 exact, 12 exact with faces split in
+  the file, 4 within 1e-7 of the volume, 1 step stopped (a fillet selector), 35 base not read
+  (said so).

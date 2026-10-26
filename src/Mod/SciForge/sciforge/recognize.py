@@ -93,6 +93,7 @@ DEFEATURE_BUDGET = 15.0  # seconds of defeaturing tries before the rest is left 
 DESCRIBE_BUDGET = 30.0  # seconds: past this, optional work (more readings, edges) is skipped
 MAX_SLABS = 60  # levels along one axis beyond which that axis is not read (a free-form part)
 MAX_PIECES = 400  # bosses + cuts beyond which a reading is dropped (it is not the part's)
+MAX_SPANS = 6  # where a lenient reading's base extrude may end (see _base_spans)
 SMOOTH = 0.9998  # cos of ~1.1 degrees: two faces meeting this smoothly are tangent
 
 
@@ -566,6 +567,23 @@ class _Reader:
             )
             base = {"public": {"kind": "none"}, "ops": [], "faces": [], "volume_error": 0.0}
             self.base_shape = self.shape
+        elif not self._some_axis_fits(holes + chamfers + blends):
+            # the faces left would fit no extrude or revolve even without the features:
+            # defeaturing (seconds to minutes) would not make the base readable
+            removed = {
+                "base": self.shape,
+                "ok": {g["id"] for g in holes + chamfers + blends},
+                "accepted": holes + chamfers + blends,
+            }
+            self.edges_off = "its base cannot be read"
+            self.notes.append(
+                "The part's faces do not all fit an extrude along X, Y or Z nor a revolve about "
+                "one (slanted faces in several directions: a molded body drafted both ways, bent "
+                "leads...): build its base yourself (look at render and query_geometry), then "
+                "follow the rest of the plan."
+            )
+            base = {"public": {"kind": "none"}, "ops": [], "faces": [], "volume_error": 0.0}
+            self.base_shape = self.shape
         else:
             t = time.time()
             removed = self.defeature(holes + islands, chamfers, blends)
@@ -574,6 +592,8 @@ class _Reader:
             self.base_shape = removed["base"]
             base = self.find_base(removed["base"])
             timing["base"] = time.time() - t
+        if base["public"].get("kind") == "none" and not free:
+            self._axis_hint(holes + chamfers + blends)
         t = time.time()
         plan = core.Plan(self.options.get("taken_ids") or ())
         features = []
@@ -650,6 +670,82 @@ class _Reader:
             "Plan step %d does not pass the tool's check: %s" % (n, sentence)
             for n, sentence in core.check_plan(steps, catalog.validate)
         ]
+
+    def _axis_fit(self, groups):
+        """For each origin axis, how the faces no feature took fit an extrude along it:
+        [{"axis", "odd" (area that fits no level, wall or draft along it), "total", "turned"
+        (all could be a revolve about it), "faces" (the odd ones), "unknown" (a kind this
+        check does not know)}]. (Optimistic: defeaturing only extends these faces.)"""
+        used = set(i for g in groups for i in g["_faces"])
+        rest = [f for f in self.facts if f.index not in used]
+        total = sum(f.area for f in rest) or 1.0
+        out = []
+        for axis in ("Z", "Y", "X"):
+            d = core.AXES[axis]
+            row = {"axis": axis, "odd": 0.0, "total": total, "turned": True, "faces": []}
+            row["unknown"] = False
+            for f in rest:
+                normal = f.normal if f.kind == "plane" else None
+                if normal is None and f.kind == "bspline":
+                    normal = _flat_normal(f.face)
+                fits, turned = True, True
+                if normal is not None:
+                    c = abs(core.dot(normal, d))
+                    fits = c > 1 - 1e-7 or c < math.sin(math.radians(60))  # level, wall, draft
+                    turned = c > 1 - 1e-7  # (a revolve's flat faces are square to its axis)
+                elif f.kind in ("cylinder", "cone") and f.axis is not None:
+                    fits = turned = core.parallel(f.axis, d, 1e-7)
+                elif f.kind in ("torus", "sphere"):
+                    fits = False
+                    turned = f.kind == "sphere" or core.parallel(f.axis, d, 1e-7)
+                else:
+                    row["unknown"] = True
+                if not fits:
+                    row["odd"] += f.area
+                    row["faces"].append(f.index)
+                if not turned:
+                    row["turned"] = False
+            out.append(row)
+        return out
+
+    def _some_axis_fits(self, groups):
+        """Whether the faces no feature took could make an extrude along X, Y or Z (each face
+        a level, a wall or a draft along it, or all but a quarter of the area: features along
+        another axis) or a revolve about one."""
+        for row in self._axis_fit(groups):
+            if row["unknown"] or row["turned"] or row["odd"] <= 0.25 * row["total"]:
+                return True
+        return False
+
+    def _axis_hint(self, groups):
+        """When no base was read: the axis most of the part fits and the faces that do not
+        (an AI builds the extrude along it and adds those), as a note and an unrecognized
+        entry; nothing when no axis fits even half of it."""
+        try:
+            rows = [r for r in self._axis_fit(groups) if not r["unknown"]]
+        except Exception:
+            return
+        if not rows:
+            return
+        best = min(rows, key=lambda r: r["odd"])
+        share = 1.0 - best["odd"] / best["total"]
+        faces = [i for i in best["faces"] if i not in self.listed]
+        if share < 0.5 or not faces:
+            return
+        self.notes.append(
+            "Along %s, %d %% of the part's area (its features aside) fits an extrude: the "
+            "faces that do not (listed in unrecognized) are round or slanted features along "
+            "other directions; start from an extrude along %s and add them."
+            % (best["axis"], int(100 * share), best["axis"])
+        )
+        self.unrecognized.append(
+            {
+                "faces": self.face_refs(faces),
+                "why": "%d face(s) that fit no extrude along %s (the axis most of the part "
+                "fits)" % (len(faces), best["axis"]),
+            }
+        )
+        self.listed.update(faces)
 
     def _free_form(self, groups):
         """Faces no feature took that no extrude or revolve of lines and arcs makes
@@ -898,8 +994,8 @@ class _Reader:
                 for j in self.topo.edge_faces.get(key, []):
                     if j in idx or j in neighbours:
                         continue
-                    try:
-                        pts = self.topo.edges[key].discretize(12)
+                    try:  # (sampled as _rim_extent samples: the same top for a 3D rim)
+                        pts = self.topo.edges[key].discretize(24)
                     except Exception:
                         continue
                     ts = [core.dot(core.sub(_t(p), origin), axis) for p in pts]
@@ -982,6 +1078,13 @@ class _Reader:
                     }
             elif beyond:
                 out = {"kind": "open", "t": t, "t_open": t, "face": j}
+            elif fj.axis is None or not core.parallel(fj.axis, axis, 1e-6):
+                # a face across the end that faces back into the bore: a round or slanted
+                # floor (a tube's bore that ends on the eye it was extruded up to); the
+                # Hole tool makes no such floor (an opening on a round face faces outward)
+                n = _normal_near(fj.face, core.add(origin, core.mul(axis, t)))
+                if n is not None and core.dot(n, axis) * sign < -0.5:
+                    return {"kind": "closed", "t": t, "t_open": t, "face": j}
         return out
 
     def _opening_face(self, j, exclude):
@@ -1100,18 +1203,81 @@ class _Reader:
         return min(a1, b1) - max(a0, b0) > 1e-6
 
     def find_chamfers(self, holes, blends):
-        """Narrow flat faces cut across the edge between two faces."""
+        """Narrow flat faces cut across the edge between two faces; narrow cones across a
+        round edge (the chamfered end of a shaft or a round boss)."""
         taken = set(i for h in holes for i in h["_faces"]) | set(
             i for b in blends for i in b["_faces"]
         )
         out = []
         for f in self.facts:
-            if f.kind != "plane" or f.index in taken:
+            if f.index in taken:
                 continue
-            found = self._chamfer(f, taken)
+            if f.kind == "plane":
+                found = self._chamfer(f, taken)
+            elif f.kind == "cone":
+                found = self._round_chamfer(f, taken)
+            else:
+                continue
             if found is not None:
                 out.append(found)
         return out
+
+    def _round_chamfer(self, f, taken):
+        """A cone between a coaxial cylinder and a flat face square to its axis, meeting them
+        along sharp circles, narrow beside both: the chamfer of the round edge where they
+        would meet (distance 1 along the cylinder, distance 2 across the flat face)."""
+        if f.axis is None or f.point is None:
+            return None
+        cyl, flat = None, None
+        for j in self.topo.neighbours(f.index):
+            if j in taken:
+                return None
+            fj = self.facts[j]
+            keys = self.topo.shared(f.index, j)
+            if not keys or any(self.topo.smooth(k) for k in keys):
+                return None
+            if any(_curve_name(self.topo.edges[k]) != "Circle" for k in keys):
+                return None
+            if fj.kind == "cylinder" and fj.axis is not None:
+                if not core.parallel(fj.axis, f.axis, 1e-6):
+                    return None
+                if core.norm(core.sub(fj.point, f.point)) > 1e-6:
+                    return None
+                if cyl is not None and abs(cyl.radius - fj.radius) > 1e-6:
+                    return None
+                cyl = cyl or fj  # (a bore split in two halves: either one)
+            elif fj.kind == "plane" and core.parallel(fj.normal, f.axis, 1e-6):
+                if flat is not None and abs(flat.h - fj.h) > 1e-6:
+                    return None
+                flat = flat or fj
+            else:
+                return None
+        if cyl is None or flat is None:
+            return None
+        rings = {}
+        for v in f.face.Vertexes:
+            w = core.sub(_t(v.Point), f.point)
+            t = core.dot(w, f.axis)
+            rings[round(t, 6)] = core.norm(core.sub(w, core.mul(f.axis, t)))
+        if len(rings) != 2:
+            return None
+        (t0, r0), (t1, r1) = sorted(rings.items())
+        along, across = abs(t1 - t0), abs(r1 - r0)
+        if along < 1e-6 or across < 1e-6:
+            return None
+        c0, c1 = self._extent([cyl.index], f.axis, f.point)
+        if along > 0.5 * (c1 - c0) or across > 0.5 * cyl.radius:
+            return None  # (a wide cone: part of the shape, a turned profile's slope)
+        item = {
+            "id": self.new_id(),
+            "kind": "chamfer",
+            "distance": self.value(along),
+            "_faces": [f.index],
+            "_between": (cyl.index, flat.index),
+        }
+        if abs(along - across) > 1e-5:
+            item["distance2"] = self.value(across)
+        return item
 
     def _chamfer(self, f, taken):
         if len(f.face.Wires) > 1 or len(f.face.Edges) > 12:
@@ -1434,7 +1600,7 @@ class _Reader:
                 d2 = g.get("distance2", d1)
                 budget += 3.0 * 0.5 * d1 * d2 * area / max(math.hypot(d1, d2), 1e-9)
             elif g.get("radius"):
-                budget += 3.0 * 0.25 * area * g["radius"]
+                budget += 1.5 * area * g["radius"]  # (0.14 A r on a square edge; more on sharp)
             else:
                 budget += area * 1.0
         try:
@@ -2986,6 +3152,16 @@ def _flat_normal(face):
         return None
 
 
+def _normal_near(face, point):
+    """The face's outward normal (its orientation counted) where its surface is nearest the
+    point, or None."""
+    try:
+        u, v = face.Surface.parameter(_vec(point))
+        return core.unit(_t(face.normalAt(u, v)))
+    except Exception:
+        return None
+
+
 def _caps_at(solid, plane, h):
     """The solid's flat faces square to the plane's normal at height h."""
     n = core.PLANES[plane]["n"]
@@ -3231,20 +3407,66 @@ def _prismatic(solid, axis_name, lenient=False):
             base_faces = _outline(base_faces)  # its openings lean: cuts of their own
     else:
         base_faces = _fill_copies(base_faces)  # copies of one opening: a cut and a pattern
+    cache = {"levels": {plane: hs}, "solid": solid}  # (moved copies of a piece read once)
     if drafted_base is not None:
-        first, prism = drafted_base
-        lo, hi = hs[0], hs[-1]
+        spans = [(hs[0], hs[-1])]
     else:
-        first = _op("base", base_faces, plane, lo, hi)
-        if first is None:
-            return None
-        prism = _extrude_faces(base_faces, plane, lo, hi)
-    ops = [first]
+        spans = _base_spans(slabs, run, ranges, touched)
+    for lo, hi in spans:
+        if drafted_base is not None:
+            first, prism = drafted_base
+        else:
+            first = _op("base", base_faces, plane, lo, hi)
+            if first is None:
+                return None
+            prism = _extrude_faces(base_faces, plane, lo, hi)
+        read = _base_pieces(solid, prism, plane, hs, lo, cache)
+        if read is None:
+            continue
+        ops = [first] + read[0]
+        _through_cuts(ops, solid)
+        _mark_shell(ops, solid)
+        result = _prismatic_result(first, ops, len(slabs), plane, axis_name, hs)
+        result["feature_volume"] = read[1]
+        return result
+    return None
+
+
+def _base_spans(slabs, run, ranges, touched):
+    """Where the base extrude starts and ends, best first: over the whole run of levels its
+    outline covers; then, when features along another axis pass through the run's end
+    levels (a lenient reading: `ranges`, `touched`), stopping inside those levels, at a
+    level or at the middle of such a feature (a rod that ends in an eye: the rod up to its
+    own end or the eye's centre, the eye a boss of its own along its axis)."""
+    lo, hi = slabs[run[0]]["lo"], slabs[run[-1]]["hi"]
+    spans = [(lo, hi)]
+    clean = [i for i in run if not touched(i)]
+    if not ranges or not clean:
+        return spans
+    c_lo, c_hi = slabs[clean[0]]["lo"], slabs[clean[-1]]["hi"]
+    stops = set()
+    for i in run:
+        if touched(i):
+            stops.update((slabs[i]["lo"], slabs[i]["hi"]))
+    stops.update(0.5 * (a + b) for a, b in ranges)
+    his = [hi] + sorted((h for h in stops if c_hi - 1e-6 <= h < hi - 1e-6), reverse=True)
+    los = [lo] + sorted(h for h in stops if lo + 1e-6 < h <= c_lo + 1e-6)
+    for a in los:
+        for b in his:
+            if (a, b) not in spans and b - a > 1e-6:
+                spans.append((a, b))
+    return spans[:MAX_SPANS]
+
+
+def _base_pieces(solid, prism, plane, hs, base_lo, cache):
+    """([ops], volume moved) of the bosses and cuts that make the solid from the base
+    extrude `prism` (the pieces of solid - prism joined, of prism - solid cut), or None
+    when a piece is not read."""
     extra = solid.cut(prism)
     missing = prism.cut(solid)
     if len(extra.Solids) + len(missing.Solids) > MAX_PIECES:
         return None
-    cache = {"levels": {plane: hs}, "solid": solid}  # (moved copies of a piece read once)
+    ops = []
     for piece_shape, operation in ((extra, "join"), (missing, "cut")):
         for piece in piece_shape.Solids:
             if piece.Volume < 1e-9:
@@ -3253,7 +3475,7 @@ def _prismatic(solid, axis_name, lenient=False):
             for other in _piece_planes(piece, prism, plane):
                 if other == plane:
                     got = _piece_ops(
-                        piece, plane, operation, hs[0], hs[-1], lo, (solid, prism), cache
+                        piece, plane, operation, hs[0], hs[-1], base_lo, (solid, prism), cache
                     )
                 else:  # a boss / cut along another axis (the holes in a channel's sides)
                     span = _span(solid, other)
@@ -3265,11 +3487,7 @@ def _prismatic(solid, axis_name, lenient=False):
             if got is None:
                 return None
             ops += got
-    _through_cuts(ops, solid)
-    _mark_shell(ops, solid)
-    result = _prismatic_result(first, ops, len(slabs), plane, axis_name, hs)
-    result["feature_volume"] = extra.Volume + missing.Volume
-    return result
+    return ops, extra.Volume + missing.Volume
 
 
 def _on_boundary(shape, face):
@@ -3791,6 +4009,20 @@ def _open_piece_op(piece, solid, region, plane, operation, part_lo, part_hi, cac
     if not ends or not open_ts:
         return None
     heights = {round(core.dot(_t(f.Vertexes[0].Point), n), 7) for f in ends}
+    if len(heights) == 2 and operation == "join":
+        # a boss across a round part (an eye on a rod): flat at both ends, joined to the part
+        # in between, made from one end to the other (through the part: that adds nothing)
+        lo, hi = sorted(_on_level(v, _part_levels(cache, plane)) for v in heights)
+        first = [f for f in ends if abs(core.dot(_t(f.Vertexes[0].Point), n) - lo) < 1e-6]
+        tol = 1e-7 * solid.Volume + 1e-6
+        try:
+            prism = _extrude_faces(first, plane, lo, hi)
+            if piece.cut(prism).Volume > tol or prism.cut(solid).Volume > tol:
+                return None
+        except Exception:
+            return None
+        op = _op(operation, first, plane, lo, hi)
+        return None if op is None else [op]
     if len(heights) != 1:
         return None
     h = _on_level(heights.pop(), _part_levels(cache, plane))
