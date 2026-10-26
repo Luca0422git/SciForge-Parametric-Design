@@ -7,7 +7,9 @@ A  DEFORMATION > Actual: the beam is drawn with its true displacement (each node
    of the model size); > Undeformed: the nodes where they are without the load; > Adjusted again
    (the menu's tick follows).
 B  Animate: the animation bar shows and the beam bends back and forth; Stop holds it at the
-   chosen scale; 2x and Mirror Loop, Play again; Close takes the bar away.
+   chosen scale; 2x and Mirror Loop, Play again; Save... writes an animated GIF (one picture
+   per step, up and back down, the part bending from one to the next) and an animated WebP,
+   and the animation plays on; Close takes the bar away.
 C  Show Mesh on and off (the element edges), DISPLAY > Undeformed Model (the see-through
    unloaded shape) on and off, INSPECT > Show Min/Max off (no tags) and on again.
 D  Results Details: the target bands ticked colour the safety factor in three bands (and the
@@ -165,6 +167,81 @@ def b_options_check():
     h.check("2x speed", sess.anim["speed"] == 2.0, sess.anim)
     h.check("mirror loop", sess.anim["mode"] == "mirror", sess.anim)
     h.check("playing again", sess.anim["playing"])
+
+
+def b_save():
+    s.click_widget(s.session().bar.findChild(QtWidgets.QToolButton, "SciForgeSimAnimationSave"))
+
+
+def _save_as(name):
+    import os
+
+    dialog = s.dialog("SciForgeSimSaveAnimation")
+    h.check("Save Animation open", dialog is not None)
+    if dialog is None:
+        return None
+    path = os.path.join(s.OUT, name)
+    if os.path.exists(path):
+        os.remove(path)
+    ui.type_into(dialog.findChild(QtWidgets.QLineEdit, "SciForgeSimAnimationPath"), path)
+    s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimAnimationSaveFile"))
+    return path
+
+
+def b_save_gif():
+    state["gif"] = _save_as("simres-beam-animation.gif")
+
+
+def _frames(path):
+    from PIL import Image, ImageChops
+
+    with Image.open(path) as image:
+        count = getattr(image, "n_frames", 1)
+        size = image.size
+        image.seek(0)
+        first = image.convert("RGB")
+        image.seek(count // 2)
+        middle = image.convert("RGB")
+    moved = ImageChops.difference(first, middle).getbbox() is not None
+    return count, size, moved
+
+
+def b_save_gif_check():
+    import os
+
+    path = state.get("gif")
+    h.check("the GIF written", path is not None and os.path.isfile(path), path)
+    if not path or not os.path.isfile(path):
+        return
+    count, size, moved = _frames(path)
+    want = len(s.results_core().animation_cycle(20, "mirror"))
+    h.check("one picture per step, up and back down", count == want, (count, want))
+    h.check("a picture of the 3D view", size[0] >= 320 and size[1] >= 200, size)
+    h.check("the part bends from one picture to the next", moved)
+    h.check("the dialog closed", s.dialog("SciForgeSimSaveAnimation") is None)
+    sess = s.session()
+    h.check("the animation plays on", sess.anim["playing"])
+    s.click_widget(sess.bar.findChild(QtWidgets.QToolButton, "SciForgeSimAnimationSave"))
+
+
+def b_save_webp():
+    state["webp"] = _save_as("simres-beam-animation.webp")
+
+
+def b_save_webp_check():
+    import os
+
+    from PIL import features
+
+    path = state.get("webp")
+    if not features.check("webp"):
+        h.check("WebP: not in this Pillow (GIF only)", True)
+        return
+    h.check("the WebP written", path is not None and os.path.isfile(path), path)
+    if path and os.path.isfile(path):
+        count, _size, moved = _frames(path)
+        h.check("its pictures", count == len(s.results_core().animation_cycle(20, "mirror")))
+        h.check("bending", moved)
 
 
 def b_close():
@@ -330,6 +407,11 @@ h.run(
         b_stop_check,
         b_options,
         b_options_check,
+        b_save,
+        b_save_gif,
+        b_save_gif_check,
+        b_save_webp,
+        b_save_webp_check,
         b_close,
         b_close_check,
         c_mesh_on,

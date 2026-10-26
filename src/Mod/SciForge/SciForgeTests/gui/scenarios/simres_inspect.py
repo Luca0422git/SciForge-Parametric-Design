@@ -379,6 +379,45 @@ def c_back_check():
     h.check("back inside", sess.point_value(sess.points[0]) is not None)
     message = s.panel_field("SciForgeSimPointMessage", QtWidgets.QLabel)
     h.check("the message gone", message.text() == "", message.text())
+    panel = s.task_panel()
+    grips = getattr(panel, "grips", [])
+    h.check("the probe's grips: X, Y and Z arrows", len(grips) == 3)
+    if len(grips) != 3:
+        return
+    from SciForgeTests.gui import arrow_input as ai
+
+    state["before_grip"] = tuple(sess.points[0]["at"])
+    start = ai.head_point(grips[0])
+    h.drag_points(start, start + V(10, 0, 0))
+
+
+c_back_check.wait_ms = 900
+
+
+def c_grip_check():
+    sess = s.session()
+    at = sess.points[0]["at"]
+    before = state.get("before_grip")
+    moved = at[0] - before[0] if before else None
+    h.check("dragging the X grip moves it along X", moved is not None and 4.0 < moved < 16.0, moved)
+    h.check(
+        "only along X",
+        before is not None and abs(at[1] - before[1]) < 1e-9 and abs(at[2] - before[2]) < 1e-9,
+        (at, before),
+    )
+    h.check("the table follows", _table().item(0, 1).text() == s.results_core().fmt_mm(at[0]))
+    grips = getattr(s.task_panel(), "grips", [])
+    h.check(
+        "the grips stand at its new place",
+        len(grips) == 3
+        and all(
+            abs(a - b) < 1e-6
+            for a, b in zip(
+                (grips[0].origin.x, grips[0].origin.y, grips[0].origin.z),
+                sess.point_place(sess.points[0]),
+            )
+        ),
+    )
     # the top face near the free end, where it is drawn (bent), away from the iso-surface
     h.click(V(*sess.point_place({"at": (90.0, 5.0, 10.0)})))
 
@@ -579,6 +618,7 @@ h.run(
         c_typed_check,
         c_outside_check,
         c_back_check,
+        c_grip_check,
         c_top_check,
         c_remove,
         c_remove_check,

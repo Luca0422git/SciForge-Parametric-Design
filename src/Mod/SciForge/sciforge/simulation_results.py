@@ -446,5 +446,10 @@ def default_report_path(study):
     return os.path.join(folder, "%s - %s.html" % (doc.Label, safe or "Study"))
 
 
+def default_animation_path(study):
+    """Like the report: next to the design file when it was saved, else in the home folder."""
+    return default_report_path(study)[: -len(".html")] + " animation.gif"
+
+
 def is_gui():
     return bool(App.GuiUp)

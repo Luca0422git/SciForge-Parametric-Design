@@ -11,7 +11,7 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtWidgets
+from PySide import QtCore, QtGui, QtWidgets
 
 from SciForgeTests.gui import dialog_input as ui
 from SciForgeTests.gui import harness as h
@@ -146,9 +146,10 @@ def click_tab(tab_id):
 
 def menu(group, label):
     """Click a ribbon group's name, then `label` in its menu with the mouse (no submenus in the
-    RESULTS tab's groups). Like a hand, the pointer travels to the entry in a few steps: a Qt
-    menu ignores a click that comes without the mouse having moved since it opened (the same
-    entry clicked twice in a row would be at the pointer already)."""
+    RESULTS tab's groups). Like a hand, the pointer travels to the entry in a few steps (a Qt
+    menu ignores a click that comes without the mouse having moved since it opened). When the
+    entry did not take the click (seen now and then on the second click of the same entry),
+    the menu is opened and the entry clicked once more, as a person would."""
     from PySide6 import QtTest
 
     from SciForgeTests.gui import sketch_input
@@ -162,7 +163,10 @@ def menu(group, label):
         h.check("Menu entry %s > %s exists" % (group, label), False)
         return False
     popup, action = path[0]
-    done = {"clicked": False}
+    done = {"clicked": False, "triggered": False}
+
+    def triggered(*_args):
+        done["triggered"] = True
 
     def click(tries=0):
         try:
@@ -178,8 +182,8 @@ def menu(group, label):
             done["clicked"] = True
         except Exception as exc:
             h.check("Menu click %s" % label, False, exc)
-            if QtWidgets.QApplication.activePopupWidget() is not None:
-                QtWidgets.QApplication.activePopupWidget().close()
+        if popup.isVisible() and not done["triggered"]:
+            QtCore.QTimer.singleShot(200, popup.close)
 
     def safety():  # never leave a menu open (it would block the scenario)
         popup_now = QtWidgets.QApplication.activePopupWidget()
@@ -187,16 +191,29 @@ def menu(group, label):
             popup_now.close()
             popup_now = QtWidgets.QApplication.activePopupWidget()
 
-    QtCore.QTimer.singleShot(300, click)
-    guard = QtCore.QTimer()
-    guard.setSingleShot(True)
-    guard.timeout.connect(safety)
-    guard.start(4000)
-    widget.label.click()  # the menu runs its own loop until it closes
-    guard.stop()
-    _process()
-    h.check("Clicked %s > %s" % (group, label), done["clicked"])
-    return done["clicked"]
+    action.triggered.connect(triggered)
+    try:
+        for _attempt in range(3):
+            # Qt's menu remembers where the pointer was when it opened and takes no click there
+            # unless it saw the mouse move; QTest moves the X pointer, whose motion events come
+            # a moment later: the pointer goes far away first, and that is waited for
+            gl = h.gl_widget()
+            QtGui.QCursor.setPos(gl.mapToGlobal(QtCore.QPoint(gl.width() - 30, gl.height() - 30)))
+            QtTest.QTest.qWait(150)
+            QtCore.QTimer.singleShot(300, click)
+            guard = QtCore.QTimer()
+            guard.setSingleShot(True)
+            guard.timeout.connect(safety)
+            guard.start(4000)
+            widget.label.click()  # the menu runs its own loop until it closes
+            guard.stop()
+            _process()
+            if done["triggered"] or not action.isEnabled():
+                break
+    finally:
+        action.triggered.disconnect(triggered)
+    h.check("Clicked %s > %s" % (group, label), done["clicked"] and done["triggered"])
+    return done["triggered"]
 
 
 def big(label):

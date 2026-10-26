@@ -536,6 +536,27 @@ def animation_fraction(step, frames, mode):
     return (step % frames) / float(last)
 
 
+def animation_cycle(frames, mode):
+    """The deformation drawn in each frame of the animation as saved: Play Once and Loop go
+    0 -> 1, Mirror Loop 0 -> 1 -> back (the turning points once, so it loops smoothly)."""
+    frames = max(int(frames), 2)
+    up = [k / float(frames - 1) for k in range(frames)]
+    if mode == "mirror":
+        return up + up[-2:0:-1]
+    return up
+
+
+ANIMATION_FILES = (("gif", "Animated GIF (*.gif)"), ("webp", "Animated WebP (*.webp)"))
+
+
+def animation_file(path):
+    """`path` with a .gif or .webp ending (.gif added when it has neither)."""
+    path = str(path).strip()
+    if path.lower().endswith((".gif", ".webp")):
+        return path
+    return path + ".gif"
+
+
 def animation_done(step, frames, mode):
     return mode == "once" and step >= max(int(frames), 2) - 1
 

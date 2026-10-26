@@ -215,6 +215,20 @@ class AnimationTests(unittest.TestCase):
         self.assertEqual(core.animation_fraction(6, 5, "mirror"), 0.5)
         self.assertEqual(core.animation_fraction(8, 5, "mirror"), 0.0)
 
+    def test_saved_cycle(self):
+        self.assertEqual(core.animation_cycle(5, "once"), [0.0, 0.25, 0.5, 0.75, 1.0])
+        self.assertEqual(core.animation_cycle(5, "loop"), [0.0, 0.25, 0.5, 0.75, 1.0])
+        # mirror: up and back down, each turning point once (it loops without a stutter)
+        self.assertEqual(
+            core.animation_cycle(5, "mirror"), [0.0, 0.25, 0.5, 0.75, 1.0, 0.75, 0.5, 0.25]
+        )
+        self.assertEqual(len(core.animation_cycle(100, "loop")), 100)
+
+    def test_saved_file_name(self):
+        self.assertEqual(core.animation_file("/tmp/beam"), "/tmp/beam.gif")
+        self.assertEqual(core.animation_file(" /tmp/beam.WEBP "), "/tmp/beam.WEBP")
+        self.assertEqual(core.animation_file("/tmp/beam.gif"), "/tmp/beam.gif")
+
     def test_speed(self):
         slow = core.animation_interval_ms(0.25, 20)
         fast = core.animation_interval_ms(2.0, 20)

@@ -538,6 +538,12 @@ class Session:
             except Exception:
                 pass
         self.panels = []
+        try:  # its windows go with it (Results Details, Solver Data...)
+            from . import simulation_results_panels as panels
+
+            panels.close_all(self)
+        except Exception as exc:
+            warn("results: %s" % exc)
         if self._timer is not None:
             try:
                 self._timer.stop()
@@ -890,6 +896,7 @@ class Session:
         if self.anim["playing"]:
             self.anim["step"] = 0
         self.apply()
+        self._panels_follow()
         log("results: deformation %s" % core.deformation_name(key))
 
     def set_option(self, name, on):
@@ -1176,6 +1183,7 @@ class Session:
                 "speed": self._set_speed,
                 "frames": self._set_frames,
                 "mode": self._set_mode,
+                "save": self._save_animation,
                 "close": self.close_animation,
             },
             self.anim["speed"],
@@ -1212,11 +1220,18 @@ class Session:
             self.display.set_factor(self.factor())
             if self.slice is not None:
                 self._apply_slice()
+            if self.iso_on:
+                self._apply_iso()
             self.update_tags()
             self._redraw()
         if self.bar is not None and view_mod._alive(self.bar):
             self.bar.set_playing(False)
         del keep_bar
+
+    def _save_animation(self):
+        from . import simulation_results_panels as panels
+
+        panels.save_animation_dialog(self)
 
     def close_animation(self):
         self.stop_animation()

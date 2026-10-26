@@ -19,6 +19,7 @@ from . import simulation_results_core as core
 from .compat import QtCore, QtGui, QtWidgets
 
 OPEN = {
+    "animation": None,
     "details": None,
     "report": None,
     "reactions": None,
@@ -675,8 +676,10 @@ def _length(text):
 
 class PointProbePanel:
     """Point Probes (Fusion): values inside the part. A click on the result, on a slice's cut
-    face or on the iso-surface puts a probe there; its X, Y, Z (on the unloaded part, in mm)
-    can then be typed to move it anywhere inside. The probes stay after Close."""
+    face or on the iso-surface puts a probe there; the chosen probe (the newest, or the one
+    chosen in the table) has grips, three arrows along X, Y and Z to drag it, and its X, Y, Z
+    (on the unloaded part, in mm) can be typed to move it anywhere inside. The probes stay
+    after Close."""
 
     title = "Point Probes"
     COLUMNS = ("Probe", "X (mm)", "Y (mm)", "Z (mm)", "Value")
@@ -694,8 +697,8 @@ class PointProbePanel:
         box = QtWidgets.QVBoxLayout(self.form)
         hint = QtWidgets.QLabel(
             "Click on the result to put a probe there: on a Slice Plane's cut face or an "
-            "Iso-surface it lands inside the part. Type X, Y and Z to move a probe anywhere "
-            "inside (places on the unloaded part)."
+            "Iso-surface it lands inside the part. Drag its arrows, or type X, Y and Z, to move "
+            "it anywhere inside (places on the unloaded part)."
         )
         hint.setWordWrap(True)
         box.addWidget(hint)
@@ -706,6 +709,10 @@ class PointProbePanel:
         self.table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.table.setSelectionMode(QtWidgets.QAbstractItemView.SingleSelection)
         self.table.itemChanged.connect(self._edited)
+        self.table.itemSelectionChanged.connect(self._chosen)
+        self.grips = []  # the chosen probe's drag arrows (X, Y, Z)
+        self.grip_index = None
+        self.grip_start = None
         box.addWidget(self.table)
         self.message = QtWidgets.QLabel("")
         self.message.setObjectName("SciForgeSimPointMessage")
@@ -770,6 +777,7 @@ class PointProbePanel:
                 return
             self.refresh()
             self.table.selectRow(len(self.session.points) - 1)
+            self._make_grips()
             log("results: point probe added")
         except Exception as exc:
             warn("Point Probes: %s" % exc)
@@ -803,8 +811,96 @@ class PointProbePanel:
         self.remove_button.setEnabled(bool(session.points))
         self.clear_button.setEnabled(bool(session.points))
 
-    def result_changed(self):  # (the legend's result or unit changed)
+    def result_changed(self):  # (the legend's result, its unit or the deformation changed)
         self.refresh()
+        self._make_grips()
+
+    # grips (Fusion: a point probe is moved "using the grips or x, y and z inputs")
+    def _grip_choice(self):
+        points = self.session.points
+        rows = sorted({i.row() for i in self.table.selectedIndexes()})
+        if rows and rows[0] < len(points):
+            return rows[0]
+        return len(points) - 1 if points else None
+
+    def _chosen(self):
+        if self._filling or self._closed:
+            return
+        try:
+            self._make_grips()
+        except Exception as exc:
+            warn("Point Probes: %s" % exc)
+
+    def _make_grips(self):
+        self._drop_grips()
+        index = self._grip_choice()
+        if index is None or self._closed:
+            return
+        point = self.session.points[index]
+        place = App.Vector(*[float(c) for c in self.session.point_place(point)])
+        self.grip_index = index
+        self.grip_start = tuple(point["at"])
+        for axis in range(3):
+            direction = App.Vector(*[1.0 if k == axis else 0.0 for k in range(3)])
+            try:
+                self.grips.append(
+                    taskui.ArrowDragger(
+                        place,
+                        direction,
+                        0.0,
+                        on_drag=lambda d, a=axis: self._gripped(a, d, False),
+                        on_release=lambda d, a=axis: self._gripped(a, d, True),
+                    )
+                )
+            except Exception as exc:
+                warn("Point Probes: no grips: %s" % exc)
+                return
+
+    def _drop_grips(self):
+        grips, self.grips = self.grips, []
+        for arrow in grips:
+            try:
+                arrow.remove()
+            except Exception:
+                pass
+        self.grip_index = None
+
+    def _gripped(self, axis, distance, done):
+        try:
+            if self._closed or self.grip_index is None or self.grip_start is None:
+                return
+            if self.grip_index >= len(self.session.points):
+                return
+            at = list(self.grip_start)
+            at[axis] += float(distance)
+            self.session.move_point(self.grip_index, at)
+            if done:
+                QtCore.QTimer.singleShot(0, self._after_grip)
+        except Exception as exc:
+            warn("Point Probes: %s" % exc)
+
+    def _after_grip(self):
+        try:
+            if self._closed:
+                return
+            index = self.grip_index
+            self.refresh()
+            if index is not None and index < len(self.session.points):
+                self._filling = True
+                try:
+                    self.table.selectRow(index)
+                finally:
+                    self._filling = False
+            outside = (
+                index is not None and self.session.point_value(self.session.points[index]) is None
+            )
+            self.message.setText(
+                "P%d is outside the part: it shows no value there." % (index + 1) if outside else ""
+            )
+            self._make_grips()
+            log("results: point probe dragged")
+        except Exception as exc:
+            warn("Point Probes: %s" % exc)
 
     def _edited(self, item):
         if self._filling or self._closed:
@@ -833,6 +929,7 @@ class PointProbePanel:
         try:
             if not self._closed:
                 self.refresh()
+                self._make_grips()
         except Exception as exc:
             warn("Point Probes: %s" % exc)
 
@@ -845,6 +942,7 @@ class PointProbePanel:
                 self.session.remove_point(r)
             self.message.setText("")
             self.refresh()
+            self._make_grips()
         except Exception as exc:
             warn("Point Probes: %s" % exc)
 
@@ -853,6 +951,7 @@ class PointProbePanel:
             self.session.clear_points()
             self.message.setText("")
             self.refresh()
+            self._make_grips()
         except Exception as exc:
             warn("Point Probes: %s" % exc)
 
@@ -874,6 +973,7 @@ class PointProbePanel:
         if self._closed:
             return True
         self._closed = True
+        self._drop_grips()
         _stop_hover(self)
         for kind, callback in self.callbacks:
             try:
@@ -1513,6 +1613,7 @@ class ReactionsDialog(QtWidgets.QDialog):
 
     def __init__(self, session, found):
         super().__init__(_main())
+        self.session = session
         self.setObjectName("SciForgeSimReactions")
         self.setWindowTitle("Reaction Force")
         box = QtWidgets.QVBoxLayout(self)
@@ -1546,6 +1647,178 @@ def reactions(session):
     OPEN["reactions"] = dialog
     dialog.show()
     return dialog
+
+
+# -- Animate: Save ---------------------------------------------------------------------------------
+class AnimationSaveDialog(QtWidgets.QDialog):
+    """Save the animation (Fusion saves it as a video): an animated GIF or WebP of the steps
+    and play mode chosen in the animation bar, at its speed, the legend drawn in each frame."""
+
+    def __init__(self, session):
+        super().__init__(_main())
+        self.setObjectName("SciForgeSimSaveAnimation")
+        self.session = session
+        self.setWindowTitle("Save Animation")
+        self.setMinimumWidth(520)
+        layout = QtWidgets.QFormLayout(self)
+        anim = session.anim
+        cycle = core.animation_cycle(anim["frames"], anim["mode"])
+        about = QtWidgets.QLabel(
+            "%d pictures (%s, %s), %s s each: the part bending as the animation shows it, with "
+            "the legend."
+            % (
+                len(cycle),
+                "%d steps" % anim["frames"],
+                dict(core.ANIMATION_MODES).get(anim["mode"], anim["mode"]),
+                core.fmt(core.animation_interval_ms(anim["speed"], anim["frames"]) / 1000.0, 2),
+            )
+        )
+        about.setWordWrap(True)
+        layout.addRow(about)
+        row = QtWidgets.QHBoxLayout()
+        self.path_field = QtWidgets.QLineEdit(results_data.default_animation_path(session.study))
+        self.path_field.setObjectName("SciForgeSimAnimationPath")
+        row.addWidget(self.path_field, 1)
+        browse = QtWidgets.QPushButton("Browse...")
+        browse.setAutoDefault(False)
+        browse.clicked.connect(self._browse)
+        row.addWidget(browse)
+        layout.addRow("File", row)
+        self.message = QtWidgets.QLabel("")
+        self.message.setObjectName("SciForgeSimAnimationMessage")
+        self.message.setWordWrap(True)
+        layout.addRow("", self.message)
+        buttons = QtWidgets.QHBoxLayout()
+        self.save_button = QtWidgets.QPushButton("Save")
+        self.save_button.setObjectName("SciForgeSimAnimationSaveFile")
+        self.save_button.setDefault(True)
+        self.save_button.clicked.connect(self._save)
+        cancel = QtWidgets.QPushButton("Cancel")
+        cancel.setObjectName("SciForgeSimAnimationCancel")
+        cancel.setAutoDefault(False)
+        cancel.clicked.connect(self.reject)
+        buttons.addStretch(1)
+        buttons.addWidget(self.save_button)
+        buttons.addWidget(cancel)
+        layout.addRow(buttons)
+        self.written = None
+
+    def _browse(self):
+        try:
+            path, _filter = QtWidgets.QFileDialog.getSaveFileName(
+                self,
+                "Save the animation",
+                self.path_field.text(),
+                ";;".join(name for _ext, name in core.ANIMATION_FILES),
+            )
+            if path:
+                self.path_field.setText(core.animation_file(path))
+        except Exception as exc:
+            warn("Save Animation: %s" % exc)
+
+    def _save(self):
+        try:
+            path = core.animation_file(self.path_field.text())
+            self.message.setText("Making the pictures...")
+            QtWidgets.QApplication.processEvents()
+            count = save_animation(self.session, path)
+            self.written = path
+            self.message.setText("Saved %d pictures to %s" % (count, path))
+            self.accept()
+        except Exception as exc:
+            self.message.setText("Could not save the animation: %s" % exc)
+            warn("Save Animation: %s" % exc)
+
+    def done(self, code):
+        OPEN["animation"] = None
+        super().done(code)
+
+
+def save_animation_dialog(session):
+    dialog = OPEN.get("animation")
+    try:
+        if dialog is not None:
+            dialog.close()
+    except RuntimeError:
+        pass
+    dialog = AnimationSaveDialog(session)
+    OPEN["animation"] = dialog
+    dialog.show()
+    return dialog
+
+
+def save_animation(session, path, size=None):
+    """Write the animation to `path` (.gif or .webp, with Pillow, which FreeCAD bundles): one
+    picture of the 3D view per step (the camera as it is, the legend drawn in). Returns the
+    number of pictures."""
+    from PIL import Image
+
+    path = core.animation_file(path)
+    folder = os.path.dirname(os.path.abspath(path))
+    if not os.path.isdir(folder):
+        raise ValueError("the folder %s does not exist" % folder)
+    playing = session.anim["playing"]
+    if playing:
+        session.stop_animation()
+    gl = session.gl
+    if size is None:
+        width = min(max(gl.width() if gl is not None else 800, 320), 960)
+        height = int(round(width * (gl.height() / float(gl.width())))) if gl is not None else 500
+        size = (width, max(height, 200))
+    full = session.factor()
+    if full == 0.0:
+        full = session.factor("adjusted")  # (Undeformed chosen: the animation shows Adjusted)
+    cycle = core.animation_cycle(session.anim["frames"], session.anim["mode"])
+    pictures = []
+    work = tempfile.mkdtemp(prefix="sciforge-animation-")
+    try:
+        for k, fraction in enumerate(cycle):
+            session.display.set_factor(full * fraction)
+            if session.slice is not None:
+                session._apply_slice()
+            if session.iso_on:
+                session._apply_iso()
+            QtWidgets.QApplication.processEvents()
+            frame = os.path.join(work, "frame%03d.png" % k)
+            session.view.saveImage(frame, int(size[0]), int(size[1]), "Current")
+            if not os.path.isfile(frame):
+                raise ValueError("the 3D view gave no picture")
+            _draw_legend(frame, session.legend_info)
+            with Image.open(frame) as image:
+                pictures.append(image.convert("RGB"))
+        ms = core.animation_interval_ms(session.anim["speed"], session.anim["frames"])
+        once = session.anim["mode"] == "once"
+        if path.lower().endswith(".webp"):
+            options = {"loop": 1 if once else 0, "quality": 85}
+            pictures[0].save(
+                path, "WEBP", save_all=True, append_images=pictures[1:], duration=ms, **options
+            )
+        else:
+            frames = [p.quantize(colors=255, method=Image.Quantize.MEDIANCUT) for p in pictures]
+            options = {} if once else {"loop": 0}
+            frames[0].save(
+                path, "GIF", save_all=True, append_images=frames[1:], duration=ms, **options
+            )
+    finally:
+        for name in os.listdir(work):
+            try:
+                os.remove(os.path.join(work, name))
+            except OSError:
+                pass
+        try:
+            os.rmdir(work)
+        except OSError:
+            pass
+        session.display.set_factor(session.factor())
+        if session.slice is not None:
+            session._apply_slice()
+        if session.iso_on:
+            session._apply_iso()
+        session._redraw()
+        if playing:
+            session.play()
+    log("results: animation saved to %s (%d pictures)" % (path, len(pictures)))
+    return len(pictures)
 
 
 # -- Solver Data -----------------------------------------------------------------------------------
@@ -1935,12 +2208,16 @@ def solve_here(session):
     return OPEN["solve"]
 
 
-def close_all():
-    for key in ("details", "report", "reactions", "range"):
+def close_all(session=None):
+    """Close the results' own windows (Results Details, Report, Reaction Force, Legend Min/Max,
+    Solver Data, Save Animation): those of `session`, or all of them."""
+    for key in ("details", "report", "reactions", "range", "solver", "animation"):
         dialog = OPEN.get(key)
         if dialog is None:
             continue
         try:
+            if session is not None and getattr(dialog, "session", None) is not session:
+                continue
             dialog.close()
         except RuntimeError:
             pass

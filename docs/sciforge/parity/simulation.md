@@ -221,7 +221,7 @@ surface: a Value slider over the result, an opacity).
 
 | Group: Fusion | SciForge | Src |
 |---|---|---|
-| RESULT TOOLS: Animate (legacy dialog with steps; online viewer: bar at the bottom of the canvas, speed 0.25x - 2x, up to 100 frames, play once / loop / mirror loop, save .webm) | Animate: a bar at the bottom left of the 3D view: Play / Stop, 0.25x - 2x, 10 - 100 steps, Play Once / Loop / Mirror Loop, Close; undeformed to the chosen scale (Adjusted when Undeformed is chosen) | A[52] |
+| RESULT TOOLS: Animate (legacy dialog with steps; online viewer: bar at the bottom of the canvas, speed 0.25x - 2x, up to 100 frames, play once / loop / mirror loop, save .webm) | Animate: a bar at the bottom left of the 3D view: Play / Stop, 0.25x - 2x, 10 - 100 steps, Play Once / Loop / Mirror Loop, **Save...** (an animated GIF or WebP: one picture of the 3D view per step, at the speed chosen, looping as chosen, the legend drawn in; Pillow, which FreeCAD bundles), Close; undeformed to the chosen scale (Adjusted when Undeformed is chosen) | A[52]; GIF / WebP instead of .webm: G |
 | RESULT TOOLS: Results Details | The lowest safety factor against the Lower / Upper targets (3 / 6) in a sentence with advice (SciForge's words), the targets editable, **Show the target bands on the model** (the newer viewer's guided bands: below / meets / above), per body: material, strength (yield or ultimate), max von Mises, min safety factor, max displacement; every result's min / max; the mesh; the limits of the study; the deformation scale at the bottom | Autodesk help (Results details), Learn video, A[54] A[71] A[51] |
 | RESULT TOOLS: Report (General, Properties, Studies; Preview / Save; HTML) | Report: title, author, pictures or not, file; Save / Save and Open (the web browser). One HTML page: the sentence, the limits, settings, materials with strengths, constraints and loads with their faces, contacts, mesh, every result's min / max, per body, three pictures with their legend drawn in | A[62] T[107] |
 | RESULT TOOLS: Compare (up to 4 studies; the canvas splits into views; Finish closes it; no probes in the legacy Compare) | Compare: tick 2 to 4 of the design's studies with results; they show **side by side in the one 3D view** (each moved beside the one before, across the way they are thinnest: two beams lie side by side), each with a tag (study, min, max), on **one colour scale** and one deformation scale (the same colour is the same value; a bigger bend looks bigger: SciForge's choice); the legend's result and unit, DEFORMATION and Show Mesh work on all; probes, slices and the rest rest meanwhile; **Finish Compare** under the legend, Compare again, SETUP or another design end it | A[61] F[86], G |
@@ -231,7 +231,7 @@ surface: a Value slider over the result, an opacity).
 | INSPECT: Show Min/Max | Toggle (on by default) | A[80] A[57] |
 | INSPECT: Reaction Force | A table: the force each constraint takes (X, Y, Z, total), from the solve (sim-core's `summary["reactions"]`) | A[48] A[58] |
 | INSPECT: Slice Plane (legacy: Shaded, Mesh Lines, Vectors, Clipping; online: Section, Slice) | A plane across X, Y or Z, or **parallel to a face clicked on the result** (any direction; half way across the part, the half away from the face kept so the cut looks at you), position (field, slider, or the plane's drag arrow), Flip; **Cut the result away** (clipping, the cut face coloured with the values inside) or **Slice alone** (the cut face inside the whole result drawn see-through); a probe on the cut face reads the value inside; OK / Cancel / Remove Slice | A[56] |
-| INSPECT: Point Probes (values inside the part; first placed on any visible surface, slice planes and iso-surfaces included; moved by grips or X, Y, Z; global coordinates, drawn with the displacement) | Point Probes: a click on the result, a slice's cut face or the iso-surface puts a probe there (inside surfaces first when the result is see-through); the value under the mouse while it moves; a table P1, P2... with X, Y, Z on the unloaded part (typed to move it, a unit allowed: "0.5 in") and the value of the result in the legend; outside the part it says so; the tag (a diamond) moves with the part as drawn (Deformation, Animate); Remove, Clear All; Close keeps them; the value is interpolated in the mesh (a node's own value at a node) | A[55], web excerpts |
+| INSPECT: Point Probes (values inside the part; first placed on any visible surface, slice planes and iso-surfaces included; moved by grips or X, Y, Z; global coordinates, drawn with the displacement) | Point Probes: a click on the result, a slice's cut face or the iso-surface puts a probe there (inside surfaces first when the result is see-through); the value under the mouse while it moves; the chosen probe (the newest, or the one chosen in the table) has **grips**: three drag arrows along X, Y and Z; a table P1, P2... with X, Y, Z on the unloaded part (typed to move it, a unit allowed: "0.5 in") and the value of the result in the legend; outside the part it says so; the tag (a diamond) moves with the part as drawn (Deformation, Animate); Remove, Clear All; Close keeps them; the value is interpolated in the mesh (a node's own value at a node) | A[55], web excerpts |
 | INSPECT: Iso-surface | Iso-surface: the surface inside the part where the result shown has one value, in the legend's colour of that value, the result see-through around it (cut by a clipping slice too); value field (legend unit) and slider between the result's lowest and highest (half way to start); the legend's result moves it to that result; a value nothing reaches says so; OK / Cancel (puts back what was there) / Remove Iso-surface | G (Flow Design's iso surface as the model) |
 | INSPECT: Solver Data | Solver Data: when the study was solved and how long each step took (model, mesh, solver input, CalculiX, reading the results), the safety factor's basis; the mesh: nodes, degrees of freedom (3 per node), elements, order, element size, smallest / largest element edge, worst aspect ratio, elements over the limit, mesher; the adaptive refinement's solves; the solve's messages; Copy (as text) | A[57]; contents G |
 | MANAGE | sim-ui's (shared with SETUP) | A[49] |
@@ -242,8 +242,8 @@ surface: a Value slider over the result, an opacity).
 - **Compare in split views** (Fusion splits the canvas, one view and legend per study): SciForge
   puts the studies side by side in one view on one shared colour scale instead (one camera, so
   they turn together; the same colour is the same value).
-- **Saving the animation as a video (.webm)**: not built; the 3D view can be captured frame by
-  frame (`saveImage`) but SciForge has no video encoder in the bundle.
+- **Saving the animation as a video (.webm)**: SciForge saves an animated GIF or WebP instead
+  (FreeCAD's bundle has Pillow but no video encoder); browsers and chat apps play both.
 - **Slice plane on a construction plane** (a document plane), the **Vectors** and **Mesh Lines**
   slice styles: the plane is across X, Y or Z or parallel to a face of the result.
 - **The online viewer's threshold sliders** (a range of interest dragged on the legend): Legend
@@ -255,8 +255,8 @@ surface: a Value slider over the result, an opacity).
   strains are shown.
 - **Load case selector**: one load case per study.
 - **Report**: no logo, cover picture, approvers or revision fields; one study per report.
-- **Point Probes' grips**: a probe is moved by typing its X, Y, Z, not by dragging handles in the
-  3D view.
+- **Point Probes' grips**: three separate arrows (X, Y, Z), not Fusion's one triad
+  manipulator.
 - **Iso-surface**: one at a time, of the result shown in the legend, in one colour (Fusion's
   own colouring of iso-surfaces was not found); several values at once are not offered.
 - **Solver Data**: CalculiX's own output (its log) is not kept by the engine, so it is not shown;
