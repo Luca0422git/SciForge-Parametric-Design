@@ -143,35 +143,75 @@ def frame_of(obj, sub, point=None):
     return None
 
 
-def snap_points(obj, sub):
+def snap_points(obj, sub, near=None):
     """The points Align offers on a face or an edge (Fusion: face centres, edge midpoints,
-    corners, circle centres), in design coordinates: [{"kind", "point" (App.Vector)}], the
-    one a plain click takes first (a face's centre, a round edge's centre, an edge's
-    middle). Same points as a joint's snaps (joints._shape_snaps)."""
+    corners, circle centres; SciForge: the centres of holes of any outline), in design
+    coordinates: [{"kind", "point" (App.Vector), "axis" (a hole's direction or None),
+    "radius" (a hole's size or 0)}], the one a plain click takes first (a face's centre, a
+    round edge's centre, a hole's centre, an edge's middle). Same points as a joint's snaps
+    (joints._shape_snaps, worked out once per shape). `near` (a design point): a face with
+    very many points (VEX metal) gives its centre and those nearest that point."""
     if obj is None or not sub or not sub.startswith(("Face", "Edge")):
         return []
-    from . import joints
+    from . import hole_snaps_core, joints
 
     try:
-        shape = _global(obj, obj.Shape)
-        snaps = joints._shape_snaps(shape, sub)
+        snaps = joints._shape_snaps(obj.Shape, sub)
     except Exception:
         return []
+    place = _parent_place(obj)
     if sub.startswith("Edge"):  # the middle first, as frame_of takes it (a circle: its centre)
-        snaps.sort(key=lambda s: {"circle": 0, "midpoint": 1}.get(s["kind"], 2))
-    found = []
+        order = {"circle": 0, "loop": 1, "midpoint": 2}
+        snaps.sort(key=lambda s: order.get(s["kind"], 3))
+    if near is not None and len(snaps) > joints.NEAR:
+        target = place.inverse().multVec(App.Vector(near)) if place is not None else near
+        rest = sorted(range(1, len(snaps)), key=lambda i: (snaps[i]["point"] - target).Length)
+        snaps = [snaps[0]] + [snaps[i] for i in sorted(rest[: joints.NEAR - 1])]
+    points = []
     for snap in snaps:
         point = App.Vector(snap["point"])
-        if all((point - f["point"]).Length > 1e-7 for f in found):
-            found.append({"kind": snap["kind"], "point": point})
+        axis = App.Vector(snap["z"]) if snap.get("loop") and snap["z"] is not None else None
+        if place is not None:
+            point = place.multVec(point)
+            if axis is not None:
+                axis = place.Rotation.multVec(axis)
+        points.append((snap, point, axis))
+    keep = hole_snaps_core.dedupe_points([(p.x, p.y, p.z) for _s, p, _a in points], 1e-7)
+    found = []
+    for i in keep:
+        snap, point, axis = points[i]
+        found.append(
+            {
+                "kind": snap["kind"],
+                "point": point,
+                "axis": axis,
+                "radius": float((snap.get("loop") or {}).get("r", 0.0)),
+            }
+        )
     return found
 
 
-def at_point(frame, point):
+def _parent_place(obj):
+    """The global placement of the component an object sits in, or None (identity)."""
+    try:
+        parent = obj.getParentGeoFeatureGroup()
+    except Exception:
+        parent = None
+    if parent is None:
+        return None
+    place = parent.getGlobalPlacement()
+    return None if place.isIdentity() else place
+
+
+def at_point(frame, point, axis=None):
     """`frame` (align_core) moved to `point` (a snap the person chose), its direction kept:
-    a face's normal still says which way the part faces."""
+    a face's normal still says which way the part faces. A hole's centre brings its own
+    direction (`axis`: along the hole, out of the face it was found on), so a dot taken on
+    a hole's edge or wall points the part along the hole."""
     if frame is None or point is None:
         return frame
+    if axis is not None:
+        return core.frame(App.Vector(point), App.Vector(axis), True)
     return core.frame(App.Vector(point), frame.get("axis"), frame.get("oriented"))
 
 

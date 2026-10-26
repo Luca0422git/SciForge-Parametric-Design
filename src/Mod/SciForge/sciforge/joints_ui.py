@@ -16,6 +16,7 @@ Also here: As-Built Joint, Joint Origin, Rigid Group, Drive Joints, Ground / Ung
 and a document watch that removes a deleted component's joints.
 """
 
+import math
 import time
 
 import FreeCAD as App
@@ -111,10 +112,31 @@ class _Gate:
 
 
 # -- the snap hover --------------------------------------------------------------------------------
+DRAWN_PIXELS = 90.0  # dots this near the pointer are drawn (plus the face's centre)
+DRAWN_MAX = 24  # never more dots than this at once (a VEX plate has thousands)
+
+
+def _modifier(name):
+    try:
+        mods = QtWidgets.QApplication.keyboardModifiers()
+        flag = QtCore.Qt.ControlModifier if name == "ctrl" else QtCore.Qt.ShiftModifier
+        return bool(mods & flag)
+    except Exception:
+        return False
+
+
 class SnapHover:
     """Fusion's snap points on the element under the mouse, the nearest highlighted with a
     triad showing the joint origin it would make. Drawn in SciForge's own Coin nodes, never
-    pickable (clicks go through to the element). `allow(pick)` says which components count."""
+    pickable (clicks go through to the element). `allow(pick)` says which components count.
+
+    SciForge's holes (hole_snaps): a hole's centre (square, hex, slot: any outline) lights up
+    while the pointer is around the hole, on its edges or inside it (a pointer that goes into
+    the hole keeps the hole's centre lit even where nothing is under it: a click there takes
+    it). Ctrl held keeps the face under the mouse (Fusion's lock): its dots stay while the
+    pointer goes onto an edge. Only the dots near the pointer are drawn."""
+
+    reach = 1e9  # the nearest dot is lit however far (Align: a few pixels, else the centre)
 
     def __init__(self, view, allow):
         from pivy import coin
@@ -128,7 +150,11 @@ class SnapHover:
         self.pick = None
         self.candidates = []
         self.hot = None
+        self.locked = False  # Ctrl keeps the face (Fusion)
+        self.holding = False  # the pointer went into a hole: its centre stays lit
+        self.on_click = None  # the dialog's handler of a click into a hole (nothing hit)
         self.source = None  # the open dialog's own snap points for a pick (position modes)
+        self._drawn = None
         self.root = coin.SoAnnotation()
         style = coin.SoPickStyle()
         style.style = coin.SoPickStyle.UNPICKABLE
@@ -142,6 +168,11 @@ class SnapHover:
         self.timer.setInterval(HOVER_MS)
         self.timer.timeout.connect(self._update)
         self.callback = view.addEventCallback("SoLocation2Event", self._moved)
+        self.button_callback = None
+        try:
+            self.button_callback = view.addEventCallback("SoMouseButtonEvent", self._button)
+        except Exception:
+            self.button_callback = None
 
     # -- events ------------------------------------------------------------------------------------
     def _moved(self, info):
@@ -152,6 +183,31 @@ class SnapHover:
         except Exception:
             pass
 
+    def _button(self, info):
+        """A click into a hole where nothing is under the pointer: no selection comes of it,
+        so the hover hands the hole's centre to the dialog itself."""
+        try:
+            if info.get("Button") != "BUTTON1" or info.get("State") != "DOWN":
+                return
+            if not (self.enabled and self.holding and self.on_click is not None):
+                return
+            position = tuple(info.get("Position") or self.position or ())
+            if position and self.view.getObjectInfo(position):
+                return  # something is hit: the selection brings the click
+            held = self.held()
+            if held is None:
+                return
+            QtCore.QTimer.singleShot(0, lambda: self._click_held(held))
+        except Exception as exc:
+            warn("joint snap hover: %s" % exc)
+
+    def _click_held(self, held):
+        try:
+            if self.on_click is not None:
+                self.on_click(*held)
+        except Exception as exc:
+            warn("joint snap hover: %s" % exc)
+
     def set_enabled(self, enabled):
         self.enabled = bool(enabled)
         if not enabled:
@@ -161,37 +217,167 @@ class SnapHover:
         try:
             if not self.enabled or self.position is None:
                 return
-            info = self.view.getObjectInfo(self.position)
-            pick = self._pick_from(info)
-            if pick is None or not self.allow(pick):
-                self.clear()
+            self.locked = bool(self.pick is not None and self.hot is not None and _modifier("ctrl"))
+            if not self.locked and not self._follow():
                 return
-            # the part may have moved since (the joint itself moves it): its place is part
-            # of the key, else the snaps would be drawn where it stood
-            plc = pick.part.Placement
-            key = (pick.part.Name, pick.obj.Name, pick.element, tuple(plc.Base), plc.Rotation.Q)
-            if key != self.key:
-                self.key = key
-                self.pick = pick
-                self.candidates = (
-                    self.source(pick) if self.source is not None else joints.snap_candidates(pick)
-                )
             if not self.candidates:
                 self.clear(keep_key=True)
                 return
-            pixels = []
-            for snap in self.candidates:
-                try:
-                    pixels.append(self.view.getPointOnViewport(snap["point"]))
-                except Exception:
-                    pixels.append((-1e9, -1e9))
-            index = core.nearest_on_screen(pixels, self.position, 1e9)
-            hot = self.candidates[index] if index is not None else self.candidates[0]
-            if hot is not self.hot or self.switch.getNumChildren() == 0:
+            hot = self._choose()
+            shown = self._visible(hot)
+            if hot is not self.hot or shown != self._drawn or self.switch.getNumChildren() == 0:
                 self.hot = hot
+                self._drawn = shown
                 self._draw()
         except Exception as exc:
             warn("joint snap hover: %s" % exc)
+
+    def _follow(self):
+        """Take the element under the pointer (False: nothing to show)."""
+        pick = self._pick_at(self.position)
+        if pick is not None and not self.allow(pick):
+            pick = None
+        if self._keep_hole(pick):
+            self.holding = True
+            return True
+        self.holding = False
+        if pick is None:
+            self.clear()
+            return False
+        key = self._key(pick)
+        if key != self.key or self._stale(pick):
+            self.key = key
+            self.pick = pick
+            self.candidates = self._candidates(pick)
+            self.hot = None
+        else:
+            self.pick.point = pick.point
+        return True
+
+    def _pick_at(self, position):
+        return self._pick_from(self.view.getObjectInfo(position))
+
+    def _key(self, pick):
+        # the part may have moved since (the joint itself moves it): its place is part of
+        # the key, else the snaps would be drawn where it stood
+        plc = pick.part.Placement
+        return (pick.part.Name, pick.obj.Name, pick.element, tuple(plc.Base), plc.Rotation.Q)
+
+    def _candidates(self, pick):
+        return self.source(pick) if self.source is not None else joints.snap_candidates(pick)
+
+    def _stale(self, pick):
+        """A face with very many dots gave those around where the pointer was: far from
+        there, look again."""
+        found = self.candidates
+        if not getattr(found, "partial", False) or pick.point is None or found.anchor is None:
+            return False
+        return (pick.point - found.anchor).Length > max(found.reach / 3.0, 1e-6)
+
+    def _keep_hole(self, pick):
+        """The pointer left the face for the inside of the hole whose centre is lit (nothing
+        under it, or something behind the hole): keep the hole's centre."""
+        hot, mine = self.hot, self.pick
+        if mine is None or hot is None or not hot.get("radius"):
+            return False
+        if pick is not None and pick.obj is mine.obj and pick.element == mine.element:
+            return False
+        try:
+            pixel = self.view.getPointOnViewport(hot["point"])
+            zone = self._zone(hot)
+            if math.hypot(pixel[0] - self.position[0], pixel[1] - self.position[1]) > zone:
+                return False
+        except Exception:
+            return False
+        if pick is None:
+            return True
+        if pick.point is None:
+            return False
+        if pick.obj is mine.obj and pick.element.startswith("Face"):
+            # a wall of the same hole offers the hole itself (both ends, half-way): take it
+            for c in self._candidates(pick):
+                if c.get("radius") and (c["point"] - hot["point"]).Length < 1e-6:
+                    return False
+        try:
+            look = App.Vector(self.view.getViewDirection())
+            return (pick.point - hot["point"]).dot(look) > 1e-6
+        except Exception:
+            return False
+
+    def _scale(self, point):
+        try:
+            from .taskui import mm_per_pixel
+
+            return max(mm_per_pixel(self.view, point), 1e-9)
+        except Exception:
+            return 0.1
+
+    def _zone(self, snap, scale=None):
+        from . import hole_snaps_core
+
+        radius = float(snap.get("radius") or 0.0)
+        if radius <= 0:
+            return None
+        scale = scale if scale is not None else self._scale(snap["point"])
+        return hole_snaps_core.zone_pixels(radius / scale)
+
+    def _pixels(self):
+        out = []
+        for snap in self.candidates:
+            try:
+                out.append(tuple(self.view.getPointOnViewport(snap["point"]))[:2])
+            except Exception:
+                out.append(None)
+        return out
+
+    def _choose(self):
+        """The dot a click takes: one right under the pointer, else the hole the pointer is
+        in or around, else the nearest (within `reach`), else the first."""
+        from . import hole_snaps_core
+
+        pixels = self._pixels()
+        self._last_pixels = pixels
+        scale = None
+        rows = []
+        for snap, pixel in zip(self.candidates, pixels):
+            zone = None
+            if snap.get("radius"):
+                if scale is None:
+                    scale = self._scale(snap["point"])
+                zone = self._zone(snap, scale)
+            rows.append((pixel, zone))
+        index = hole_snaps_core.choose_hot(rows, self.position, self.reach)
+        return self.candidates[index if index is not None else 0]
+
+    def _visible(self, hot):
+        """Indices of the dots drawn: the lit one, the first (the face's centre), the dots
+        near the pointer; of the holes only the lit one's (or the nearest's)."""
+        pixels = getattr(self, "_last_pixels", None) or self._pixels()
+        near = []
+        nearest_hole = None
+        for i, (snap, pixel) in enumerate(zip(self.candidates, pixels)):
+            if pixel is None:
+                continue
+            d = math.hypot(pixel[0] - self.position[0], pixel[1] - self.position[1])
+            if snap.get("radius"):
+                if nearest_hole is None or d < nearest_hole[0]:
+                    nearest_hole = (d, i)
+                continue
+            if d <= DRAWN_PIXELS:
+                near.append((d, i))
+        near.sort()
+        keep = {0}
+        keep.update(i for _d, i in near[:DRAWN_MAX])
+        if hot is not None and hot.get("radius"):
+            keep.update(
+                i for i, s in enumerate(self.candidates) if s.get("radius") and _same_hole(s, hot)
+            )
+        elif nearest_hole is not None:
+            keep.add(nearest_hole[1])
+        for i, snap in enumerate(self.candidates):
+            if snap is hot:
+                keep.add(i)
+        return tuple(sorted(keep))
 
     def _pick_from(self, info):
         if not info or not info.get("Object"):
@@ -218,9 +404,32 @@ class SnapHover:
             return None, None
         return self.pick, self.hot
 
+    def held(self):
+        """(pick, snap) a click takes whatever it lands on: the face Ctrl keeps, or the hole
+        the pointer went into; None otherwise (and once the pointer left the 3D view: a
+        click in the browser is the browser's)."""
+        if (self.locked or self.holding) and self.pick is not None and self.hot is not None:
+            if self._pointer_in_view():
+                return self.pick, self.hot
+        return None
+
+    def _pointer_in_view(self):
+        try:
+            from .taskui import view_widget
+
+            gl = view_widget()
+            if gl is None:
+                return True
+            return gl.rect().contains(gl.mapFromGlobal(QtGui.QCursor.pos()))
+        except Exception:
+            return True
+
     def snap_for(self, pick, point):
         """The snap a click on `pick` takes: the highlighted one when the mouse is on that
-        element, else the one nearest the clicked point."""
+        element (or Ctrl / a hole keeps it), else the one nearest the clicked point."""
+        held = self.held()
+        if held is not None:
+            return held[1]
         if (
             self.pick is not None
             and self.hot is not None
@@ -229,7 +438,7 @@ class SnapHover:
             and self.pick.element == pick.element
         ):
             return self.hot
-        found = self.source(pick) if self.source is not None else joints.snap_candidates(pick)
+        found = self._candidates(pick)
         return joints.nearest_snap(found, point)
 
     # -- drawing -----------------------------------------------------------------------------------
@@ -245,7 +454,11 @@ class SnapHover:
         coin = self.coin
         self.switch.removeAllChildren()
         size = self._size()
-        for snap in self.candidates:
+        shown = self._drawn if self._drawn is not None else range(len(self.candidates))
+        for i in shown:
+            if i >= len(self.candidates):
+                continue
+            snap = self.candidates[i]
             hot = snap is self.hot
             sep = coin.SoSeparator()
             material = coin.SoMaterial()
@@ -292,6 +505,8 @@ class SnapHover:
             self.pick = None
             self.candidates = []
         self.hot = None
+        self.holding = False
+        self._drawn = None
         try:
             self.switch.removeAllChildren()
         except Exception:
@@ -308,10 +523,38 @@ class SnapHover:
             except Exception:
                 pass
             self.callback = None
+        if self.button_callback is not None:
+            try:
+                self.view.removeEventCallback("SoMouseButtonEvent", self.button_callback)
+            except Exception:
+                pass
+            self.button_callback = None
+        self.on_click = None
         try:
             self.view.getSceneGraph().removeChild(self.root)
         except Exception:
             pass
+
+
+def _same_hole(a, b):
+    """Two hole dots of one hole (its centre on each face, half-way): on one line along the
+    hole."""
+    try:
+        if a is b:
+            return True
+        d = b["point"] - a["point"]
+        if d.Length < 1e-9:
+            return True
+        axis = a.get("axis")
+        if axis is None and a.get("frame") is not None:
+            axis = a["frame"].Rotation.multVec(App.Vector(0, 0, 1))
+        if axis is None or axis.Length < 1e-12:
+            return False
+        axis = App.Vector(axis).normalize()
+        across = d - axis * d.dot(axis)
+        return across.Length < 1e-6 * max(1.0, float(a.get("radius") or 1.0))
+    except Exception:
+        return False
 
 
 class Marker:
@@ -489,6 +732,7 @@ class _JointsPanel(BodyPanel):
             self.gate = None
         try:
             self.hover = SnapHover(self.view, self.allow_hover)
+            self.hover.on_click = self._held_click
         except Exception as exc:
             warn("%s: snap points unavailable: %s" % (self.title, exc))
             self.hover = None
@@ -556,8 +800,35 @@ class _JointsPanel(BodyPanel):
                 self._syncing = False
             if time.time() < self._busy_until:
                 return
+            held = self._held()
+            if held is not None:  # Ctrl kept a face, or the pointer is in a hole
+                self._take_held(*held)
+                return
             for root, sub, point in entries:
                 self.picked_raw(root, sub, point)
+        except Exception as exc:
+            warn("%s pick: %s" % (self.title, exc))
+
+    def _held(self):
+        """(pick, snap) the hover holds for the box waiting (Ctrl's face, the hole the
+        pointer is in), or None."""
+        hover = self.hover
+        if hover is None or not hover.enabled or self.active not in self.hover_boxes:
+            return None
+        return hover.held()
+
+    def _take_held(self, pick, snap):
+        """A click while the hover holds a snap: it is taken on the element its dots belong
+        to, whatever the click landed on (Fusion's Ctrl lock; SciForge's hole centres)."""
+        sub = pick.ref[1][0] if pick.ref and pick.ref[1] else pick.element
+        self.picked_raw(pick.part, sub, App.Vector(snap["point"]))
+
+    def _held_click(self, pick, snap):
+        """A click into a hole where nothing is under the pointer (the hover's own click)."""
+        if self._closed or self._held() is None:
+            return
+        try:
+            self._take_held(pick, snap)
         except Exception as exc:
             warn("%s pick: %s" % (self.title, exc))
 
@@ -594,9 +865,8 @@ class _JointsPanel(BodyPanel):
         if self.hover is not None:
             slot = self.slot_of(name)
             source = slot.candidates if slot is not None and slot.mode == "twofaces" else None
-            if source is not self.hover.source:
-                self.hover.source = source
-                self.hover.clear()
+            self.hover.source = source
+            self.hover.clear()  # a new box looks afresh (Ctrl's face was the last box's)
             self.hover.set_enabled(name in self.hover_boxes)
 
     def slot_of(self, box):

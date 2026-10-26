@@ -22,21 +22,45 @@ OBJECTS = [("Bodies", "bodies"), ("Components", "components")]
 SNAP_PIXELS = 14.0  # a click this near a dot (on the screen) takes it; farther: the centre
 
 
+class _Ref:
+    """A face or edge under the mouse for Align's hover: (object, element) like Align's
+    picks, with the point hit (the hover's base class reads part / obj / element / point)."""
+
+    def __init__(self, obj, short, point=None):
+        self.obj = self.part = obj
+        self.element = short
+        self.point = point
+
+    def __getitem__(self, i):
+        return (self.obj, self.element)[i]
+
+    def __iter__(self):
+        return iter((self.obj, self.element))
+
+    def __len__(self):
+        return 2
+
+
 def _snap_hover_class():
     """joints_ui.SnapHover (Fusion's snap dots on the face or edge under the mouse, the one
     the click would take highlighted) for Align's picks: any body or solid, not only parts
-    of components; the dots are align.snap_points; the dot a click takes is the one within
-    SNAP_PIXELS of the mouse, else the first (a face's centre). Ctrl held keeps the dots of
-    the face under the mouse (Fusion's Ctrl lock), so a dot on its edge can be reached
-    without the edge taking over. Made on demand (joints_ui is a big module)."""
-    from . import hole_common, joints_core, joints_ui, protractor
+    of components; the dots are align.snap_points (with SciForge's hole centres); the dot a
+    click takes is the one within SNAP_PIXELS of the mouse (or the hole the pointer is
+    around), else the first (a face's centre). Ctrl held keeps the dots of the face under
+    the mouse (Fusion's Ctrl lock), so a dot on its edge can be reached without the edge
+    taking over; Shift held turns the dots off (Fusion: snapping off), so the click takes
+    the plain pick. Made on demand (joints_ui is a big module)."""
+    from . import hole_common, joints_ui
 
     class AlignSnaps(joints_ui.SnapHover):
+        reach = SNAP_PIXELS
+
         def __init__(self, view, allow):
             super().__init__(view, allow)
-            self.locked = False
+            self.off = False  # Shift: no snapping
 
-        def _ref(self, info):
+        def _pick_at(self, position):
+            info = self.view.getObjectInfo(position)
             if not info or not info.get("Object"):
                 return None
             doc = App.getDocument(info["Document"]) if info.get("Document") else None
@@ -53,44 +77,37 @@ def _snap_hover_class():
             obj, short = hole_common.resolve(root, sub)
             if obj is None or not short.startswith(("Face", "Edge")):
                 return None
-            return obj, short
+            return _Ref(obj, short, App.Vector(info["x"], info["y"], info["z"]))
+
+        def _key(self, ref):
+            # where the part is now is part of the key: the preview moves it
+            return (ref.obj.Name, ref.element, tuple(ref.obj.Shape.BoundBox.Center))
+
+        def _candidates(self, ref):
+            found = joints_ui.joints.Candidates()
+            points = align.snap_points(ref.obj, ref.element, near=ref.point)
+            # (SnapHover draws a triad at the lit dot's "frame": none here)
+            found.extend(dict(snap, frame=None) for snap in points)
+            many = len(points) >= joints_ui.joints.NEAR and ref.point is not None
+            if many:
+                found.partial = True
+                found.anchor = App.Vector(ref.point)
+                found.reach = max(
+                    ((p["point"] - ref.point).Length for p in points[1:]), default=0.0
+                )
+            return found
 
         def _update(self):
             try:
-                if not self.enabled or self.position is None:
-                    return
-                self.locked = bool(self.pick is not None and protractor.ctrl_held())
-                if not self.locked:
-                    ref = self._ref(self.view.getObjectInfo(self.position))
-                    if ref is None or not self.allow(ref):
+                if self.enabled and joints_ui._modifier("shift"):
+                    if not self.off:
+                        self.off = True
                         self.clear()
-                        return
-                    # where the part is now is part of the key: the preview moves it
-                    key = (ref[0].Name, ref[1], tuple(ref[0].Shape.BoundBox.Center))
-                    if key != self.key:
-                        self.key = key
-                        self.pick = ref
-                        # (SnapHover draws a triad at the lit dot's "frame": none here)
-                        self.candidates = [
-                            dict(snap, frame=None) for snap in align.snap_points(*ref)
-                        ]
-                        self.hot = None
-                if not self.candidates:
-                    self.clear(keep_key=True)
                     return
-                pixels = []
-                for snap in self.candidates:
-                    try:
-                        pixels.append(self.view.getPointOnViewport(snap["point"]))
-                    except Exception:
-                        pixels.append((-1e9, -1e9))
-                index = joints_core.nearest_on_screen(pixels, self.position, SNAP_PIXELS)
-                hot = self.candidates[index if index is not None else 0]
-                if hot is not self.hot or self.switch.getNumChildren() == 0:
-                    self.hot = hot
-                    self._draw()
-            except Exception as exc:
-                warn("align snap hover: %s" % exc)
+                self.off = False
+            except Exception:
+                pass
+            super()._update()
 
         def _size(self):
             try:
@@ -103,16 +120,24 @@ def _snap_hover_class():
         def _triad(self, frame, size):
             return self.coin.SoSeparator()  # dots only: the face's normal sets the direction
 
-        def snap_for(self, obj, short):
+        def dot_for(self, obj, short):
             """The dot a click on (obj, short) takes (None: the pick's own default)."""
+            if self.off:
+                return None
             if self.pick is not None and self.hot is not None:
-                if self.locked or (self.pick[0] is obj and self.pick[1] == short):
-                    return self.hot["point"]
+                if self.held() is not None or (self.pick.obj is obj and self.pick.element == short):
+                    return self.hot
             return None
 
+        def snap_for(self, obj, short):
+            dot = self.dot_for(obj, short)
+            return dot["point"] if dot is not None else None
+
         def locked_pick(self):
-            """(obj, short) of the face Ctrl keeps, or None."""
-            return self.pick if self.locked and self.hot is not None else None
+            """(obj, short) of the face Ctrl keeps (or of the hole the pointer is in), or
+            None."""
+            held = self.held()
+            return (held[0].obj, held[0].element) if held is not None else None
 
     return AlignSnaps
 
@@ -156,6 +181,7 @@ class AlignPanel(BodyPanel):
         self.squares = mc.PlaneSquares(self, self._take_plane)
         try:  # the dots of the face / edge under the mouse (Fusion's snap points)
             self.snaps = _snap_hover_class()(self.view, self._snap_allowed)
+            self.snaps.on_click = self._hole_click
         except Exception as exc:
             warn("Align snap points unavailable: %s" % exc)
         self._show_picks()
@@ -258,10 +284,14 @@ class AlignPanel(BodyPanel):
             return True
 
     def _snapped(self, obj, short, frame):
-        """`frame` moved to the dot the click took (the face's normal is kept)."""
+        """`frame` moved to the dot the click took (the face's normal is kept; a hole's
+        centre brings the hole's direction)."""
         if self.snaps is None or frame is None or not short:
             return frame
-        return align.at_point(frame, self.snaps.snap_for(obj, short))
+        dot = self.snaps.dot_for(obj, short)
+        if dot is None:
+            return frame
+        return align.at_point(frame, dot["point"], dot.get("axis"))
 
     def picked(self, obj, short, point):
         if self.squares is not None and self.squares.took_click():
@@ -275,12 +305,14 @@ class AlignPanel(BodyPanel):
             self._pick_to(obj, short, point)
 
     def _pick_from(self, obj, short, point):
-        dot = self.snaps.snap_for(obj, short) if self.snaps is not None and short else None
+        dot = self.snaps.dot_for(obj, short) if self.snaps is not None and short else None
         if short and bodies.body_of(obj) is None:
             adopted = mc.body_of_pick(self, obj)  # a solid without history becomes a body
             if adopted is not None:
                 obj = adopted.Tip
-        frame = align.at_point(align.frame_of(obj, short, point), dot)
+        frame = align.frame_of(obj, short, point)
+        if dot is not None:
+            frame = align.at_point(frame, dot["point"], dot.get("axis"))
         if frame is None:
             self.message.setText("Pick a corner, an edge, a face or a plane of what moves.")
             return
@@ -320,6 +352,15 @@ class AlignPanel(BodyPanel):
         if self.squares is not None:
             self.squares.hide()
         self.changed()
+
+    def _hole_click(self, ref, dot):
+        """A click into a hole where nothing is under the pointer: its lit centre."""
+        if self._closed:
+            return
+        try:
+            self.picked(ref.obj, ref.element, App.Vector(dot["point"]))
+        except Exception as exc:
+            warn("Align pick: %s" % exc)
 
     def _take_plane(self, ref):
         if self._closed:

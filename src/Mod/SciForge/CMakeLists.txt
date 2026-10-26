@@ -30,8 +30,9 @@ FILE(GLOB_RECURSE SciForge_Tests RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_
     SciForgeTests/*.py SciForgeTests/*.json SciForgeTests/*.md SciForgeTests/*.txt)
 
 # Sample files the Insert/Export tests open (meshes, STEP, SVG, DXF, images): every file.
-FILE(GLOB SciForge_Fixtures RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} CONFIGURE_DEPENDS
-    SciForgeTests/fixtures/*)
+# (files only: the VEX test parts' generator sits in a sub-folder, installed with the tests)
+FILE(GLOB SciForge_Fixtures LIST_DIRECTORIES false RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}
+    CONFIGURE_DEPENDS SciForgeTests/fixtures/*)
 
 # What the Home tab's welcome line opens offline: the cheat sheet (a copy of
 # docs/sciforge/cheat-sheet.md; a unit test keeps the two the same) and the Raspberry Pi 5
