@@ -86,6 +86,9 @@ class RecognizeError(ValueError):
 
 LIN = 1e-6  # mm: two B-rep values this close are the same
 DEFEATURE_BUDGET = 15.0  # seconds of defeaturing tries before the rest is left in the base
+DESCRIBE_BUDGET = 30.0  # seconds: past this, optional work (more readings, edges) is skipped
+MAX_SLABS = 60  # levels along one axis beyond which that axis is not read (a free-form part)
+MAX_PIECES = 400  # bosses + cuts beyond which a reading is dropped (it is not the part's)
 SMOOTH = 0.9998  # cos of ~1.1 degrees: two faces meeting this smoothly are tangent
 
 
@@ -475,6 +478,13 @@ class _Reader:
         self.topo = Topology(self.shape, self.facts)
         self.refs = None
         self.counter = 0
+        self.started = time.time()
+        self.edges_off = None  # why the chamfers' and fillets' edges are not looked for
+        self.listed = set()  # faces already in an `unrecognized` entry of their own
+
+    def late(self):
+        """Past the time budget: skip what is optional."""
+        return time.time() - self.started > DESCRIBE_BUDGET
 
     # -- helpers ------------------------------------------------------------------------------
     def new_id(self):
@@ -519,13 +529,39 @@ class _Reader:
         blends = self.find_fillets(holes)
         chamfers = self.find_chamfers(holes, blends)
         timing["blends"] = time.time() - t
-        t = time.time()
-        removed = self.defeature(holes, chamfers, blends)
-        timing["defeaturing"] = time.time() - t
-        t = time.time()
-        self.base_shape = removed["base"]
-        base = self.find_base(removed["base"])
-        timing["base"] = time.time() - t
+        free = self._free_form(holes + chamfers + blends)
+        if free:
+            # no extrude or revolve makes these faces: the base cannot be read, so the
+            # features are not taken off (defeaturing such parts can take minutes)
+            removed = {
+                "base": self.shape,
+                "ok": {g["id"] for g in holes + chamfers + blends},
+                "accepted": holes + chamfers + blends,
+            }
+            self.edges_off = "the part has free-form faces"
+            self.unrecognized.append(
+                {
+                    "faces": self.face_refs(free),
+                    "why": "%d free-form face(s) (B-spline, swept or offset surfaces): no "
+                    "extrude or revolve of lines and arcs makes them" % len(free),
+                }
+            )
+            self.listed.update(free)
+            self.notes.append(
+                "The part has %d free-form face(s) (listed in unrecognized): its base shape "
+                "is neither an extrude nor a revolve; build it yourself (look at render and "
+                "query_geometry), then follow the rest of the plan." % len(free)
+            )
+            base = {"public": {"kind": "none"}, "ops": [], "faces": [], "volume_error": 0.0}
+            self.base_shape = self.shape
+        else:
+            t = time.time()
+            removed = self.defeature(holes, chamfers, blends)
+            timing["defeaturing"] = time.time() - t
+            t = time.time()
+            self.base_shape = removed["base"]
+            base = self.find_base(removed["base"])
+            timing["base"] = time.time() - t
         t = time.time()
         plan = core.Plan(self.options.get("taken_ids") or ())
         features = []
@@ -554,7 +590,9 @@ class _Reader:
         explained.update(threaded)
         for f in features:
             f.pop("_faces", None)
-        missing = [f.index for f in self.facts if f.index not in explained]
+        missing = [
+            f.index for f in self.facts if f.index not in explained and f.index not in self.listed
+        ]
         if missing:
             self.unrecognized.append(
                 {
@@ -587,6 +625,21 @@ class _Reader:
             "Plan step %d does not pass the tool's check: %s" % (n, sentence)
             for n, sentence in core.check_plan(steps, catalog.validate)
         ]
+
+    def _free_form(self, groups):
+        """Faces no feature took that no extrude or revolve of lines and arcs makes
+        (B-spline, swept or offset surfaces; a flat B-spline is a tapered wall)."""
+        used = set()
+        for g in groups:
+            used.update(g["_faces"])
+        out = []
+        for f in self.facts:
+            if f.index in used or f.kind in ("plane", "cylinder", "cone", "sphere", "torus"):
+                continue
+            if _flat_normal(f.face) is not None:
+                continue
+            out.append(f.index)
+        return out
 
     # -- holes ----------------------------------------------------------------------------------
     def find_holes(self):
@@ -1002,6 +1055,8 @@ class _Reader:
         return out
 
     def _chamfer(self, f, taken):
+        if len(f.face.Wires) > 1 or len(f.face.Edges) > 12:
+            return None  # (a chamfer is a narrow strip: no openings, a few edges)
         lines = []
         for j in self.topo.neighbours(f.index):
             fj = self.facts[j]
@@ -1378,7 +1433,13 @@ class _Reader:
             except Exception as exc:
                 warn("recognize: revolve not read (%s)" % exc)
         if best is None and revolved is None:
-            best = self._best_prismatic(solid, True)
+            if self.late():
+                self.notes.append(
+                    "Time budget spent: the readings along an axis with features along the "
+                    "others (a keyway in a shaft) were not tried."
+                )
+            else:
+                best = self._best_prismatic(solid, True)
         if revolved is not None:
             chosen = revolved
         elif best is not None:
@@ -1916,6 +1977,8 @@ class _Reader:
         chamfers and fillets."""
         if not chamfers:
             return
+        if self._edges_skipped(chamfers, features):
+            return
         accepted = removed["accepted"]
         shape = self._defeature([g for g in accepted if g["kind"] in ("chamfer", "fillet")])
         by_size = {}
@@ -1965,6 +2028,30 @@ class _Reader:
                 item["_faces"] = list(c["_faces"])
                 features.append(item)
 
+    def _edges_skipped(self, groups, features):
+        """When the edges are not looked for (a free-form part, the time budget spent): the
+        chamfers / fillets listed without plan steps. True when so."""
+        if self.edges_off is None and self.late():
+            self.edges_off = "the time budget was spent"
+        if not self.edges_off:
+            return False
+        if not getattr(self, "_edges_noted", False):
+            self._edges_noted = True
+            self.notes.append(
+                "The chamfers' and fillets' edges were not looked for (%s): they are listed "
+                "without plan steps; pick their edges with query_geometry." % self.edges_off
+            )
+        for g in groups:
+            item = {"id": g["id"], "kind": g["kind"]}
+            for key in ("radius", "distance", "distance2"):
+                if key in g:
+                    item[key] = g[key]
+            item["faces"] = self.face_refs(g["_faces"])
+            item["steps"] = []
+            item["_faces"] = list(g["_faces"])
+            features.append(item)
+        return True
+
     def _first_face_is_a(self, shape, chamfer):
         """Whether SciForge's Chamfer measures distance 1 (the one on face A) for this
         chamfer: its sharp edge's first face on `shape` lies on face A."""
@@ -1984,6 +2071,8 @@ class _Reader:
         """One fillet step per radius (biggest first), each with its edges picked on the part
         as it will be then (the later fillets not made yet)."""
         if not blends:
+            return
+        if self._edges_skipped(blends, features):
             return
         by_radius = {}
         for b in blends:
@@ -2743,6 +2832,8 @@ def _prismatic(solid, axis_name, lenient=False):
     frame = core.PLANES[plane]
     sign = 1 if core.dot(frame["n"], core.AXES[axis_name]) > 0 else -1
     hs = sorted(sign * h for h in levels)  # heights along the plane's normal (XZ's is -Y)
+    if len(hs) - 1 > MAX_SLABS:
+        return None
     ranges = [sorted((sign * a, sign * b)) for a, b in ranges]
     box = solid.BoundBox
     if (
@@ -2794,6 +2885,8 @@ def _prismatic(solid, axis_name, lenient=False):
         if drafted(k):
             return None  # a drafted base with more on it: not read (yet)
         base_faces = _outline(base_faces)  # its openings lean: cuts of their own
+    else:
+        base_faces = _fill_copies(base_faces)  # copies of one opening: a cut and a pattern
     first = _op("base", base_faces, plane, lo, hi)
     if first is None:
         return None
@@ -2801,17 +2894,24 @@ def _prismatic(solid, axis_name, lenient=False):
     prism = _extrude_faces(base_faces, plane, lo, hi)
     extra = solid.cut(prism)
     missing = prism.cut(solid)
+    if len(extra.Solids) + len(missing.Solids) > MAX_PIECES:
+        return None
+    cache = {}  # (moved copies of one piece are read once)
     for piece_shape, operation in ((extra, "join"), (missing, "cut")):
         for piece in piece_shape.Solids:
             if piece.Volume < 1e-9:
                 continue
             got = None
-            for other in _piece_planes(piece, solid, plane):
+            for other in _piece_planes(piece, prism, plane):
                 if other == plane:
-                    got = _piece_ops(piece, plane, operation, hs[0], hs[-1], lo, solid)
+                    got = _piece_ops(
+                        piece, plane, operation, hs[0], hs[-1], lo, (solid, prism), cache
+                    )
                 else:  # a boss / cut along another axis (the holes in a channel's sides)
                     span = _span(solid, other)
-                    got = _piece_ops(piece, other, operation, span[0], span[1], None, solid)
+                    got = _piece_ops(
+                        piece, other, operation, span[0], span[1], None, (solid, prism), cache
+                    )
                 if got is not None:
                     break
             if got is None:
@@ -2824,17 +2924,23 @@ def _prismatic(solid, axis_name, lenient=False):
     return result
 
 
-def _piece_planes(piece, solid, plane):
+def _on_boundary(shape, face):
+    """A point inside the face lies on the shape's surface."""
+    p = face.valueAt(*_inner_uv(face))
+    return shape.isInside(p, 1e-6, True) and not shape.isInside(p, 1e-6, False)
+
+
+def _piece_planes(piece, region, plane):
     """The origin planes to read a boss / cut piece on, best first: the one its open sides
-    face when they all face one way (where a cut opens to the air or a boss meets the rest of
-    the part: not the part's own surface), then the base's plane, then the others."""
+    face when they all face one way (its faces on the base extrude's surface, `region`: where
+    a cut opens to the air or a boss meets the rest of the part), then the base's plane, then
+    the others."""
     order = [plane] + [p for p in ("XY", "XZ", "YZ") if p != plane]
     axes = set()
     try:
         for face in piece.Faces:
-            p = face.valueAt(*_inner_uv(face))
-            if solid.isInside(p, 1e-6, True) and not solid.isInside(p, 1e-6, False):
-                continue  # (on the part's surface: a wall or the floor)
+            if not _on_boundary(region, face):
+                continue  # (on the part's own surface: a wall or the floor)
             n = _flat_normal(face)
             axis = None if n is None else core.origin_axis(n)
             if axis is None:
@@ -3014,6 +3120,49 @@ def _covers(base_outline, faces):
         return False
 
 
+def _fill_copies(faces):
+    """The faces with the openings that are copies of one another filled (a plate's grid of
+    square holes): those become cuts of their own, which the plan repeats with a pattern.
+    Openings of a kind of their own stay in the base's sketch."""
+    import Part
+
+    def key(wire):
+        box = wire.BoundBox
+        return (
+            len(wire.Edges),
+            round(wire.Length, 4),
+            round(box.XLength, 4),
+            round(box.YLength, 4),
+            round(box.ZLength, 4),
+        )
+
+    def inner(f):
+        outer = f.OuterWire
+        return [w for w in f.Wires if not w.isSame(outer)]
+
+    counts = {}
+    for f in faces:
+        for w in inner(f):
+            counts[key(w)] = counts.get(key(w), 0) + 1
+    if not any(n >= 2 for n in counts.values()):
+        return faces
+    out = []
+    for f in faces:
+        openings = inner(f)
+        keep = [w for w in openings if counts.get(key(w), 0) < 2]
+        if len(keep) == len(openings):
+            out.append(f)
+            continue
+        try:
+            filled = Part.Face(f.OuterWire)
+            if keep:
+                filled = filled.cutHoles(keep)
+            out.append(filled if filled.isValid() else f)
+        except Exception:
+            out.append(f)
+    return out
+
+
 def _mostly_covers(base_outline, faces):
     """This level's region fills nearly all of the base's outline (a boss along another axis
     may stick out of it: a piece of its own)."""
@@ -3071,16 +3220,27 @@ def _op(kind, faces, plane, lo, hi):
     }
 
 
-def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None, solid=None):
+def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None, within=None, cache=None):
     """A boss or cut piece as one extrude per height band (consecutive equal regions
-    merged), or None when it is not prismatic along the plane's normal."""
+    merged), or None when it is not prismatic along the plane's normal. within: (the solid,
+    the base extrude) for a piece that opens onto a round face (_open_piece_op). cache: a
+    dict shared by the pieces of one reading; a moved copy of a piece read before (a grid of
+    square holes) takes that one's bands, moved."""
     n = core.PLANES[plane]["n"]
     axis_name = core.origin_axis(n)
+    key = None
+    if cache is not None:
+        bb = piece.BoundBox
+        key = (plane, operation, len(piece.Faces), round(piece.Volume, 6))
+        key += tuple(round(v, 6) for v in (bb.XLength, bb.YLength, bb.ZLength))
+        bands = _moved_bands(cache.get(key), piece, n)
+        if bands is not None:
+            return _band_ops(bands, plane, operation, part_lo, part_hi, base_lo)
     walls = _walls(piece, axis_name, allow_taper=True)
     if walls is None or len(walls[0]) < 2:
-        if solid is None:
+        if within is None:
             return None
-        return _open_piece_op(piece, solid, plane, operation, part_lo, part_hi)
+        return _open_piece_op(piece, within[0], within[1], plane, operation, part_lo, part_hi)
     levels, tapers = walls
     if tapers and _walls(piece, axis_name, allow_taper="pure") is None:
         return None  # some walls lean and some do not: no single draft makes it
@@ -3101,6 +3261,42 @@ def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None, solid=No
             bands[-1]["hi"] = hi
             continue
         bands.append({"lo": lo, "hi": hi, "faces": faces})
+    if key is not None:
+        cache[key] = (piece, bands)
+    return _band_ops(bands, plane, operation, part_lo, part_hi, base_lo)
+
+
+def _moved_bands(hit, piece, n):
+    """The bands of a piece read before (hit: (piece, bands)), moved onto this piece when it
+    is a moved copy of that one, else None."""
+    if hit is None:
+        return None
+    ref, ref_bands = hit
+    try:
+        shift = piece.BoundBox.Center.sub(ref.BoundBox.Center)
+        moved = sorted(_t(v.Point + shift) for v in ref.Vertexes)
+        here = sorted(_t(v.Point) for v in piece.Vertexes)
+        if len(moved) != len(here) or abs(ref.Area - piece.Area) > 1e-6 * max(1.0, ref.Area):
+            return None
+        if any(core.norm(core.sub(p, q)) > 1e-6 for p, q in zip(moved, here)):
+            return None  # (the same size, another shape)
+    except Exception:
+        return None
+    dn = core.dot(_t(shift), n)
+    out = []
+    for band in ref_bands:
+        faces = []
+        for f in band["faces"]:
+            g = f.copy()
+            g.translate(shift)
+            faces.append(g)
+        out.append({"lo": band["lo"] + dn, "hi": band["hi"] + dn, "faces": faces})
+    return out
+
+
+def _band_ops(bands, plane, operation, part_lo, part_hi, base_lo=None):
+    """The extrudes of a piece's bands (see _piece_ops), or None."""
+    bands = list(bands)
     base_lo = part_lo if base_lo is None else base_lo
     if operation == "join" and bands and bands[-1]["hi"] <= base_lo + 1e-6:
         bands.reverse()  # below the base: the band touching it first, so each one joins
@@ -3117,19 +3313,19 @@ def _piece_ops(piece, plane, operation, part_lo, part_hi, base_lo=None, solid=No
     return out
 
 
-def _open_piece_op(piece, solid, plane, operation, part_lo, part_hi):
+def _open_piece_op(piece, solid, region, plane, operation, part_lo, part_hi):
     """A cut that opens onto a round or slanted face of the part (a keyway or a flat on a
     shaft) or a boss standing on one (a port on a pipe): the piece's faces on the part's
     surface all run along the plane's normal, but for one flat end (a cut's floor, a boss's
     top). The extrude goes from that end out of the part (a cut) or into it down to where the
-    boss meets it: [op] when that takes or adds exactly the piece, else None."""
+    boss meets it: [op] when that takes or adds exactly the piece, else None. region: the
+    base extrude (the piece's faces on its surface are where it opens)."""
     n = core.PLANES[plane]["n"]
     d = core.AXES[core.origin_axis(n)]
     ends, open_ts = [], []
     try:
         for face in piece.Faces:
-            p = face.valueAt(*_inner_uv(face))
-            if not (solid.isInside(p, 1e-6, True) and not solid.isInside(p, 1e-6, False)):
+            if _on_boundary(region, face):
                 # where the cut opens to the air, or the boss meets the rest of the part
                 pts = [v.Point for v in face.Vertexes]
                 for e in face.Edges:
@@ -3254,17 +3450,30 @@ def _group_ops(ops, pattern_args=None):
 def _touching(a, b):
     """Two extrudes' sketch regions (on one plane at one height) meet at an edge or a
     point."""
-    import Part
-
     try:
-        ca, cb = Part.makeCompound(a["faces"]), Part.makeCompound(b["faces"])
-        ba, bb = ca.BoundBox, cb.BoundBox
-        ba.enlarge(1e-5)
+        ba, bb = _op_box(a), _op_box(b)
         if not ba.intersect(bb):
             return False  # (far apart: no distance to work out)
-        return ca.distToShape(cb)[0] < 1e-6
+        return _op_compound(a).distToShape(_op_compound(b))[0] < 1e-6
     except Exception:
         return True
+
+
+def _op_compound(op):
+    import Part
+
+    if op.get("_compound") is None:
+        op["_compound"] = Part.makeCompound(op["faces"])
+    return op["_compound"]
+
+
+def _op_box(op):
+    """The op's faces' box, a little larger (made once)."""
+    if op.get("_box") is None:
+        box = _op_compound(op).BoundBox
+        box.enlarge(1e-5)
+        op["_box"] = box
+    return op["_box"]
 
 
 def _ops_pattern(members, pattern_args):
@@ -3305,6 +3514,7 @@ def _build_ops(chosen):
     if chosen["public"]["kind"] == "revolve":
         return chosen["solid_check"]
     shape = None
+    joins, cuts = [], []  # (all at once: the bosses join before any cut, as in the plan)
     for op in chosen["ops"]:
         if op.get("solid") is not None:
             prism = op["solid"]
@@ -3313,9 +3523,13 @@ def _build_ops(chosen):
         if shape is None:
             shape = prism
         elif op["kind"] == "cut":
-            shape = shape.cut(prism)
+            cuts.append(prism)
         else:
-            shape = shape.fuse(prism)
+            joins.append(prism)
+    if joins:
+        shape = shape.fuse(joins)
+    if cuts:
+        shape = shape.cut(cuts)
     return shape
 
 
