@@ -76,8 +76,8 @@ Other parts (describe() alone, seconds, measured on this sandbox while other bui
 | Part | Faces | describe (s) | Where the time goes |
 |---|---|---|---|
 | plate with a 21 x 14 grid of holes (`bench_part_300`) | 300 | 1.5 to 3.7 | holes closed by their rims; one section |
-| VEX-like plate, 50 square cut-outs (`bench_vex_plate`) | 406 | about 6 | the base along Z; X and Y are skipped (many more levels than a 2-step reading) |
-| VEX-like C-channel, square holes in web and flanges | 70 | about 4 | three axes read, 10 cut pieces |
+| VEX-like plate, 50 square cut-outs (`bench_vex_plate`) | 206 | about 5.5 | the base along Z; X and Y are skipped (many more levels than a 2-step reading) |
+| VEX-like C-channel, square holes in web and flanges | 70 | about 4.4 | three axes read, 10 cut pieces |
 | Raspberry Pi 5 case, base (a real STEP file) | 62 | about 3.3 | |
 | 7 x 7 bosses with a fillet at foot and top | 202 | about 19 | OpenCASCADE's defeaturing of 98 fillet faces: 15 s |
 | forged lever `Schenkel.stp` (free-form) | 409 | about 1.9 | not defeatured: its base cannot be read |
@@ -92,7 +92,71 @@ interrupted: a 434-face connector with 26 chamfers and fillets spends about 40 s
 
 ### Benchmark
 
-(filled in from the final run, see Tests)
+`SciForgeTests/headless/recognize_bench.py` (`run_tests.sh --only recognize`), the final run on this sandbox (times are wall-clock on 4 CPUs shared with five other builders). 61 parts: 61 pass, 0 fail. Each part: built, exported to STEP, imported as a body without a timeline, described, rebuilt from the plan through the headless AI executor, compared (volume within 0.1 %, every face matched; for the STEP files made by other programs, every surface: they split faces the rebuild keeps whole).
+
+| Part | Faces | Found | Plan steps | Volume | Faces matched | describe (s) | Total (s) | Result |
+|---|---|---|---|---|---|---|---|---|
+| box_basic | 6 | extrude | 2 | +0.0000 % | 6 / 6 | 0.126 | 0.752 | PASS |
+| cylinder_extrude | 3 | extrude | 2 | +0.0000 % | 3 / 3 | 0.035 | 0.162 | PASS |
+| hex_prism | 8 | extrude | 2 | -0.0000 % | 8 / 8 | 0.619 | 0.766 | PASS |
+| l_bracket_profile | 8 | extrude | 2 | +0.0000 % | 8 / 8 | 0.259 | 0.403 | PASS |
+| slot_extrude | 6 | extrude | 2 | +0.0000 % | 6 / 6 | 0.235 | 0.388 | PASS |
+| bracket_inner_fillet | 9 | extrude, fillet r3 | 3 | +0.0000 % | 9 / 9 | 0.3 | 0.571 | PASS |
+| fillet_top_edges | 10 | extrude, fillet r2 | 3 | +0.0000 % | 10 / 10 | 0.193 | 0.57 | PASS |
+| fillet_one_vertical_edge | 7 | extrude, fillet r5 | 3 | +0.0000 % | 7 / 7 | 0.376 | 0.65 | PASS |
+| fillet_all_edges | 26 | extrude, fillet r2 | 3 | +0.0000 % | 26 / 26 | 0.208 | 1.13 | PASS |
+| chamfer_top_edges | 10 | extrude, chamfer 2 | 3 | +0.0000 % | 10 / 10 | 0.349 | 0.765 | PASS |
+| chamfer_one_edge | 7 | extrude, chamfer 3 | 3 | +0.0000 % | 7 / 7 | 0.257 | 0.458 | PASS |
+| blend_chamfer_top_face | 10 | extrude, chamfer 2 | 3 | +0.0000 % | 10 / 10 | 0.169 | 0.51 | PASS |
+| plate_through_hole_cut | 7 | extrude, 1 hole | 4 | +0.0000 % | 7 / 7 | 0.227 | 0.509 | PASS |
+| pattern_rect_hole_grid_fusion | 12 | extrude, 6 holes, 1 pattern | 5 | +0.0000 % | 12 / 12 | 0.221 | 0.617 | PASS |
+| flange_polar_holes | 9 | extrude, 6 holes, 1 pattern | 5 | +0.0000 % | 9 / 9 | 0.055 | 0.416 | PASS |
+| hole_blind | 8 | extrude, 1 hole | 4 | +0.0000 % | 8 / 8 | 0.1 | 0.422 | PASS |
+| hole_counterbore | 9 | extrude, 1 hole | 4 | +0.0000 % | 9 / 9 | 0.306 | 0.715 | PASS |
+| hole_countersink | 8 | extrude, 1 hole | 4 | +0.0000 % | 8 / 8 | 0.172 | 0.619 | PASS |
+| hole_single_angled | 8 | extrude, 1 hole | 4 | -0.0000 % | 8 / 8 | 0.263 | 0.533 | PASS |
+| pocket_depth | 11 | extrude | 4 | +0.0000 % | 11 / 11 | 0.43 | 0.709 | PASS |
+| symmetric_cut_slot | 10 | extrude | 2 | +0.0000 % | 10 / 10 | 0.31 | 0.643 | PASS |
+| sf_cylinder_boss | 8 | extrude | 4 | -0.0000 % | 8 / 8 | 0.09 | 0.255 | PASS |
+| mirror_boss | 10 | extrude, 1 pattern | 5 | +0.0000 % | 10 / 10 | 0.112 | 0.432 | PASS |
+| pattern_rect_symmetric_bosses | 36 | extrude, 1 pattern | 5 | +0.0000 % | 36 / 36 | 0.796 | 1.523 | PASS |
+| shell_open_box | 11 | extrude | 3 | +0.0000 % | 11 / 11 | 0.405 | 0.681 | PASS |
+| shell_filleted_box | 19 | extrude | 3 | -0.0000 % | 19 / 19 | 0.755 | 1.365 | PASS |
+| revolve_washer | 4 | extrude, 1 hole | 4 | +0.0000 % | 4 / 4 | 0.062 | 0.193 | PASS |
+| groove_ring | 7 | extrude | 4 | +0.0000 % | 7 / 7 | 0.115 | 0.365 | PASS |
+| sf_revolve_cone | 2 | revolve | 2 | +0.0000 % | 2 / 2 | 0.038 | 0.319 | PASS |
+| bench_stepped_shaft | 7 | revolve | 2 | -0.0000 % | 7 / 7 | 0.292 | 0.477 | PASS |
+| bench_knob | 6 | revolve, 1 hole | 4 | +0.0000 % | 6 / 6 | 0.125 | 0.361 | PASS |
+| bench_bracket_holes | 12 | extrude, 3 holes, 1 pattern, fillet r3 | 8 | +0.0000 % | 12 / 12 | 0.511 | 1.334 | PASS |
+| bench_mount_plate | 18 | extrude, 4 holes, 1 pattern, fillet r6 | 6 | +0.0000 % | 18 / 18 | 1.748 | 2.747 | PASS |
+| extrude_taper_cut | 11 | extrude | 4 | +0.0000 % | 11 / 11 | 0.816 | 1.293 | PASS |
+| extrude_taper_join_all | 11 | extrude | 4 | +0.0000 % | 11 / 11 | 0.817 | 1.58 | PASS |
+| sf_draft_four_sides | 6 | extrude | 2 | -0.0000 % | 6 / 6 | 0.085 | 0.374 | PASS |
+| bench_turned_bracket | 12 | extrude, 3 holes, 1 pattern, fillet r3 | 9 | -0.0000 % | 12 / 12 | 0.513 | 1.4 | PASS |
+| bench_shaft_cross_hole | 4 | extrude, 1 hole | 4 | -0.0001 % | 4 / 4 | 0.166 | 0.665 | PASS |
+| bench_vex_channel | 70 | extrude, 2 patterns | 8 | -0.0000 % | 70 / 70 | 4.36 | 6.915 | PASS |
+| bench_side_boss | 9 | extrude | 4 | +0.0000 % | 9 / 9 | 0.185 | 0.583 | PASS |
+| bench_keyed_shaft | 10 | extrude | 6 | -0.0000 % | 10 / 10 | 1.104 | 1.793 | PASS |
+| bench_pipe_port | 7 | extrude, 2 holes | 8 | +0.0005 % | 7 / 7 | 1.244 | 2.228 | PASS |
+| bench_clevis | 11 | extrude, 1 hole | 4 | +0.0000 % | 11 / 11 | 0.384 | 0.626 | PASS |
+| bench_opposed_holes | 10 | extrude, 2 holes | 6 | +0.0000 % | 10 / 10 | 0.132 | 0.358 | PASS |
+| bench_vex_plate | 206 | extrude, 1 pattern | 5 | +0.0000 % | 206 / 206 | 5.466 | 53.855 | PASS |
+| bench_vex_angle | 50 | extrude, 2 patterns | 8 | -0.0000 % | 50 / 50 | 1.345 | 2.692 | PASS |
+| bench_shaft_collar | 5 | extrude, 2 holes | 6 | +0.0002 % | 5 / 5 | 0.202 | 0.915 | PASS |
+| bench_chamfered_boss | 9 | extrude, chamfer 1 | 5 | +0.0000 % | 9 / 9 | 0.121 | 0.399 | PASS |
+| bench_chamfered_shaft | 5 | extrude, chamfer 1.5 | 3 | +0.0000 % | 5 / 5 | 0.086 | 0.192 | PASS |
+| bench_offset_flange | 9 | extrude, 6 holes, 1 pattern | 7 | +0.0000 % | 9 / 9 | 0.092 | 0.54 | PASS |
+| bench_part_300 | 300 | extrude, 294 holes, 1 pattern | 5 | +0.0000 % | 300 / 300 | 2.062 | 19.176 | PASS |
+| contract and odd shapes |  | None |  |  |  |  | 0.34 | PASS |
+| pi5_case.step #0 | 62 | extrude, 4 holes, 1 pattern | 19 | -0.0000 % | 62 / 62 (surfaces all) | 3.283 | 8.025 | PASS |
+| pi5_case.step #1 | 56 | extrude, fillet r1 | 5 | +0.0000 % | 56 / 56 (surfaces all) | 2.5 | 4.307 | PASS |
+| as1-ac-214.stp #0 | 18 | extrude, 6 holes | 4 | +0.0000 % | 6 / 18 (surfaces all) | 0.226 | 1.003 | PASS |
+| EPL22_6_16.stp #0 | 36 | extrude, 1 pattern, fillet r1, chamfer 0.443784/1 | 8 | -0.0000 % | 36 / 36 (surfaces all) | 3.11 | 4.439 | PASS |
+| plate_through_hole_cut (mesh) | 7 | extrude, 1 hole | 4 | +0.0000 % | 7 / 7 | 0.435 | 0.606 | PASS |
+| flange_polar_holes (mesh) | 9 | extrude, 6 holes, 1 pattern | 5 | +0.0000 % | 9 / 9 | 4.264 | 4.633 | PASS |
+| l_bracket_profile (mesh) | 8 | extrude | 2 | +0.0000 % | 8 / 8 | 0.283 | 0.362 | PASS |
+| bench_knob (mesh) | 6 | revolve, 1 hole | 4 | +0.0000 % | 6 / 6 | 3.567 | 3.839 | PASS |
+| bench_mount_plate (mesh) | 18 | extrude, 4 holes, 1 pattern, fillet r6 | 6 | +0.0000 % | 18 / 18 | 3.763 | 4.68 | PASS |
 
 ### Real files from other programs
 
