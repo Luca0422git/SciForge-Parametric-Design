@@ -183,6 +183,52 @@ EXTRA_MODELS = {
             },
         ],
     },
+    "bench_shaft_cross_hole": {
+        "title": "Shaft d20 x 50 along Z with a d4 hole across it (along X) at height 25",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"circle": [0, 0, 10]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 50},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "YZ",
+                "offset": 15,
+                "geometry": [{"circle": [0, 25, 2]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s2", "diameter": 4, "through_all": True},
+        ],
+    },
+    "bench_offset_flange": {
+        "title": "Flange d60 x 8 centred at (40, 30) with a d20 bore and 5 holes d6 on a d44 "
+        "circle around it (not around the origin)",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"circle": [40, 30, 30]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 8},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 8,
+                "geometry": [{"circle": [40, 30, 10]}],
+            },
+            {"op": "hole", "id": "h0", "sketch": "s2", "diameter": 20, "through_all": True},
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "XY",
+                "offset": 8,
+                "geometry": [{"circle": [62, 30, 3]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s3", "diameter": 6, "through_all": True},
+            {
+                "op": "circular_pattern",
+                "id": "p1",
+                "features": ["h1"],
+                "axis": {"face": {"type": "cylinder", "radius": 10, "count": 1}},
+                "quantity": 5,
+            },
+        ],
+    },
     "bench_turned_bracket": {
         "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
         "placed in an assembly)",
@@ -263,6 +309,8 @@ BENCH = [
     ("extrude_taper_join_all", {"base": "extrude", "holes": []}),
     ("sf_draft_four_sides", {"base": "extrude", "holes": []}),
     ("bench_turned_bracket", {"base": "extrude", "holes": [5, 5, 6], "fillets": [3]}),
+    ("bench_shaft_cross_hole", {"base": "extrude", "holes": [4]}),
+    ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
 MESH_BENCH = [

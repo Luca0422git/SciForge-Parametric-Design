@@ -1275,7 +1275,9 @@ class _Reader:
         if public["kind"] == "revolve":
             sketch = plan.add(
                 "create_sketch",
-                core.sketch_args(public["plane"], 0.0, public.pop("geometry")),
+                core.sketch_args(
+                    public["plane"], 0.0, core.name_items(public.pop("geometry"), "profile")
+                ),
                 "The half profile of the turned part (%s), on the %s plane, on one side of the "
                 "%s axis." % (public["profile_words"], public["plane"], public["axis"]),
             )
@@ -1310,8 +1312,10 @@ class _Reader:
                     plane,
                     where,
                 )
+            prefix = "base" if first else ("pocket" if kind == "cut" else "boss")
+            geometry = core.name_items(op["geometry"], prefix)
             sketch = plan.add(
-                "create_sketch", core.sketch_args(plane, offset, op["geometry"]), why_sketch
+                "create_sketch", core.sketch_args(plane, offset, geometry), why_sketch
             )
             args = {"profile": sketch}
             args.update(op["extrude"])
@@ -1512,7 +1516,7 @@ class _Reader:
             drawn = ordered[:1] if pattern_step else ordered
             group = [by_point[p] for p in ordered]
             r = h0["diameter"] / 2.0
-            geometry = [{"circle": [x, y, r]} for x, y in drawn]
+            geometry = core.name_items([{"circle": [x, y, r]} for x, y in drawn], "hole")
             words = self._hole_words(h0)
             sketch = plan.add(
                 "create_sketch",

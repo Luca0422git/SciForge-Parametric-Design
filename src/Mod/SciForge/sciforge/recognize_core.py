@@ -1107,3 +1107,18 @@ def rotation_xyz(rx, ry, rz):
         [cb * sc, sa * sb * sc + ca * cc, ca * sb * sc - sa * cc],
         [-sb, sa * cb, ca * cb],
     ]
+
+
+def name_items(items, prefix):
+    """Name the rectangles and circles of a sketch's geometry so their dimensions read as a
+    person would name them (base.width, hole.x, boss2.diameter): the first gets the prefix,
+    the next ones prefix2, prefix3..."""
+    out = []
+    k = 0
+    for item in items:
+        item = dict(item)
+        if any(key in item for key in ("rect", "circle", "center_rect")) and "name" not in item:
+            k += 1
+            item["name"] = prefix if k == 1 else "%s%d" % (prefix, k)
+        out.append(item)
+    return out
