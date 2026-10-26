@@ -142,6 +142,7 @@ G = guess (the SciForge choice when the sources are silent).
 | `sim_setup_canvas` | the right-click marking menu in SIMULATION (the setup's commands, none of the design's; Structural Loads from the ring; Repeat Structural Loads), Delete and E on a face picked in the view change nothing, the design's ring and keys back in DESIGN |
 | `sim_setup_lost` | a design change takes a load's face away: its row marked with the reason, pre-check red, Load Case Attributes "Lost its faces"; Edit Load says the face is gone, a new pick, OK: fine again |
 | `sim_setup_more` | Frictionless on a side face, Force Per Entity on two faces, Moment about a typed axis (Vector), gravity along a typed vector, Local Mesh Control edited from the browser + undo |
+| `sim_setup_two` | two bodies 0.5 mm apart: no contact at 0.1 mm, bonded with the tolerance typed as 1 mm (kept), DOF View: held through the contact, Clone Study with Aluminium for one body, "Solve 2 Studies": both solved, each body in its study's material |
 | `sim_setup_units` | Document Settings > Units: Inch from the SIMULATION browser; a force typed as 50 (lbf) kept as 222.4 N, the browser and Load Case Attributes in lbf, Edit + OK changes nothing, psi, inches for Local Mesh Control, the mesh size and the contact tolerance (0.1 mm kept exactly); back to Millimeter |
 
 ### Known gaps
