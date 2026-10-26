@@ -227,8 +227,8 @@ def h_check_clone():
     clone = s.active_study()
     h.check("the clone is active", clone is not None and clone.Label == "Study 2 - Static Stress")
     if clone is not None:
-        labels = sorted(i.Label for i in s.sim().items(clone))
-        h.check("with copies of the items", labels == ["Fixed 1", "Force 1"], labels)
+        kinds = sorted(s.sim().item_data(i)["kind"] for i in s.sim().items(clone))
+        h.check("with copies of the items", kinds == ["fixed", "force"], kinds)
         h.check(
             "its own objects",
             not set(i.Name for i in s.sim().items(clone))

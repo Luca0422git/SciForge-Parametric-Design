@@ -17,7 +17,7 @@ import FreeCADGui as Gui
 from . import bodies, commands, hole_common, log, pickpanel, warn
 from . import simulation_core as core
 from . import simulation_setup_core as score
-from .compat import QtWidgets
+from .compat import QtCore, QtWidgets
 
 ERROR_STYLE = "color: #ff8a80;"
 HINT_STYLE = "color: #b8c4d0;"
@@ -131,6 +131,42 @@ def _toggle(name, text, on, tip=""):
     return button
 
 
+TITLES = {
+    "constraint": "Structural Constraints",
+    "load": "Structural Loads",
+    "mesh": "Local Mesh Control",
+}
+ICONS = {"constraint": "sim_constraints", "load": "sim_loads", "mesh": "sim_local_mesh"}
+
+
+def _table(category):
+    tables = getattr(core, "TABLES", None) or {"constraint": core.CONSTRAINTS, "load": core.LOADS}
+    return tables[category]
+
+
+def _global_size(study):
+    """The study's average element size (mm), as its next mesh will use it."""
+    try:
+        sim = _sim()
+        box = None
+        for body in sim.study_bodies(study):
+            b = bodies.global_shape(body, copy=False).BoundBox
+            if box is None:
+                box = b
+            else:
+                box.add(b)
+        if box is None:
+            return 1.0
+        mesh = sim.settings(study)["mesh"]
+        bbox = (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)
+        try:
+            return core.element_size(bbox, mesh["size_pct"], mesh.get("size_mm", 0.0))
+        except TypeError:
+            return core.element_size(bbox, mesh["size_pct"])
+    except Exception:
+        return 1.0
+
+
 TOGGLE_TEXT = {
     "x": ("Ux", "Hold the movement along X"),
     "y": ("Uy", "Hold the movement along Y"),
@@ -140,8 +176,8 @@ TOGGLE_TEXT = {
     "tangential": ("Tangential", "No turning about the axis (off: the part may turn)"),
 }
 KIND_NOTES = {
-    "frictionless": "The faces cannot move through themselves; they may slide along their own "
-    "plane (a support without friction).",
+    "frictionless": "The faces cannot move through themselves; they may slide along them (a "
+    "support without friction, a symmetry plane).",
     "pin": "Round faces only. Fusion's default holds Radial and Axial and lets the part turn "
     "(Tangential off).",
     "fixed": "Faces, edges or corners. Untick directions to let it slide that way (a roller).",
@@ -151,6 +187,8 @@ KIND_NOTES = {
     "moment": "Turns the picked faces about the axis (right-hand rule).",
     "bearing": "Pushes on the round face like a shaft in a hole, only on the side it presses.",
     "remote_force": "A force acting at a point away from the model, carried to the faces.",
+    "local": "Smaller (or larger) elements on the picked faces, edges or bodies, blending into "
+    "the study's size. The mesh is made again by Generate Mesh or the next solve.",
 }
 
 
@@ -161,8 +199,8 @@ class ItemPanel(pickpanel.PickPanel):
     last = None
 
     def __init__(self, doc, study, category, item=None, kind=None, initial=()):
-        self.title = "Structural Constraints" if category == "constraint" else "Structural Loads"
-        self.icon = "sim_constraints" if category == "constraint" else "sim_loads"
+        self.title = TITLES.get(category, "Structural Loads")
+        self.icon = ICONS.get(category, "sim_loads")
         transaction = ("Edit %s" % item.Label) if item is not None else self.title
         super().__init__(doc, transaction)
         ItemPanel.last = self
@@ -172,16 +210,20 @@ class ItemPanel(pickpanel.PickPanel):
         self.item = item
         self.editing = item is not None
         self.made = None
-        table = core.CONSTRAINTS if category == "constraint" else core.LOADS
+        table = _table(category)
+        self.whole = False  # Local Mesh Control's Body Selection: a click picks the body
         if item is not None:
             data = sim.item_data(item)
             self.kind = data["kind"]
             self.opts = core.options(category, self.kind, data["options"])
-            self.picks = [(o, s) for o, s in sim._picks(item.References) if s]
+            self.picks = [(o, s) for o, s in sim._picks(item.References)]
+            self.whole = any(not sub for _o, sub in self.picks)
         else:
             built = [k for k, info in table.items() if info.get("built")]
             self.kind = kind if kind in table and table[kind].get("built") else built[0]
             self.opts = core.options(category, self.kind)
+            if category == "mesh":
+                self.opts["size"] = round(_global_size(study), 3)
             self.picks = []
         self.study_names = {b.Name for b in sim.study_bodies(study)}
         self.form.setObjectName("SciForgeSimItemPanel")
@@ -202,6 +244,14 @@ class ItemPanel(pickpanel.PickPanel):
         self.select.button.setObjectName("SciForgeSimItemSelect")
         self.select.clear.setObjectName("SciForgeSimItemClear")
         self.layout.addRow("Targets", self.select.widget)
+        if "bodies" in self.info()["targets"]:
+            self.body_mode = QtWidgets.QPushButton("Body Selection")
+            self.body_mode.setObjectName("SciForgeSim_body_selection")
+            self.body_mode.setCheckable(True)
+            self.body_mode.setChecked(self.whole)
+            self.body_mode.setToolTip("On: a click picks a whole body; off: faces and edges")
+            self.body_mode.toggled.connect(self._body_mode)
+            self.layout.addRow(self.body_mode)
         self.options_box = QtWidgets.QWidget()
         self.options_layout = QtWidgets.QFormLayout(self.options_box)
         self.options_layout.setContentsMargins(0, 0, 0, 0)
@@ -240,6 +290,8 @@ class ItemPanel(pickpanel.PickPanel):
         body = bodies.body_of(obj)
         if body is None or body.Name not in self.study_names:
             return False
+        if self.whole:
+            return True  # Body Selection: any element stands for its body
         kind = element_kind(short)
         info = self.info()
         if kind is None or kind not in info["targets"]:
@@ -250,17 +302,35 @@ class ItemPanel(pickpanel.PickPanel):
                 return False
         return True
 
+    def _pick_of(self, obj, short):
+        if self.whole:
+            body = bodies.body_of(obj)
+            return (body, "") if body is not None else None
+        return body_pick(obj, short)
+
+    def _body_mode(self, on):
+        try:
+            self.whole = bool(on)
+            self.picks = [p for p in self.picks if bool(p[1]) != self.whole]
+            self._sync()
+            self._update_text()
+            self.schedule()
+        except Exception as exc:
+            warn("%s: %s" % (self.title, exc))
+
     def picks_changed(self, added, dropped):
         changed = False
         for obj, short, _point in dropped:
-            found = body_pick(obj, short)
+            if self.whole and short:
+                continue  # (a face's selection put back by the sync: not the body's pick)
+            found = self._pick_of(obj, short)
             if found is not None and found in self.picks:
                 self.picks.remove(found)
                 changed = True
         for obj, short, _point in added:
             if not self.allow(obj, short):
                 continue
-            found = body_pick(obj, short)
+            found = self._pick_of(obj, short)
             if found is None:
                 continue
             if found in self.picks:
@@ -277,6 +347,10 @@ class ItemPanel(pickpanel.PickPanel):
         order = []
         for body, sub in self.picks:
             if not bodies.alive(body):
+                continue
+            if not sub:
+                grouped[body.Name] = (body, [])
+                order.append(body.Name)
                 continue
             target = getattr(body, "Tip", None) or body
             if target.Name not in grouped:
@@ -300,12 +374,12 @@ class ItemPanel(pickpanel.PickPanel):
     def _update_text(self):
         counts = {}
         for _body, sub in self.picks:
-            kind = element_kind(sub) or "faces"
+            kind = element_kind(sub) or ("bodies" if not sub else "faces")
             counts[kind] = counts.get(kind, 0) + 1
         if not counts:
             self.select.set_text(None)
         else:
-            words = {"faces": "face", "edges": "edge", "vertices": "corner"}
+            words = {"faces": "face", "edges": "edge", "vertices": "corner", "bodies": "body"}
             self.select.set_text(
                 ", ".join(
                     "%d %s%s" % (n, words[k], "" if n == 1 else "s") for k, n in counts.items()
@@ -383,6 +457,27 @@ class ItemPanel(pickpanel.PickPanel):
                     row.addWidget(button)
                     self.fields[key] = button
                 form.addRow("Directions" if kind == "fixed" else "Hold", holder)
+        elif self.category == "mesh":
+            size = float(opts.get("size", 1.0))
+            self.global_size = max(_global_size(self.study), 0.05)
+            slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+            slider.setObjectName("SciForgeSim_size_slider")
+            slider.setRange(1, 20)
+            slider.setValue(max(1, min(20, int(round(20.0 * size / self.global_size)))))
+            slider.setToolTip("Fine (left) to Coarse (right): the share of the study's size")
+            field = _number_field("size", size, "length", "The element size on the picks")
+            slider.valueChanged.connect(lambda v, f=field: self._slider_moved(v, f))
+            field.editingFinished.connect(self._value_typed)
+            holder = QtWidgets.QWidget()
+            row = QtWidgets.QHBoxLayout(holder)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.addWidget(QtWidgets.QLabel("Fine"))
+            row.addWidget(slider, 1)
+            row.addWidget(QtWidgets.QLabel("Coarse"))
+            form.addRow(holder)
+            form.addRow("Length", field)
+            self.fields["size"] = field
+            self.fields["size_slider"] = slider
         else:
             if "direction" in opts:
                 box = QtWidgets.QComboBox()
@@ -456,6 +551,14 @@ class ItemPanel(pickpanel.PickPanel):
             form.addRow(label)
         self._update_text()
 
+    def _slider_moved(self, value, field):
+        try:
+            size = self.global_size * value / 20.0
+            field.setText(score.format_quantity(round(size, 3), "length"))
+            self.schedule()
+        except Exception as exc:
+            warn("%s: %s" % (self.title, exc))
+
     def _direction_changed(self, *_a):
         try:
             opts, _problem = self.read_options(lenient=True)
@@ -508,6 +611,8 @@ class ItemPanel(pickpanel.PickPanel):
                 opts["flip"] = bool(self.fields["flip"].isChecked())
             if "per_entity" in self.fields:
                 opts["per_entity"] = bool(self.fields["per_entity"].isChecked())
+            if "size" in self.fields:
+                opts["size"] = score.parse_quantity(self.fields["size"].text(), "length")
         except core.SimulationError as exc:
             if lenient:
                 return opts, str(exc)
@@ -530,7 +635,7 @@ class ItemPanel(pickpanel.PickPanel):
             self.say(" ".join(problems), error=True)
         elif not self.picks:
             words = " / ".join(
-                {"faces": "faces", "edges": "edges", "vertices": "corners"}[t]
+                {"faces": "faces", "edges": "edges", "vertices": "corners", "bodies": "bodies"}[t]
                 for t in self.info()["targets"]
             )
             self.say("Click the %s to put the %s on." % (words, self.info()["title"]))
@@ -828,26 +933,13 @@ def open_gravity(study):
 
 
 # -- Local Mesh Control -------------------------------------------------------------------------
-def local_mesh_api():
-    """The engine's local mesh functions (builder sim-core), or None while it has none."""
-    sim = _sim()
-    for name in ("add_mesh_control", "add_local_mesh", "add_mesh_region"):
-        fn = getattr(sim, name, None)
-        if fn is not None:
-            return fn
-    return None
-
-
-def open_local_mesh(study):
-    if local_mesh_api() is None:
+def open_local_mesh(study, item=None):
+    """Fusion's Local Mesh Control (research 3.7): smaller elements on picked faces, edges or
+    whole bodies (one size per control), blending into the study's size."""
+    if "mesh" not in getattr(core, "TABLES", {}):
         commands.tell(
             "Local Mesh Control is not in SciForge yet: make the Average Element Size smaller "
             "in Settings > Mesh."
         )
         return None
-    from . import simulation_dialogs
-
-    if not commands.finish_open_dialog() or simulation_dialogs._busy(study):
-        return None
-    commands.tell("Local Mesh Control: pick faces or edges, then OK.")
-    return None
+    return open_item(study, "mesh", item=item, kind="local")
