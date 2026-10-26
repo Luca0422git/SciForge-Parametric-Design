@@ -59,7 +59,7 @@ Lowest safety factor 1.27 at (6.121, 26.13, 10) mm on Body1: below 2.
  "out_of_date": false,
  "verdict": "Lowest safety factor 1.27 at (6.121, 26.13, 10) mm on Body1: below 2.",
  "safety": {
-  "lowest": 1.2682905880492756,
+  "lowest": 1.2682905880492759,
   "at": [
    6.121,
    26.1309,
@@ -72,7 +72,7 @@ Lowest safety factor 1.27 at (6.121, 26.13, 10) mm on Body1: below 2.
   "safety": {
    "title": "Safety Factor",
    "unit": "",
-   "min": 1.2682905880492756,
+   "min": 1.2682905880492759,
    "min_at": [
     6.121,
     26.1309,
@@ -94,7 +94,7 @@ Lowest safety factor 1.27 at (6.121, 26.13, 10) mm on Body1: below 2.
     26.5958,
     5.0118
    ],
-   "max": 163.21180804344,
+   "max": 163.21180804343996,
    "max_at": [
     6.121,
     26.1309,
@@ -121,7 +121,7 @@ Lowest safety factor 1.27 at (6.121, 26.13, 10) mm on Body1: below 2.
  "bodies": {
   "Body1": {
    "displacement_max": 0.21201575620458465,
-... (28 more lines)
+... (29 more lines)
 ```
 
 ## More argument examples
