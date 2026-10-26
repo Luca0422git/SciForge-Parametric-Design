@@ -141,3 +141,8 @@ sections Engine and Benchmarks.
   the general fuse's own history says which body each piece came from (exact and instant), and
   the model stage is two turns (pre-check, then the model). The same stack at the default mesh
   needs over 6 GB in CalculiX (stopped after 9 minutes): a big model is still big.
+- 21:20-21:40 integration check (nothing merged): `sf/sim-results` (which holds sim-ui's work
+  too) exported to a scratch folder with this branch's `simulation.py` / `simulation_core.py`
+  on top: the simulation unit tests (129) and eight of their GUI scenarios pass
+  (sim_setup_bracket 74, sim_setup_components 36, sim_setup_kinds 52, simres_cantilever 80,
+  simres_out_of_date 32, simres_reopen 21, simres_adaptive 16, simres_inspect 93 checks).
