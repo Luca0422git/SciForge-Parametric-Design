@@ -64,12 +64,16 @@ How it reads a solid (each stage can fail on its own without stopping the others
   3. fillets: round faces (cylinder, torus, sphere) tangent to their neighbours, constant
      radius; chamfers: narrow flat faces between two faces, equal distances;
   4. defeaturing (OpenCASCADE through FreeCAD, shape.defeaturing): the solid without those
-     features; a feature that cannot be taken off stays in the base and is said so;
+     features; a feature that cannot be taken off stays in the base and is said so (skipped
+     when free-form faces are left: no extrude or revolve makes them, so the base is "none");
   5. the base: prismatic along an origin axis (levels, a section per level: the base extrude
-     and the bosses / cuts on it) or turned about an origin axis (the half profile and a
-     revolve);
+     and the bosses / cuts on it, each read along the axis it opens on) or turned about an
+     origin axis (the half profile and a revolve);
   6. patterns of equal holes (grid, circle, row), the plan in Fusion's order, the fillet and
      chamfer edges as selectors on the part as it will be when the step runs.
+Past DESCRIBE_BUDGET seconds (an OpenCASCADE call cannot be stopped, so this is a soft limit)
+the optional work is skipped and said so in the notes: the readings along an axis with
+features along the others, and the chamfers' and fillets' edges.
 """
 
 import math
@@ -741,6 +745,8 @@ class _Reader:
         for side, t in (("low", t0), ("high", t1)):
             ends[side] = self._hole_end(idx, axis, origin, radius, t, side, bigger, faces)
         # the open end: where the hole starts
+        if "closed" in (ends["low"]["kind"], ends["high"]["kind"]):
+            return None  # an end the Hole tool cannot make
         opening = ("open", "counterbore", "countersink")
         opens = [s for s in ("high", "low") if ends[s]["kind"] in opening]
         if not opens:
@@ -895,7 +901,22 @@ class _Reader:
                         "depth": abs(outer["t_open"] - t),
                         "face": outer.get("face"),
                     }
+                if core.dot(fj.normal, axis) * sign < 0:
+                    # a floor with something in it (a smaller hole that is no hole, a spigot):
+                    # the Hole tool cannot make that end
+                    return {"kind": "closed", "t": t, "t_open": t, "face": j}
                 out = {"kind": "open", "t": t, "t_open": t, "face": j}
+            elif (
+                fj.kind == "torus"
+                and beyond
+                and fj.axis is not None
+                and core.parallel(fj.axis, axis, 1e-6)
+                and core.norm(core.sub(fj.point, origin)) < 1e-6
+                and abs(fj.radius - (radius - fj.minor)) < 1e-6
+            ):
+                # a rounded floor corner: the Hole tool makes no such floor (the bore stays
+                # in the base, read as a pocket with its round as a fillet)
+                return {"kind": "closed", "t": t, "t_open": t, "face": j}
             elif (
                 fj.kind == "torus"
                 and beyond
@@ -1405,9 +1426,25 @@ class _Reader:
         return chosen
 
     def _best_prismatic(self, solid, lenient):
-        """(score, reading) of the best extrude reading along X, Y or Z, or None."""
-        best = None
+        """(score, reading) of the best extrude reading along X, Y or Z, or None. The axes
+        with the fewest levels first; an axis with many more levels than a simple reading
+        already found (two steps at most, a quarter of the volume moved at most: a plate with
+        a grid of cut-outs) is not read: its reading would only cost time."""
+        order = []
         for axis in ("Z", "Y", "X"):
+            try:
+                walls = _walls(solid, axis, allow_taper=True, lenient=lenient)
+            except Exception:
+                walls = None
+            if walls is not None and len(walls[0]) >= 2:
+                order.append((len(walls[0]) - 1, ("Z", "Y", "X").index(axis), axis))
+        order.sort()
+        best = None
+        for slabs, _rank, axis in order:
+            if best is not None:
+                b_steps, b_moved, _ops, b_slabs, _a = best[0]
+                if b_steps <= 2 and b_moved <= 0.25 and slabs >= b_slabs + 5:
+                    continue
             try:
                 found = _prismatic(solid, axis, lenient)
             except Exception as exc:
@@ -2555,7 +2592,7 @@ def _flat_normal(face):
     """The normal of a free-form face that is in fact flat (SciForge's tapered extrude makes
     its walls as flat B-spline faces), or None."""
     try:
-        plane = face.findPlane(1e-7)
+        plane = face.findPlane(1e-6)  # (degree-1 spline walls: flat to 1e-6)
     except Exception:
         return None
     if plane is None:
@@ -2801,17 +2838,25 @@ def _prismatic(solid, axis_name, lenient=False):
     run = [i for i in range(len(slabs)) if covered[i]]
     lo, hi = slabs[run[0]]["lo"], slabs[run[-1]]["hi"]
     base_faces = slabs[k]["faces"]
+    drafted_base = None
     if tapers and _tapered(solid, plane, slabs[k]["lo"], slabs[k]["hi"], box):
-        if drafted(k):
-            return None  # a drafted base with more on it: not read (yet)
-        base_faces = _outline(base_faces)  # its openings lean: cuts of their own
+        if drafted(k):  # a drafted block with more on it (a molded box and its cavity)
+            drafted_base = _drafted_base(solid, plane, hs[0], hs[-1])
+            if drafted_base is None:
+                return None
+        else:
+            base_faces = _outline(base_faces)  # its openings lean: cuts of their own
     else:
         base_faces = _fill_copies(base_faces)  # copies of one opening: a cut and a pattern
-    first = _op("base", base_faces, plane, lo, hi)
-    if first is None:
-        return None
+    if drafted_base is not None:
+        first, prism = drafted_base
+        lo, hi = hs[0], hs[-1]
+    else:
+        first = _op("base", base_faces, plane, lo, hi)
+        if first is None:
+            return None
+        prism = _extrude_faces(base_faces, plane, lo, hi)
     ops = [first]
-    prism = _extrude_faces(base_faces, plane, lo, hi)
     extra = solid.cut(prism)
     missing = prism.cut(solid)
     if len(extra.Solids) + len(missing.Solids) > MAX_PIECES:
@@ -3038,6 +3083,67 @@ def _covers(base_outline, faces):
         return outside.Area <= 1e-6 * max(1.0, a_base)
     except Exception:
         return False
+
+
+def _drafted_base(solid, plane, lo, hi):
+    """(op, prism) of a block on a draft from lo to hi with more on it: the outline of its
+    flat face at lo extruded with the lean of the walls on that outline (as SciForge's taper
+    makes it: the outline offset at the far end, the two joined by straight lines), when its
+    far end meets the flat face at hi; else None."""
+    import Part
+
+    n = core.PLANES[plane]["n"]
+    bottom, top = _caps_at(solid, plane, lo), _caps_at(solid, plane, hi)
+    if len(bottom) != 1 or len(top) != 1:
+        return None
+    wire = bottom[0].OuterWire
+    angles = []
+    try:
+        for edge in wire.Edges:
+            for face in solid.ancestorsOfType(edge, Part.Face):
+                if face.isSame(bottom[0]):
+                    continue
+                normal = _flat_normal(face)
+                if normal is not None:
+                    angles.append(math.degrees(math.asin(min(1.0, abs(core.dot(normal, n))))))
+                elif _face_kind(face) == "cone":
+                    angles.append(math.degrees(abs(face.Surface.SemiAngle)))
+                else:
+                    return None
+    except Exception:
+        return None
+    if not angles or max(angles) - min(angles) > 1e-6 or angles[0] < 1e-6:
+        return None
+    try:
+        area_lo = Part.Face(wire).Area
+        area_hi = Part.Face(top[0].OuterWire).Area
+        taper = angles[0] if area_hi > area_lo else -angles[0]
+        prism = _tapered_prism(Part.Face(wire), n, hi - lo, taper)
+        cap = [f for f in prism.Faces if abs(core.dot(_t(f.CenterOfMass), n) - hi) < 1e-6]
+        if len(cap) != 1 or abs(cap[0].Area - area_hi) > 1e-6 * max(1.0, area_hi):
+            return None  # (its far end is not the face at hi)
+    except Exception:
+        return None
+    op = _op("base", [Part.Face(wire)], plane, lo, hi)
+    if op is None:
+        return None
+    op["offset"] = lo
+    op["extrude"] = {"distance": core.snap(hi - lo), "taper": core.snap(taper, 1e-7)}
+    op["taper"] = op["extrude"]["taper"]
+    op["solid"] = prism
+    return op, prism
+
+
+def _tapered_prism(face, n, length, taper):
+    """The face extruded `length` along n with the taper (degrees, positive widens): its
+    outline offset at the far end and joined to it by a ruled loft, as FreeCAD's extrusion
+    with a taper angle does (Part::ExtrusionHelper::makeDraft)."""
+    import Part
+
+    d = math.tan(math.radians(taper)) * length
+    far = face.makeOffset2D(d, 2, False, False, False)
+    far.translate(_vec(core.mul(n, length)))
+    return Part.makeLoft([face.OuterWire, far.Faces[0].OuterWire], True, True)
 
 
 def _fill_copies(faces):

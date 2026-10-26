@@ -66,7 +66,22 @@
   how a boss or cut piece's open side (where it meets the part, or the air) is found.
 - A `create_sketch` whose loops touch at a point (two regions sharing a corner) made a cut that
   took nothing off: such regions go in sketches of their own.
-- Some golden models (`sf_gear_*`) take minutes to build: the sweep skips them.
+- Some golden models (`sf_gear_*`, modelled `thread_*`) take minutes to build: the sweep skips
+  them.
+- Real STEP files from other programs (the repository's `data/tests/Step`, `Mod/Idf/Idflibs`,
+  the Pi 5 case) split a full bore in two half faces: the hole reader sums the halves; the
+  bench's face check (kind, area, centre) then fails although the rebuild is exact, so the
+  real-file sweep also compares surface by surface.
+- One FreeCAD run of the real-file sweep grew to 13.5 GB and was killed by the out-of-memory
+  killer (the machine has 16 GB for every builder): my scratch runners now set `ulimit -v 7000000`.
+- OpenCASCADE's defeaturing took 48 s for 26 chamfers / fillets on a 434-face connector
+  (`TSM_103_01_L_DV_A.stp`): a single call cannot be interrupted, so describe() keeps a time
+  budget (30 s) for what comes after, and skips defeaturing for parts with free-form faces (their
+  base cannot be read anyway: the forged lever `Schenkel.stp` went from 26 s to 1.6 s).
+- `core.snap` snapped an already snapped offset again (-3.459989 -> -3.45999: exactly 1e-6
+  away passed the `<= 1e-6` test), so a base ended 1e-6 before the boss on it started and the
+  boss became a body of its own. Snapping is now idempotent (a unit test).
+- `Part.ShapeUpgrade` in FreeCAD 1.1.4 has only `UnifySameDomain` (no `ShapeDivideClosed`).
 
 ## Tests
 
