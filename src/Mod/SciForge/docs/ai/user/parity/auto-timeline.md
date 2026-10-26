@@ -31,7 +31,7 @@ Each builder writes only its own sections (beta3-common.md).
 |---|---|
 | The reference | `start(doc, source)`: a body (or a step in it), or a mesh body made into a solid first with SciForge's own mesh-to-solid (Prismatic). A mesh that is not watertight, has edges shared by more than two triangles, or whose solid does not come out the mesh's size is refused with the reason and what to do (MESH tab > Repair). The solid is frozen (design coordinates) in an `App::FeaturePython` (SciForgeType `RebuildReference`, never a `Part::Feature`, so no export, inspect, joint or body code takes it for a part), hidden from the timeline (`SciForgeTimeline` false) and not in the browser. The original is hidden; a new empty body `<name> (rebuilt)` is made in the original's component with its placement, and made active. One undo step; undo shows the original again (an undo / redo watcher, since FreeCAD does not record what is shown). The same body is not started twice (its message is offered again). A reference whose rebuilt body was deleted gets a new one when started again. |
 | The picture | the reference's own view provider draws it faint blue-grey and see-through (Coin nodes only, unpickable, pushed behind faces lying on it, so the rebuild shows clean where it matches); nothing in the document changes for it. Saved with the design and drawn again on reopen. |
-| Compare | `compare(ref, target=None)`: both solids in the rebuilt body's frame; the faces matched first (when every face of each part lies on a face of the other and the volumes agree, it is the same solid: no boolean, `method` "faces"); else one General Fuse splits them by each other; every piece is put inside / outside each solid from the orientation of its faces (a face of a piece lies on a face of one solid; facing the same way, it is inside), a point test only when that says nothing; slivers below 1e-7 of the volume are rounding; the pieces must add up to both volumes (else a fuzzy General Fuse, else the volumes sampled on a grid, said in `note`). `match` = common / union. |
+| Compare | `compare(ref, target=None)`: both solids in the rebuilt body's frame; the faces matched first (when every face of each part lies on a face of the other and the volumes agree, it is the same solid: no boolean, `method` "faces"); else one General Fuse splits them by each other; every piece is put inside / outside each solid from the orientation of its faces (a face of a piece lies on a face of one solid; facing the same way, it is inside), a point test only when that says nothing; slivers below 1e-7 of the volume are rounding; the pieces must add up to both volumes (else a fuzzy General Fuse, else the volumes measured along 4096 rays through both parts' triangles, about 1 % exact, said in `note` and in the verdict). `match` = common / union. |
 | Regions | each region of missing / extra material (touching pieces merged) with volume, centre, box, kind and numbers: a round hole (extra material shaped like a cylinder; counterbores as stepped), a boss, a rounded edge (the corner strip of radius r: r^2 (1 - pi/4) per mm), a chamfer (a triangle strip), a block, a layer (a thin slab: "too tall"), else its size. `fix` when SciForge is sure: a Single Hole call on the flat face the hole starts on (through_all when it comes out the other side), a fillet / chamfer of exactly the rebuild's sharp edges in the strip (stable selectors); `groups` puts equal regions together in Fusion's order (big base differences first, fillets last) with one call for a group of fillets / chamfers. |
 | Faces | matched by geometry: same kind and surface (plane: normal and offset; cylinder: axis line, radius, inside / outside; sphere; cone; torus) within 0.001 mm, facing the same way, and covering each other (every sample point of one lies on the other; the same face with the same area and box needs no sampling). A reference from a mesh: a facet is matched when its points lie within the mesh's tolerance (0.2 % of its size, 0.02 to 0.5 mm) of the rebuild's faces and the other way round. Unmatched faces are listed with words ("a round hole face 6 mm across along Z at (10, 30)") and a selector. |
 | Deviation | sample points of the unmatched faces, their exact distance to the other solid (the faces' boxes first); matched faces count 0; max and an area-weighted mean. |
@@ -88,7 +88,7 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
   six parts built, exported (STEP; STL for the meshed plate), imported without a timeline and
   rebuilt only through the tools (start_rebuild, describe_reference, every plan step,
   compare_to_reference and its fixes, finish_rebuild), then the timeline checked, check_design,
-  and one early value edited (66 checks):
+  and one early value edited; plus compare's fallback (68 checks):
 
   | Part | Plan steps | Fix rounds | Match | Faces | Timeline after finish |
   |---|---|---|---|---|---|
@@ -111,9 +111,9 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
   (39: a broken mesh refused in a window, a mesh rebuilt, Compare and Esc, save / close /
   reopen with the reference), `rebuild_chat` (20: SciForge's own chat with a fake local model
   that reads only SciForge's answers rebuilds the plate, from the right-click to Finish).
-- Unit tests `test_rebuild_core.py` (20: regions, groups, the verdict for an AI and for a
-  person, faces in words, the message); the docs runner runs the recipe, the troubleshooting
-  block and the tools' examples.
+- Unit tests `test_rebuild_core.py` (21: regions, groups, the verdict for an AI and for a
+  person, sampled volumes, faces in words, the message); the docs runner runs the recipe,
+  the troubleshooting block and the tools' examples.
 
 ### Known gaps (at-tools)
 

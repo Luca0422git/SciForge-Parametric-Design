@@ -654,7 +654,28 @@ def verdict(result, limit=3):
                 "s" if len(groups) - limit > 1 else "",
             )
         )
-    if not groups and total - matched > 0:
+    sampled = result.get("method") == "sampled"
+    if not groups and sampled:
+        volume = result.get("volume") or {}
+        first = (faces.get("unmatched_reference") or faces.get("unmatched_rebuilt") or [])[:2]
+        todo.append(
+            "The differences could not be listed (OpenCASCADE could not split the two parts, so "
+            "the volumes were sampled): about %s mm3 of the original is missing and about %s mm3 "
+            "is extra%s."
+            % (
+                about(volume.get("missing", 0.0)),
+                about(volume.get("extra", 0.0)),
+                (
+                    (
+                        "; the faces not matched yet show where: "
+                        + "; ".join(f.get("describe", "") for f in first)
+                    )
+                    if first
+                    else ""
+                ),
+            )
+        )
+    if not groups and not sampled and total - matched > 0:
         first = faces.get("unmatched_reference", [])[:2]
         words = "; ".join(f.get("describe", "") for f in first)
         todo.append(
@@ -668,7 +689,7 @@ def verdict(result, limit=3):
                 words,
             )
         )
-    if not groups and left_over and total == matched:
+    if not groups and not sampled and left_over and total == matched:
         first = faces.get("unmatched_rebuilt", [])[:2]
         words = "; ".join(f.get("describe", "") for f in first)
         todo.append(

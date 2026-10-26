@@ -298,6 +298,25 @@ class Groups(unittest.TestCase):
             self.assertNotIn("_", core.person_words(refusal))
         self.assertEqual(core.person_words(None), "")
 
+    def test_sampled_volumes_are_said_as_such(self):
+        result = {
+            "match": 0.9505,
+            "method": "sampled",
+            "volume": {"missing": 0.0, "extra": 1160.2},
+            "faces": {
+                "reference": 10,
+                "matched": 6,
+                "unmatched_reference": [{"describe": "a round hole face 6 mm across"}],
+                "unmatched_rebuilt": [],
+            },
+            "groups": [],
+        }
+        text = core.verdict(result)
+        self.assertIn("could not be listed", text)
+        self.assertIn("about 1160.2 mm3 is extra", text)
+        self.assertIn("a round hole face 6 mm across", text)
+        self.assertNotIn("No material differs", text)
+
     def test_size_notes(self):
         notes = core.size_notes([0, 0, 0, 60, 40, 10], [0, 0, 0, 60, 40, 12])
         self.assertEqual(notes, ["it is 2 mm taller along Z (0 to 12; the original 0 to 10)"])

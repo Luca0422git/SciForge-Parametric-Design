@@ -579,7 +579,8 @@ def compare(ref, target=None, options=None):
     if method == "sampled":
         result["note"] = (
             "OpenCASCADE could not split these two solids by each other, so the volumes were "
-            "measured by sampling points (about 1 % exact) and the regions are not listed."
+            "measured along 4096 rays through them (about 1 % exact) and the regions are not "
+            "listed."
         )
         result["verdict"] = "(Volumes sampled, about 1 % exact: see note.) " + result["verdict"]
     if opts.get("show", True):
@@ -924,30 +925,113 @@ def _face_points(face, n, full=False):
     return out
 
 
-def _sampled(a, b, count=20000):
-    """(common, missing, extra) volumes from points on a grid over both solids' box (the
-    fallback when booleans fail)."""
+def _sampled(a, b, count=4096):
+    """(common, missing, extra) volumes measured along rays (the fallback when booleans fail):
+    a grid of `count` rays along Z over both solids' box; along each ray, where it is inside A
+    and inside B (its crossings of each solid's triangles, OpenCASCADE's tessellation), and
+    their overlap. About 1 % exact and a fraction of a second (a point test per grid point
+    took minutes on a 300-face part)."""
+    import numpy
+
     box = App.BoundBox(a.BoundBox)
     box.add(b.BoundBox)
-    n = max(4, int(round(count ** (1.0 / 3.0))))
-    dx, dy, dz = box.XLength / n, box.YLength / n, box.ZLength / n
-    cell = dx * dy * dz
+    n = max(8, int(round(math.sqrt(count))))
+    dx, dy = box.XLength / n, box.YLength / n
+    if dx <= 0 or dy <= 0:
+        return 0.0, 0.0, 0.0
+    # (a little off the cells' centres: no ray runs along an edge of a part drawn on a grid)
+    xs = box.XMin + (numpy.arange(n) + 0.5 + 0.0137) * dx
+    ys = box.YMin + (numpy.arange(n) + 0.5 - 0.0219) * dy
+    inside_a = _ray_insides(a, xs, ys, box)
+    inside_b = _ray_insides(b, xs, ys, box)
     common = missing = extra = 0.0
-    for i in range(n):
-        for j in range(n):
-            for k in range(n):
-                p = App.Vector(
-                    box.XMin + (i + 0.5) * dx, box.YMin + (j + 0.5) * dy, box.ZMin + (k + 0.5) * dz
-                )
-                in_a = a.isInside(p, 1e-7, True)
-                in_b = b.isInside(p, 1e-7, True)
-                if in_a and in_b:
-                    common += cell
-                elif in_a:
-                    missing += cell
-                elif in_b:
-                    extra += cell
-    return common, missing, extra
+    for ray in set(inside_a) | set(inside_b):
+        along_a, along_b = inside_a.get(ray, []), inside_b.get(ray, [])
+        both = _overlap(along_a, along_b)
+        common += both
+        missing += sum(z1 - z0 for z0, z1 in along_a) - both
+        extra += sum(z1 - z0 for z0, z1 in along_b) - both
+    cell = dx * dy
+    return common * cell, max(0.0, missing) * cell, max(0.0, extra) * cell
+
+
+def _ray_insides(shape, xs, ys, box):
+    """{ray: [(z0, z1)]}: where the rays along Z through (xs[i], ys[j]) (ray i * len(ys) + j)
+    are inside the solid: their crossings of its triangles, in pairs. A ray with an odd number
+    of crossings (it grazes an edge) is left out."""
+    import numpy as np
+
+    size = max(box.DiagonalLength, 1e-6)
+    points, triangles = shape.tessellate(1e-3 * size)
+    if not triangles:
+        return {}
+    xyz = np.array([(p.x, p.y, p.z) for p in points])
+    tri = np.array(triangles, dtype=int)
+    pa, pb, pc = xyz[tri[:, 0]], xyz[tri[:, 1]], xyz[tri[:, 2]]
+    nx, ny = len(xs), len(ys)
+    sx = xs[1] - xs[0] if nx > 1 else 1.0
+    sy = ys[1] - ys[0] if ny > 1 else 1.0
+    lo = np.minimum(np.minimum(pa, pb), pc)
+    hi = np.maximum(np.maximum(pa, pb), pc)
+    # the rays each triangle's box covers: (i0..i1) x (j0..j1)
+    i0 = np.clip(np.ceil((lo[:, 0] - xs[0]) / sx), 0, nx).astype(int)
+    i1 = np.clip(np.floor((hi[:, 0] - xs[0]) / sx), -1, nx - 1).astype(int)
+    j0 = np.clip(np.ceil((lo[:, 1] - ys[0]) / sy), 0, ny).astype(int)
+    j1 = np.clip(np.floor((hi[:, 1] - ys[0]) / sy), -1, ny - 1).astype(int)
+    wide = np.maximum(0, i1 - i0 + 1)
+    tall = np.maximum(0, j1 - j0 + 1)
+    counts = wide * tall
+    total = int(counts.sum())
+    if total == 0:
+        return {}
+    which = np.repeat(np.arange(len(tri)), counts)
+    k = np.arange(total) - np.repeat(np.cumsum(counts) - counts, counts)
+    tall_k = np.repeat(tall, counts)
+    ii = np.repeat(i0, counts) + k // tall_k
+    jj = np.repeat(j0, counts) + k % tall_k
+    a, b, c = pa[which], pb[which], pc[which]
+    e0x, e0y = c[:, 0] - a[:, 0], c[:, 1] - a[:, 1]
+    e1x, e1y = b[:, 0] - a[:, 0], b[:, 1] - a[:, 1]
+    qx, qy = xs[ii] - a[:, 0], ys[jj] - a[:, 1]
+    den = e0x * e1y - e1x * e0y
+    ok = np.abs(den) > 1e-15 * size * size  # (a triangle seen edge-on: a wall, never crossed)
+    den = np.where(ok, den, 1.0)
+    u = (qx * e1y - e1x * qy) / den
+    v = (e0x * qy - qx * e0y) / den
+    hit = ok & (u >= 0) & (v >= 0) & (u + v <= 1)
+    z = a[:, 2] + u * (c[:, 2] - a[:, 2]) + v * (b[:, 2] - a[:, 2])
+    rays = (ii * ny + jj)[hit]
+    z = z[hit]
+    order = np.lexsort((z, rays))
+    rays, z = rays[order], z[order]
+    out = {}
+    same = 1e-9 * size
+    start = 0
+    for end in list(np.nonzero(np.diff(rays))[0] + 1) + [len(rays)]:
+        zs = []
+        for value in z[start:end]:
+            if not zs or value - zs[-1] > same:  # (two triangles meeting where the ray crosses)
+                zs.append(float(value))
+        if zs and len(zs) % 2 == 0:
+            out[int(rays[start])] = [(zs[i], zs[i + 1]) for i in range(0, len(zs), 2)]
+        start = end
+    return out
+
+
+def _overlap(one, other):
+    """The length two sorted lists of stretches [(z0, z1)] share."""
+    total = 0.0
+    i = j = 0
+    while i < len(one) and j < len(other):
+        low = max(one[i][0], other[j][0])
+        high = min(one[i][1], other[j][1])
+        if high > low:
+            total += high - low
+        if one[i][1] < other[j][1]:
+            i += 1
+        else:
+            j += 1
+    return total
 
 
 # -- regions ----------------------------------------------------------------------------------

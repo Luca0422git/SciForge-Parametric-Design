@@ -624,6 +624,8 @@ def main():
     wanted = os.environ.get("SCIFORGE_REBUILD_FILTER", "")
     parts = [p for p in PARTS if wanted in p["id"]]
     agent, rows = run_in_process(parts)
+    if not wanted:
+        fallback_checks(agent)
     text, passed = markdown("Auto Timeline end to end (in-process)", agent, rows)
     report = {"passed": passed, "parts": rows, "checks": agent.checks, "calls": agent.log}
     with open(os.path.join(out_dir, "rebuild-e2e-report.json"), "w", encoding="utf-8") as handle:
@@ -644,6 +646,65 @@ def main():
         % (len(rows), len(agent.checks), len([c for c in agent.checks if not c["ok"]]))
     )
     return report
+
+
+# -- compare's fallback when OpenCASCADE cannot split the parts -----------------------------------
+def fallback_checks(agent):
+    """The volumes measured along rays (rebuild._sampled) against exact booleans, and compare
+    forced into that fallback: the method, the note and an honest verdict, in well under a
+    second (a point test per grid point took minutes on a big part)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import bodies, rebuild
+
+    V = App.Vector
+    plate = Part.makeBox(60, 40, 10)
+    for x, y in ((10, 10), (50, 10), (10, 30), (50, 30)):
+        plate = plate.cut(Part.makeCylinder(3, 10, V(x, y, 0)))
+    box = Part.makeBox(60, 40, 12)
+    began = time.time()
+    got = rebuild._sampled(plate, box)
+    took = time.time() - began
+    want = (plate.common(box).Volume, plate.cut(box).Volume, box.cut(plate).Volume)
+    off = max(abs(g - w) for g, w in zip(got, want)) / box.Volume
+    agent.check(
+        "fallback: volumes along rays within 1 %% of the exact ones (%.3f %%, %.2f s)"
+        % (100 * off, took),
+        off < 0.01 and took < 5.0,
+        (got, want),
+    )
+    doc = App.newDocument("RebuildFallback")
+    try:
+        body = bodies.new_body(doc, "Plate")
+        base = doc.addObject("Part::Feature", "Imported")
+        base.Shape = plate
+        body.BaseFeature = base
+        doc.recompute()
+        ref = rebuild.start(doc, body)
+        doc.recompute()
+        kept = (rebuild._membership, rebuild._inside_point)
+        rebuild._membership = lambda *args: None  # (no piece can be placed: the fallback)
+        rebuild._inside_point = lambda *args: None
+        try:
+            result = rebuild.compare(ref, box, {"show": False})
+        finally:
+            rebuild._membership, rebuild._inside_point = kept
+        agent.check(
+            "fallback: compare says the volumes were sampled",
+            result["method"] == "sampled"
+            and "rays" in result.get("note", "")
+            and result["verdict"].startswith("(Volumes sampled")
+            and "could not be listed" in result["verdict"]
+            and "No material differs" not in result["verdict"]
+            and abs(result["match"] - 22869.03 / 28800.0) < 0.01
+            and not result["done"],
+            result.get("verdict"),
+        )
+    except Exception:
+        agent.check("fallback: compare forced into it", False, traceback.format_exc())
+    finally:
+        App.closeDocument(doc.Name)
 
 
 # -- through the real MCP server (plain Python) ----------------------------------------------------
