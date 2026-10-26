@@ -18,6 +18,8 @@ E  RESULTS, Compare again (the shown study and one more): Navigation bar > Viewp
 F  When the view cannot be split (Viewports refuses), Compare puts the studies side by side in
    the one view instead (the second beam beside the first, along Y: the beams are long in X),
    each tag at its own beam; Finish Compare.
+G  Compare again; a solve ends meanwhile (sim-ui's Solve dialog shows its study's results):
+   Compare ends, one view with that study's results.
 """
 
 import FreeCAD as App
@@ -369,6 +371,38 @@ def f_finished():
     h.check("the shown study's results", s.session() is not None)
 
 
+def g_compare():
+    s.menu("RESULT TOOLS", "Compare")
+
+
+def g_go():
+    e_tick()
+
+
+g_go.wait_ms = 1500
+
+
+def g_solved():
+    from sciforge import simulation_results_ui as ui
+
+    h.check("comparing in split views", _compare() is not None and _compare().split)
+    ui.show(s.doc().getObject(state["second"]))  # (what sim-ui's Solve dialog does at the end)
+
+
+g_solved.wait_ms = 1500
+
+
+def g_check():
+    h.check("the solve's results end Compare", _compare() is None)
+    h.check("one view", _layout() == "Single View", _layout())
+    sess = s.session()
+    h.check(
+        "the solved study's results shown",
+        sess is not None and sess.study_name == state["second"],
+        sess.study_name if sess else None,
+    )
+
+
 h.run(
     "simres_compare",
     [
@@ -401,5 +435,9 @@ h.run(
         f_go,
         f_check,
         f_finished,
+        g_compare,
+        g_go,
+        g_solved,
+        g_check,
     ],
 )

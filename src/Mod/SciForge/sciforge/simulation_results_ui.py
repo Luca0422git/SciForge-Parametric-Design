@@ -134,6 +134,11 @@ def show(study):
                 simulation_ui.set_active_study(study)
             except Exception:
                 pass
+        compare = COMPARE["session"]
+        if compare is not None and compare.doc_name == doc.Name:
+            # (a solve ended while Compare showed: its study's results take the view)
+            COMPARE["session"] = None
+            compare.deactivate()
         session = SESSIONS.get(doc.Name)
         if session is not None and session.study_name != study.Name:
             session.deactivate()
