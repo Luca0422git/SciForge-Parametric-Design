@@ -212,10 +212,23 @@ def _solid_of(kind, source):
 
     note = ""
     if kind == "mesh":
+        mesh = insert.kernel_copy(source)
+        broken = _mesh_problem(mesh)
+        if broken:
+            raise RebuildError(
+                "%s cannot be rebuilt: %s, so it does not close into a solid. Repair the mesh "
+                "first (MESH tab > Repair), then try again." % (source.Label, broken)
+            )
         try:
-            solid = insert.solid_from_mesh(insert.kernel_copy(source), "Prismatic")
+            solid = insert.solid_from_mesh(mesh, "Prismatic")
         except insert.InsertError as exc:
             raise RebuildError("%s cannot be rebuilt: %s" % (source.Label, exc))
+        if not _same_size(solid, mesh):
+            raise RebuildError(
+                "%s cannot be rebuilt: its triangles do not close into a solid of the mesh's "
+                "size (a mesh that is not watertight). Repair the mesh first (MESH tab > "
+                "Repair), then try again." % source.Label
+            )
         try:
             place = source.getGlobalPlacement()
         except Exception:
@@ -246,6 +259,41 @@ def _solid_of(kind, source):
                 "OpenCASCADE finds flaws in this solid, so comparisons may be less exact"
             )
     return solid, note
+
+
+def _mesh_problem(mesh):
+    """Why a mesh cannot become a solid, in words ("" when it can)."""
+    try:
+        if mesh.CountFacets == 0:
+            return "the mesh has no triangles"
+        if not mesh.isSolid():
+            return "the mesh is not watertight (it has holes or loose edges)"
+        if mesh.hasNonManifolds():
+            return "the mesh has edges shared by more than two triangles"
+    except Exception:
+        return ""
+    return ""
+
+
+def _same_size(solid, mesh):
+    """The solid made from a mesh has the mesh's box and (about) its volume."""
+    try:
+        a, b = solid.BoundBox, mesh.BoundBox
+        tol = max(1e-3, 1e-4 * b.DiagonalLength)
+        for x, y in (
+            (a.XMin, b.XMin),
+            (a.YMin, b.YMin),
+            (a.ZMin, b.ZMin),
+            (a.XMax, b.XMax),
+            (a.YMax, b.YMax),
+            (a.ZMax, b.ZMax),
+        ):
+            if abs(x - y) > tol:
+                return False
+        volume = abs(float(mesh.Volume))
+        return volume <= 0 or abs(solid.Volume - volume) <= 0.01 * volume
+    except Exception:
+        return True
 
 
 def start(doc, source, label=None):
