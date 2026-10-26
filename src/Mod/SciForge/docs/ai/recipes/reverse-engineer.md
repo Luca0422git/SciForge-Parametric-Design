@@ -45,9 +45,12 @@ SciForge's tests; `expect` is what the answer must contain.
 5. `finish_rebuild` when compare says `done` (match at least 0.999, every face of the
    original matched, no face of the rebuild left over). The rebuilt body takes the original's
    name, component and place; the original is deleted (`keep_original: true` keeps it,
-   hidden, as `<name> (original)`). finish_rebuild compares first and refuses a rebuild
-   that is not done (`even_if_different: true` finishes it anyway: a person happy with a close
-   rebuild of a mesh).
+   hidden, as `<name> (original)`). Whatever used the original (joints, a ground, a pattern
+   of it, a sketch on one of its faces) moves onto the rebuild face for face, so a jointed
+   part stays jointed; what cannot move keeps the original (hidden: the answer names it).
+   finish_rebuild compares first and refuses a rebuild that is not done
+   (`even_if_different: true` finishes it anyway: a person happy with a close rebuild of a
+   mesh).
 
 ## Good habits
 

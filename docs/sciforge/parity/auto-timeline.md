@@ -115,7 +115,7 @@ face) to milliseconds.
 | Faces | matched by geometry: same kind and surface (plane: normal and offset; cylinder: axis line, radius, inside / outside; sphere; cone; torus) within 0.001 mm, facing the same way, and covering each other (every sample point of one lies on the other; the same face with the same area and box needs no sampling). A reference from a mesh: a facet is matched when its points lie within the mesh's tolerance (0.2 % of its size, 0.02 to 0.5 mm) of the rebuild's faces and the other way round. Unmatched faces are listed with words ("a round hole face 6 mm across along Z at (10, 30)") and a selector. |
 | Deviation | sample points of the unmatched faces (at most 48 faces, spread from the biggest to the smallest, the mean scaled to all of them), their exact distance to the other solid (the faces' boxes first); matched faces count 0; max and an area-weighted mean. |
 | Done and verdict | `done`: match >= 0.999, every face of the original matched and no face of the rebuild left over (an extra 1 mm hole hides inside the 0.1 % volume tolerance; the faces catch it: stricter than the contract's comment, which says the first two). The verdict: "Match 0.9497 (1 is identical); 6 of 14 faces of the original matched. Next: 4 round holes about 6 mm across, 10 deep (along Z) are not cut yet, at (10, 10), (50, 10), (10, 30), (50, 30). 4 rounded edges of radius about 3 are still sharp in the rebuild (the fillet call is ready in groups[1].fix). Fix that, then compare_to_reference again." |
-| Finish | `finish(ref, target=None, keep_reference=False, keep_original=False)`: the rebuilt body takes the original's name, component and place; the original is deleted (an imported body with its imported shape; a mesh body with its steps) or kept hidden as `<name> (original)`; the reference removed or kept hidden (not drawn). One undo step. |
+| Finish | `finish(ref, target=None, keep_reference=False, keep_original=False)`: the rebuilt body takes the original's name, component and place (and its material and appearance), and the original's place in the timeline (its steps go where the original's stood, before what used it); whatever used the original (joints and their snaps, grounds, rigid groups, contact sets, a pattern of bodies of it, sketches and planes on its faces, drawings: every link of every other object) moves onto the rebuild, each face / edge / corner name swapped for the rebuild's element on the same geometry (`sciforge/rebuild_links.py`, beta 3 QA); then the original is deleted (an imported body with its imported shape; a mesh body with its steps) or kept hidden as `<name> (original)`; it is kept anyway, and the answer says why, when something cannot move (a link to its own sketch, a face the rebuild does not have). The reference removed or kept hidden (not drawn). One undo step. |
 | Speed | measured in this sandbox (4 CPUs shared by six builders, load about 4.5): the parts of the end-to-end test 0.01 to 0.13 s when done (the same solid: no boolean), the meshed plate (150 faces) 1.6 to 2.1 s; a 298-face plate with 96 chamfered holes: the same solid 0.3 to 0.6 s, the base plate only (96 holes left) 1.5 s, 10 holes left 2.2 s, every chamfer and 4 holes left (188 regions) 3.7 s. OpenCASCADE's General Fuse alone takes 0.5 to 2.4 s of that. What compare measures of the reference is kept between compares (the reference never changes). On a PC without other jobs it should be about half. The 2 s target is met for typical parts, and on the 300-face plate for the same solid and the base plate, not with 10 or 188 regions left at this load. |
 
 ## AI tools and documentation
@@ -227,3 +227,28 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
   rebuild) would make the selectors' coordinates differ.
 - A reference made from a mesh: `done` comes when every facet lies within the mesh's
   tolerance of the rebuild, so a hole a hair off still counts as matched there.
+
+## QA (beta 3)
+
+(the independent QA pass, branch `sf/autotimeline-qa`; session log
+`docs/sciforge/sessions/beta3-autotimeline-qa.md`)
+
+What the QA pass found and fixed, each with a check in
+`SciForgeTests/headless/rebuild_qa.py` (run by `rebuild_e2e.main()`, so by `run_tests.sh
+--only headless / base`) that fails on the code before the fix:
+
+| Found | Fixed |
+|---|---|
+| Finish deleted every joint of a jointed part (the VEX case), its ground, the source of a pattern of bodies of it and the face a sketch of another body sat on | what used the original moves onto the rebuild first (see Finish above); what cannot keeps the original, hidden |
+| Finish left the original's imported shape in its component (a stray "Body001 (imported)" step in the timeline) | deleted with the original |
+| A design saved half way and opened again: the next steps went into the design's first body ("No base set" on the hole after) | the body of the rebuild going on is the active one again (window and headless) |
+| The reference deleted another way than Finish (delete_step, a script) left the original hidden for good | the rebuild is given up: the original is shown again |
+| describe_reference on a plate with a modeled thread took 210 s (OpenCASCADE's defeaturing on the thread's faces) and then read nothing | a thread round a bore is closed with its hole, never defeatured, and listed as not read (1.3 s) |
+
+Tried and found right: two rebuilds at once (each tool takes `reference`; the dialogs ask to
+select the rebuilt body), undo / redo across start, the AI's steps and finish, parts of 0.5 mm
+and 2 m, an inch STEP file (read at its size; the plan's numbers are millimetres: 12.7 for
+half an inch), a 294-face plate (describe 1.7 s, compare 1.6 to 2.2 s while holes are left,
+0.4 s when done, finish 2 s), a loft (said not read: the plan is empty and the notes say to
+build it by hand).
+

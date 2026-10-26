@@ -156,9 +156,12 @@ define(
     "Finish a rebuild: the rebuilt body takes the original's name, component and place, "
     "with its timeline; the original (the featureless body or the mesh body) is deleted, or "
     "kept hidden as '<name> (original)' with keep_original: true; the reference is removed "
-    "(keep_reference: true keeps it, hidden). It first compares and refuses a rebuild that "
-    "is not done yet (the answer says what is left); even_if_different: true finishes it as "
-    "it is (a person happy with a close rebuild of a mesh). One undo step.",
+    "(keep_reference: true keeps it, hidden). Whatever used the original (joints, grounds, a "
+    "pattern of it, sketches on its faces...) moves onto the rebuild, face for face; what "
+    "cannot move keeps the original (kept hidden; the answer says so). It first compares and "
+    "refuses a rebuild that is not done yet (the answer says what is left); "
+    "even_if_different: true finishes it as it is (a person happy with a close rebuild of a "
+    "mesh). One undo step.",
     schema(
         {
             "reference": REFERENCE_ARG,
