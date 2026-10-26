@@ -634,6 +634,468 @@ def bearing_lug(doc):
     return study, checks
 
 
+# -- engine checks (not accuracy: what must hold around a solve) ------------------------------
+# Each check(doc, out) appends (name, ok, detail) to `out`; they run after the accuracy cases.
+ENGINE_CHECKS = []
+
+
+def engine_check(name):
+    def register(fn):
+        ENGINE_CHECKS.append((name, fn))
+        return fn
+
+    return register
+
+
+def _cantilever(doc, label="Body", placement=None, part=None, size_pct=10.0):
+    import Part
+
+    from sciforge import simulation as sim
+
+    body = make_body(doc, Part.makeBox(100, 10, 10), label)
+    if part is not None:
+        part.addObject(body)
+    if placement is not None:
+        (part or body).Placement = placement
+    doc.recompute()
+    study = sim.create_study(doc, study_bodies=[body])
+    sim.set_settings(study, {"mesh": {"size_pct": size_pct}})
+    sim.add_item(
+        study, "constraint", "fixed", [(body, one_face(body, lambda f: near(f.CenterOfMass.x, 0)))]
+    )
+    sim.add_item(
+        study,
+        "load",
+        "force",
+        [(body, one_face(body, lambda f: near(f.CenterOfMass.x, 100)))],
+        {"direction": "vector", "vector": [0, 0, -1], "magnitude": 100.0},
+    )
+    return body, study
+
+
+def _sim_objects(doc):
+    from sciforge import simulation as sim
+
+    return sorted(o.Name for o in doc.Objects if sim._type(o) in (sim.RUN, sim.MODEL, sim.HELPER))
+
+
+@engine_check("cancel at every stage")
+def check_cancel(doc, out):
+    """Cancel just before each stage runs (the slow ones, mesh and solve, run in the
+    background: cancel stops their program)."""
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc, size_pct=3.0)
+    first = sim.solve(study, timeout=600)
+    kept = sim.result_object(study)
+    objects = _sim_objects(doc)
+
+    def background_done(job):
+        return job._thread is None or not job._thread.is_alive()
+
+    moments = (
+        ("model", lambda job: True),  # before the first turn
+        ("mesh", lambda job: job.stage == "mesh" and not background_done(job)),
+        ("input", lambda job: job.stage == "mesh" and background_done(job)),
+        ("solve", lambda job: job.stage == "solve" and not background_done(job)),
+        ("results", lambda job: job.stage == "solve" and background_done(job)),
+    )
+    for stage, ready in moments:
+        job = sim.Job(study)
+        tries = 0
+        while job.state == "running" and not ready(job) and tries < 20000:
+            tries += 1
+            if job._thread is not None and job._thread.is_alive():
+                job._thread.join(0.002)
+                continue
+            job.poll()
+        if job.state != "running" or not ready(job):
+            out.append(("cancel before %s: got there" % stage, False, (job.state, job.stage)))
+            job.cancel()
+            job.wait(60)
+            continue
+        job.cancel()
+        job.wait(60)
+        out.append(("cancel before %s: cancelled" % stage, job.state == "cancelled", job.message))
+        out.append(
+            (
+                "cancel before %s: temporary folder gone" % stage,
+                not os.path.isdir(job.work),
+                job.work,
+            )
+        )
+        out.append(
+            (
+                "cancel before %s: last results and objects kept" % stage,
+                sim.result_object(study) is kept
+                and sim.summary(study) == first
+                and _sim_objects(doc) == objects,
+                (_sim_objects(doc), objects),
+            )
+        )
+
+
+@engine_check("a failed solve keeps the last results")
+def check_failed(doc, out):
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc)
+    first = sim.solve(study, timeout=600)
+    kept = sim.result_object(study)
+    fixed = sim.items(study, "constraint")[0]
+    sim.update_item(fixed, suppressed=True)
+    job = sim.Job(study)
+    job.wait(120)
+    out.append(
+        (
+            "refused: nothing holds it",
+            job.state == "failed" and "Nothing holds" in job.message,
+            job.message,
+        )
+    )
+    out.append(
+        ("results kept", sim.result_object(study) is kept and sim.summary(study) == first, "")
+    )
+    out.append(("now out of date", sim.out_of_date(study), ""))
+    sim.update_item(fixed, suppressed=False)
+    out.append(("back in date", not sim.out_of_date(study), ""))
+    # a model held in X only can still move: CalculiX's complaint becomes a sentence
+    sim.update_item(fixed, opts={"y": False, "z": False})
+    job = sim.Job(study)
+    job.wait(300)
+    out.append(
+        (
+            "not held enough: a sentence",
+            job.state == "failed" and "not held enough" in job.message,
+            job.message,
+        )
+    )
+    out.append(("results still kept", sim.result_object(study) is kept, ""))
+
+
+@engine_check("Generate Mesh")
+def check_mesh_only(doc, out):
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc)
+    summary = sim.solve(study, timeout=600)
+    kept = sim.result_object(study)
+    sim.set_settings(study, {"mesh": {"size_pct": 5.0}})
+    info = sim.generate_mesh(study, timeout=600)
+    out.append(
+        ("mesh statistics", info["nodes"] > summary["mesh"]["nodes"] and info["smallest"] > 0, info)
+    )
+    out.append(("results kept next to the new mesh", sim.result_object(study) is kept, ""))
+    out.append(
+        ("the newest mesh is shown", sim.mesh_object(study).FemMesh.NodeCount == info["nodes"], "")
+    )
+    out.append(("mesh summary not stale", not sim.mesh_summary(study)["stale"], ""))
+    sim.set_settings(study, {"mesh": {"size_pct": 6.0}})
+    out.append(("mesh summary stale after a mesh setting", sim.mesh_summary(study)["stale"], ""))
+    sim.solve(study, timeout=600)
+    out.append(
+        ("a solve replaces the Generate Mesh run", sim.run_of(study, "SimMeshRun") is None, "")
+    )
+
+
+@engine_check("save and reopen")
+def check_reopen(doc, out):
+    import tempfile
+
+    import FreeCAD as App
+
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc, size_pct=3.0)
+    summary = sim.solve(study, timeout=600)
+    folder = tempfile.mkdtemp(prefix="sciforge-bench-")
+    kept_path = os.path.join(folder, "kept.FCStd")
+    doc.saveAs(kept_path)
+    sim.set_settings(study, {"keep_results": False})
+    small_path = os.path.join(folder, "small.FCStd")
+    doc.saveAs(small_path)
+    sizes = (os.path.getsize(kept_path), os.path.getsize(small_path))
+    out.append(
+        (
+            "file size: %.0f kB with results, %.0f kB without (%d nodes)"
+            % (sizes[0] / 1024.0, sizes[1] / 1024.0, summary["mesh"]["nodes"]),
+            sizes[1] < sizes[0] / 5,
+            sizes,
+        )
+    )
+    name = doc.Name
+    App.closeDocument(name)
+    again = App.openDocument(kept_path)
+    st = sim.studies(again)[0]
+    res = sim.results(st)
+    out.append(
+        ("reopened: results back", res is not None and len(res.values("von_mises")) > 100, "")
+    )
+    out.append(
+        (
+            "reopened: same summary, not out of date",
+            sim.summary(st) == summary and not sim.out_of_date(st),
+            "",
+        )
+    )
+    out.append(
+        ("reopened: items and picks", len(sim.items(st)) == 2 and not sim.lost_items(st), "")
+    )
+    App.closeDocument(again.Name)
+    small = App.openDocument(small_path)
+    st = sim.studies(small)[0]
+    out.append(("without results: the numbers stay", sim.summary(st) == summary, ""))
+    out.append(
+        (
+            "without results: solve again to see them",
+            sim.results(st) is None and sim.results_dropped(st),
+            "",
+        )
+    )
+    again = sim.solve(st, timeout=600)
+    out.append(
+        ("solved again after reopening", sim.results(st) is not None, again["mesh"]["nodes"])
+    )
+    App.closeDocument(small.Name)
+
+
+@engine_check("a body in a moved component")
+def check_component(doc, out):
+    import FreeCAD as App
+
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc, "Plain")
+    plain = sim.solve(study, timeout=600)
+    part = doc.addObject("App::Part", "Component")
+    place = App.Placement(App.Vector(200, 50, 30), App.Rotation(App.Vector(0, 0, 1), 90))
+    moved, study2 = _cantilever(doc, "Moved", placement=place, part=part)
+    summary = sim.solve(study2, timeout=600)
+    a, b = plain["stats"]["displacement"]["max"], summary["stats"]["displacement"]["max"]
+    out.append(("same bend as unmoved", abs(a - b) <= 0.02 * a, (a, b)))
+    at = summary["stats"]["displacement"]["max_at"]
+    tip = place.multVec(App.Vector(100, 5, 5))
+    out.append(
+        (
+            "the tip is where the component put it",
+            abs(at[0] - tip.x) < 6 and abs(at[1] - tip.y) < 6,
+            (at, tip),
+        )
+    )
+    out.append(
+        (
+            "reaction 100 N",
+            abs(summary["reactions"]["Fixed 2"]["total"] - 100) < 0.5,
+            summary["reactions"],
+        )
+    )
+
+
+@engine_check("a deleted body")
+def check_deleted_body(doc, out):
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc)
+    other = make_body(doc, Part.makeBox(10, 10, 10, App.Vector(0, 50, 0)), "Other")
+    sim.add_item(
+        study,
+        "load",
+        "pressure",
+        [(other, one_face(other, lambda f: near(f.CenterOfMass.z, 10)))],
+        {"magnitude": 1},
+    )
+    study.SimBodies = [body, other]
+    doc.removeObject(other.Name)
+    doc.removeObject("OtherShape")
+    doc.recompute()
+    checks = sim.precheck(study)
+    lost = [t for level, t in checks if level == "error" and "lost what it was on" in t]
+    out.append(
+        (
+            "the pre-check names the load that lost its face",
+            len(lost) == 1 and "Pressure" in lost[0],
+            checks,
+        )
+    )
+    job = sim.Job(study)
+    job.wait(120)
+    out.append(
+        (
+            "the solve refuses with that sentence",
+            job.state == "failed" and "lost" in job.message,
+            job.message,
+        )
+    )
+
+
+@engine_check("a solve is no undo step")
+def check_undo(doc, out):
+    import FreeCAD as App
+
+    from sciforge import simulation as sim
+
+    doc.UndoMode = 1
+    doc.openTransaction("Make beam")
+    body, study = _cantilever(doc)
+    doc.commitTransaction()
+    before = list(doc.UndoNames)
+    doc.openTransaction("Left open")  # (a dialog's undo step, not closed yet)
+    sim.solve(study, timeout=600)
+    after = list(doc.UndoNames)
+    out.append(("the undo list did not grow with the solve", after == before, (before, after)))
+    out.append(
+        ("no undo step left open", not App.getActiveTransaction(), App.getActiveTransaction())
+    )
+    name = study.Name
+    doc.undo()
+    out.append(("undo takes the setup back", doc.getObject(name) is None, list(doc.UndoNames)))
+    doc.redo()
+    study = doc.getObject(name)
+    out.append(
+        (
+            "redo brings it back with its results",
+            study is not None and sim.results(study) is not None and not sim.out_of_date(study),
+            list(doc.RedoNames),
+        )
+    )
+
+
+@engine_check("Netgen when Gmsh fails")
+def check_netgen(doc, out):
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc)
+    real = sim._binary
+
+    def broken(name):
+        if name == "gmsh":
+            return "/bin/false" if os.name != "nt" else real(name)
+        return real(name)
+
+    sim._binary = broken
+    try:
+        job = sim.Job(study)
+        job.wait(600)
+    finally:
+        sim._binary = real
+    if os.name == "nt":
+        out.append(("(skipped on Windows)", True, ""))
+        return
+    out.append(
+        (
+            "solved with Netgen",
+            job.state == "done" and job.summary["mesh"].get("mesher") == "netgen",
+            job.message,
+        )
+    )
+    out.append(("a note says so", any("Netgen" in n for n in (job.notes or [])), job.notes))
+    tip = (job.summary or {}).get("stats", {}).get("displacement", {}).get("max")
+    out.append(
+        ("Netgen's mesh bends the same (3 %)", tip is not None and abs(tip - 0.2) < 0.006, tip)
+    )
+
+
+@engine_check("adaptive mesh refinement")
+def check_adaptive(doc, out):
+    """The plate with a hole of the accuracy cases, without a local mesh control, at the
+    default mesh: adaptive refinement makes the elements where the stress changes the most
+    smaller, solve after solve, until the peak stress settles; it ends nearer Peterson's Kt
+    than the first solve."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    W, L, t, d, s = 100.0, 200.0, 5.0, 20.0, 10.0
+    plate = Part.makeBox(L, W, t).cut(Part.makeCylinder(d / 2, t, App.Vector(L / 2, W / 2, 0)))
+    body = make_body(doc, plate)
+    study = sim.create_study(doc)
+    sim.set_settings(
+        study,
+        {
+            "remove_rigid": True,
+            "adaptive": {
+                "level": "custom",
+                "passes": 4,
+                "tolerance": 2.0,
+                "portion": 10.0,
+                "result": "principal_1",
+            },
+        },
+    )
+    ends = faces(body, lambda f: near(f.CenterOfMass.x, 0) or near(f.CenterOfMass.x, L))
+    sim.add_item(study, "load", "pressure", [(body, e) for e in ends], {"magnitude": -s})
+    ratio = d / W
+    kt = 3.0 - 3.14 * ratio + 3.667 * ratio**2 - 1.527 * ratio**3
+    expected = kt * s * W / (W - d)
+    summary = sim.solve(study, timeout=1200)
+    passes = (summary.get("adaptive") or {}).get("passes") or []
+    out.append(("several solves", len(passes) >= 2, passes))
+    out.append(
+        (
+            "each solve on a finer mesh",
+            all(b["nodes"] > a["nodes"] for a, b in zip(passes, passes[1:])),
+            [p["nodes"] for p in passes],
+        )
+    )
+    first = abs(passes[0]["value"] - expected) / expected if passes else 1.0
+    last = abs(summary["stats"]["principal_1"]["max"] - expected) / expected
+    out.append(
+        (
+            "the peak stress ends nearer Kt: first %.1f %% off, last %.1f %% (within 5 %%)"
+            % (first * 100, last * 100),
+            last < first and last <= 0.05,
+            [p["value"] for p in passes],
+        )
+    )
+    out.append(("a note says so", any("Adaptive" in n for n in summary["notes"]), summary["notes"]))
+
+
+@engine_check("contacts and loose bodies")
+def check_contacts(doc, out):
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    a = make_body(doc, Part.makeBox(50, 10, 10), "A")
+    b = make_body(doc, Part.makeBox(50, 10, 10, App.Vector(50.05, 0, 0)), "B")
+    make_body(doc, Part.makeBox(50, 10, 10, App.Vector(100.6, 0, 0)), "C")
+    make_body(doc, Part.makeBox(10, 10, 10, App.Vector(40, 5, 0)), "D")  # overlaps A
+    study = sim.create_study(doc)
+    sim.add_item(
+        study, "constraint", "fixed", [(a, one_face(a, lambda f: near(f.CenterOfMass.x, 0)))]
+    )
+    sim.add_item(
+        study,
+        "load",
+        "force",
+        [(b, one_face(b, lambda f: near(f.CenterOfMass.z, 10)))],
+        {"magnitude": 10.0},
+    )
+    pairs = sorted((p.Label, q.Label) for p, q, _k in sim.contacts(study))
+    out.append(
+        (
+            "0.05 mm apart is glued, 0.55 mm is not",
+            ("A", "B") in pairs and not any("C" in p for p in pairs),
+            pairs,
+        )
+    )
+    checks = sim.precheck(study)
+    text = " ".join(t for _l, t in checks)
+    out.append(("C would fly away: an error naming it", "C is not held" in text, checks))
+    out.append(
+        (
+            "A and D overlap: a warning",
+            any(l == "warning" and "A and D overlap" in t for l, t in checks),
+            checks,
+        )
+    )
+
+
 # -- running ----------------------------------------------------------------------------------
 def _close(doc):
     import FreeCAD as App
@@ -764,6 +1226,10 @@ def markdown(report):
                 r["status"].upper(),
             )
         )
+    if report.get("engine"):
+        lines += ["", "## Engine checks", "", "| Check | | Result |", "|---|---|---|"]
+        for r in report["engine"]:
+            lines.append("| %s | %s | %s |" % (r["case"], r["check"], r["status"].upper()))
     return "\n".join(lines) + "\n"
 
 
@@ -811,13 +1277,48 @@ def main():
                         (r.get("problem") or "")[:600],
                     )
                 )
-    report["passed"] = bool(report["rows"]) and all(r["status"] == "pass" for r in report["rows"])
+    report["engine"] = []
+    for name, fn in ENGINE_CHECKS:
+        if wanted and wanted not in name:
+            continue
+        doc = App.newDocument("Engine")
+        doc_name = doc.Name
+        found = []
+        start = time.time()
+        try:
+            fn(doc, found)
+        except Exception as exc:
+            found.append(("raised", False, "%s\n%s" % (exc, traceback.format_exc())))
+        finally:
+            if doc_name in App.listDocuments():
+                App.closeDocument(doc_name)
+        for check, ok, detail in found:
+            row = {
+                "case": name,
+                "check": check,
+                "status": "pass" if ok else "fail",
+                "detail": str(detail)[:600],
+                "seconds": round(time.time() - start, 2),
+            }
+            report["engine"].append(row)
+            App.Console.PrintMessage(
+                "[SciForge] sim %s engine/%s: %s %s\n"
+                % (row["status"].upper(), name, check, "" if ok else row["detail"])
+            )
+    report["passed"] = (
+        bool(report["rows"] or report["engine"])
+        and all(r["status"] == "pass" for r in report["rows"])
+        and all(r["status"] == "pass" for r in report["engine"])
+    )
     with open(os.path.join(out_dir, "sim-benchmarks.json"), "w", encoding="utf-8") as handle:
         json.dump(report, handle, indent=2)
     with open(os.path.join(out_dir, "sim-benchmarks.md"), "w", encoding="utf-8") as handle:
         handle.write(markdown(report))
     App.Console.PrintMessage(
         "[SciForge] sim summary: %d checks, %d failed\n"
-        % (len(report["rows"]), len([r for r in report["rows"] if r["status"] != "pass"]))
+        % (
+            len(report["rows"]) + len(report["engine"]),
+            len([r for r in report["rows"] + report["engine"] if r["status"] != "pass"]),
+        )
     )
     return report

@@ -1603,6 +1603,26 @@ def _refs_round_trip(data, run):
     return None if data["elements"] else "no elements"
 
 
+def _sim_cantilever(data, run):
+    """The aluminium beam bends F L^3 / (3 E I), its fixed end holds the 100 N."""
+    from sciforge import simulation
+
+    doc = run.doc()
+    study = simulation.studies(doc)[0]
+    body = simulation.study_bodies(study)[0]
+    _name, props, _src = simulation.study_material(study, body)
+    expected = 100.0 * 100.0**3 / (3 * props["youngs_mpa"] * 20.0 * 10.0**3 / 12.0)
+    got = data["results"]["displacement"]["max"]
+    if abs(got - expected) > 0.03 * expected:
+        return "tip deflection %s, beam theory %s" % (got, expected)
+    reaction = data["reactions"].get("Fixed 1", {}).get("total")
+    if reaction is None or abs(reaction - 100.0) > 1.0:
+        return "reaction %s" % data["reactions"]
+    if "target 1.5" not in data["verdict"] and "1.5." not in data["verdict"]:
+        return "verdict %s" % data["verdict"]
+    return None
+
+
 VERIFY_SESSION = [
     {"tool": "new_design", "args": {"name": "VerifyTwoBodies"}},
     {
@@ -1722,6 +1742,108 @@ VERIFY_SESSION = [
         "expect": "error",
         "contains": ["No AI change"],
     },
+    # --- sim-core ---------------------------------------------------------------------------------
+    # Static Stress through the AI tools: a 100 x 20 x 10 mm aluminium cantilever (beam theory
+    # F L^3 / 3 E I with the study material's E), every refusal in a sentence.
+    {"tool": "new_design", "args": {"name": "SimCantilever"}},
+    {
+        "tool": "primitive",
+        "save": "sim_beam",
+        "args": {"kind": "box", "plane": "XY", "length": 100, "width": 20, "height": 10},
+    },
+    {"tool": "precheck_study", "args": {}, "expect": "error", "contains": ["no simulation study"]},
+    {"tool": "create_study", "args": {"label": "Beam study"}, "save": "sim_study"},
+    {
+        "tool": "precheck_study",
+        "args": {},
+        "contains": ["cannot solve"],
+        "check": _json_check(
+            lambda d, r: None if d["verdict"] == "cannot solve" else "verdict %s" % d["verdict"]
+        ),
+    },
+    {
+        "tool": "add_constraint",
+        "args": {"kind": "fixed", "on": [{"face": {"normal": [-1, 0, 0], "count": 1}}]},
+        "contains": ["Fixed", "Beam study"],
+    },
+    {
+        "tool": "add_constraint",
+        "args": {"kind": "pin", "on": [{"face": {"normal": [0, 0, -1], "count": 1}}]},
+        "expect": "error",
+        "contains": ["round"],
+    },
+    {
+        "tool": "add_load",
+        "args": {
+            "kind": "pressure",
+            "on": [{"face": {"normal": [0, 0, 1], "count": 1}}],
+            "magnitude": 1,
+            "vector": [0, 0, -1],
+        },
+        "expect": "error",
+        "contains": ["pressure always pushes"],
+    },
+    {
+        "tool": "add_load",
+        "args": {
+            "kind": "force",
+            "on": [{"face": {"normal": [1, 0, 0], "count": 1}}],
+            "magnitude": 100,
+            "direction": "vector",
+            "vector": [0, 0, -1],
+        },
+        "contains": ["Force 100 N"],
+    },
+    {
+        "tool": "set_study_material",
+        "args": {"body": "$sim_beam", "material": "unobtainium"},
+        "expect": "error",
+        "contains": ["no material 'unobtainium'", "aluminium"],
+    },
+    {
+        "tool": "set_study_material",
+        "args": {"body": "$sim_beam", "material": "aluminium"},
+        "check": _json_check(
+            lambda d, r: None if 60000 < d["youngs_mpa"] < 80000 else "E %s" % d["youngs_mpa"]
+        ),
+    },
+    {
+        "tool": "study_settings",
+        "args": {},
+        "check": _json_check(
+            lambda d, r: None if d["mesh_size"] == 10 and not d["gravity"] else "settings %s" % d
+        ),
+    },
+    {
+        "tool": "study_settings",
+        "args": {"mesh_size": 6},
+        "check": _json_check(lambda d, r: None if d["mesh_size"] == 6 else "mesh %s" % d),
+    },
+    {
+        "tool": "local_mesh_control",
+        "args": {"on": [{"face": {"normal": [-1, 0, 0], "count": 1}}], "size": 2},
+        "contains": ["Local Mesh Control 2 mm"],
+    },
+    {
+        "tool": "precheck_study",
+        "args": {},
+        "check": _json_check(lambda d, r: None if d["verdict"] == "ready" else "%s" % d),
+    },
+    {"tool": "solve_study", "args": {}, "contains": ["Lowest safety factor", "nodes"]},
+    {
+        "tool": "study_results",
+        "args": {"target": 1.5},
+        "check": _json_check(_sim_cantilever),
+    },
+    {"tool": "create_study", "args": {}, "save": "sim_study2"},
+    {
+        "tool": "study_results",
+        "args": {},
+        "check": _json_check(lambda d, r: None if len(d["studies"]) == 2 else "%s" % d),
+    },
+    {"tool": "study_results", "args": {"study": "$sim_study2"}, "expect": "error"},
+    {"tool": "delete_study", "args": {"study": "$sim_study2"}, "contains": ["deleted"]},
+    {"tool": "delete_study", "args": {"study": "NoSuchStudy"}, "expect": "error"},
 ]
 
 

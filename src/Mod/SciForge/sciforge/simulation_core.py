@@ -953,6 +953,190 @@ def reactions_from_dat(text):
     return out
 
 
+# -- held enough? (rigid body modes) ---------------------------------------------------------------
+# A model must be held so that no piece of it can move or turn as a whole (Fusion: "rigid
+# body motion"; its DOF View). CalculiX does not always notice: a part held only along X can
+# come back "solved" with nonsense displacements, so SciForge checks before solving. Every
+# constraint stops points of the piece moving in some directions; the piece is held when
+# those rows stop all six rigid movements (three slides, three turns).
+RIGID_WORDS = ("slide along X", "slide along Y", "slide along Z")
+
+
+def free_modes(rows, centre, size):
+    """The rigid movements `rows` leave free. rows: [(point (x, y, z), direction (cx, cy,
+    cz))]: that point cannot move along that direction. centre: the middle of the piece,
+    size: its size (mm, to weigh turns against slides). Returns [(kind "slide" / "turn",
+    direction [x, y, z], point on the axis [x, y, z] or None)]."""
+    size = max(float(size), 1e-9)
+    m = [[0.0] * 6 for _ in range(6)]
+    for point, direction in rows:
+        c = list(direction)
+        length = _norm(c)
+        if length <= 1e-12:
+            continue
+        c = [v / length for v in c]
+        r = _sub(point, centre)
+        turn = _cross(r, c)
+        a = c + [v / size for v in turn]
+        for i in range(6):
+            if a[i] == 0.0:
+                continue
+            for j in range(6):
+                m[i][j] += a[i] * a[j]
+    values, vectors = _jacobi(m)
+    top = max(values) if values else 0.0
+    out = []
+    for value, vector in zip(values, vectors):
+        if top > 0 and value > 1e-9 * top:
+            continue
+        slide = vector[:3]
+        turn = [v / size for v in vector[3:]]
+        if _norm(turn) * size <= 1e-6 * max(_norm(slide), 1e-12) or _norm(turn) <= 1e-15:
+            out.append(("slide", _unit_or(slide), None))
+        else:
+            # the movement u(p) = slide + turn x (p - centre): an axis along turn through
+            # centre + (turn x slide) / |turn|^2 (plus a slide along the axis)
+            w = _dot(turn, turn)
+            through = [centre[i] + _cross(turn, slide)[i] / w for i in range(3)]
+            out.append(("turn", _unit_or(turn), through))
+    return out
+
+
+def _unit_or(v):
+    length = _norm(v)
+    if length <= 1e-15:
+        return [0.0, 0.0, 0.0]
+    out = [c / length for c in v]
+    # point the main component the positive way, so the words read naturally
+    big = max(range(3), key=lambda i: abs(out[i]))
+    if out[big] < 0:
+        out = [-c for c in out]
+    return [0.0 if abs(c) < 1e-9 else c for c in out]
+
+
+def _jacobi(a, sweeps=50):
+    """Eigenvalues and eigenvectors of a small symmetric matrix (lists), Jacobi rotations."""
+    n = len(a)
+    a = [list(row) for row in a]
+    v = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+    for _sweep in range(sweeps):
+        off = sum(a[i][j] ** 2 for i in range(n) for j in range(n) if i != j)
+        scale = sum(a[i][i] ** 2 for i in range(n)) or 1.0
+        if off <= 1e-30 * scale:
+            break
+        for p in range(n):
+            for q in range(p + 1, n):
+                if abs(a[p][q]) <= 1e-300:
+                    continue
+                theta = (a[q][q] - a[p][p]) / (2.0 * a[p][q])
+                t = (1.0 if theta >= 0 else -1.0) / (abs(theta) + math.sqrt(theta * theta + 1.0))
+                c = 1.0 / math.sqrt(t * t + 1.0)
+                s_ = t * c
+                for k in range(n):
+                    akp, akq = a[k][p], a[k][q]
+                    a[k][p] = c * akp - s_ * akq
+                    a[k][q] = s_ * akp + c * akq
+                for k in range(n):
+                    apk, aqk = a[p][k], a[q][k]
+                    a[p][k] = c * apk - s_ * aqk
+                    a[q][k] = s_ * apk + c * aqk
+                for k in range(n):
+                    vkp, vkq = v[k][p], v[k][q]
+                    v[k][p] = c * vkp - s_ * vkq
+                    v[k][q] = s_ * vkp + c * vkq
+    values = [a[i][i] for i in range(n)]
+    vectors = [[v[k][i] for k in range(n)] for i in range(n)]
+    return values, vectors
+
+
+def describe_free_mode(mode):
+    """A free movement in words: "slide along X", "turn about an axis along Z through (50, 5,
+    5)"."""
+    kind, direction, through = mode
+    names = ("X", "Y", "Z")
+    axis = None
+    for i in range(3):
+        if abs(abs(direction[i]) - 1.0) <= 1e-6:
+            axis = names[i]
+    words = axis or "(%s)" % ", ".join(fmt(c, 3) for c in direction)
+    if kind == "slide":
+        return "slide along %s" % words
+    return "turn about an axis along %s through (%s)" % (
+        words,
+        ", ".join(fmt(c, 4) for c in through),
+    )
+
+
+# -- what the programs say, in sentences -----------------------------------------------------------
+def solver_failure(output):
+    """CalculiX's complaint (its printed output) as a sentence a person can act on."""
+    text = (output or "").lower()
+    if "zero pivot" in text or "singular" in text:
+        return (
+            "The model is not held enough: a part can still move or spin freely. Add constraints "
+            "so every body is held in X, Y and Z (a Fixed face is the simplest), or switch on "
+            "Remove rigid body modes if the loads balance each other."
+        )
+    if "nonpositive jacobian" in text or "negative jacobian" in text:
+        return "The mesh has distorted elements: make the Average Element Size smaller."
+    if (
+        "dependent dof" in text
+        or "is used as dependent" in text
+        or ("mpc" in text and "error" in text)
+    ):
+        return (
+            "Two constraints hold the same corner or edge in ways that cannot both be true: "
+            "suppress one of them, or move one to a different face."
+        )
+    if "not enough memory" in text or ("allocation" in text and "fail" in text):
+        return (
+            "The computer ran out of memory for this mesh: make the Average Element Size "
+            "larger, or use local mesh controls only where the stress matters."
+        )
+    if "material" in text and ("not defined" in text or "no elastic" in text):
+        return "A body has no usable material: check the study materials."
+    lines = [line.strip() for line in (output or "").splitlines() if line.strip()]
+    return ("CalculiX could not solve the study. %s" % " ".join(lines[-4:])).strip()
+
+
+def gmsh_errors(output):
+    """(Gmsh's error lines, the surface numbers they name): Gmsh numbers the model's faces
+    in order, so surface 12 is the model's Face12."""
+    import re
+
+    errors = [line.strip() for line in (output or "").splitlines() if "Error" in line]
+    numbers = []
+    for line in errors:
+        for match in re.finditer(r"[Ss]urfaces?\s+(\d+)", line):
+            if int(match.group(1)) not in numbers:
+                numbers.append(int(match.group(1)))
+    return errors, numbers
+
+
+# -- contacts --------------------------------------------------------------------------------------
+# Fusion's contact types (research 3.6) and what SciForge does with each: bodies that touch or
+# come closer than the contact tolerance are glued (Bonded, made automatically at solve time,
+# Fusion's default); the others make the solve nonlinear (the bodies may open, slide or press
+# harder as the load grows), which a linear Static Stress solve cannot do.
+CONTACT_TYPES = (
+    ("bonded", "Bonded", True),
+    ("offset_bonded", "Offset Bonded", False),
+    ("separation", "Separation", False),
+    ("sliding", "Sliding", False),
+    ("rough", "Rough", False),
+    ("no_contact", "No Contact", False),
+)
+CONTACT_NOT_AVAILABLE = (
+    "Not in SciForge yet: only bonded contacts, found automatically (bodies that touch or are "
+    "closer than the contact tolerance are glued). Separation, sliding and rough contacts make "
+    "the solve nonlinear, which a linear Static Stress study cannot do."
+)
+
+
+def contact_type_available(key):
+    return any(k == key and ok for k, _t, ok in CONTACT_TYPES)
+
+
 # -- mesh statistics -------------------------------------------------------------------------------
 def mesh_quality(edge_lengths, aspect_ratios, limit):
     """{"smallest", "largest" (mm, element edge lengths), "worst_aspect", "over_limit" (how
