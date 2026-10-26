@@ -163,9 +163,57 @@ def check_duplicate_rigid_group():
         _close(doc)
 
 
+# -- the first occurrence deleted ----------------------------------------------------------------
+def _parts_list(doc):
+    from sciforge import drawing, drawing_core
+
+    found = [b for b in doc.Objects if b.TypeId == "PartDesign::Body"]
+    return {
+        r["PartNumber"]: r["Qty"] for r in drawing_core.parts_rows(drawing.components_of(found))
+    }
+
+
+def check_parts_list_original_deleted():
+    """The same screw file inserted three times ("screw", "screw:2", "screw:3"); the first one
+    deleted: the other two stay (frozen as they were), and a drawing's parts list still counts
+    them as one part (Fusion: the component lives on in its other occurrences, one row, Qty
+    2), also after a save and reopen."""
+    from sciforge import components
+
+    path = _files(["screw_8_32_x_0_5"])["screw_8_32_x_0_5"]
+    doc = App.newDocument("VexQaQty")
+    saved = os.path.join(_folder(), "qty.FCStd")
+    try:
+        tops = [
+            _insert(doc, path, App.Placement(V(15 * k, 0, 0), App.Rotation())).top for k in range(3)
+        ]
+        base = tops[0].Label
+        before = _parts_list(doc)
+        names = [t.Name for t in tops]
+        components.remove(doc, tops[0])
+        doc.recompute()
+        left = [doc.getObject(n) for n in names[1:]]
+        solid = all(o is not None and _body(doc, o).Shape.Volume > 1.0 for o in left)
+        after = _parts_list(doc)
+        doc.saveAs(saved)
+        _close(doc)
+        doc = App.openDocument(saved)
+        doc.recompute()
+        reopened = _parts_list(doc)
+        _out(
+            "parts_list_original_deleted",
+            before == {base: 3} and solid and after == {base: 2} and reopened == {base: 2},
+            "before %s, the others solid %s, after the delete %s, reopened %s"
+            % (before, solid, after, reopened),
+        )
+    finally:
+        _close(doc)
+
+
 # -- the run -------------------------------------------------------------------------------------
 CHECKS = [
     check_duplicate_rigid_group,
+    check_parts_list_original_deleted,
 ]
 
 

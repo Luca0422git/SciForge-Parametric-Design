@@ -450,14 +450,19 @@ def components_of(sources):
 def _part_name(unit):
     """A parts-list row's part number: the component's name. An occurrence of a component
     ("Screw:2", instances.py: Paste, a pattern, a STEP file inserted again, Duplicate With
-    Joints) is the same part as its original (Fusion: one row, the count in Qty)."""
+    Joints) is the same part as its original (Fusion: one row, the count in Qty), also once
+    the original was deleted (its occurrences stay, named "Screw:2", "Screw:3": the name
+    without the occurrence number; Fusion keeps the component while one remains)."""
     try:
-        from . import instances
+        from . import components_core, instances
 
         if instances.is_instance(unit):
             source = instances.source_of(unit)
             if source is not None:
                 return source.Label
+            base, number = components_core.split_instance_label(unit.Label)
+            if number is not None and base:
+                return base
     except Exception:
         pass
     return unit.Label
