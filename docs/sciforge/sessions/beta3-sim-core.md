@@ -156,3 +156,5 @@ sections Engine and Benchmarks.
   cancel removes a run (a dialog's own step must stay open for its Cancel; sim-ui does not
   poll while a dialog is open). Engine check "undo steps opened while it solves" (fails
   without the change).
+- 22:00 a study material later deleted from the materials made the study fall back to the
+  body's own material without a word; the pre-check now warns (engine check).

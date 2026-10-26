@@ -1106,6 +1106,30 @@ def check_steps_between_turns(doc, out):
     )
 
 
+@engine_check("a study material that is gone")
+def check_gone_material(doc, out):
+    """A study material chosen from the materials and later deleted there: the study falls back
+    to the body's own material, and the pre-check says so (never silently)."""
+    from sciforge import bodies
+    from sciforge import simulation as sim
+
+    body, study = _cantilever(doc)
+    sim.set_study_material(study, body, "aluminium")
+    data = sim.study_data(study)
+    data["materials"][body.Name] = "a material deleted since"
+    bodies.save_meta(study, sim.STUDY_PROP, data)
+    name, _props, source = sim.study_material(study, body)
+    checks = sim.precheck(study)
+    out.append(
+        (
+            "the body's own material is used, and the pre-check warns",
+            source == "model"
+            and any(l == "warning" and "no longer in the materials" in t for l, t in checks),
+            (name, source, checks),
+        )
+    )
+
+
 @engine_check("a change while it solves")
 def check_change_during(doc, out):
     """The results are of the study as the solve started: a load changed while CalculiX runs

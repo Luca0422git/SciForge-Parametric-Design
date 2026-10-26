@@ -1173,6 +1173,23 @@ def precheck(study):
         warn("simulation pre-check (held enough): %s" % exc)
     for label in summary.get("unbuilt", []):
         checks.append(("error", "%s is not in SciForge yet: suppress or delete it." % label))
+    try:
+        from . import material
+
+        for body in found:
+            key = data["materials"].get(body.Name)
+            if key and material.entry(key) is None:
+                name = summary["materials"][body.Label][0]
+                checks.append(
+                    (
+                        "warning",
+                        "%s's study material %r is no longer in the materials: the study uses "
+                        "%s's own material (%s). Choose one in Study Materials."
+                        % (body.Label, key, body.Label, name),
+                    )
+                )
+    except Exception as exc:
+        warn("simulation pre-check (materials): %s" % exc)
     return checks
 
 
