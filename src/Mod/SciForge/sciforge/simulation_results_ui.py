@@ -456,6 +456,11 @@ def _run_later():
         if session is not None and session.doc_name in units:
             session.apply()
             session._panels_follow()
+        compare = COMPARE["session"] if compare_on() else None
+        if compare is not None and compare.doc_name in names:
+            compare.refresh_status()  # (a study out of date now says so on its tag)
+        if compare is not None and compare.doc_name in units:
+            compare.apply()
     except Exception as exc:
         warn("results: %s" % exc)
 
@@ -2190,6 +2195,20 @@ class CompareSession:
     def set_deformation(self, key):
         self.deformation = key
         self.apply()
+
+    def refresh_status(self):
+        """The design changed (a recompute, Undo): each study's out-of-date mark again."""
+        changed = False
+        for item in self.items:
+            try:
+                stale = bool(results_data.out_of_date(item["study"]))
+            except Exception:
+                continue
+            if stale != item.get("stale"):
+                item["stale"] = stale
+                changed = True
+        if changed:
+            self.update_tags()
 
     def set_option(self, name, on):
         if name == "mesh":

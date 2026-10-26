@@ -21,7 +21,8 @@ F  When the view cannot be split (Viewports refuses), Compare puts the studies s
 G  Compare again; a solve ends meanwhile (sim-ui's Solve dialog shows its study's results):
    Compare ends, one view with that study's results.
 H  The beam made 120 mm long and only the 300 N study solved again: Compare of all three says
-   which ones are out of date on their tags.
+   which ones are out of date on their tags; the beam back to 100 mm while comparing: the marks
+   follow (the 300 N study out of date now, the others not).
 I  FINISH RESULTS during Compare: SETUP, one view, the beam shown.
 """
 
@@ -461,6 +462,30 @@ def h_check():
     )
 
 
+def h_back():
+    doc = s.doc()
+    box = [o for o in doc.Objects if o.TypeId == "PartDesign::AdditiveBox"][0]
+    box.Length = 100.0  # (while comparing: the two first studies' design again)
+    doc.recompute()
+
+
+h_back.wait_ms = 1500
+
+
+def h_back_check():
+    cmp = _compare()
+    h.check("still comparing", cmp is not None)
+    if cmp is None:
+        return
+    texts = {t["study"]: t["text"] for t in cmp.tag_list}
+    h.check(
+        "the marks follow the change: the 300 N study out of date now, the others not",
+        "(out of date)" in texts.get(state["third"], "")
+        and all("out of date" not in texts.get(state[k], "") for k in ("first", "second")),
+        texts,
+    )
+
+
 def i_finish():
     s.big("Finish Results")
 
@@ -516,6 +541,8 @@ h.run(
         h_compare,
         h_tick_all,
         h_check,
+        h_back,
+        h_back_check,
         i_finish,
         i_check,
     ],
