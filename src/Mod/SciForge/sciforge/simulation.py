@@ -1278,10 +1278,6 @@ def _owner_by_geometry(solid, pieces):
     return min(pieces, key=lambda p: p[1].distToShape(Part.Vertex(point))[0])[0]
 
 
-def _element(obj, sub):
-    return bodies.global_shape(obj, copy=False).getElement(sub.split(".")[-1])
-
-
 def _model_element(model, sub):
     """A sub-element of the model shape by name, solids too ("Solid2")."""
     if sub.startswith("Solid"):
@@ -1308,15 +1304,32 @@ def _probe_points(face):
     return pts
 
 
-def map_picks(item, model, owners=None):
+def _model_index(model):
+    """The model's faces and edges with their boxes (made once for all the picks of a solve:
+    120 picked holes on a 366-face part asked for every face's box 120 times, 3.4 s)."""
+    faces, edges = list(model.Faces), list(model.Edges)
+    return {
+        "faces": faces,
+        "face_boxes": [f.BoundBox for f in faces],
+        "edges": edges,
+        "edge_boxes": [e.BoundBox for e in edges],
+        "vertexes": list(model.Vertexes),
+    }
+
+
+def map_picks(item, model, owners=None, index=None):
     """The model's sub-elements ("Face12", "Edge3", "Vertex5", "Solid2") that lie on the
-    item's picks (a whole-body pick: the model solids that body owns)."""
+    item's picks (a whole-body pick: the model solids that body owns). index: _model_index of
+    the model, when several items are mapped onto it."""
     import Part
 
+    if index is None:
+        index = _model_index(model)
     names = []
     picked = []
     for obj, found, _moved in resolve_picks(item):
         picked += [(obj, n) for n in found]
+    shapes = {}
     for obj, sub in picked:
         if not sub:
             body = obj if bodies.is_body(obj) else bodies.body_of(obj)
@@ -1325,7 +1338,9 @@ def map_picks(item, model, owners=None):
                     names.append("Solid%d" % i)
             continue
         try:
-            element = _element(obj, sub)
+            if obj.Name not in shapes:  # (once per object: a moved body's shape is a copy)
+                shapes[obj.Name] = bodies.global_shape(obj, copy=False)
+            element = shapes[obj.Name].getElement(sub.split(".")[-1])
         except Exception:
             continue
         if element is None or element.isNull():
@@ -1334,8 +1349,8 @@ def map_picks(item, model, owners=None):
         box = element.BoundBox
         box.enlarge(GEOMETRY_TOL * 10)
         if kind == "faces":
-            for i, face in enumerate(model.Faces, 1):
-                if not box.intersect(face.BoundBox):
+            for i, (face, face_box) in enumerate(zip(index["faces"], index["face_boxes"]), 1):
+                if not box.intersect(face_box):
                     continue
                 ok = True
                 for p in _probe_points(face):
@@ -1345,8 +1360,8 @@ def map_picks(item, model, owners=None):
                 if ok:
                     names.append("Face%d" % i)
         elif kind == "edges":
-            for i, edge in enumerate(model.Edges, 1):
-                if not box.intersect(edge.BoundBox):
+            for i, (edge, edge_box) in enumerate(zip(index["edges"], index["edge_boxes"]), 1):
+                if not box.intersect(edge_box):
                     continue
                 mid = edge.valueAt((edge.FirstParameter + edge.LastParameter) / 2.0)
                 ends = [v.Point for v in edge.Vertexes]
@@ -1355,7 +1370,7 @@ def map_picks(item, model, owners=None):
                 ):
                     names.append("Edge%d" % i)
         elif kind == "vertices":
-            for i, vertex in enumerate(model.Vertexes, 1):
+            for i, vertex in enumerate(index["vertexes"], 1):
                 if (vertex.Point - element.Point).Length <= GEOMETRY_TOL:
                     names.append("Vertex%d" % i)
     out = []
@@ -1483,10 +1498,13 @@ def _make_run(study, model_shape, owners, mesh_only=False, straight=False):
         analysis.addObject(model)
 
         subs = {}
+        index = None
         for item in items(study, "mesh" if mesh_only else None):
             if item.Suppressed:
                 continue
-            found = map_picks(item, model_shape, owners)
+            if index is None:
+                index = _model_index(model_shape)
+            found = map_picks(item, model_shape, owners, index)
             if not found:
                 raise SimulationError(
                     "%s lost what it was on: edit it and pick again." % item.Label

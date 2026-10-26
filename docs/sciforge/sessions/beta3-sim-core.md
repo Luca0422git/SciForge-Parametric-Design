@@ -162,3 +162,6 @@ sections Engine and Benchmarks.
   window's thread). It now lets the window repaint and run its timers while the solve's
   programs work (`Job.wait(timeout, idle=...)`; no mouse or keys meanwhile, so nothing changes
   the design under it). GUI scenario sim_core_job step F: 38 timer ticks during a 5.8 s solve.
+- 22:10 the model turn of the plate fixed at its 120 holes took 7.6 s: mapping each pick onto
+  the model asked every model face for its box (120 x 366 times). The model's faces and boxes
+  are now listed once per solve: 3.3 s.
