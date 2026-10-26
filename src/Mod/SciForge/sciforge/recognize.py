@@ -569,10 +569,10 @@ class _Reader:
             }
             self.edges_off = "its base cannot be read"
             self.notes.append(
-                "The part's faces fit no extrude along X, Y or Z nor a revolve about one (slanted "
-                "faces in several directions: a molded body drafted both ways, bent leads...): "
-                "build its base yourself (look at render and query_geometry), then follow the "
-                "rest of the plan."
+                "The part's faces do not all fit an extrude along X, Y or Z nor a revolve about "
+                "one (slanted faces in several directions: a molded body drafted both ways, bent "
+                "leads...): build its base yourself (look at render and query_geometry), then "
+                "follow the rest of the plan."
             )
             base = {"public": {"kind": "none"}, "ops": [], "faces": [], "volume_error": 0.0}
             self.base_shape = self.shape
@@ -584,6 +584,8 @@ class _Reader:
             self.base_shape = removed["base"]
             base = self.find_base(removed["base"])
             timing["base"] = time.time() - t
+        if base["public"].get("kind") == "none" and not free:
+            self._axis_hint(holes + chamfers + blends)
         t = time.time()
         plan = core.Plan(self.options.get("taken_ids") or ())
         features = []
@@ -656,40 +658,81 @@ class _Reader:
             for n, sentence in core.check_plan(steps, catalog.validate)
         ]
 
-    def _some_axis_fits(self, groups):
-        """Whether the faces no feature took could make an extrude along X, Y or Z (each face
-        a level, a wall or a draft along it, or all but a quarter of the area: features along
-        another axis) or a revolve about one. (Optimistic: defeaturing only extends these faces,
-        it makes no new kinds.)"""
+    def _axis_fit(self, groups):
+        """For each origin axis, how the faces no feature took fit an extrude along it:
+        [{"axis", "odd" (area that fits no level, wall or draft along it), "total", "turned"
+        (all could be a revolve about it), "faces" (the odd ones), "unknown" (a kind this
+        check does not know)}]. (Optimistic: defeaturing only extends these faces.)"""
         used = set(i for g in groups for i in g["_faces"])
         rest = [f for f in self.facts if f.index not in used]
         total = sum(f.area for f in rest) or 1.0
+        out = []
         for axis in ("Z", "Y", "X"):
             d = core.AXES[axis]
-            odd, turned = 0.0, True
+            row = {"axis": axis, "odd": 0.0, "total": total, "turned": True, "faces": []}
+            row["unknown"] = False
             for f in rest:
                 normal = f.normal if f.kind == "plane" else None
                 if normal is None and f.kind == "bspline":
                     normal = _flat_normal(f.face)
+                fits, turned = True, True
                 if normal is not None:
                     c = abs(core.dot(normal, d))
-                    if not (c > 1 - 1e-7 or c < math.sin(math.radians(60))):
-                        odd += f.area  # (steeper than a draft, not square: another axis)
-                    if c < 1 - 1e-7:
-                        turned = False  # (a revolve's flat faces are square to its axis)
+                    fits = c > 1 - 1e-7 or c < math.sin(math.radians(60))  # level, wall, draft
+                    turned = c > 1 - 1e-7  # (a revolve's flat faces are square to its axis)
                 elif f.kind in ("cylinder", "cone") and f.axis is not None:
-                    if not core.parallel(f.axis, d, 1e-7):
-                        odd += f.area
-                        turned = False
+                    fits = turned = core.parallel(f.axis, d, 1e-7)
                 elif f.kind in ("torus", "sphere"):
-                    odd += f.area
-                    if f.kind == "torus" and not core.parallel(f.axis, d, 1e-7):
-                        turned = False
+                    fits = False
+                    turned = f.kind == "sphere" or core.parallel(f.axis, d, 1e-7)
                 else:
-                    return True  # (a kind this check does not know: let the reading decide)
-            if turned or odd <= 0.25 * total:
+                    row["unknown"] = True
+                if not fits:
+                    row["odd"] += f.area
+                    row["faces"].append(f.index)
+                if not turned:
+                    row["turned"] = False
+            out.append(row)
+        return out
+
+    def _some_axis_fits(self, groups):
+        """Whether the faces no feature took could make an extrude along X, Y or Z (each face
+        a level, a wall or a draft along it, or all but a quarter of the area: features along
+        another axis) or a revolve about one."""
+        for row in self._axis_fit(groups):
+            if row["unknown"] or row["turned"] or row["odd"] <= 0.25 * row["total"]:
                 return True
         return False
+
+    def _axis_hint(self, groups):
+        """When no base was read: the axis most of the part fits and the faces that do not
+        (an AI builds the extrude along it and adds those), as a note and an unrecognized
+        entry; nothing when no axis fits even half of it."""
+        try:
+            rows = [r for r in self._axis_fit(groups) if not r["unknown"]]
+        except Exception:
+            return
+        if not rows:
+            return
+        best = min(rows, key=lambda r: r["odd"])
+        share = 1.0 - best["odd"] / best["total"]
+        faces = [i for i in best["faces"] if i not in self.listed]
+        if share < 0.5 or not faces:
+            return
+        self.notes.append(
+            "Along %s, %d %% of the part's area (its features aside) fits an extrude: the "
+            "faces that do not (listed in unrecognized) are round or slanted features along "
+            "other directions; start from an extrude along %s and add them."
+            % (best["axis"], int(100 * share), best["axis"])
+        )
+        self.unrecognized.append(
+            {
+                "faces": self.face_refs(faces),
+                "why": "%d face(s) that fit no extrude along %s (the axis most of the part "
+                "fits)" % (len(faces), best["axis"]),
+            }
+        )
+        self.listed.update(faces)
 
     def _free_form(self, groups):
         """Faces no feature took that no extrude or revolve of lines and arcs makes
