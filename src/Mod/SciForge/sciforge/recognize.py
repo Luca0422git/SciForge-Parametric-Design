@@ -1229,7 +1229,7 @@ class _Reader:
                 d2 = g.get("distance2", d1)
                 budget += 3.0 * 0.5 * d1 * d2 * area / max(math.hypot(d1, d2), 1e-9)
             elif g.get("radius"):
-                budget += 3.0 * 0.25 * area * g["radius"]
+                budget += 1.5 * area * g["radius"]  # (0.14 A r on a square edge; more on sharp)
             else:
                 budget += area * 1.0
         try:
@@ -3481,6 +3481,20 @@ def _open_piece_op(piece, solid, region, plane, operation, part_lo, part_hi, cac
     if not ends or not open_ts:
         return None
     heights = {round(core.dot(_t(f.Vertexes[0].Point), n), 7) for f in ends}
+    if len(heights) == 2 and operation == "join":
+        # a boss across a round part (an eye on a rod): flat at both ends, joined to the part
+        # in between, made from one end to the other (through the part: that adds nothing)
+        lo, hi = sorted(_on_level(v, _part_levels(cache, plane)) for v in heights)
+        first = [f for f in ends if abs(core.dot(_t(f.Vertexes[0].Point), n) - lo) < 1e-6]
+        tol = 1e-7 * solid.Volume + 1e-6
+        try:
+            prism = _extrude_faces(first, plane, lo, hi)
+            if piece.cut(prism).Volume > tol or prism.cut(solid).Volume > tol:
+                return None
+        except Exception:
+            return None
+        op = _op(operation, first, plane, lo, hi)
+        return None if op is None else [op]
     if len(heights) != 1:
         return None
     h = _on_level(heights.pop(), _part_levels(cache, plane))

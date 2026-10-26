@@ -82,7 +82,18 @@
   away passed the `<= 1e-6` test), so a base ended 1e-6 before the boss on it started and the
   boss became a body of its own. Snapping is now idempotent (a unit test).
 - `Part.ShapeUpgrade` in FreeCAD 1.1.4 has only `UnifySameDomain` (no `ShapeDivideClosed`).
+- Two tangent arcs of a part in `AssemblyExample.FCStd` missed each other by 5e-7 mm, more than
+  the sketch's 1e-7 closing tolerance ("no closed area"). Arcs that meet are now moved by that
+  noise onto one shared point (the centre put on the perpendicular bisector of the two ends).
+- `edge.Curve` raises `TypeError: undefined curve type` for some edges of the CAM demo part
+  `hole_puzzle.fcstd` (and so does `selectors.edge_type`): every curve / surface type check in
+  recognize.py goes through a guarded helper, and each plan stage fails on its own.
+- A "chamfer" found on the slanted side of a groove made the defeaturing fill the groove
+  (+15 % volume, a wrong plan): a feature is now taken off only when the volume changes by about
+  what such a feature holds. `_hole_void` counted both halves of a split bore as whole bores.
+- OpenCASCADE's defeaturing of 98 fillet faces: 14.4 s at once; in chunks of 49, 11 s for the
+  first chunk alone (and the faces of the rest must be found again): at once is fastest.
 
 ## Tests
 
-(see the parity doc's Tests section for the final numbers)
+TESTS_SECTION
