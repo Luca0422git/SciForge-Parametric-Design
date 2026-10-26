@@ -850,6 +850,13 @@ def check_reopen(doc, out):
     out.append(("without results: the numbers stay", sim.summary(st) == summary, ""))
     out.append(
         (
+            "without results: not out of date (keeping them changes nothing)",
+            not sim.out_of_date(st),
+            "",
+        )
+    )
+    out.append(
+        (
             "without results: solve again to see them",
             sim.results(st) is None and sim.results_dropped(st),
             "",

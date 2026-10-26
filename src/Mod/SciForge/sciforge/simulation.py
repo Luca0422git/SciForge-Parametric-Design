@@ -1343,11 +1343,9 @@ def _make_run(study, model_shape, owners, mesh_only=False, straight=False):
             mesh.CoherenceMesh = True
         if straight and "SecondOrderLinear" in mesh.PropertiesList:
             mesh.SecondOrderLinear = True
-        elif opts["mesh"]["order"] == "parabolic" and opts["mesh"]["curved"]:
-            # curved elements whose mid-side nodes are moved onto a hole's wall can turn
-            # inside out where the elements are large: Gmsh straightens them as needed
-            if "HighOrderOptimize" in mesh.PropertiesList:
-                mesh.HighOrderOptimize = "Optimization"
+        # (curved elements that turn inside out at a tight curve are made straight-sided
+        # before the solve, _straighten_input: Gmsh's HighOrderOptimize took minutes on a big
+        # part)
         _hide(mesh)
         analysis.addObject(mesh)
 
@@ -1927,6 +1925,60 @@ def _inject(path, cards):
         handle.write("\n".join(lines) + "\n")
 
 
+def _straighten_input(path):
+    """The curved elements of a CalculiX input that turned inside out (or nearly) made
+    straight-sided (core.straighten_tets): the lines of the nodes it moved are rewritten.
+    Pure file work (it runs in the background thread). Returns (elements made straight,
+    elements still bad)."""
+    import numpy as np
+
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().split("\n")
+    ids, xyz, where, elements, pending = [], [], [], [], []
+    section = None
+    for i, line in enumerate(lines):
+        if line.startswith("*"):
+            upper = line.upper().replace(" ", "")
+            if upper == "*NODE" or upper.startswith("*NODE,"):
+                section = "node"
+            elif upper.startswith("*ELEMENT,") and "TYPE=C3D10," in upper + ",":
+                section, pending = "tet10", []
+            else:
+                section = None
+            continue
+        if section == "node":
+            parts = line.split(",")
+            if len(parts) >= 4:
+                ids.append(int(parts[0]))
+                xyz.append((float(parts[1]), float(parts[2]), float(parts[3])))
+                where.append(i)
+        elif section == "tet10":
+            pending += [int(p) for p in line.split(",") if p.strip()]
+            if len(pending) >= 11:  # (an element's numbers may go on over two lines)
+                elements.append(pending[1:11])
+                pending = []
+    if not elements or not ids:
+        return 0, 0
+    ids_a = np.array(ids, dtype=np.int64)
+    row_of = np.full(int(ids_a.max()) + 1, -1, dtype=np.int64)
+    row_of[ids_a] = np.arange(len(ids_a))
+    elements_a = np.array(elements, dtype=np.int64)
+    if elements_a.max() >= len(row_of) or elements_a.min() < 0:
+        return 0, 0  # (an element names a node that is not listed: CalculiX will say so)
+    rows = row_of[elements_a]
+    if (rows < 0).any():
+        return 0, 0
+    xyz_a = np.array(xyz, dtype=float)
+    moved, straightened, left = core.straighten_tets(xyz_a, rows)
+    if moved:
+        for row in moved:
+            x, y, z = xyz_a[row]
+            lines[where[row]] = "%d, %.13e, %.13e, %.13e" % (ids[row], x, y, z)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines))
+    return straightened, left
+
+
 # -- the mesh: Gmsh's size fields, Netgen when Gmsh fails, statistics ------------------------------
 def _size_fields(study, model, owners, subs, global_size, view=None):
     """Gmsh .geo lines for the local mesh controls and Scale Mesh Size Per Part: a size
@@ -2229,6 +2281,8 @@ class Job:
         self._netgen_out = None
         self._gmsh_problem = None
         self._straight = False  # mesh again with straight-sided elements (bad curved ones)
+        self._curved = None  # (made straight, still bad, error) of the check before a solve
+        self._curved_text = None  # its note
         self._solid_nodes = {}  # model solid index -> its mesh nodes (from Gmsh's groups)
         self._groups = {}  # Gmsh's groups: model faces / edges / solids -> elements, nodes
         self._previous_run = None  # adaptive refinement: the last pass's run, until the next
@@ -2334,6 +2388,8 @@ class Job:
     def _start_mesh(self):
         from femmesh.gmshtools import GmshTools
 
+        # (Gmsh first every time: a mesh made again after a failed solve tries Gmsh again)
+        self.mesher, self._netgen_out = "gmsh", None
         tools = GmshTools(self._mesh)
         # GmshTools.prepare() without get_gmsh_command(): that one only looks on the PATH and
         # reports an error when Gmsh is elsewhere (next to SciForge on Windows)
@@ -2392,6 +2448,7 @@ class Job:
         """The solver's result file read (parsed) in the background: the slow part of
         reading results (tens of MB for a big mesh), done without the document."""
         self.stage, self.message = "results", "Reading the results"
+        self._curved_note()
         frd = os.path.join(self.work, self._input + ".frd")
         if self._returncode not in (0, None) or not os.path.isfile(frd) or not os.path.getsize(frd):
             self._frd_data = None
@@ -2408,6 +2465,30 @@ class Job:
                 frd_module.Console = real
 
         self._background_call(work, "results")
+
+    def _curved_note(self):
+        """The note of the check of the curved elements that ran before the solver (the
+        last solve's only, with adaptive refinement)."""
+        done, self._curved = self._curved, None
+        if not done:
+            return
+        straightened, _left, error = done
+        if error:
+            warn("simulation: checking the curved mesh elements: %s" % error)
+        if self._curved_text in self.notes:
+            self.notes.remove(self._curved_text)
+        self._curved_text = None
+        if straightened:
+            self._curved_text = (
+                "SciForge made %d curved mesh element%s straight-sided: at tight curves %s "
+                "would have turned inside out."
+                % (
+                    straightened,
+                    "" if straightened == 1 else "s",
+                    "it" if straightened == 1 else "they",
+                )
+            )
+            self.notes.append(self._curved_text)
 
     def _after_mesh(self):
         t = time.time()
@@ -2431,10 +2512,11 @@ class Job:
             import Fem
 
             self._mesh.FemMesh = Fem.read(self._netgen_out)
-            self.notes.append(
-                "Gmsh could not mesh the model, so Netgen made the mesh (%s)."
-                % (self._gmsh_problem or "")
+            note = "Gmsh could not mesh the model, so Netgen made the mesh (%s)." % (
+                self._gmsh_problem or ""
             )
+            if note not in self.notes:
+                self.notes.append(note)
         # FreeCAD 1.1's Gmsh run names a group after every solid, face and edge; with any
         # group in the mesh, the solver input looks for groups named after the materials,
         # finds none and reports an error before searching the mesh itself. SciForge does
@@ -2545,7 +2627,23 @@ class Job:
         env = dict(os.environ)
         if not env.get("OMP_NUM_THREADS"):
             env["OMP_NUM_THREADS"] = str(max(1, (os.cpu_count() or 2) - 1))
-        self._background([_binary("ccx"), "-i", self._input], "solve", env=env)
+        opts = settings(self.study)["mesh"]
+        self._curved = None
+        check = opts["order"] == "parabolic" and opts["curved"] and not self._straight
+
+        def straighten():
+            # (background thread) curved elements turned inside out made straight-sided
+            try:
+                self._curved = _straighten_input(path) + (None,)
+            except Exception as exc:
+                self._curved = (0, 0, str(exc))
+
+        self._background(
+            [_binary("ccx"), "-i", self._input],
+            "solve",
+            env=env,
+            before=straighten if check else None,
+        )
 
     def _stage_results(self):
         t = time.time()
@@ -2559,6 +2657,8 @@ class Job:
             ):
                 # curved elements turned inside out: the same mesh with straight sides
                 self._straight = True
+                if self._curved_text in self.notes:
+                    self.notes.remove(self._curved_text)
                 self.notes.append(
                     "Some curved mesh elements turned inside out, so SciForge made the mesh "
                     "again with straight-sided elements."
@@ -2709,13 +2809,17 @@ class Job:
         self._thread = threading.Thread(target=work, name="SciForge %s" % stage, daemon=True)
         self._thread.start()
 
-    def _background(self, command, stage, env=None):
+    def _background(self, command, stage, env=None, before=None):
+        """Run `command` in the background thread (after `before()`, Python work on files
+        only, when given); poll() picks up its output."""
         self.stage = stage
         self._output, self._returncode, self._run_error = "", None, None
         t = time.time()
 
         def work():
             try:
+                if before is not None and not self._cancel:
+                    before()
                 if self._cancel:  # (cancelled before the program started)
                     return
                 self._process = subprocess.Popen(
@@ -3080,7 +3184,10 @@ def signature(study):
         h.update(json.dumps(_shape_key(body)).encode())
         name, props, _source = study_material(study, body)
         h.update(json.dumps([name, props], sort_keys=True, default=str).encode())
-    h.update(json.dumps(study_data(study), sort_keys=True).encode())
+    data = dict(study_data(study))
+    # (whether the results are kept in the file changes nothing they say)
+    data["settings"] = {k: v for k, v in data["settings"].items() if k != "keep_results"}
+    h.update(json.dumps(data, sort_keys=True).encode())
     for item in items(study):
         h.update(json.dumps(_item_key(item), sort_keys=True).encode())
     return h.hexdigest()
