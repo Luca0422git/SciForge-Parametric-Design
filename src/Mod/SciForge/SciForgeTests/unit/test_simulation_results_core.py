@@ -466,6 +466,16 @@ class MeshTests(unittest.TestCase):
         lo, hi = core.slice_range({"axis": "face", "normal": (1, 1, 0)}, pts)
         self.assertAlmostEqual(hi - lo, math.sqrt(2.0))
 
+    def test_plane_slice(self):
+        spec = core.plane_slice((0, 0, -1), (5, 5, 7.5))
+        self.assertEqual((spec["axis"], spec["offset"], spec["flip"]), ("z", 7.5, False))
+        spec = core.plane_slice((0, 3, 4), (0, 0, 10))
+        self.assertEqual(spec["axis"], "face")
+        self.assertAlmostEqual(spec["offset"], 8.0)
+        origin, normal = core.slice_plane(spec)
+        self.assertAlmostEqual(sum(a * b for a, b in zip(origin, normal)), 8.0)
+        self.assertIsNone(core.plane_slice((0, 0, 0), (0, 0, 0)))
+
     def test_face_slice(self):
         pts = [(0, 0, 0), (100, 0, 0), (100, 10, 10), (0, 10, 10)]
         # the top face (outward +Z): across Z at half height, the lower half kept (its cut face

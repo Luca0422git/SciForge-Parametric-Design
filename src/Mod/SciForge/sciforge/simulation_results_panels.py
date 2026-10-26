@@ -316,6 +316,24 @@ def probes(session):
 
 
 # -- Slice Plane -----------------------------------------------------------------------------------
+def _construction_planes(doc):
+    """[(label, normal, point)] of the design's construction planes (offset planes and the
+    like; not the origin's, which are the X / Y / Z entries)."""
+    out = []
+    if doc is None:
+        return out
+    for obj in doc.Objects:
+        try:
+            if obj.TypeId not in ("PartDesign::Plane", "Part::DatumPlane"):
+                continue
+            place = obj.getGlobalPlacement()
+            normal = place.Rotation.multVec(App.Vector(0, 0, 1))
+            out.append((obj.Label, (normal.x, normal.y, normal.z), tuple(place.Base)))
+        except Exception:
+            continue
+    return out
+
+
 class SlicePanel:
     """Slice Plane: a plane across X, Y or Z, or parallel to a face clicked on the result, cuts
     the result; the cut face is coloured with the result inside the part. Style: cut the
@@ -360,6 +378,9 @@ class SlicePanel:
             self.axis_box.addItem(name, key)
         if self.face_normal is not None:
             self.axis_box.addItem(self.FACE_ITEM, "face")
+        self.planes = _construction_planes(session.doc)
+        for label, _normal, _point in self.planes:
+            self.axis_box.addItem("On %s" % label, "plane:" + label)
         self.axis_box.setCurrentIndex(max(0, self.axis_box.findData(spec["axis"])))
         self.axis_box.currentIndexChanged.connect(self._axis_changed)
         layout.addRow("Plane", self.axis_box)
@@ -464,8 +485,9 @@ class SlicePanel:
         except Exception as exc:
             warn("Slice Plane: %s" % exc)
 
-    def use(self, spec):
-        """Show a slice spec in the fields (and apply it)."""
+    def use(self, spec, choice=None):
+        """Show a slice spec in the fields (and apply it); `choice` the Plane entry to show
+        (a construction plane's), else the spec's own."""
         if spec.get("axis") == "face":
             self.face_normal = tuple(spec["normal"])
             if self.axis_box.findData("face") < 0:
@@ -473,10 +495,13 @@ class SlicePanel:
                 self.axis_box.addItem(self.FACE_ITEM, "face")
                 self.axis_box.blockSignals(False)
         self.spec = dict(spec)
+        self._exact = float(spec["offset"])  # (the field shows it rounded to the micrometre)
         for widget in (self.axis_box, self.flip, self.offset):
             widget.blockSignals(True)
         try:
-            self.axis_box.setCurrentIndex(max(0, self.axis_box.findData(spec["axis"])))
+            self.axis_box.setCurrentIndex(
+                max(0, self.axis_box.findData(choice if choice else spec["axis"]))
+            )
             self.flip.setChecked(bool(spec.get("flip")))
             self._set_range()
             self.offset.setValue(float(spec["offset"]))
@@ -555,7 +580,17 @@ class SlicePanel:
         self.slider.blockSignals(False)
 
     def _axis_changed(self, _index):
-        self.spec["axis"] = self.axis_box.currentData()
+        choice = self.axis_box.currentData()
+        if str(choice).startswith("plane:"):  # a construction plane: the cut on it
+            for label, normal, point in self.planes:
+                if "plane:" + label == choice:
+                    spec = core.plane_slice(normal, point, self.style_box.currentData())
+                    if spec is not None:
+                        spec["lines"] = bool(self.lines.isChecked())
+                        self.use(spec, choice)
+                    return
+            return
+        self.spec["axis"] = choice
         if self.spec["axis"] == "face":
             self.spec["normal"] = self.face_normal
         self._set_range()
@@ -582,15 +617,24 @@ class SlicePanel:
         try:
             if self._closed:
                 return
+            choice = self.axis_box.currentData()
+            if str(choice).startswith("plane:"):  # (a construction plane: its direction)
+                axis, normal = self.spec.get("axis", "x"), self.spec.get("normal")
+            else:
+                axis, normal = choice, self.face_normal
+            offset = float(self.offset.value())
+            exact = getattr(self, "_exact", None)
+            if exact is not None and abs(offset - exact) <= 0.5 * 10.0 ** -self.offset.decimals():
+                offset = exact  # (a plane's own place, not its rounded figure)
             self.spec = {
-                "axis": self.axis_box.currentData(),
-                "offset": float(self.offset.value()),
+                "axis": axis,
+                "offset": offset,
                 "flip": bool(self.flip.isChecked()),
                 "style": self.style_box.currentData(),
                 "lines": bool(self.lines.isChecked()),
             }
-            if self.spec["axis"] == "face":
-                self.spec["normal"] = tuple(self.face_normal)
+            if axis == "face" and normal is not None:
+                self.spec["normal"] = tuple(normal)
             self.session.set_slice(self.spec)
             self._follow_arrow()
         except Exception as exc:

@@ -838,6 +838,23 @@ def slice_range(spec, points):
     return float(along.min()), float(along.max())
 
 
+def plane_slice(normal, point, style="clip"):
+    """The slice on a construction plane (its normal and a point of it): an axis-aligned one
+    gives the X / Y / Z entry at its place."""
+    n = [float(c) for c in normal]
+    length = math.sqrt(sum(c * c for c in n))
+    if length < 1e-12:
+        return None
+    n = [c / length for c in n]
+    for axis, e in SLICE_AXES.items():
+        dot = sum(a * b for a, b in zip(n, e))
+        if abs(abs(dot) - 1.0) < 1e-6:
+            i = "xyz".index(axis)
+            return {"axis": axis, "offset": float(point[i]), "flip": False, "style": style}
+    offset = sum(a * float(b) for a, b in zip(n, point))
+    return {"axis": "face", "normal": tuple(n), "offset": offset, "flip": False, "style": style}
+
+
 def face_slice(outward, points, style="clip"):
     """The slice made by a click on a flat face whose outward normal is `outward`: parallel to
     the face, half way across the part, keeping the half away from the face (its cut face looks

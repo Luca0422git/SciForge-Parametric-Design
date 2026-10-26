@@ -20,7 +20,8 @@ E  Slice Plane, a click on the beam's top face: the cut is parallel to it (acros
    down, the half under it kept, so the cut face looks at whoever clicked; OK; Remove Slice.
 F  A wedge (a sloped face, solved): Slice Plane, a click on the sloped face: the cut is
    parallel to that face ("Parallel to the face clicked"), the cut face lies on the plane and
-   the drag arrow points along the face's normal; OK.
+   the drag arrow points along the face's normal; the design's construction plane (tilted 30
+   degrees) in the Plane list: the cut on it; OK.
 """
 
 import FreeCAD as App
@@ -481,6 +482,12 @@ def f_wedge():
         [(body, sloped)],
         {"magnitude": 100.0, "direction": "vector", "vector": [0.0, 0.0, -1.0]},
     )
+    # a construction plane through (50, 5, 5), tilted 30 degrees about X
+    plane = body.newObject("PartDesign::Plane", "DatumPlane")
+    plane.Label = "Tilted Plane"
+    plane.MapMode = "Deactivated"
+    plane.Placement = App.Placement(App.Vector(50, 5, 5), App.Rotation(App.Vector(1, 0, 0), 30))
+    doc.recompute()
     s.solve(study)
     h.fit()
 
@@ -534,6 +541,28 @@ def f_click_slope_check():
         arrow is not None
         and np.allclose((arrow.direction.x, arrow.direction.y, arrow.direction.z), keep, atol=1e-6),
     )
+    ui.choose(s.panel_field("SciForgeSimSliceAxis", QtWidgets.QComboBox), "On Tilted Plane")
+
+
+def f_plane_check():
+    import numpy as np
+
+    sess = s.session()
+    spec = sess.slice or {}
+    n = np.array([0.0, -np.sin(np.radians(30)), np.cos(np.radians(30))])
+    h.check(
+        "the cut on the construction plane",
+        spec.get("axis") == "face" and np.allclose(spec.get("normal"), n, atol=1e-9),
+        spec,
+    )
+    h.check("through its place", abs(spec.get("offset", 0) - float(n @ (50, 5, 5))) < 1e-9)
+    pts = sess.display.cap_points
+    h.check(
+        "the cut face lies on it",
+        len(pts) and float(np.abs(pts @ n - float(n @ (50, 5, 5))).max()) < 1e-6,
+    )
+    box = s.panel_field("SciForgeSimSliceAxis", QtWidgets.QComboBox)
+    h.check("the dialog says so", box.currentText() == "On Tilted Plane", box.currentText())
     h.task_button("OK")
 
 
@@ -606,6 +635,7 @@ h.run(
         f_slice,
         f_click_slope,
         f_click_slope_check,
+        f_plane_check,
         f_ok_check,
     ],
 )
