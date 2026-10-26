@@ -71,6 +71,7 @@ class RebuildError(ValueError):
 REFERENCE = "RebuildReference"
 SHAPE = "FrozenShape"
 LISTENERS = []  # fn(event, ref, data): the window's red / green overlay (rebuild_ui)
+_LIVE_DOCS = set()  # documents a rebuild was started or opened in (the move watcher looks there)
 _HIDDEN = {}  # document name -> {reference name: original's name}: hidden while it is rebuilt
 
 
@@ -117,6 +118,7 @@ class ReferenceFeature:
 
     def onDocumentRestored(self, obj):
         self.ensure(obj)
+        _LIVE_DOCS.add(obj.Document.Name)
         try:
             if getattr(obj, "Shown", True):
                 _resume_later(obj.Document.Name)
@@ -454,6 +456,7 @@ def start(doc, source, label=None):
     ref.TargetName = target.Name
     if fresh:
         ref.FrozenFrame = frame(body=target)
+    _LIVE_DOCS.add(doc.Name)
     ref.Shown = True
     _attach_view(ref)
     bodies.set_shown(source, False)
@@ -2299,8 +2302,8 @@ class _Watch:
             if obj.TypeId not in ("App::Part", "PartDesign::Body") or App.isRestoring():
                 return
             doc = obj.Document
-            if doc is None or doc.Name in self.closing:
-                return
+            if doc is None or doc.Name in self.closing or doc.Name not in _LIVE_DOCS:
+                return  # (no rebuild in this design: nothing to look for)
             for ref in active_references(doc):
                 target = target_of(ref)
                 if target is not None and (target is obj or obj in _containers(target)):

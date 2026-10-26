@@ -374,8 +374,10 @@ the category "Rebuild with a timeline":
   `done`; and a `verdict` that says what to do next. In the window the differences show in
   the 3D view: missing red, extra green.
 - `finish_rebuild`: when done, the rebuild takes the original's name, component and place;
-  the original is deleted or kept hidden (`keep_original`); one undo step. It refuses a
-  rebuild that is not done unless `even_if_different` is given.
+  whatever used the original (joints, a ground, a pattern of it, sketches on its faces)
+  moves onto the rebuild; the original is deleted or kept hidden (`keep_original`; also kept
+  when something cannot move, said in the answer); one undo step. It refuses a rebuild that
+  is not done unless `even_if_different` is given.
 
 The whole loop with real calls: [rebuilding a part](sciforge://docs/recipes/reverse-engineer.md).
 A person starts it from a body's right-click, **Rebuild with Timeline (AI)...**: SciForge
