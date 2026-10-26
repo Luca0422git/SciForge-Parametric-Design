@@ -21,13 +21,22 @@ up to bc1bf483); `sf/at-recognize` merged again as it went on (see "Merges").
 | start_rebuild with the id import_file answers | **Bug, fixed**: that id is the component's; it was refused ("pick the body") |
 | A mesh with holes (not watertight) | refused with the reason and "MESH tab > Repair" (start_rebuild and the window); a meshed plate with through holes rebuilds (the e2e test) |
 | Threads | **Bug, fixed**: a plate with a modeled M6 thread took 210 s in describe_reference (OpenCASCADE's defeaturing on the thread's faces), then read no base at all and planned a hole that failed. Now 1.3 s: the plate and the hole are read, the thread is listed as not read with what to do |
-| Text (raised letters), a loft | said, not guessed: "the base shape is neither an extrude ... nor a revolve: build it yourself", every face in unrecognized, an empty plan (the plate under raised text is not read either: a gap) |
+| Text (raised or engraved letters), a loft | **Bug, fixed** for text on a flat face: its free-form letters made the whole part unreadable (base none, every face unrecognized, a plan of a sketch and a hole that failed on the empty body); now the letters are closed over like holes, the plate and its hole are read and planned, and each group of letters is said (raised or engraved, size and place, sketch_text + extrude). A loft: said, not guessed ("build it yourself") |
 | A 0.5 mm part and a 2 m part | both rebuilt to done (match 0.999996 and 1) |
 | An inch STEP file | read at its size (127 x 12.7 x 1.5875 mm), rebuilt to done; the plan's numbers are millimetres (12.7 for half an inch) |
 | The chat message a beginner sees | right for the AI it is meant for (names the body, the rebuilt body, the recipe, the four tools); nothing said it waits for Send: a tip now says so |
 | An AI following only the docs and the answers | the e2e agent (plain Python, reads only answers) gets to done on 6 parts, the recognition bench on 53; a threaded part cannot get to done (the thread is said; finish with even_if_different) |
 | Speed on a 294-face part (144 chamfered holes) | start 0.4 s, describe 1.7 s, compare 1.6 to 2.2 s while holes are left and 0.4 s when done, finish 2 s (load about 5 on 4 CPUs) |
 | Speed on a VEX plate (125 square holes, 506 faces) | **Bug, fixed**: describe 56 s; now about 9 s (compare 2 to 3 s, finish 5 s) |
+| Speed on a VEX C-channel (410 faces) | **Bug, fixed** in part: describe 37 s, read along its length too (51 levels); now 25 s (the rest is at-recognize's sections and booleans) |
+| A plate with a boss and 60 holes in the face the boss stands on | **Bug, fixed**: no hole was closed by its rim (`Face.cutHoles` answers None), all went to defeaturing: 12.7 s, now 0.3 s |
+| Speed of Finish in a big design (150 components, 3009 objects, 40 joints) | start 0.55 s, describe 0.25 s, compare 0.13 s, finish 1.3 s (both joints of the part followed) |
+| check_design half way through a rebuild | **Bug, fixed**: the hidden original under its rebuild was an overlap (NOT OK) |
+| Holes with a chamfered rim, the base built only | **Bug, fixed**: compare called them holes "with a pointed (drilled) end" |
+| Giving a rebuild up | **Bug, fixed**: there was no way but Undo (none in a design opened again: the original stayed hidden, the ghost drawn); now Stop Rebuild... (UTILITIES > AI, the rebuilt body's right-click) |
+| A drawing of the original (3 views, 26 dimensions) | the views follow the rebuild; no dimension changed its value |
+| A body two components deep, both turned, the body moved in its component | rebuilt to done and finished in place (the same world volume) |
+| A modelled thread after at-recognize's latest merge (28b49f4d) | **Regression, fixed**: its new round-floor rule took the thread's flanks for a floor: no hole, base none |
 
 ## Fixes (each with a check that fails on the code before it)
 
@@ -56,6 +65,22 @@ Commits on `sf/autotimeline-qa` (oldest first):
 9. start_rebuild takes a component with one body. Check `component_id`.
 10. The window: the chat's ready message is said; the ghost placed on reopening.
 11. Docs: finish_rebuild's description, the recipe, troubleshooting, the parity doc.
+12. check_design and interference leave an original under its rebuild alone. Check `midway`.
+13. A link through the original's sketch or datum does not follow to a wrong element (unit
+    test `FollowTest`); a reference deleted in a design opened again shows its original too
+    (`deleted_reference`); the move watcher looks only in designs with a rebuild.
+14. compare tells a drill point from a chamfered or countersunk rim. Check `chamfered_rim`,
+    unit test.
+15. A VEX C-channel is not read along its length too (37 s -> 25 s). Check `vex_channel`.
+16. Holes in a face that keeps another loop (a boss) are closed by their rims again
+    (`Face.cutHoles` works in place; 12.7 s -> 0.3 s). Check `bossed_plate`.
+17. Raised or engraved text on a flat face: closed over like a hole ("islands"), the rest of
+    the part read and planned, the text said. Check `text_plate` (raised and engraved).
+18. Stop Rebuild... (window) / `delete_step` on the reference (AI). Checks `stopped`, scenario
+    `rebuild_qa_joints` D.
+19. After merging at-recognize 28b49f4d: a modelled thread is read again (its round-floor rule
+    limited to analytic faces). Check `threaded` (failed on the merge).
+20. Stop Rebuild keeps the rebuilt body by default when the original was deleted meanwhile.
 
 `SciForgeTests/headless/rebuild_qa.py` is run by `rebuild_e2e.main()` (so by
 `run_tests.sh --only headless / base`); `SCIFORGE_REBUILD_FILTER=qa` runs only it. On the code
@@ -66,8 +91,10 @@ component id, follower).
 
 0460e98b (2543d664), 7c5a95f8 (cd7dc610), e286585b (4622f67f: its free-form rule then took a
 hole's thread for free-form faces: fixed in 5bdbdd82), 8ca93fd0 (135be235: its axis skipping
-conflicted with mine in `_best_prismatic`: theirs kept). After each: recognition bench and
-rebuild e2e passed (see the report for the numbers).
+conflicted with mine in `_best_prismatic`: theirs kept), a5682d67 (db65af29), 71810a78
+(28b49f4d: its round-floor rule broke threads: fixed in dd8022eb; parity doc conflicts
+resolved by hand, the AI docs copy regenerated). After each: recognition bench and rebuild
+e2e passed (see the report for the numbers).
 
 ## FreeCAD facts learned
 
@@ -85,3 +112,7 @@ rebuild e2e passed (see the report for the numbers).
   210 s. Keep free-form faces away from it.
 - Two booleans between solids whose 500 faces coincide take seconds each: compare the faces
   first.
+- `Part.Face.cutHoles(wires)` changes the face in place and answers None (`f = f.cutHoles(w)`
+  leaves None).
+- In headless FreeCAD there is no active body after `components.activate_body` (it is the
+  window's); tests of the active body belong in GUI scenarios.
