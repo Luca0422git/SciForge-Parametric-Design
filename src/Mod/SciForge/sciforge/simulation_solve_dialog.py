@@ -23,6 +23,7 @@ import FreeCADGui as Gui
 from . import bodies, log, ui_icon, warn
 from . import simulation_setup_core as score
 from .compat import QtCore, QtWidgets
+from .simulation_dialogs import FocusBack
 
 RUN = {
     "queue": [],  # studies waiting
@@ -76,7 +77,7 @@ def _status_text(study):
     return "Not solved"
 
 
-class SolveDialog(QtWidgets.QDialog):
+class SolveDialog(FocusBack, QtWidgets.QDialog):
     """Fusion's Solve dialog (research 3.10), solving on this computer."""
 
     def __init__(self, doc):
@@ -398,7 +399,7 @@ STATUS_ICONS = {
 }
 
 
-class StatusDialog(QtWidgets.QDialog):
+class StatusDialog(FocusBack, QtWidgets.QDialog):
     def __init__(self):
         super().__init__(Gui.getMainWindow())
         self.setObjectName("SciForgeSimJobStatus")

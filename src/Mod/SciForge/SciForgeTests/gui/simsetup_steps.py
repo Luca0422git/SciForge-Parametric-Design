@@ -116,6 +116,16 @@ def arm_top(body_obj):
     )
 
 
+def plate_top(body_obj):
+    """The plate's top face (z 6), seen from the default view."""
+    return face_named(
+        body_obj,
+        lambda f: "Plane" in f.Surface.TypeId
+        and abs(f.BoundBox.ZMax - 6.0) < 1e-6
+        and abs(f.BoundBox.ZMin - 6.0) < 1e-6,
+    )
+
+
 def plate_bottom(body_obj):
     return face_named(
         body_obj, lambda f: "Plane" in f.Surface.TypeId and abs(f.BoundBox.ZMax) < 1e-6
@@ -244,6 +254,13 @@ def click_widget(widget):
     return True
 
 
+def menu_item(group, label):
+    """GROUP > label in the ribbon (the group's name opens its menu), with the mouse."""
+    from SciForgeTests.gui import sketch_input
+
+    return sketch_input.menu_item(group, label)
+
+
 def ok():
     return h.task_button("OK")
 
@@ -257,11 +274,17 @@ def esc():
 
 
 def undo():
-    h.press("z", QtCore.Qt.ControlModifier)
+    """The application bar's Undo (as a person clicks it)."""
+    h.check("Undo button", ui.quick_access("Undo"))
 
 
 def redo():
-    h.press("y", QtCore.Qt.ControlModifier)
+    h.check("Redo button", ui.quick_access("Redo"))
+
+
+def undo_key():
+    """Ctrl+Z over the 3D view."""
+    h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
 def message():

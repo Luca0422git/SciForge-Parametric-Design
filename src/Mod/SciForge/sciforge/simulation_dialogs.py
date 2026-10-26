@@ -70,6 +70,30 @@ def _close_active():
         pass
 
 
+def give_back_focus():
+    """A SciForge window closed: the main window becomes the active one again, so its keys
+    (Esc, Enter, Ctrl+Z over the 3D view) work at once (without a window manager, as on some
+    Linux desktops and under xvfb, nobody else does it)."""
+
+    def run():
+        try:
+            main = Gui.getMainWindow()
+            if QtWidgets.QApplication.activeModalWidget() is None:
+                main.activateWindow()
+        except Exception:
+            pass
+
+    QtCore.QTimer.singleShot(0, run)
+
+
+class FocusBack:
+    """Mixin for SciForge's dialogs: closing one gives the main window the keyboard back."""
+
+    def hideEvent(self, event):
+        give_back_focus()
+        super().hideEvent(event)
+
+
 def _note(text, style=NOTE_STYLE):
     label = QtWidgets.QLabel(text)
     label.setWordWrap(True)
@@ -133,7 +157,7 @@ class _SimPanel(Panel):
 STUDY_ICONS = {"static_stress": "sim_static_stress"}
 
 
-class NewStudyDialog(QtWidgets.QDialog):
+class NewStudyDialog(FocusBack, QtWidgets.QDialog):
     """Fusion's New Study: the study types as pictures, the one picked described in big on the
     right with a Settings gear, Create Study. Only Static Stress is available; every other type
     is shown greyed with "Not in SciForge yet" (research 2.1, 2.2)."""
@@ -439,7 +463,7 @@ class SettingsForm(QtWidgets.QTabWidget):
         return out
 
 
-class SettingsDialog(QtWidgets.QDialog):
+class SettingsDialog(FocusBack, QtWidgets.QDialog):
     """Study Settings opened from the New Study dialog's gear (before the study exists)."""
 
     def __init__(self, parent, settings):
@@ -840,8 +864,12 @@ def open_contacts(study):
     return _show_panel(ContactsPanel(study.Document, study))
 
 
+class _TableDialog(FocusBack, QtWidgets.QDialog):
+    pass
+
+
 def _table_dialog(name, title, headers, rows, note=""):
-    dialog = QtWidgets.QDialog(Gui.getMainWindow())
+    dialog = _TableDialog(Gui.getMainWindow())
     dialog.setObjectName(name)
     dialog.setWindowTitle(title)
     layout = QtWidgets.QVBoxLayout(dialog)
@@ -971,7 +999,7 @@ def open_attributes(study):
 
 
 # -- Pre-check ----------------------------------------------------------------------------------
-class PrecheckDialog(QtWidgets.QDialog):
+class PrecheckDialog(FocusBack, QtWidgets.QDialog):
     """Fusion's Pre-check list (research 3.9): the traffic light and what may be missing."""
 
     def __init__(self, study):
