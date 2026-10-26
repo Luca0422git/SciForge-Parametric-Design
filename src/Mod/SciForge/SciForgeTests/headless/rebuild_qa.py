@@ -30,6 +30,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
   its one body (it refused: "pick the body").
 * vex plate: a VEX-like plate with 125 square holes (506 faces): describe_reference took 56 s
   (a section and a boolean per level along X, two booleans on 506 coincident faces).
+* bossed plate: a plate with a boss and 60 holes in the face the boss stands on: no hole was
+  closed by its rim (Face.cutHoles answers None), all went to defeaturing (12.7 s).
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -796,6 +798,48 @@ def vex_channel(agent, folder):
     )
 
 
+# -- a plate with a boss and holes on the same face ----------------------------------------------
+def bossed_plate(agent, folder):
+    import time
+
+    import FreeCAD as App
+    import Part
+
+    from sciforge import recognize
+
+    V = App.Vector
+    plate = Part.makeBox(200, 120, 6).fuse(Part.makeCylinder(12, 8, V(100, 60, 6)))
+    cutters = []
+    for i in range(60):
+        x, y = 10 + (i % 18) * 10.5, 10 + (i // 18) * 10.0
+        if abs(x - 100) >= 20 or abs(y - 60) >= 20:
+            cutters.append(Part.makeCylinder(2, 6, V(x, y, 0)))
+    plate = plate.removeSplitter().cut(Part.makeCompound(cutters)).removeSplitter()
+    reader = recognize._Reader(plate, {})
+    holes = reader.find_holes()
+    _solid, closed, _left = reader._drop_holes(holes)
+    began = time.time()
+    out = recognize.describe(plate, {})
+    took = time.time() - began
+    agent.check(
+        "bossed plate: the %d holes in the face the boss stands on are closed by their rims "
+        "(none were: the face keeps the boss's loop, Face.cutHoles answers None; all went to "
+        "OpenCASCADE's defeaturing, 12.7 s) (%d closed, describe %.1f s)"
+        % (len(holes), len(closed), took),
+        len(holes) == len(cutters)
+        and len(closed) == len(holes)
+        and out["base"].get("kind") == "extrude"
+        and out["confidence"] >= 0.99,
+        (len(holes), len(closed), out["base"].get("kind"), out["confidence"]),
+    )
+    path = os.path.join(folder, "qa_bossed_plate.step")
+    plate.exportStep(path)
+    agent.call("new_design", {"name": "QaBossedPlate"})
+    agent.call("import_file", {"path": path})
+    result = rebuild_through_tools(agent, "Body001")
+    agent.check("bossed plate: the plan rebuilds it (done)", result.get("done"), result)
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -810,6 +854,7 @@ CHECKS = (
     checked_midway,
     chamfered_rim,
     vex_channel,
+    bossed_plate,
 )
 
 

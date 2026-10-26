@@ -1377,7 +1377,10 @@ class _Reader:
                 keep = [w for w in f.face.Wires if w.hashCode() not in gone]
                 rebuilt = Part.Face(f.face.Surface, f.face.OuterWire)
                 if keep:
-                    rebuilt = rebuilt.cutHoles(keep)
+                    # (beta 3 QA) cutHoles changes the face in place and answers None: taking
+                    # its answer failed every face that keeps a loop (a boss on it), and with
+                    # it the closing of every hole (60 holes: 12.7 s of defeaturing)
+                    rebuilt.cutHoles(keep)
                 p = rebuilt.CenterOfMass
                 n_new = rebuilt.normalAt(*rebuilt.Surface.parameter(p))
                 n_old = f.face.normalAt(*f.face.Surface.parameter(p))
