@@ -341,9 +341,32 @@ def _arc_ends(item):
     )
 
 
+def _arc_through(s, start, end):
+    """The arc s moved (by float noise) to run exactly from start to end: its centre put on
+    their perpendicular bisector, its radius the distance to them."""
+    (cx, cy), (x0, y0), (x1, y1) = s["c"], start, end
+    mx, my = 0.5 * (x0 + x1), 0.5 * (y0 + y1)
+    dx, dy = x1 - x0, y1 - y0
+    length = math.hypot(dx, dy)
+    if length < 1e-12:
+        return None
+    ux, uy = -dy / length, dx / length  # (along the bisector)
+    t = (cx - mx) * ux + (cy - my) * uy
+    c = (mx + t * ux, my + t * uy)
+    r = math.hypot(x1 - c[0], y1 - c[1])
+    a, b = (start, end) if s["ccw"] else (end, start)
+    a0 = math.degrees(_angle(c, a))
+    a1 = math.degrees(_angle(c, b))
+    while a1 <= a0:
+        a1 += 360.0
+    return {"arc": [c[0], c[1], r, a0, a1]}
+
+
 def _segments(loop):
     """A loop as create_sketch "segments": arcs counter-clockwise, every line's ends taken
-    from the arcs beside it, so the chain closes within FreeCAD's 1e-7 mm."""
+    from the arcs beside it, so the chain closes within FreeCAD's 1e-7 mm. Two arcs that meet
+    (tangent arcs from another program's STEP file can miss each other by 5e-7 mm) are moved
+    by that noise to share their meeting point exactly."""
     pieces = []
     for s in loop:
         if s["kind"] == "arc":
@@ -353,6 +376,24 @@ def _segments(loop):
         else:
             pieces.append([None, s["a"], s["b"]])
     n = len(pieces)
+    meets = {}  # piece index -> (start, end) where two arcs meet in between
+    for i in range(n):
+        a, b = pieces[i], pieces[(i + 1) % n]
+        if a[0] is None or b[0] is None or _same_pt(a[2], b[1], 1e-12):
+            continue
+        j = (0.5 * (a[2][0] + b[1][0]), 0.5 * (a[2][1] + b[1][1]))
+        meets.setdefault(i, [None, None])[1] = j
+        meets.setdefault((i + 1) % n, [None, None])[0] = j
+    for i, (start, end) in meets.items():
+        piece = pieces[i]
+        start = start or piece[1]
+        end = end or piece[2]
+        item = _arc_through(loop[i], start, end)
+        if item is None:
+            continue
+        p0, p1 = _arc_ends(item)
+        piece[0] = item
+        piece[1], piece[2] = (p0, p1) if loop[i]["ccw"] else (p1, p0)
     for i, piece in enumerate(pieces):
         if piece[0] is None:
             before, after = pieces[i - 1], pieces[(i + 1) % n]

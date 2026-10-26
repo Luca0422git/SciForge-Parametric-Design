@@ -187,6 +187,24 @@ class Loops(unittest.TestCase):
         self.assertEqual(item["segments"][1], {"arc": [10, 5, 5, -90.0, 90.0]})
         self.assertIsNone(core.loop_geometry([{"kind": "other", "a": (0, 0), "b": (1, 1)}]))
 
+    def test_arcs_that_miss_each_other_by_noise_meet_exactly(self):
+        # an excavator link from a STEP file: four tangent arcs, the junctions 5e-7 mm apart
+        # (more than the sketch's 1e-7: "no closed area" before)
+        loop = [
+            arc((0.0, 0.0), 8.0, (8.0, 0.0), (-8.0, 0.0)),
+            arc((-38.0, 5e-7), 30.0, (-8.0, 5e-7), (-68.0, 5e-7), ccw=False),
+            arc((-76.0, 0.0), 8.0, (-68.0, 0.0), (-84.0, 0.0)),
+            arc((-38.0, -5e-7), 46.0, (-84.0, -5e-7), (8.0, -5e-7)),
+        ]
+        segs = core.loop_geometry(loop)["segments"]
+        ends = []
+        for i, piece in enumerate(segs):
+            p0, p1 = core._arc_ends(piece)
+            ends.append((p0, p1) if loop[i]["ccw"] else (p1, p0))
+        for i in range(len(ends)):
+            gap = math.dist(ends[i][1], ends[(i + 1) % len(ends)][0])
+            self.assertLess(gap, 1e-9)
+
     def test_a_clockwise_arc_is_written_counter_clockwise(self):
         seg = arc((0, 0), 2, (0, 2), (2, 0), ccw=False)  # quarter turn clockwise
         self.assertEqual(core._arc_item(seg), {"arc": [0, 0, 2, 0.0, 90.0]})
