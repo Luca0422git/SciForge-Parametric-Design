@@ -45,7 +45,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   a big button in every group; SOLVE > Job Status opens the progress window any time), **icons**
   (`tools/sciforge/icons_simulation.py`, 44 icons, also for the greyed commands; written one by
   one so the other builders' icons are untouched), unit tests (`test_simulation_setup_core.py`,
-  37), fifteen GUI scenarios `sim_setup_*.py`.
+  37), sixteen GUI scenarios `sim_setup_*.py`.
 - **The design's units** (Fusion's Simulation follows the document's units, research 6): the
   value fields, the browser's texts, Load Case Attributes, Study Materials' properties and the
   mesh / contact lengths show N, MPa, N mm, mm in a metric design and lbf, psi, lbf in, in in an
@@ -76,7 +76,10 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   double-click said the results were gone; a design closed during its solve left the progress
   window saying "Solving..."; a new load dialog opened after a click on another load's row
   started on that load's face (the row lights it up: `simulation_browser.only_highlight`); a
-  deleted study whose mesh showed left Show Mesh ticked (and Undo drew the mesh again).
+  deleted study whose mesh showed left Show Mesh ticked (and Undo drew the mesh again); a body
+  deleted while its study solved made the engine fail with "Cannot access attribute 'Label' of
+  deleted object" (the UI now stops the job first, with a sentence naming the body); a cancelled
+  solve's progress still showed its stage "running".
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
@@ -92,7 +95,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_dialogs` | 85 | PASS |
 | `sim_setup_browser` | 61 | PASS |
 | `sim_setup_documents` | 71 | PASS |
-| `sim_setup_kinds` | 70 | PASS |
+| `sim_setup_kinds` | 72 | PASS |
 | `sim_setup_workspace` | 70 | PASS |
 | `sim_setup_components` | 43 | PASS |
 | `sim_setup_glyphs` | 20 | PASS |
@@ -103,6 +106,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_two` | 40 | PASS |
 | `sim_setup_mesh` | 42 | PASS |
 | `sim_setup_odd` | 44 | PASS |
+| `sim_setup_during` | 30 | PASS |
 
 The first fourteen in one batch (22:35-22:57 UTC, with the five below): every one passes. Shared
 files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser` (92),
@@ -159,6 +163,10 @@ GUI smoke / journey / restart: all passed.
    date (found by `sim_setup_documents` part H). Also: with it off, the saved design keeps an
    emptied result object, so the browser's Results row asks `results_dropped(study)` rather
    than whether a result object exists.
+9. Open: a body of the study deleted while the study solves: `Job.poll()` raised "Cannot
+   access attribute 'Label' of deleted object" (a WARNING, and "The solve failed: ..." as the
+   message). The UI now stops the job first (`simulation_solve_dialog._poll` checks the
+   study's bodies each turn); the engine could check them too (scripts and the AI's solve).
 
 ## FreeCAD / Qt facts and traps
 

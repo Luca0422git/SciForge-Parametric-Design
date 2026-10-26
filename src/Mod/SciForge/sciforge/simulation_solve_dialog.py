@@ -335,6 +335,7 @@ def start(studies, kind="solve"):
     RUN["kind"] = kind
     RUN["results"] = {}
     RUN["where"] = {}
+    RUN["stage_at"] = {}  # study name (or label) -> the stage its job ended at
     RUN["last_done"] = None
     show_status()
     if RUN["timer"] is None:
@@ -362,6 +363,10 @@ def _next():
             continue
         RUN["study"] = study
         RUN["label"] = study.Label  # (said when the study goes while it solves)
+        try:
+            RUN["bodies"] = [(b, b.Label) for b in sim.study_bodies(study)]
+        except Exception:
+            RUN["bodies"] = []
         RUN["started"] = time.time()
         try:
             RUN["signature"] = sim.signature(study)
@@ -425,7 +430,23 @@ def _poll():
             RUN.setdefault("draining", []).append(job)
             RUN["job"] = None
             _gone(RUN.get("label") or "The study")
+            RUN.setdefault("stage_at", {})[RUN.get("label") or "The study"] = job.stage
             _after(None, "cancelled", "The study is gone.")
+            return
+        gone = [label for body, label in RUN.get("bodies") or [] if not bodies.alive(body)]
+        if gone:
+            # a body of the study deleted while it solves (the design changed under it): the
+            # solve stops with a sentence, before the solver's turns touch the gone body
+            job.cancel()
+            RUN.setdefault("draining", []).append(job)
+            RUN["job"] = None
+            RUN.setdefault("stage_at", {})[study.Name] = job.stage
+            _after(
+                study,
+                "cancelled",
+                "%s %s deleted while it solved: the solve stopped. Solve again for the design "
+                "as it is now." % (", ".join(gone), "was" if len(gone) == 1 else "were"),
+            )
             return
         thread = job._thread
         running_alone = thread is not None and thread.is_alive()
@@ -449,6 +470,7 @@ def _poll():
                     )
             if notes:
                 message = (message + " " if message else "") + " ".join(notes)
+            RUN.setdefault("stage_at", {})[study.Name] = job.stage
             _after(study, state, message)
     except Exception as exc:
         warn("solve: %s" % exc)
@@ -752,6 +774,12 @@ def _update_status(final=False):
                 name, (state, message) = failed[-1]
                 _study, label = _result_study(name)
                 dialog.title.setText("%s: %s" % (label, score.STATE_WORDS.get(state, state)))
+                at = RUN.get("stage_at", {}).get(name)
+                if state == "suspect":  # (solved, but the model moved too far)
+                    _fill_stages(dialog, score.stage_rows("results", "done", stages))
+                elif at:  # the stage it stopped at, not "running" any more
+                    ended = state if state in ("failed", "cancelled") else "failed"
+                    _fill_stages(dialog, score.stage_rows(at, ended, stages))
                 dialog.message.setStyleSheet(
                     "color: #ff8a80;" if state in ("failed", "suspect") else ""
                 )
@@ -875,9 +903,14 @@ def last_results():
 def generate_mesh(study):
     """SETUP > SOLVE > Generate Mesh (and the browser's Mesh row): the mesh made now (the
     engine's mesh-only job: no constraints or loads needed) and shown on the model."""
-    from . import commands, simulation_dialogs
+    from . import commands
 
-    if study is None or simulation_dialogs._busy(study):
+    if study is None:
+        return False
+    if solving():
+        commands.tell(
+            "A solve is running: Generate Mesh waits for it to end (or cancel it in Job Status)."
+        )
         return False
     if not commands.finish_open_dialog():
         return False
