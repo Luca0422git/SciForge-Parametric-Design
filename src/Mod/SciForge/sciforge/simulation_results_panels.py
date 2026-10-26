@@ -419,6 +419,15 @@ class SlicePanel:
         self.lines.setChecked(bool(spec.get("lines")))
         self.lines.toggled.connect(self._changed)
         layout.addRow("", self.lines)
+        self.vectors = QtWidgets.QCheckBox("Displacement arrows on the cut")
+        self.vectors.setObjectName("SciForgeSimSliceVectors")
+        self.vectors.setToolTip(
+            "Arrows the way the material moves, longer where it moves more, coloured like the "
+            "result there"
+        )
+        self.vectors.setChecked(bool(spec.get("vectors")))
+        self.vectors.toggled.connect(self._changed)
+        layout.addRow("", self.vectors)
         self.remove_button = QtWidgets.QPushButton("Remove Slice")
         self.remove_button.setObjectName("SciForgeSimSliceRemove")
         self.remove_button.clicked.connect(self.remove)
@@ -480,6 +489,7 @@ class SlicePanel:
             if spec is None:
                 return
             spec["lines"] = bool(self.lines.isChecked())
+            spec["vectors"] = bool(self.vectors.isChecked())
             self.use(spec)
             log("results: slice plane parallel to the face clicked")
         except Exception as exc:
@@ -587,6 +597,7 @@ class SlicePanel:
                     spec = core.plane_slice(normal, point, self.style_box.currentData())
                     if spec is not None:
                         spec["lines"] = bool(self.lines.isChecked())
+                        spec["vectors"] = bool(self.vectors.isChecked())
                         self.use(spec, choice)
                     return
             return
@@ -632,6 +643,7 @@ class SlicePanel:
                 "flip": bool(self.flip.isChecked()),
                 "style": self.style_box.currentData(),
                 "lines": bool(self.lines.isChecked()),
+                "vectors": bool(self.vectors.isChecked()),
             }
             if axis == "face" and normal is not None:
                 self.spec["normal"] = tuple(normal)
@@ -1691,10 +1703,29 @@ class ReactionsDialog(QtWidgets.QDialog):
                 table.setItem(r, c, QtWidgets.QTableWidgetItem(text))
         table.resizeColumnsToContents()
         box.addWidget(table)
+        hint = QtWidgets.QLabel("Each constraint's total is shown on the model while this is open.")
+        hint.setWordWrap(True)
+        hint.setProperty("role", "dim")
+        box.addWidget(hint)
         close = QtWidgets.QPushButton("Close")
+        close.setObjectName("SciForgeSimReactionsClose")
         close.clicked.connect(self.close)
         box.addWidget(close)
         self.table = table
+        self._tags(True)
+
+    def _tags(self, on):
+        try:
+            if self.session.active:
+                self.session.reaction_tags = bool(on)
+                self.session.update_tags()
+        except Exception as exc:
+            warn("Reaction Force: %s" % exc)
+
+    def closeEvent(self, event):
+        self._tags(False)
+        OPEN["reactions"] = None
+        super().closeEvent(event)
 
 
 def reactions(session):
@@ -1704,9 +1735,16 @@ def reactions(session):
 
         commands.tell("This solve has no reaction forces: solve the study again.")
         return None
+    old = OPEN.get("reactions")
+    try:
+        if old is not None:
+            old.close()
+    except RuntimeError:
+        pass
     dialog = ReactionsDialog(session, found)
     OPEN["reactions"] = dialog
     dialog.show()
+    log("Reaction Force opened")
     return dialog
 
 

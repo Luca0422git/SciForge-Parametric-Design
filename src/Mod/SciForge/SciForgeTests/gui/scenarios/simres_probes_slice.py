@@ -11,6 +11,8 @@ A  INSPECT > Surface Probes: the mouse over the result shows the value under it 
 B  Slice Plane: the result is cut across X at the middle and the cut face is coloured with the
    values inside (each between the result's min and max); Mesh lines on the cut draws where
    the plane crosses the elements (on the plane, more than the outline), and goes again;
+   Displacement arrows on the cut: arrows standing on the plane, pointing down (the beam bends
+   down), and go again;
    dragging the plane's arrow moves the cut along X; Across Y at 2 mm puts the cut face on
    that plane; Flip keeps the other half; a probe click on the cut face reads the value inside;
    Slice alone shows the cut face inside the whole result drawn see-through; OK keeps it.
@@ -249,6 +251,26 @@ def b_lines_check():
 
 def b_lines_off_check():
     h.check("mesh lines off again", not s.session().display.cap_lines_shown())
+    s.click_widget(s.panel_field("SciForgeSimSliceVectors", QtWidgets.QCheckBox))
+
+
+def b_vectors_check():
+    sess = s.session()
+    display = sess.display
+    h.check("displacement arrows on the cut", display.vectors_shown() and display.vector_count > 3)
+    shafts = display.vector_segments[: display.vector_count]
+    feet_x = shafts[:, 0, 0] if len(shafts) else []
+    h.check(
+        "standing on the plane x = 50",
+        len(feet_x) and max(abs(x - 50.0) for x in feet_x) < 1e-4,
+    )
+    down = (shafts[:, 1] - shafts[:, 0])[:, 2] if len(shafts) else []
+    h.check("pointing down, as the beam bends", len(down) and (down < 0).all(), list(down)[:5])
+    s.click_widget(s.panel_field("SciForgeSimSliceVectors", QtWidgets.QCheckBox))
+
+
+def b_vectors_off_check():
+    h.check("the arrows off again", not s.session().display.vectors_shown())
 
 
 def b_drag():
@@ -605,6 +627,8 @@ h.run(
         b_lines,
         b_lines_check,
         b_lines_off_check,
+        b_vectors_check,
+        b_vectors_off_check,
         b_drag,
         b_drag_check,
         b_axis_y,

@@ -77,6 +77,9 @@ class ResultData:
         self._stats = {}
         self._straight = None
         self._boxes = None
+        self._tet_bodies = None
+        self._bodies = None
+        self._subsets = {}  # tuple of body indices shown -> (rows, surface, straight)
 
     def values(self, key):
         """numpy array of a result at every node (NaN where there is none)."""
@@ -153,6 +156,81 @@ class ResultData:
         if self._straight is None:
             self._straight = core.straight_tets(self.tets)
         return self._straight
+
+    def bodies(self):
+        """The bodies these results are of (the solve's per-body rows; a body hidden since is
+        still one of them: the engine's study_bodies() leaves hidden bodies out)."""
+        if self._bodies is None:
+            found = []
+            try:
+                doc = self.study.Document
+                for label in simulation.summary(self.study).get("bodies") or {}:
+                    for obj in doc.getObjectsByLabel(label):
+                        if hasattr(obj, "Shape") and obj not in found:
+                            found.append(obj)
+                            break
+                if not found:
+                    found = list(simulation.study_bodies(self.study))
+            except Exception:
+                found = []
+            self._bodies = found
+        return self._bodies
+
+    def tet_bodies(self):
+        """Per tetrahedron the index (into bodies()) of the body it lies in, -1 when none was
+        found: its centre tested in each body's shape (worked out once, on first use; one body:
+        no test)."""
+        import numpy as np
+
+        if self._tet_bodies is not None:
+            return self._tet_bodies
+        owners = np.full(len(self.tets), -1, dtype=np.int64)
+        found = self.bodies()
+        if len(found) <= 1 or not len(self.tets):
+            owners[:] = 0 if found else -1
+            self._tet_bodies = owners
+            return owners
+        from . import bodies as body_tools
+
+        centres = self.points[self.tets[:, :4]].mean(axis=1)
+        size = float(self.diagonal or 1.0)
+        for k, body in enumerate(found):
+            try:
+                shape = body_tools.global_shape(body, copy=False)
+                box = shape.BoundBox
+            except Exception:
+                continue
+            pad = 1e-6 * size
+            near = np.flatnonzero(
+                (owners < 0)
+                & (centres[:, 0] >= box.XMin - pad)
+                & (centres[:, 0] <= box.XMax + pad)
+                & (centres[:, 1] >= box.YMin - pad)
+                & (centres[:, 1] <= box.YMax + pad)
+                & (centres[:, 2] >= box.ZMin - pad)
+                & (centres[:, 2] <= box.ZMax + pad)
+            )
+            for i in near.tolist():
+                try:
+                    if shape.isInside(App.Vector(*centres[i]), pad, True):
+                        owners[i] = k
+                except Exception:
+                    continue
+        self._tet_bodies = owners
+        return owners
+
+    def subset(self, shown):
+        """(tetrahedron rows, surface, straight tetrahedra) of the bodies `shown` (indices into
+        bodies()); the elements of no body found count as shown."""
+        import numpy as np
+
+        key = tuple(sorted(int(k) for k in shown))
+        if key not in self._subsets:
+            owners = self.tet_bodies()
+            rows = np.flatnonzero(np.isin(owners, list(key)) | (owners < 0))
+            tets = self.tets[rows]
+            self._subsets[key] = (rows, core.surface(self.points, tets), core.straight_tets(tets))
+        return self._subsets[key]
 
     def locate(self, point):
         """Where a point of the unloaded part lies in the mesh: (straight tetrahedron row,
@@ -293,6 +371,39 @@ def reactions(study):
         warn("results: reaction forces unreadable: %s" % exc)
         return None
     return out or None
+
+
+def reaction_places(study):
+    """{constraint label: (x, y, z)} the middle of the faces each constraint holds, in design
+    coordinates (where Reaction Force puts its tags)."""
+    from . import bodies as body_tools
+
+    out = {}
+    for item in simulation.items(study):
+        try:
+            if simulation.item_data(item).get("category") != "constraint" or item.Suppressed:
+                continue
+            points = []
+            for obj, subs in item.References or []:
+                subs = [subs] if isinstance(subs, str) else list(subs or [])
+                shape = body_tools.global_shape(obj, copy=False)
+                for sub in subs or []:
+                    try:
+                        points.append(shape.getElement(sub).CenterOfMass)
+                    except Exception:
+                        continue
+                if not subs:
+                    points.append(shape.CenterOfMass)
+            if points:
+                n = float(len(points))
+                out[item.Label] = (
+                    sum(p.x for p in points) / n,
+                    sum(p.y for p in points) / n,
+                    sum(p.z for p in points) / n,
+                )
+        except Exception:
+            continue
+    return out
 
 
 def _picks_text(item):

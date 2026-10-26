@@ -474,6 +474,9 @@ class Session:
         self._anim_timer = None
         self._glyphs_before = None
         self.panels = []
+        self.reaction_tags = False  # Reaction Force's tags at the constraints (window open)
+        self.shown_bodies = None  # indices of the study's bodies drawn (None: all of them)
+        self._shown_key = None
 
     # -- the study
     @property
@@ -538,12 +541,70 @@ class Session:
         if was:
             self.deactivate()
         self.data = results_data.data(study)
-        self.display = view_mod.ResultDisplay(self.data)
+        self.shown_bodies = self._bodies_shown()
+        self._shown_key = self._visibility_key()
+        self.display = self._new_display()
         self.probes = []
         for point in self.points:  # (kept: they are places of the part, found in the new mesh)
             point.pop("where", None)
         if self.slice is not None:
             self.slice = dict(self.slice)
+
+    # -- the bodies shown (Fusion: hide a body in the browser to see the results inside)
+    def _visibility_key(self):
+        if self.data is None or self.doc is None:
+            return None
+        key = []
+        for body in self.data.bodies():
+            try:
+                key.append((body.Name, bool(body.ViewObject.Visibility)))
+            except Exception:
+                key.append((body.Name, True))
+        return tuple(key)
+
+    def _bodies_shown(self):
+        """Indices (into the study's bodies) of the ones whose eye is on; None when all are."""
+        key = self._visibility_key() or ()
+        shown = [k for k, (_name, visible) in enumerate(key) if visible]
+        return None if len(shown) == len(key) else shown
+
+    def _new_display(self):
+        if self.shown_bodies is None:
+            return view_mod.ResultDisplay(self.data)
+        _rows, surface, _straight = self.data.subset(self.shown_bodies)
+        return view_mod.ResultDisplay(self.data, surface)
+
+    def straight(self):
+        """The straight tetrahedra of the bodies shown (slices and iso-surfaces)."""
+        if self.shown_bodies is None:
+            return self.data.straight()
+        return self.data.subset(self.shown_bodies)[2]
+
+    def element_count(self):
+        if self.shown_bodies is None:
+            return len(self.data.tets)
+        return len(self.data.subset(self.shown_bodies)[0])
+
+    def _follow_bodies(self):
+        """A body's eye switched in the browser: its results go (or come back)."""
+        key = self._visibility_key()
+        if key == self._shown_key or self.data is None:
+            return
+        self._shown_key = key
+        shown = self._bodies_shown()
+        if shown == self.shown_bodies:
+            return
+        self.shown_bodies = shown
+        old = self.display
+        views = list(old.views) if old is not None else []
+        if old is not None:
+            old.detach()
+        self.display = self._new_display()
+        for view in views:
+            self.display.attach(view)
+        self.apply()
+        names = [n for n, visible in key if visible]
+        log("results: bodies shown %s" % (", ".join(names) if names else "none"))
 
     def deactivate(self):
         self.stop_animation(keep_bar=True)
@@ -797,6 +858,8 @@ class Session:
                     tags.append(tag)
             for number, point in enumerate(self.points, 1):
                 tags.append(self._point_tag(point, "P%d: " % number, unit, (lo, hi, reverse)))
+            if self.reaction_tags:
+                tags.extend(self._reaction_tags())
             hover = self.hover
             if hover is not None:
                 if "at" in hover:
@@ -832,6 +895,31 @@ class Session:
             "text": text,
             "colour": core.map_colour(core.position(value, lo, hi, reverse)),
         }
+
+    def _reaction_tags(self):
+        """Reaction Force: a tag at each constraint with the force it takes (total, N)."""
+        study = self.study
+        found = results_data.reactions(study) if study is not None else None
+        if not found:
+            return []
+        places = results_data.reaction_places(study)
+        out = []
+        for label, (fx, fy, fz) in sorted(found.items()):
+            place = places.get(label)
+            if place is None:
+                continue
+            total = (fx * fx + fy * fy + fz * fz) ** 0.5
+            point = [a + b for a, b in zip(place, self.display.offset)]
+            out.append(
+                {
+                    "kind": "reaction",
+                    "value": total,
+                    "point": tuple(float(c) for c in point),
+                    "text": "%s: %s N" % (label, core.fmt(total)),
+                    "colour": (0.55, 0.78, 1.0),
+                }
+            )
+        return out
 
     def _point_tag(self, point, prefix, unit, scale):
         """The tag of a Point Probe (`prefix`: its name)."""
@@ -1039,15 +1127,16 @@ class Session:
         data = self.data
         values = data.values(self.result)
         lo, hi, reverse = self.scale()
-        tris, vals, rest, owners = core.cut(
+        tris, vals, carried, owners = core.cut(
             data.deformed(self.display.factor),
             values,
-            data.straight(),
+            self.straight(),
             origin,
             normal,
-            carry=data.points,
+            carry=np.hstack([data.points, data.displacement]),
             owners=True,
         )
+        rest = carried[:, :, :3] if carried is not None else None
         flat_vals = vals.ravel()
         positions = (
             _positions(np, flat_vals, lo, hi, reverse, self._grey()) if len(flat_vals) else []
@@ -1055,8 +1144,24 @@ class Session:
         self.display.set_cap(tris, flat_vals, positions, normal, rest=rest)
         lines = (self.slice or {}).get("lines")
         self.display.set_cap_lines(
-            core.cut_lines(tris, owners, len(data.tets)) if lines and len(tris) else []
+            core.cut_lines(tris, owners, self.element_count()) if lines and len(tris) else []
         )
+        if (self.slice or {}).get("vectors") and len(tris):
+            # the displacement's arrows, coloured like the result where they stand
+            centres = tris.mean(axis=1)
+            moved = carried[:, :, 3:].mean(axis=1)
+            middle = vals.mean(axis=1)
+            chosen, segments, arrow = core.vector_arrows(
+                centres, moved, normal, 0.04 * data.diagonal, 0.035 * data.diagonal
+            )
+            colours = []
+            if len(chosen):
+                at = _positions(np, middle[chosen], lo, hi, reverse, self._grey())
+                per_arrow = [core.map_colour(t) if t is not None else core.NO_VALUE for t in at]
+                colours = [per_arrow[a] for a in arrow]
+            self.display.set_vectors(segments, colours, len(chosen))
+        else:
+            self.display.set_vectors([])
 
     # -- iso-surface
     def iso_level(self, result=None):
@@ -1094,7 +1199,7 @@ class Session:
         tris, _vals, rest = core.iso_surface(
             data.deformed(display.factor),
             data.values(self.result),
-            data.straight(),
+            self.straight(),
             level,
             carry=data.points,
         )
@@ -1335,6 +1440,7 @@ class Session:
             self._ticks += 1
             if self._ticks % 6 == 0:
                 self._keep_design_hidden()
+                self._follow_bodies()
             if _picking_dialog_open():
                 # a command that picks faces of the design (a load or constraint edited from the
                 # browser, Local Mesh Control) opened: the model is needed, back to SETUP

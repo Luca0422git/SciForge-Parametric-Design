@@ -90,13 +90,13 @@ class ResultDisplay:
       ghost (the undeformed model, see-through)
     """
 
-    def __init__(self, data):
+    def __init__(self, data, surface=None):
         from pivy import coin
 
         np = _np()
         self.coin = coin
         self.data = data
-        surf = data.surface
+        surf = data.surface if surface is None else surface  # (some bodies hidden: theirs)
         self.nodes = np.asarray(surf["nodes"], dtype=np.int64)
         self.triangles = np.asarray(surf["triangles"], dtype=np.int64)
         self.factor = 0.0
@@ -242,6 +242,29 @@ class ResultDisplay:
         self.cap_lines_switch.whichChild = coin.SO_SWITCH_NONE
         cap.addChild(self.cap_lines_switch)
         self.cap_line_count = 0
+        # Vectors: the displacement's arrows on the cut, coloured like the result there
+        self.vectors_switch = coin.SoSwitch()
+        arrows = coin.SoSeparator()
+        arrows_light = coin.SoLightModel()
+        arrows_light.model = coin.SoLightModel.BASE_COLOR
+        arrows.addChild(arrows_light)
+        self.vector_material = coin.SoMaterial()
+        arrows.addChild(self.vector_material)
+        vector_binding = coin.SoMaterialBinding()
+        vector_binding.value = coin.SoMaterialBinding.PER_PART
+        arrows.addChild(vector_binding)
+        arrows_style = coin.SoDrawStyle()
+        arrows_style.lineWidth.setValue(2.0)
+        arrows.addChild(arrows_style)
+        self.vector_coords = coin.SoCoordinate3()
+        arrows.addChild(self.vector_coords)
+        self.vector_lines = coin.SoLineSet()
+        arrows.addChild(self.vector_lines)
+        self.vectors_switch.addChild(arrows)
+        self.vectors_switch.whichChild = coin.SO_SWITCH_NONE
+        cap.addChild(self.vectors_switch)
+        self.vector_count = 0
+        self.vector_segments = np.zeros((0, 2, 3))
         self.cap_switch.addChild(cap)
         self.cap_switch.whichChild = coin.SO_SWITCH_NONE
         self.root.addChild(self.cap_switch)
@@ -398,6 +421,7 @@ class ResultDisplay:
         if not len(triangles):
             self.cap_switch.whichChild = coin.SO_SWITCH_NONE
             self.set_cap_lines([])
+            self.set_vectors([])
             self.cap_points = np.zeros((0, 3))
             self.cap_rest = np.zeros((0, 3))
             self.cap_values = np.zeros(0)
@@ -445,6 +469,27 @@ class ResultDisplay:
 
     def cap_lines_shown(self):
         return self.cap_lines_switch.whichChild.getValue() != self.coin.SO_SWITCH_NONE
+
+    def set_vectors(self, segments, colours=None, count=0):
+        """The arrows on the cut: (s, 2, 3) segments with a colour each; `count` arrows."""
+        np = _np()
+        coin = self.coin
+        segs = np.asarray(segments, dtype=float).reshape((-1, 2, 3))
+        self.vector_segments = segs
+        self.vector_count = int(count) if len(segs) else 0
+        if not len(segs):
+            self.vectors_switch.whichChild = coin.SO_SWITCH_NONE
+            self.vector_lines.numVertices.setNum(0)
+            return
+        _floats(self.vector_coords.point, segs.reshape((-1, 3)), 3)
+        self.vector_lines.numVertices.setNum(len(segs))
+        self.vector_lines.numVertices.setValues(0, len(segs), [2] * len(segs))
+        colours = colours if colours is not None else [(0.1, 0.1, 0.12)] * len(segs)
+        _floats(self.vector_material.diffuseColor, colours, 3)
+        self.vectors_switch.whichChild = coin.SO_SWITCH_ALL
+
+    def vectors_shown(self):
+        return self.vectors_switch.whichChild.getValue() != self.coin.SO_SWITCH_NONE
 
     def set_iso(self, triangles, colour=None, rest=None):
         """The iso-surface: triangles (k, 3, 3) as drawn, its colour, `rest` the same points on
@@ -659,6 +704,8 @@ class TagLayer(QtWidgets.QWidget):
         dx, dy = (16, -26) if kind != "min" else (16, 18)
         if kind in ("probe", "point", "hover"):
             dx, dy = (14, -20)
+        if kind == "reaction":
+            dx, dy = (18, 24)
         box_w = metrics.horizontalAdvance(text) + 14
         box_h = metrics.height() + 6
         corner = QtCore.QPointF(pos.x() + dx, pos.y() + dy)

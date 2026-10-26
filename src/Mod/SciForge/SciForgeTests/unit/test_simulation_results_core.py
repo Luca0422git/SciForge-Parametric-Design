@@ -450,6 +450,27 @@ class MeshTests(unittest.TestCase):
         self.assertAlmostEqual(outline, 4.0)
         self.assertEqual(len(core.cut_lines([], [], 3)), 0)
 
+    def test_vector_arrows(self):
+        import numpy as np
+
+        # a 10 x 10 grid of points on the plane x = 0, all moving down -Z, more to the right
+        ys, zs = np.meshgrid(np.arange(10.0) + 0.5, np.arange(10.0) + 0.5)
+        pts = np.column_stack([np.zeros(100), ys.ravel(), zs.ravel()])
+        moves = np.column_stack([np.zeros(100), np.zeros(100), -(1.0 + ys.ravel())])
+        chosen, segments, arrow = core.vector_arrows(pts, moves, (1, 0, 0), 2.0, 2.0)
+        self.assertEqual(len(chosen), 25)  # one per 2 x 2 square
+        self.assertEqual(segments.shape, (75, 2, 3))
+        shafts = segments[:25]
+        lengths = np.linalg.norm(shafts[:, 1] - shafts[:, 0], axis=1)
+        self.assertAlmostEqual(float(lengths.max()), 2.0)  # the biggest is `length` long
+        self.assertTrue(np.allclose(shafts[:, 0], pts[chosen]))  # from the points kept
+        down = (shafts[:, 1] - shafts[:, 0])[:, 2]
+        self.assertTrue((down < 0).all())  # the way they move
+        self.assertTrue(np.allclose(segments[:, :, 0], 0.0))  # the heads in the plane too
+        self.assertEqual(sorted(set(arrow.tolist())), list(range(25)))
+        none = core.vector_arrows(pts, np.zeros((100, 3)), (1, 0, 0), 2.0, 2.0)
+        self.assertEqual(len(none[0]), 0)
+
     def test_slice_planes(self):
         import numpy as np
 

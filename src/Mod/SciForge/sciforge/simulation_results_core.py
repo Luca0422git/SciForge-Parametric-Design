@@ -797,6 +797,57 @@ def straight_tets(tets):
     return np.concatenate([tets[:, list(piece)] for piece in SPLIT10])
 
 
+# -- arrows on a cut (the slice style Vectors) -----------------------------------------------------
+def vector_arrows(points, vectors, normal, length, spacing):
+    """Arrows for vectors at points of a cut (Fusion's slice style Vectors): one point kept per
+    `spacing` square of the plane (evenly spread), each arrow as long as `length` for the
+    largest vector there and shorter for smaller ones, with a two-stroke head in the plane.
+    Returns (the points kept: indices (a,) into `points`, segments (s, 2, 3), the arrow of each
+    segment (s,) as an index into the points kept)."""
+    np = _np()
+    pts = np.asarray(points, dtype=float).reshape((-1, 3))
+    vec = np.asarray(vectors, dtype=float).reshape((-1, 3))
+    empty = (np.zeros(0, dtype=np.int64), np.zeros((0, 2, 3)), np.zeros(0, dtype=np.int64))
+    if not len(pts) or spacing <= 0 or length <= 0:
+        return empty
+    n = np.asarray(normal, dtype=float)
+    n = n / (np.linalg.norm(n) or 1.0)
+    helper = np.array([1.0, 0.0, 0.0]) if abs(n[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    u = np.cross(n, helper)
+    u /= np.linalg.norm(u)
+    v = np.cross(n, u)
+    cells = np.floor(np.column_stack([pts @ u, pts @ v]) / float(spacing)).astype(np.int64)
+    _cells, first = np.unique(cells, axis=0, return_index=True)
+    first.sort()
+    pts, vec = pts[first], vec[first]
+    size = np.linalg.norm(vec, axis=1)
+    biggest = float(size.max()) if len(size) else 0.0
+    keep = size > 1e-12 * max(biggest, 1e-300)
+    chosen = first[keep]
+    pts, vec, size = pts[keep], vec[keep], size[keep]
+    if not len(pts) or biggest <= 0:
+        return empty
+    direction = vec / size[:, None]
+    shaft = direction * (length * size / biggest)[:, None]
+    tips = pts + shaft
+    # the head: two strokes back from the tip, in the plane of the arrow and the cut's normal
+    side = np.cross(direction, n)
+    flat = np.linalg.norm(side, axis=1) < 1e-9  # (an arrow along the normal: any side)
+    side[flat] = u
+    side /= np.linalg.norm(side, axis=1)[:, None]
+    head = 0.3 * np.linalg.norm(shaft, axis=1)[:, None]
+    back = tips - direction * head
+    segments = np.concatenate(
+        [
+            np.stack([pts, tips], axis=1),
+            np.stack([tips, back + side * head * 0.5], axis=1),
+            np.stack([tips, back - side * head * 0.5], axis=1),
+        ]
+    )
+    arrow = np.tile(np.arange(len(pts)), 3)
+    return chosen, segments, arrow
+
+
 # -- the slice plane's place ----------------------------------------------------------------------
 SLICE_AXES = {"x": (1.0, 0.0, 0.0), "y": (0.0, 1.0, 0.0), "z": (0.0, 0.0, 1.0)}
 

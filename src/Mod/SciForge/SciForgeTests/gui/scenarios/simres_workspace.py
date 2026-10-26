@@ -6,8 +6,11 @@ A  A component moved 20 mm up holds two bodies glued end to end (steel 0..50, al
    fixed at the steel end, 100 N down at the aluminium end. Its results are drawn where the
    component is (design coordinates); both bodies, the component and the mesh SETUP's Show
    Mesh drew are hidden on the view only while they show.
+A2 The browser's eye of the aluminium body off: its results go (only the steel half drawn, its
+   end face at x = 50 now outside), the same colour scale; on again: the whole arm.
 B  Results Details: one row per body, each with its own material and strength.
-C  INSPECT > Reaction Force: the fixed end takes the whole 100 N.
+C  INSPECT > Reaction Force: the fixed end takes the whole 100 N; while it is open a tag on the
+   fixed face (x = 0) says so; Close takes the tag away.
 D  DISPLAY > Loads and Constraints shows the setup's glyphs on the results, and hides them again.
 E  INSPECT > Point Probes in design coordinates: a click on the steel's top face puts a probe
    at z = 30 (the component is 20 mm up); its Z typed as 5 (the body's own height) is outside
@@ -107,6 +110,59 @@ def a_check():
         )
 
 
+def _click_eye(label):
+    from SciForgeTests.gui import timeline_input as ti
+
+    tree = ti.tree()
+    item = tree.row(label)
+    h.check("browser row %s" % label, item is not None, tree.labels())
+    if item is None:
+        return
+    parent = item.parent()
+    while parent is not None:
+        parent.setExpanded(True)
+        parent = parent.parent()
+    tree.scrollToItem(item)
+    w.click(tree.viewport(), tree.eye_point(item))
+
+
+def a2_hide():
+    state["legend_hi"] = s.session().legend_info["hi"]
+    _click_eye("Alu")
+
+
+a2_hide.wait_ms = 900
+
+
+def a2_hide_check():
+    sess = s.session()
+    xs = sess.data.points[sess.display.nodes][:, 0]
+    h.check(
+        "the aluminium body's eye off", not s.doc().getObject(state["alu"]).ViewObject.Visibility
+    )
+    h.check(
+        "only the steel half drawn",
+        len(xs) and float(xs.max()) <= 50.0 + 1e-6,
+        float(xs.max()) if len(xs) else None,
+    )
+    h.check("the steel's end face at x = 50 drawn", len(xs) and (abs(xs - 50.0) < 1e-6).any())
+    h.check("the same colour scale", sess.legend_info["hi"] == state["legend_hi"])
+    _click_eye("Alu")
+
+
+a2_hide_check.wait_ms = 900
+
+
+def a2_show_check():
+    sess = s.session()
+    xs = sess.data.points[sess.display.nodes][:, 0]
+    h.check("the eye on again: the whole arm", len(xs) and abs(float(xs.max()) - 100.0) < 1e-6)
+    h.check(
+        "the aluminium body still hidden on the view",
+        s.doc().getObject(state["alu"]).ViewObject.SwitchNode.whichChild.getValue() == -1,
+    )
+
+
 def b_details():
     s.big("Results Details")
 
@@ -151,7 +207,25 @@ def c_check():
         h.check("it takes the whole 100 N", abs(total - 100.0) < 1.0, total)
         fz = float(table.item(0, 3).text())
         h.check("upwards (against the load)", fz > 99.0, fz)
-    dialog.close()
+    tags = s.tags("reaction")
+    h.check(
+        "a tag on the fixed face",
+        len(tags) == 1
+        and tags[0]["text"].startswith("Fixed 1: ")
+        and tags[0]["text"].endswith(" N"),
+        tags,
+    )
+    if tags:
+        h.check(
+            "at x = 0, where the component is", abs(tags[0]["point"][0]) < 1e-6, tags[0]["point"]
+        )
+        h.check("z: the component's middle height", abs(tags[0]["point"][2] - 25.0) < 1e-6)
+    s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReactionsClose"))
+
+
+def c_closed_check():
+    h.check("Close: the tag gone", not s.tags("reaction"))
+    h.check("the window closed", s.dialog("SciForgeSimReactions") is None)
 
 
 def d_loads():
@@ -341,10 +415,14 @@ h.run(
         a_mesh,
         a_results,
         a_check,
+        a2_hide,
+        a2_hide_check,
+        a2_show_check,
         b_details,
         b_check,
         c_reactions,
         c_check,
+        c_closed_check,
         d_loads,
         d_check,
         d_off,
