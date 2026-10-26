@@ -2437,7 +2437,8 @@ def _freecad_cmd():
     None when there is none."""
     home = App.getHomePath()
     names = ("SciForgeCmd", "sciforgecmd", "FreeCADCmd", "freecadcmd")
-    for folder in ("bin", ""):
+    # (Linux / Windows: bin next to FreeCAD's home; macOS: the app bundle's Contents/MacOS)
+    for folder in ("bin", "", os.path.join("..", "MacOS")):
         for name in names:
             candidate = os.path.join(home, folder, name + (".exe" if os.name == "nt" else ""))
             if os.path.isfile(candidate):
