@@ -2332,7 +2332,8 @@ def is_motion_link(obj):
 
 
 def motion_links(doc):
-    return sorted((o for o in doc.Objects if is_motion_link(o)), key=lambda o: o.ID)
+    # (App::FeaturePython only: a drive step asks this, and a robot has 6000 objects)
+    return sorted((o for o in _python_objects(doc) if is_motion_link(o)), key=lambda o: o.ID)
 
 
 def motions_of(joint):
@@ -2569,7 +2570,7 @@ def is_contact_set(obj):
 
 
 def contact_sets(doc):
-    return sorted((o for o in doc.Objects if is_contact_set(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_contact_set(o)), key=lambda o: o.ID)
 
 
 def contact_mode(doc):
@@ -2742,7 +2743,7 @@ def is_motion_study(obj):
 
 
 def motion_studies(doc):
-    return sorted((o for o in doc.Objects if is_motion_study(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_motion_study(o)), key=lambda o: o.ID)
 
 
 def study_data(study):
@@ -2849,7 +2850,8 @@ def baseline(doc):
 def positions(doc):
     """Captured Position steps, oldest first."""
     return sorted(
-        (o for o in doc.Objects if getattr(o, TYPE_PROP, "") == "Position"), key=lambda o: o.ID
+        (o for o in _python_objects(doc) if getattr(o, TYPE_PROP, "") == "Position"),
+        key=lambda o: o.ID,
     )
 
 
@@ -2984,7 +2986,7 @@ def is_rigid_group(obj):
 
 
 def rigid_groups(doc):
-    return sorted((o for o in doc.Objects if is_rigid_group(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_rigid_group(o)), key=lambda o: o.ID)
 
 
 def create_rigid_group(doc, members, include_children=True):

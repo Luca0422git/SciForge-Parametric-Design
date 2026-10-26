@@ -822,14 +822,29 @@ def shape_notes(shape, notes):
         if solids:
             in_solids = sum(len(s.Faces) for s in solids)
             notes["loose_faces"] = notes.get("loose_faces", 0) + max(0, len(faces) - in_solids)
-        face_edges = len(Part.makeCompound(faces).Edges) if faces else 0
-        loose_edges = max(0, len(shape.Edges) - face_edges)
+        if _only_solids(shape):
+            loose_edges = 0  # (a solid's edges are all on its faces: no compound of them)
+        else:
+            face_edges = len(Part.makeCompound(faces).Edges) if faces else 0
+            loose_edges = max(0, len(shape.Edges) - face_edges)
         loose_points = 0
         if not shape.Edges and shape.Vertexes:
             loose_points = len(shape.Vertexes)
         notes["loose_curves"] = notes.get("loose_curves", 0) + loose_edges + loose_points
     except Exception as exc:
         log("import report: a part was not looked into (%s)" % exc)
+
+
+def _only_solids(shape):
+    """A solid, or a compound of nothing but solids (a VEX part's file: making a compound of
+    its 2000 faces to count their edges took a second for twenty files; speed, beta 3)."""
+    try:
+        if shape.ShapeType == "Solid":
+            return True
+        kids = shape.childShapes() if shape.ShapeType in ("Compound", "CompSolid") else []
+        return bool(kids) and all(_only_solids(k) for k in kids)
+    except Exception:
+        return False
 
 
 def piece_notes(pieces, notes):

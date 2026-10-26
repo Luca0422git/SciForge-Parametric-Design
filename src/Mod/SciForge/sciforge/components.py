@@ -148,10 +148,32 @@ def members(doc, component):
 def bodies_in(doc, component, recursive=False):
     """Bodies in a component (None: at the root), in the order they were made."""
     if recursive and component is not None:
-        found = [o for o in of_type(doc, BODY) if is_inside(o, component)]
+        found = [o for o in _bodies_under(component) if is_inside(o, component)]
     else:
         found = [o for o in members(doc, component) if o.TypeId == BODY]
     return sorted(found, key=lambda o: o.ID)
+
+
+def _bodies_under(component):
+    """The bodies reached through a component's Group and the groups in it (its components,
+    folders): a walk of the component, not a look at every body of the design (an
+    occurrence's sync asks this for each of a robot's 300 occurrences: speed, beta 3)."""
+    found, seen = [], set()
+    stack = list(getattr(component, "Group", None) or [])
+    while stack:
+        obj = stack.pop()
+        try:
+            name, tid = obj.Name, obj.TypeId
+        except Exception:
+            continue
+        if name in seen:
+            continue
+        seen.add(name)
+        if tid == BODY:
+            found.append(obj)
+        elif hasattr(obj, "Group"):
+            stack.extend(obj.Group or [])
+    return found
 
 
 def components_in(doc, component):

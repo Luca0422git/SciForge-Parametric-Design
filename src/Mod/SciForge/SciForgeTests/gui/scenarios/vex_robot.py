@@ -185,6 +185,12 @@ def c_refresh():
         QtWidgets.QApplication.processEvents()
         tries.append(time.perf_counter() - t0)
     note("browser refresh (forced)", tries)
+    reads = []
+    for _ in range(4):  # what a change that adds no row costs: the design read again
+        t0 = time.perf_counter()
+        browser.refresh()
+        reads.append(time.perf_counter() - t0)
+    note("browser read after a change (rows the same)", reads)
     h.check("the browser refreshes in under 0.3 s", min(tries) < 0.3, tries)
     timeline = timeline_ui.widget()
     if timeline is not None:
