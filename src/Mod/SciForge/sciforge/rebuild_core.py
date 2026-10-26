@@ -79,6 +79,7 @@ def axis_name(axis):
 def _axis_index(axis, tol=1e-6):
     if not axis or len(axis) != 3:
         return None
+    axis = _unit(axis)
     for k in range(3):
         if abs(abs(axis[k]) - 1.0) < tol:
             return k
