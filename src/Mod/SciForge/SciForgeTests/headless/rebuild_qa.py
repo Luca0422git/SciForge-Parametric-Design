@@ -18,6 +18,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * deleted reference: the reference deleted with delete_step: the original is shown again.
 * driven: the jointed arm turned while it is rebuilt: the reference turns with it (compare
   said match 0.16 and the plan came out turned).
+* vex plate: a VEX-like plate with 125 square holes (506 faces): describe_reference took 56 s
+  (a section and a boolean per level along X, two booleans on 506 coincident faces).
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -538,7 +540,48 @@ def driven(agent, folder):
     agent.check("driven: the reference stands where the arm is now", gap.Length < 1e-6, gap)
 
 
-CHECKS = (jointed, dependents, kept, reopened, deleted_reference, threaded, driven)
+# -- a VEX plate: 125 square holes (506 faces) -------------------------------------------------
+def vex_plate(agent, folder):
+    import time
+
+    import FreeCAD as App
+    import Part
+
+    inch = 25.4
+    plate = Part.makeBox(25 * 0.5 * inch, 5 * 0.5 * inch, 0.0625 * inch)
+    side = 0.182 * inch
+    cutters = [
+        Part.makeBox(
+            side,
+            side,
+            inch,
+            App.Vector((0.25 + 0.5 * i) * inch - side / 2, (0.25 + 0.5 * j) * inch - side / 2, -9),
+        )
+        for i in range(25)
+        for j in range(5)
+    ]
+    plate = plate.cut(Part.makeCompound(cutters)).removeSplitter()
+    path = os.path.join(folder, "qa_vex_plate.step")
+    plate.exportStep(path)
+    agent.call("new_design", {"name": "QaVexPlate"})
+    agent.call("import_file", {"path": path})
+    agent.call("start_rebuild", {"body": "Body001"})
+    began = time.time()
+    text, error = agent.call("describe_reference", {})
+    took = time.time() - began
+    data = _json(text) or {}
+    plan = data.get("plan") or []
+    agent.check(
+        "vex plate: describe_reference reads the 506 faces in seconds (56 s before: a section "
+        "and a boolean for each of the 50 levels along X) (%.1f s)" % took,
+        not error and took < 25 and len(plan) <= 6,
+        (took, [st["tool"] for st in plan]),
+    )
+    result = rebuild_through_tools(agent, None, plan=plan)
+    agent.check("vex plate: the plan rebuilds it (done)", result.get("done"), result.get("verdict"))
+
+
+CHECKS = (jointed, dependents, kept, reopened, deleted_reference, threaded, driven, vex_plate)
 
 
 def run(agent):

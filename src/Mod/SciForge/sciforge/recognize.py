@@ -1461,7 +1461,10 @@ class _Reader:
         # how well the decomposition rebuilds the defeatured solid
         try:
             rebuilt = _build_ops(chosen)
-            error = rebuilt.cut(solid).Volume + solid.cut(rebuilt).Volume
+            if _same_faces(rebuilt, solid):  # (beta 3 QA: two booleans on 500 faces, 18 s)
+                error = 0.0
+            else:
+                error = rebuilt.cut(solid).Volume + solid.cut(rebuilt).Volume
         except Exception as exc:
             warn("recognize: base check failed (%s)" % exc)
             error = solid.Volume
@@ -1479,7 +1482,20 @@ class _Reader:
     def _best_prismatic(self, solid, lenient):
         """(score, reading) of the best extrude reading along X, Y or Z, or None."""
         best = None
-        for axis in ("Z", "Y", "X"):
+        # (beta 3 QA) the axes with the fewest levels first; one with many times more levels
+        # than an axis already read is not read (a section and a boolean per level: a VEX
+        # plate's 125 square holes made 50 levels along X, and describe took 56 s)
+        order = []
+        for n, axis in enumerate(("Z", "Y", "X")):
+            try:
+                got = _walls(solid, axis, allow_taper=True, lenient=lenient, ranges=[])
+            except Exception:
+                got = None
+            order.append((len(got[0]) if got else 10**6, n, axis))
+        fewest = None
+        for count, _n, axis in sorted(order):
+            if fewest is not None and count > max(8, 4 * fewest):
+                continue
             try:
                 found = _prismatic(solid, axis, lenient)
             except Exception as exc:
@@ -1487,6 +1503,8 @@ class _Reader:
                 found = None
             if found is None:
                 continue
+            if fewest is None:
+                fewest = count
             # fewest steps, then the least volume added / taken by them (a round boss on a
             # block is a boss along Z, not the block's side profile with its corners cut off)
             steps = len(_group_ops(found["ops"]))
@@ -1497,14 +1515,22 @@ class _Reader:
         return best
 
     def _faces_in(self, solid):
-        """Indexes of the original's faces that lie on the surface of a face of `solid`."""
-        buckets = {}
+        """Indexes of the original's faces that lie on the surface of a face of `solid`.
+        (Planes are bucketed by their offset too, the neighbouring buckets looked at as well:
+        a VEX plate's 500 walls on two directions made 30 000 surface tests, 3 s; beta 3 QA.)"""
+        buckets, by_key = {}, {}
         for face in solid.Faces:
-            buckets.setdefault(_surface_key(face), []).append(face)
+            key = _surface_key(face)
+            buckets.setdefault((key, _plane_slot(face, key)), []).append(face)
+            by_key.setdefault(key, []).append(face)
         out = []
         for f in self.facts:
-            for face in buckets.get(_surface_key(f.face), []):
-                if _same_surface(f.face, face, 1e-5):
+            key = _surface_key(f.face)
+            slot = _plane_slot(f.face, key)
+            near = [] if slot is None else [slot, slot - 1, slot + 1]
+            tries = [buckets.get((key, at), []) for at in near] + [by_key.get(key, [])]
+            for faces in tries:  # (the whole kind last: a plane whose slot came out apart)
+                if any(_same_surface(f.face, face, 1e-5) for face in faces):
                     out.append(f.index)
                     break
         return out
@@ -2395,6 +2421,56 @@ def _coarse_key(face):
     except Exception:
         pass
     return (kind, id(face))
+
+
+def _plane_slot(face, key):
+    """A plane's offset along its normal in 0.01 mm slots (None for other surfaces): a finer
+    bucket than _surface_key for _faces_in."""
+    if not key or key[0] != "plane" or len(key) < 4:
+        return None
+    try:
+        if _face_kind(face) == "plane":
+            n = core.canonical_direction(core.unit(_t(face.Surface.Axis)))
+        else:
+            n = core.canonical_direction(_flat_normal(face))  # (a flat B-spline)
+        return int(math.floor(core.dot(_t(face.Vertexes[0].Point), n) / 0.01))
+    except Exception:
+        return None
+
+
+def _same_faces(a, b, tol=1e-6):
+    """Two solids with the same faces (each on the same surface, with the same area and box)
+    and the same volume: the same solid, told without a boolean (beta 3 QA: the base check's
+    two booleans on a VEX plate's 506 coincident faces took 18 s)."""
+    try:
+        fa, fb = a.Faces, b.Faces
+        if len(fa) != len(fb) or abs(a.Volume - b.Volume) > 1e-6 * max(1.0, abs(b.Volume)):
+            return False
+        buckets = {}
+        for f in fb:
+            buckets.setdefault(_surface_key(f), []).append([f, f.Area, f.BoundBox, False])
+        for f in fa:
+            area, box = f.Area, f.BoundBox
+            for item in buckets.get(_surface_key(f), []):
+                if item[3] or abs(item[1] - area) > 1e-6 * max(1.0, area):
+                    continue
+                other = item[2]
+                if max(
+                    abs(other.XMin - box.XMin),
+                    abs(other.YMin - box.YMin),
+                    abs(other.ZMin - box.ZMin),
+                    abs(other.XMax - box.XMax),
+                    abs(other.YMax - box.YMax),
+                    abs(other.ZMax - box.ZMax),
+                ) > tol or not _same_surface(f, item[0], tol):
+                    continue
+                item[3] = True
+                break
+            else:
+                return False
+        return True
+    except Exception:
+        return False
 
 
 def _surface_key(face):
