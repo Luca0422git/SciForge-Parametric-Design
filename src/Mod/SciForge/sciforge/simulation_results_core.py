@@ -1600,15 +1600,16 @@ def _study_html(data):
     parts.append(_table(["Result", "Min", "Max", "Unit"], result_rows))
     if data.get("bodies"):
         parts.append("<h3>Per body</h3>")
+        stress, length = data.get("body_units") or ("MPa", "mm")
         parts.append(
             _table(
                 [
                     "Body",
                     "Material",
-                    "Strength (MPa)",
-                    "Max von Mises (MPa)",
+                    "Strength (%s)" % stress,
+                    "Max von Mises (%s)" % stress,
                     "Min safety factor",
-                    "Max displacement (mm)",
+                    "Max displacement (%s)" % length,
                 ],
                 data["bodies"],
             )

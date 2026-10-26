@@ -515,16 +515,20 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None,
             results.append(
                 (key, core.convert(st.get("min"), unit), core.convert(st.get("max"), unit), unit)
             )
+    stress = unit_of("von_mises") if unit_of is not None else None
+    stress = stress if stress and core.unit_ok("von_mises", stress) else "MPa"
+    length = unit_of("displacement") if unit_of is not None else None
+    length = length if length and core.unit_ok("displacement", length) else "mm"
     bodies_rows = []
     for row in body_rows(study):
         bodies_rows.append(
             (
                 row["body"],
                 row["material"],
-                core.fmt(row["strength"]),
-                core.fmt(row["von_mises_max"]),
+                core.fmt(core.convert(row["strength"], stress)),
+                core.fmt(core.convert(row["von_mises_max"], stress)),
                 core.fmt(row["safety_min"]),
-                core.fmt(row["displacement_max"]),
+                core.fmt(core.convert(row["displacement_max"], length)),
             )
         )
     convergence = None
@@ -561,6 +565,7 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None,
         "convergence": convergence,
         "results": results,
         "bodies": bodies_rows,
+        "body_units": (stress, length),
         "verdict": core.verdict(min_safety(study), lower, upper),
         "out_of_date": out_of_date(study),
         "images": list(images),

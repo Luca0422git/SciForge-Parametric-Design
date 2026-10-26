@@ -776,6 +776,14 @@ class ReportTests(unittest.TestCase):
         self.assertIn("Static Stress report", text)
         self.assertNotIn("Adaptive mesh refinement", text)
 
+    def test_per_body_units(self):
+        text = core.report_html(
+            {"bodies": [("B", "Steel", 30.02, 8.58, 3.5, 0.0079)], "body_units": ("ksi", "in")}
+        )
+        self.assertIn("Max von Mises (ksi)", text)
+        self.assertIn("Max displacement (in)", text)
+        self.assertIn("Max von Mises (MPa)", core.report_html({"bodies": [("B",) * 6]}))
+
     def test_adaptive_refinement_in_the_report(self):
         adaptive = ConvergenceTests.ADAPTIVE
         text = core.report_html({"study": "S", "convergence": core.convergence(adaptive, 5.0)})
