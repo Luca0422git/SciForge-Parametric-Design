@@ -4,11 +4,15 @@
 A  Report: the dialog offers a title, an author, pictures and a file; Save writes one HTML page
    with the study's setup (settings, the material with its strengths, the constraint and the
    load), the mesh, every result's min and max (the solve's numbers), the per-body table, the
-   safety factor sentence, the limits of the study and a picture of each of three results;
-   the result shown before is shown again after.
+   safety factor sentence, the limits of the study, a picture of the loads and constraints and
+   one of each of three results; the result shown before is shown again after.
 B  Without pictures: no picture in the page.
 C  No file name: the dialog says so and stays open; Cancel writes nothing.
 D  Nothing of it lands in the undo history.
+E  A second study (300 N) solved: the Report dialog lists both, this one ticked; ticking the
+   other, a summary, the project, who approved it, the revision, a logo and a cover picture
+   give one page with the cover (logo, picture, summary, properties) and a part per study, each
+   with its own numbers and pictures.
 """
 
 import os
@@ -100,8 +104,9 @@ def a_check():
         ("the per-body table", "Min safety factor"),
     ):
         h.check("report has %s" % name, needle in text, needle)
-    h.check("three pictures", text.count("<img ") == 3, text.count("<img "))
-    h.check("pictures in the page", text.count("data:image/png;base64,") == 3)
+    h.check("four pictures", text.count("<img ") == 4, text.count("<img "))
+    h.check("pictures in the page", text.count("data:image/png;base64,") == 4)
+    h.check("the loads and constraints first", "Loads and constraints" in text)
     h.check("the result shown before is back", s.session().result == "displacement")
 
 
@@ -153,6 +158,120 @@ def c_cancel_check():
     h.check("nothing in the undo history", s.undo_count() == state["undo"], s.undo_count())
 
 
+PATH4 = os.path.join(s.OUT, "simres_report_two.html")
+LOGO = os.path.join(s.OUT, "simres_report_logo.png")
+
+
+def e_second():
+    """(setup) a second study of the same beam, 300 N, solved; a logo picture."""
+    from PySide import QtGui
+
+    for p in (PATH4, LOGO):
+        if os.path.isfile(p):
+            os.remove(p)
+    first = s.study()
+    state["first"] = first.Name
+    second = s.cantilever_study(s.doc(), s.body(), 300.0, label="Heavy Load")
+    s.solve(second)
+    state["second"] = second.Name
+    image = QtGui.QImage(120, 40, QtGui.QImage.Format_RGB32)
+    image.fill(QtGui.QColor("#3fa9f5"))
+    image.save(LOGO)
+    from sciforge import simulation_ui
+
+    simulation_ui.set_active_study(first)  # (the results shown stay the first study's)
+    state["undo2"] = s.undo_count()
+
+
+def e_report():
+    s.big("Report")
+
+
+def e_fill():
+    from PySide import QtCore
+    from PySide6 import QtTest
+
+    dialog = s.dialog("SciForgeSimReport")
+    h.check("Report dialog open", dialog is not None)
+    if dialog is None:
+        return
+    listing = dialog.findChild(QtWidgets.QListWidget, "SciForgeSimReportStudies")
+    names = [listing.item(i).text() for i in range(listing.count())]
+    h.check("both studies listed", len(names) == 2 and "Heavy Load" in names, names)
+    ticked = [
+        listing.item(i).text()
+        for i in range(listing.count())
+        if listing.item(i).checkState() == QtCore.Qt.Checked
+    ]
+    h.check("the study shown ticked", ticked == [s.doc().getObject(state["first"]).Label], ticked)
+    # tick the other one: a click on its tick box
+    for i in range(listing.count()):
+        item = listing.item(i)
+        if item.text() == "Heavy Load":
+            rect = listing.visualItemRect(item)
+            QtTest.QTest.mouseClick(
+                listing.viewport(),
+                QtCore.Qt.LeftButton,
+                QtCore.Qt.NoModifier,
+                QtCore.QPoint(rect.left() + 10, rect.center().y()),
+            )
+    summary = dialog.findChild(QtWidgets.QPlainTextEdit, "SciForgeSimReportSummary")
+    summary.setFocus()
+    QtTest.QTest.keyClicks(summary, "Two loads on the bracket arm.")
+    for name, text in (
+        ("SciForgeSimReportProject", "Bracket B-12"),
+        ("SciForgeSimReportApprover", "M. Rossi"),
+        ("SciForgeSimReportRevision", "C"),
+        ("SciForgeSimReportLogo", LOGO),
+        ("SciForgeSimReportCoverPicture", LOGO),
+        ("SciForgeSimReportPath", PATH4),
+    ):
+        ui.type_into(dialog.findChild(QtWidgets.QLineEdit, name), text)
+
+
+def e_save():
+    dialog = s.dialog("SciForgeSimReport")
+    s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReportSave"))
+
+
+e_save.wait_ms = 2500
+
+
+def e_check():
+    from sciforge import simulation
+
+    core = s.results_core()
+    h.check("the two-study report written", os.path.isfile(PATH4), PATH4)
+    if not os.path.isfile(PATH4):
+        return
+    with open(PATH4, encoding="utf-8") as handle:
+        text = handle.read()
+    first = s.doc().getObject(state["first"])
+    second = s.doc().getObject(state["second"])
+    for name, needle in (
+        ("the summary", "Two loads on the bracket arm."),
+        ("the project", "Bracket B-12"),
+        ("who approved it", "M. Rossi"),
+        ("the revision", "<td>C</td>"),
+        ("the logo", 'class="logo" src="data:image/png;base64,'),
+        ("the cover picture", 'class="cover" src="data:image/png;base64,'),
+        ("both studies on the cover", "Studies: %s, Heavy Load" % first.Label),
+        ("a part for the first study", '<h1 class="study">%s</h1>' % first.Label),
+        ("a part for the second", '<h1 class="study">Heavy Load</h1>'),
+    ):
+        h.check("report has %s" % name, needle in text, needle)
+    for study in (first, second):
+        low = simulation.summary(study)["stats"]["safety"]["min"]
+        h.check("%s's own lowest safety factor" % study.Label, core.fmt(low) in text, low)
+    h.check(
+        "pictures of both (4 each), the logo and the cover picture",
+        text.count("<img ") == 10,
+        text.count("<img "),
+    )
+    h.check("the first study's results still shown", s.session().study is first)
+    h.check("nothing in the undo history", s.undo_count() == state["undo2"], s.undo_count())
+
+
 h.run(
     "simres_report",
     [
@@ -170,5 +289,10 @@ h.run(
         c_empty_check,
         c_cancel,
         c_cancel_check,
+        e_second,
+        e_report,
+        e_fill,
+        e_save,
+        e_check,
     ],
 )

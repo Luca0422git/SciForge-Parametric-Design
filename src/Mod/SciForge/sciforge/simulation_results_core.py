@@ -1178,34 +1178,76 @@ th { background: #eef1f5; }
 figure { display: inline-block; margin: 8px 12px 16px 0; vertical-align: top; }
 figure img { border: 1px solid #c9ced6; max-width: 460px; }
 figcaption { font-size: 13px; color: #3b4453; }
+.logo { float: right; max-height: 64px; max-width: 220px; }
+.cover { display: block; max-width: 100%; max-height: 420px; margin: 12px 0; }
+.summary { font-size: 14px; line-height: 1.45; }
+h1.study { font-size: 22px; margin-top: 48px; border-top: 3px solid #3fa9f5; padding-top: 12px; }
 """
 
 
 def report_html(data):
-    """The study report (Fusion's RESULTS > Report, research 5.12) as one HTML page.
+    """The report (Fusion's RESULTS > Report, research 5.12) as one HTML page.
 
-    data: {"title", "author", "date", "version", "design", "study", "study_type", "settings":
-    [(name, value)], "materials": [row], "constraints": [row], "loads": [row], "contacts": text,
-    "mesh": [(name, value)], "results": [(result, min, max, unit)], "bodies": [row],
-    "verdict": (state, headline, advice), "out_of_date": bool, "images": [(caption, src)],
-    "notes": [text]} (any key may be missing)."""
+    data: the cover {"title", "author", "date", "version", "design", "logo" and "picture" (an
+    image's src), "summary", "project", "approver", "revision"} and "studies": [one dict per
+    study: {"study",
+    "study_type", "settings": [(name, value)], "materials": [row], "constraints": [row],
+    "loads": [row], "contacts": text, "mesh": [(name, value)], "results": [(result, min, max,
+    unit)], "bodies": [row], "verdict": (state, headline, advice), "out_of_date": bool,
+    "images": [(caption, src)], "notes": [text]}]. Without "studies" the data is one study's
+    (its keys beside the cover's). Any key may be missing."""
     esc = html.escape
     title = data.get("title") or "Static Stress report"
+    studies = data.get("studies") or [data]
     parts = [
         "<!DOCTYPE html>",
         '<html lang="en"><head><meta charset="utf-8">',
         "<title>%s</title>" % esc(title),
         "<style>%s</style></head><body>" % REPORT_STYLE,
-        "<h1>%s</h1>" % esc(title),
     ]
+    if data.get("logo"):
+        parts.append('<img class="logo" src="%s" alt="Logo">' % esc(data["logo"], quote=True))
+    parts.append("<h1>%s</h1>" % esc(title))
+    names = [s.get("study") for s in studies if s.get("study")]
     meta = [
         data.get("design") and "Design: %s" % data["design"],
-        data.get("study") and "Study: %s" % data["study"],
+        names and ("Study: %s" if len(names) == 1 else "Studies: %s") % ", ".join(names),
         data.get("author") and "Author: %s" % data["author"],
         data.get("date") and "Date: %s" % data["date"],
         data.get("version") and "Made with SciForge %s" % data["version"],
     ]
     parts.append('<p class="meta">%s</p>' % esc(" | ".join(m for m in meta if m)))
+    if data.get("picture"):
+        parts.append(
+            '<img class="cover" src="%s" alt="Cover picture">' % esc(data["picture"], quote=True)
+        )
+    properties = [
+        (name, data[key])
+        for name, key in (
+            ("Project", "project"),
+            ("Approved by", "approver"),
+            ("Revision", "revision"),
+        )
+        if data.get(key)
+    ]
+    if properties:
+        parts.append(_table(["Property", "Value"], properties, "properties"))
+    summary = (data.get("summary") or "").strip()
+    if summary:
+        for paragraph in [p.strip() for p in summary.split("\n\n") if p.strip()]:
+            parts.append('<p class="summary">%s</p>' % esc(paragraph).replace("\n", "<br>"))
+    for study in studies:
+        if len(studies) > 1:
+            parts.append('<h1 class="study">%s</h1>' % esc(study.get("study") or "Study"))
+        parts.extend(_study_html(study))
+    parts.append("</body></html>")
+    return "\n".join(parts) + "\n"
+
+
+def _study_html(data):
+    """One study's part of the report."""
+    esc = html.escape
+    parts = []
     if data.get("out_of_date"):
         parts.append('<p class="warning">%s</p>' % esc(OUT_OF_DATE))
     verdict_data = data.get("verdict")
@@ -1286,5 +1328,4 @@ def report_html(data):
             )
     for note in data.get("notes") or []:
         parts.append('<p class="limits">%s</p>' % esc(note))
-    parts.append("</body></html>")
-    return "\n".join(parts) + "\n"
+    return parts

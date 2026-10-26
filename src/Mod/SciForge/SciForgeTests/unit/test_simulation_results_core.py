@@ -579,6 +579,32 @@ class ReportTests(unittest.TestCase):
         self.assertIn("data:image/png;base64,AAAA", text)
         self.assertIn("Meets the safety factor target", text)
 
+    def test_cover_and_two_studies(self):
+        text = core.report_html(
+            {
+                "title": "Bracket",
+                "logo": "data:image/png;base64,AAA",
+                "picture": "data:image/png;base64,BBB",
+                "summary": "First line\nsame paragraph\n\nSecond <paragraph>",
+                "project": "P-1",
+                "approver": "M. Rossi",
+                "revision": "C",
+                "studies": [
+                    {"study": "Light", "results": [("safety", 4.0, 15.0, "")]},
+                    {"study": "Heavy", "results": [("safety", 1.5, 15.0, "")], "out_of_date": 1},
+                ],
+            }
+        )
+        self.assertIn('class="logo" src="data:image/png;base64,AAA"', text)
+        self.assertIn('class="cover" src="data:image/png;base64,BBB"', text)
+        self.assertIn("First line<br>same paragraph", text)
+        self.assertIn("Second &lt;paragraph&gt;", text)
+        self.assertIn("<td>M. Rossi</td>", text)
+        self.assertIn("Studies: Light, Heavy", text)
+        self.assertEqual(text.count('<h1 class="study">'), 2)
+        self.assertEqual(text.count("<h2>Results</h2>"), 2)
+        self.assertEqual(text.count('class="warning"'), 1)  # only Heavy is out of date
+
     def test_empty_report(self):
         text = core.report_html({})
         self.assertIn("Static Stress report", text)

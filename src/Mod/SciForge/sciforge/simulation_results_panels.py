@@ -18,6 +18,13 @@ from . import simulation_results as results_data
 from . import simulation_results_core as core
 from .compat import QtCore, QtGui, QtWidgets
 
+
+def studies_with_results(doc):
+    from . import simulation_results_ui as results_ui
+
+    return results_ui.studies_with_results(doc)
+
+
 OPEN = {
     "animation": None,
     "details": None,
@@ -1944,15 +1951,17 @@ PICTURES = ("safety", "von_mises", "displacement")
 
 
 class ReportDialog(QtWidgets.QDialog):
-    """Report (Fusion: RESULT TOOLS > Report): a title, an author, pictures or not, where to
-    write it; Save, or Save and Open in the web browser."""
+    """Report (Fusion: RESULT TOOLS > Report; General, Properties and Studies): a title, an
+    author, a logo and a summary for the cover, the project, who approved it and the revision,
+    the studies it covers (this design's with results), pictures or not, where to write it;
+    Save, or Save and Open in the web browser."""
 
     def __init__(self, session):
         super().__init__(_main())
         self.setObjectName("SciForgeSimReport")
         self.session = session
         self.setWindowTitle("Report")
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(560)
         study = session.study
         layout = QtWidgets.QFormLayout(self)
         self.title_field = QtWidgets.QLineEdit("%s report" % study.Label)
@@ -1961,8 +1970,53 @@ class ReportDialog(QtWidgets.QDialog):
         self.author_field = QtWidgets.QLineEdit("")
         self.author_field.setObjectName("SciForgeSimReportAuthor")
         layout.addRow("Author", self.author_field)
+        logo_row = QtWidgets.QHBoxLayout()
+        self.logo_field = QtWidgets.QLineEdit("")
+        self.logo_field.setObjectName("SciForgeSimReportLogo")
+        self.logo_field.setPlaceholderText("A picture file (PNG, JPG, SVG), or nothing")
+        logo_row.addWidget(self.logo_field, 1)
+        logo_browse = QtWidgets.QPushButton("Browse...")
+        logo_browse.setAutoDefault(False)
+        logo_browse.clicked.connect(lambda: self._browse_picture(self.logo_field))
+        logo_row.addWidget(logo_browse)
+        layout.addRow("Logo", logo_row)
+        picture_row = QtWidgets.QHBoxLayout()
+        self.picture_field = QtWidgets.QLineEdit("")
+        self.picture_field.setObjectName("SciForgeSimReportCoverPicture")
+        self.picture_field.setPlaceholderText("A picture for the cover, or nothing")
+        picture_row.addWidget(self.picture_field, 1)
+        picture_browse = QtWidgets.QPushButton("Browse...")
+        picture_browse.setAutoDefault(False)
+        picture_browse.clicked.connect(lambda: self._browse_picture(self.picture_field))
+        picture_row.addWidget(picture_browse)
+        layout.addRow("Cover picture", picture_row)
+        self.summary_field = QtWidgets.QPlainTextEdit("")
+        self.summary_field.setObjectName("SciForgeSimReportSummary")
+        self.summary_field.setPlaceholderText("What was studied and what came out of it")
+        self.summary_field.setFixedHeight(72)
+        layout.addRow("Summary", self.summary_field)
+        self.project_field = QtWidgets.QLineEdit("")
+        self.project_field.setObjectName("SciForgeSimReportProject")
+        layout.addRow("Project", self.project_field)
+        self.approver_field = QtWidgets.QLineEdit("")
+        self.approver_field.setObjectName("SciForgeSimReportApprover")
+        layout.addRow("Approved by", self.approver_field)
+        self.revision_field = QtWidgets.QLineEdit("")
+        self.revision_field.setObjectName("SciForgeSimReportRevision")
+        layout.addRow("Revision", self.revision_field)
+        self.studies = QtWidgets.QListWidget()
+        self.studies.setObjectName("SciForgeSimReportStudies")
+        others = [s for s in studies_with_results(study.Document) if s is not study]
+        for one in [study] + others:
+            item = QtWidgets.QListWidgetItem(one.Label)
+            item.setData(QtCore.Qt.UserRole, one.Name)
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.Checked if one is study else QtCore.Qt.Unchecked)
+            self.studies.addItem(item)
+        self.studies.setFixedHeight(min(120, 26 * (len(others) + 1) + 8))
+        layout.addRow("Studies", self.studies)
         self.pictures = QtWidgets.QCheckBox(
-            "Pictures of the safety factor, stress and " "displacement"
+            "Pictures: the loads and constraints, the safety factor, stress and displacement"
         )
         self.pictures.setObjectName("SciForgeSimReportPictures")
         self.pictures.setChecked(True)
@@ -1996,6 +2050,39 @@ class ReportDialog(QtWidgets.QDialog):
         layout.addRow(buttons)
         self.written = None
 
+    def chosen(self):
+        """The studies ticked, the active one first."""
+        doc = self.session.doc
+        out = []
+        for i in range(self.studies.count()):
+            item = self.studies.item(i)
+            if item.checkState() != QtCore.Qt.Checked or doc is None:
+                continue
+            one = doc.getObject(item.data(QtCore.Qt.UserRole))
+            if one is not None:
+                out.append(one)
+        return out
+
+    def cover(self):
+        return {
+            "summary": self.summary_field.toPlainText().strip(),
+            "logo": self.logo_field.text().strip(),
+            "picture": self.picture_field.text().strip(),
+            "project": self.project_field.text().strip(),
+            "approver": self.approver_field.text().strip(),
+            "revision": self.revision_field.text().strip(),
+        }
+
+    def _browse_picture(self, field):
+        try:
+            path, _filter = QtWidgets.QFileDialog.getOpenFileName(
+                self, "A picture for the report", "", "Pictures (*.png *.jpg *.jpeg *.svg *.gif)"
+            )
+            if path:
+                field.setText(path)
+        except Exception as exc:
+            warn("Report: %s" % exc)
+
     def _browse(self):
         try:
             path, _filter = QtWidgets.QFileDialog.getSaveFileName(
@@ -2015,13 +2102,26 @@ class ReportDialog(QtWidgets.QDialog):
             return
         if not path.lower().endswith((".html", ".htm")):
             path += ".html"
+        studies = self.chosen()
+        if not studies:
+            self.message.setText("Tick at least one study.")
+            return
+        for key, name in (("logo", "logo"), ("picture", "cover picture")):
+            picture = self.cover()[key]
+            if picture and not os.path.isfile(picture):
+                self.message.setText("The %s file was not found: %s" % (name, picture))
+                return
         try:
+            self.message.setText("Writing the report...")
+            QtWidgets.QApplication.processEvents()
             self.written = write(
                 self.session,
                 path,
                 self.title_field.text().strip(),
                 self.author_field.text().strip(),
                 self.pictures.isChecked(),
+                studies=studies,
+                cover=self.cover(),
             )
         except Exception as exc:
             self.message.setText("The report could not be saved: %s" % exc)
@@ -2047,35 +2147,138 @@ def report(session):
     return dialog
 
 
-def write(session, path, title="", author="", pictures=True, size=(900, 600)):
-    """Write the session's study report (with pictures of the results drawn now)."""
-    study = session.study
-    images = []
+def write(
+    session, path, title="", author="", pictures=True, size=(900, 600), studies=None, cover=None
+):
+    """Write the report of the session's study, or of `studies` (this design's), with
+    pictures: the setup (loads and constraints) and the results, the camera as it is."""
+    studies = list(studies or [session.study])
+    entries = []
     folder = tempfile.mkdtemp(prefix="sciforge_report_")
     try:
-        if pictures and session.active and session.view is not None:
-            images = _pictures(session, folder, size)
+        for k, study in enumerate(studies):
+            images = []
+            if pictures and session.active and session.view is not None:
+                sub = os.path.join(folder, "s%d" % k)
+                os.mkdir(sub)
+                images = _setup_picture(session, study, sub, size)
+                if study is session.study:
+                    images += _pictures(session, sub, size)
+                else:
+                    images += _pictures_of(session, study, sub, size)
+            entries.append((study, images))
         results_data.write_report(
-            study,
+            entries[0][0],
             path,
             title or None,
             author,
-            images,
+            entries[0][1],
             session.targets[0],
             session.targets[1],
+            cover=cover,
+            more=entries[1:],
         )
     finally:
-        for name in os.listdir(folder):
-            try:
-                os.remove(os.path.join(folder, name))
-            except OSError:
-                pass
-        try:
-            os.rmdir(folder)
-        except OSError:
-            pass
+        import shutil
+
+        shutil.rmtree(folder, ignore_errors=True)
     log("report written: %s" % path)
     return path
+
+
+def _setup_picture(session, study, folder, size):
+    """A picture of the study's loads and constraints (Fusion's report shows the setup): the
+    bodies and sim-ui's glyphs, the results put aside for a moment."""
+    from . import simulation_results_ui as results_ui
+
+    glyphs = results_ui._glyph_module()
+    if glyphs is None:
+        return []
+    display = session.display
+    views = list(display.views) if display is not None else []
+    before = None
+    path = os.path.join(folder, "setup.png")
+    try:
+        before = glyphs.visible()
+        if display is not None:
+            display.detach()
+        session._show_design()
+        _show_study_glyphs(glyphs, study)
+        QtWidgets.QApplication.processEvents()
+        session.view.saveImage(path, size[0], size[1], "Current")
+    except Exception as exc:
+        warn("report: picture of the setup left out: %s" % exc)
+    finally:
+        try:
+            session._hide_design()
+            for view in views:
+                display.attach(view)
+            own = session.study
+            if own is not None and own is not study:
+                glyphs.refresh(own.Document, own, force=True)
+            if before is not None:
+                glyphs.set_visible(bool(before))
+            session._glyphs()  # (as the results want them: Loads and Constraints)
+            session._redraw()
+        except Exception as exc:
+            warn("report: %s" % exc)
+    return [("Loads and constraints", path)] if os.path.isfile(path) else []
+
+
+def _show_study_glyphs(glyphs, study):
+    """sim-ui's glyphs of `study`, shown (drawn for it when it is not the active study; the
+    active study itself is left as it is)."""
+    try:
+        glyphs.refresh(study.Document, study, force=True)
+        glyphs.set_visible(True)
+    except Exception as exc:
+        warn("report: glyphs: %s" % exc)
+
+
+def _pictures_of(session, study, folder, size):
+    """Pictures of another study's results (the same camera and deformation scale): its
+    results drawn in place of the session's for a moment."""
+    from . import simulation_results_ui as results_ui
+    from . import simulation_results_view as view_mod
+
+    out = []
+    own = session.display
+    views = list(own.views) if own is not None else []
+    other = None
+    try:
+        data = results_data.data(study)
+        other = view_mod.ResultDisplay(data)
+        if own is not None:
+            own.detach()
+        for view in views:
+            other.attach(view)
+        factor = core.deformation_factor(session.deformation, data.max_displacement, data.diagonal)
+        other.set_factor(factor)
+        np = view_mod._np()
+        for key in PICTURES:
+            try:
+                values = data.values(key)
+                stats = data.stats(key)
+                lo, hi, reverse = core.scale(key, stats.get("min"), stats.get("max"))
+                other.set_texture(core.texture_rows())
+                other.set_positions(results_ui._positions(np, values[other.nodes], lo, hi, reverse))
+                QtWidgets.QApplication.processEvents()
+                path = os.path.join(folder, "%s.png" % key)
+                session.view.saveImage(path, size[0], size[1], "Current")
+                if os.path.isfile(path):
+                    _draw_legend(path, core.legend(key, stats, session.unit(key)))
+                    out.append((core.result_name(key), path))
+            except Exception as exc:
+                warn("report: picture of %s left out: %s" % (core.result_name(key), exc))
+    except Exception as exc:
+        warn("report: pictures of %s left out: %s" % (study.Label, exc))
+    finally:
+        if other is not None:
+            other.detach()
+        for view in views:
+            own.attach(view)
+        session._redraw()
+    return out
 
 
 def _pictures(session, folder, size):

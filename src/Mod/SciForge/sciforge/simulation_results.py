@@ -412,24 +412,55 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None)
     }
 
 
+IMAGE_TYPES = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".svg": "image/svg+xml",
+    ".webp": "image/webp",
+}
+
+
 def image_source(path):
     """A picture file as a data: URL (the report is one file that can be mailed)."""
+    kind = IMAGE_TYPES.get(os.path.splitext(str(path))[1].lower(), "image/png")
     with open(path, "rb") as handle:
-        return "data:image/png;base64," + base64.b64encode(handle.read()).decode("ascii")
+        return "data:%s;base64,%s" % (kind, base64.b64encode(handle.read()).decode("ascii"))
 
 
-def write_report(study, path, title=None, author="", images=(), lower=None, upper=None):
-    """Write the study's report to `path` (HTML). images: [(caption, png file)]. Returns the
-    path."""
-    if not has_results(study):
-        raise SimulationError(core.NO_RESULTS)
-    embedded = []
-    for caption, png in images:
-        try:
-            embedded.append((caption, image_source(png)))
-        except Exception as exc:
-            warn("report: picture %s left out: %s" % (caption, exc))
-    text = core.report_html(report_data(study, title, author, embedded, lower, upper))
+def write_report(
+    study, path, title=None, author="", images=(), lower=None, upper=None, cover=None, more=()
+):
+    """Write the study's report to `path` (HTML). images: [(caption, png file)]; cover: the
+    report's own fields {"summary", "logo" and "picture" (image files), "project",
+    "approver", "revision"}; more: [(another study, its images)] in the same report. Returns
+    the path."""
+    entries = [(study, images)] + list(more)
+    studies = []
+    for one, pictures in entries:
+        if not has_results(one):
+            raise SimulationError("%s: %s" % (one.Label, core.NO_RESULTS))
+        embedded = []
+        for caption, png in pictures:
+            try:
+                embedded.append((caption, image_source(png)))
+            except Exception as exc:
+                warn("report: picture %s left out: %s" % (caption, exc))
+        studies.append(report_data(one, title, author, embedded, lower, upper))
+    data = dict(studies[0])
+    data["studies"] = studies
+    cover = dict(cover or {})
+    for key in ("summary", "project", "approver", "revision"):
+        if cover.get(key):
+            data[key] = str(cover[key])
+    for key, name in (("logo", "logo"), ("picture", "cover picture")):
+        if cover.get(key):
+            try:
+                data[key] = image_source(cover[key])
+            except Exception as exc:
+                warn("report: %s left out: %s" % (name, exc))
+    text = core.report_html(data)
     folder = os.path.dirname(os.path.abspath(path))
     if folder and not os.path.isdir(folder):
         os.makedirs(folder, exist_ok=True)
