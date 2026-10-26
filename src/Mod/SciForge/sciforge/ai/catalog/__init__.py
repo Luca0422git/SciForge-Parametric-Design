@@ -32,6 +32,8 @@ from . import more_tools  # noqa: F401
 from . import history_tools  # noqa: F401
 from . import verify_tools  # noqa: F401  (checking: inspect_design, query_geometry, render...)
 from . import docs_tools  # noqa: F401  (documentation: docs_search, docs_read, examples_search)
+from . import simulate_tools  # noqa: F401  (Static Stress simulation, beta 3)
+from . import rebuild_tools  # noqa: F401  (Auto Timeline: rebuild with a timeline, beta 3)
 from .kit import (  # noqa: F401  (the shared texts, re-exported)
     BODY_PICK_HELP,
     CURVES_HELP,

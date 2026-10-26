@@ -13,7 +13,9 @@ SMALL = 18  # menu / quick-access icon size
 
 
 # Tabs shown only in their own mode (never remembered as the tab to go back to).
-CONTEXTUAL = ("sketch", "drawing", "flat_pattern")
+CONTEXTUAL = ("sketch", "drawing", "flat_pattern", "sim_setup", "sim_results")
+# The SIMULATION workspace's tabs (simulation_ui): shown instead of the design's tabs.
+SIMULATION_TABS = ("sim_setup", "sim_results")
 
 
 def resolve(command, available):
@@ -403,6 +405,11 @@ class RibbonWidget(QtWidgets.QWidget):
         # The FLAT PATTERN tab shows only while a flat pattern is open (sheet metal).
         if "flat_pattern" in self.tab_buttons:
             self.tab_buttons["flat_pattern"].setVisible(False)
+        # The SETUP and RESULTS tabs show only in the SIMULATION workspace (simulation_ui).
+        self._sim_mode = False
+        for tid in SIMULATION_TABS:
+            if tid in self.tab_buttons:
+                self.tab_buttons[tid].setVisible(False)
         self.select_tab("solid")
 
         self._timer = QtCore.QTimer(self)
@@ -554,13 +561,24 @@ class RibbonWidget(QtWidgets.QWidget):
         menu.setToolTipsVisible(True)
         design = menu.addAction(ui_icon("workspace_design"), "Design")
         design.setCheckable(True)
-        design.setChecked(not self._drawing_mode)
+        design.setChecked(not self._drawing_mode and not self._sim_mode)
+        simulation = menu.addAction(ui_icon("workspace_simulation"), "Simulation")
+        simulation.setObjectName("SciForgeWorkspaceSimulation")
+        simulation.setCheckable(True)
+        simulation.setChecked(self._sim_mode and not self._drawing_mode)
         drawings = menu.addMenu(ui_icon("dw_base_view"), "Drawing")
         try:
             from . import drawing_ui
 
             design.triggered.connect(lambda: drawing_ui.show_design())
             drawing_ui.fill_workspace_menu(drawings)
+        except Exception as exc:
+            warn("workspace menu: %s" % exc)
+        try:  # Fusion's SIMULATION workspace (beta 3, simulation_ui)
+            from . import simulation_ui
+
+            design.triggered.connect(lambda: simulation_ui.leave_workspace())
+            simulation.triggered.connect(lambda: simulation_ui.enter_workspace())
         except Exception as exc:
             warn("workspace menu: %s" % exc)
         menu.exec_(button.mapToGlobal(QtCore.QPoint(0, button.height())))
@@ -650,18 +668,23 @@ class RibbonWidget(QtWidgets.QWidget):
         if on == self._drawing_mode or "drawing" not in self.tab_buttons:
             return
         self._drawing_mode = on
+        sim = getattr(self, "_sim_mode", False)
         for tid, button in self.tab_buttons.items():
             if tid == "drawing":
                 button.setVisible(on)
+            elif tid in SIMULATION_TABS:
+                button.setVisible(sim and not on)
             elif tid == "sketch":
-                button.setVisible(self._sketch_mode and not on)
+                button.setVisible(self._sketch_mode and not on and not sim)
             elif tid == "flat_pattern":
-                button.setVisible(getattr(self, "_flat_mode", False) and not on)
+                button.setVisible(getattr(self, "_flat_mode", False) and not on and not sim)
             else:
-                button.setVisible(not on and not getattr(self, "_flat_mode", False))
-        self.workspace.setText("DRAWING ▾" if on else "DESIGN ▾")
+                button.setVisible(not on and not getattr(self, "_flat_mode", False) and not sim)
+        self.workspace.setText("DRAWING ▾" if on else ("SIMULATION ▾" if sim else "DESIGN ▾"))
         if on:
             self.select_tab("drawing")
+        elif sim:
+            self.select_tab("sim_setup")
         elif getattr(self, "_flat_mode", False):
             self.select_tab("flat_pattern")
         else:
@@ -681,6 +704,8 @@ class RibbonWidget(QtWidgets.QWidget):
                 button.setVisible(on and not drawing)
             elif tid == "drawing":
                 button.setVisible(drawing)
+            elif tid in SIMULATION_TABS:
+                button.setVisible(False)
             elif tid == "sketch":
                 button.setVisible(self._sketch_mode and not on and not drawing)
             else:
@@ -693,6 +718,42 @@ class RibbonWidget(QtWidgets.QWidget):
             back = self._user_tab if self._user_tab in self.page_index else "solid"
             self.select_tab("sketch" if self._sketch_mode else back)
         log("ribbon: flat pattern mode %s" % ("on" if on else "off"))
+
+    def set_simulation_mode(self, on, tab=None):
+        """Fusion's SIMULATION workspace (simulation_ui): its SETUP and RESULTS tabs are the only
+        ones shown (the workspace button says SIMULATION); back to the design's tabs after.
+        `tab`: the simulation tab to select ("sim_setup" / "sim_results"). SCIFORGE beta 3."""
+        if "sim_setup" not in self.tab_buttons:
+            return
+        if on == getattr(self, "_sim_mode", False):
+            if on and tab in self.tab_buttons:
+                self.select_tab(tab)
+            return
+        self._sim_mode = on
+        drawing = getattr(self, "_drawing_mode", False)
+        flat = getattr(self, "_flat_mode", False)
+        for tid, button in self.tab_buttons.items():
+            if tid in SIMULATION_TABS:
+                button.setVisible(on and not drawing)
+            elif tid == "drawing":
+                button.setVisible(drawing)
+            elif tid == "flat_pattern":
+                button.setVisible(flat and not on and not drawing)
+            elif tid == "sketch":
+                button.setVisible(self._sketch_mode and not on and not drawing)
+            else:
+                button.setVisible(not on and not drawing and not flat)
+        log("ribbon: simulation mode %s" % ("on" if on else "off"))
+        if drawing:
+            return
+        self.workspace.setText("SIMULATION ▾" if on else "DESIGN ▾")
+        if on:
+            self.select_tab(tab if tab in SIMULATION_TABS else "sim_setup")
+        elif flat:
+            self.select_tab("flat_pattern")
+        else:
+            back = self._user_tab if self._user_tab in self.page_index else "solid"
+            self.select_tab("sketch" if self._sketch_mode else back)
 
     def current_tab(self):
         for tid, button in self.tab_buttons.items():

@@ -86,7 +86,7 @@ WORKSPACES [in=workspace]
   Generative Design [out=generative design is out of scope]
   Render [out=rendering is out of scope]
   Animation [out=animation is out of scope]
-  Simulation [out=simulation is out of scope]
+  Simulation
   Manufacture [out=CAM is out of scope]
   Drawing
     From Design

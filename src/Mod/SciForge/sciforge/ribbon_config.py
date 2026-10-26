@@ -1341,6 +1341,173 @@ DRAWING_EXPORT = group(
     ],
 )
 
+# -- SIMULATION workspace (beta 3, outline 7.18: Static Stress only) ----------------------------
+# Fusion's SETUP and RESULTS tabs (docs/sciforge/dev/research/fusion-simulation.md, 3.1 and 5.13;
+# group order partly a guess there). Scaffold: every command None (greyed) until its builder
+# wires it; "# owner:" says who. Entries Fusion has that SciForge will not build in beta 3 keep
+# None and say so in their note.
+SIM_ICON = "workspace_simulation"  # placeholder until sim-ui / sim-results draw their icons
+_SIM_LATER = "Not in SciForge yet"
+SIM_STUDY = group(
+    "sim_study",
+    "STUDY",
+    ["New Simulation Study"],
+    [
+        item("New Simulation Study", None, SIM_ICON),  # owner: sim-ui
+    ],
+)
+SIM_SIMPLIFY = group(
+    "sim_simplify",
+    "SIMPLIFY",
+    [],
+    [
+        item(
+            "Simplify",
+            None,
+            SIM_ICON,
+            note=_SIM_LATER + ": a study uses the design as it is (leave a body out in Study "
+            "Materials)",
+        ),
+    ],
+)
+SIM_MATERIALS = group(
+    "sim_materials",
+    "MATERIALS",
+    ["Study Materials"],
+    [
+        item("Study Materials", None, SIM_ICON),  # owner: sim-ui
+        item(
+            "Manage Physical Materials", ("SciForge_ManageMaterials", "Material_Edit"), "material"
+        ),
+    ],
+)
+SIM_CONSTRAINTS = group(
+    "sim_constraints",
+    "CONSTRAINTS",
+    ["Structural Constraints"],
+    [
+        item("Structural Constraints", None, SIM_ICON),  # owner: sim-ui
+    ],
+)
+SIM_LOADS = group(
+    "sim_loads",
+    "LOADS",
+    ["Structural Loads"],
+    [
+        item("Structural Loads", None, SIM_ICON),  # owner: sim-ui
+        item("Toggle Gravity On/Off", None, SIM_ICON),  # owner: sim-ui
+        SEP,
+        item("Linear Global Load", None, SIM_ICON, note=_SIM_LATER),
+        item("Angular Global Load", None, SIM_ICON, note=_SIM_LATER),
+        item("Point Mass (Auto)", None, SIM_ICON, note=_SIM_LATER),
+        item("Point Mass (Manual)", None, SIM_ICON, note=_SIM_LATER),
+    ],
+)
+SIM_CONTACTS = group(
+    "sim_contacts",
+    "CONTACTS",
+    ["Automatic Contacts"],
+    [
+        item("Automatic Contacts", None, SIM_ICON),  # owner: sim-ui
+        item(
+            "Manual Contacts",
+            None,
+            SIM_ICON,
+            note=_SIM_LATER + ": bodies that touch are bonded, found automatically",
+        ),
+        item("Contact Manager", None, SIM_ICON),  # owner: sim-ui
+        SEP,
+        item("Bolt Connector", None, SIM_ICON, note=_SIM_LATER),
+        item("Rigid Body Connector", None, SIM_ICON, note=_SIM_LATER),
+    ],
+)
+SIM_DISPLAY = group(
+    "sim_display",
+    "DISPLAY",
+    [],
+    [
+        item("DOF View", None, SIM_ICON),  # owner: sim-ui
+    ],
+)
+SIM_MANAGE = group(
+    "sim_manage",
+    "MANAGE",
+    [],
+    [
+        item("Settings", None, SIM_ICON),  # owner: sim-ui (Study Settings)
+        item("Local Mesh Control", None, SIM_ICON),  # owner: sim-ui
+        item("Load Case Attributes", None, SIM_ICON),  # owner: sim-ui
+    ],
+)
+SIM_SOLVE = group(
+    "sim_solve",
+    "SOLVE",
+    ["Pre-check", "Solve"],
+    [
+        item("Pre-check", None, SIM_ICON),  # owner: sim-ui
+        item("Solve", None, SIM_ICON),  # owner: sim-ui
+        item("Generate Mesh", None, SIM_ICON),  # owner: sim-ui
+    ],
+)
+SIMR_TOOLS = group(
+    "simr_tools",
+    "RESULT TOOLS",
+    ["Animate"],
+    [
+        item("Animate", None, SIM_ICON),  # owner: sim-results
+        item("Results Details", None, SIM_ICON),  # owner: sim-results
+        item("Compare", None, SIM_ICON, note=_SIM_LATER),
+        item("Report", None, SIM_ICON),  # owner: sim-results
+    ],
+)
+SIMR_DEFORMATION = group(
+    "simr_deformation",
+    "DEFORMATION",
+    [],
+    [
+        item("Undeformed", None, SIM_ICON),  # owner: sim-results
+        item("Actual", None, SIM_ICON),  # owner: sim-results
+        item("Adjusted x 0.5", None, SIM_ICON),  # owner: sim-results
+        item("Adjusted", None, SIM_ICON),  # owner: sim-results
+        item("Adjusted x 2", None, SIM_ICON),  # owner: sim-results
+        item("Adjusted x 5", None, SIM_ICON),  # owner: sim-results
+    ],
+)
+SIMR_DISPLAY = group(
+    "simr_display",
+    "DISPLAY",
+    [],
+    [
+        item("Show Mesh", None, SIM_ICON),  # owner: sim-results
+        item("Wireframe", None, SIM_ICON),  # owner: sim-results
+    ],
+)
+SIMR_INSPECT = group(
+    "simr_inspect",
+    "INSPECT",
+    ["Surface Probes"],
+    [
+        item("Surface Probes", None, SIM_ICON),  # owner: sim-results
+        item("Show Min/Max", None, SIM_ICON),  # owner: sim-results
+        item("Reaction Force", None, SIM_ICON),  # owner: sim-results
+        item("Slice Plane", None, SIM_ICON),  # owner: sim-results
+        SEP,
+        item("Point Probes", None, SIM_ICON, note=_SIM_LATER),
+        item("Iso-surface", None, SIM_ICON, note=_SIM_LATER),
+        item("Solver Data", None, SIM_ICON, note=_SIM_LATER),
+        SEP,
+        item("Measure", ("SciForge_Measure", "Std_Measure"), "measure"),
+    ],
+)
+SIMR_FINISH = group(
+    "simr_finish",
+    "FINISH RESULTS",
+    ["Finish Results"],
+    [
+        item("Finish Results", None, SIM_ICON),  # owner: sim-results
+    ],
+)
+
 TABS = [
     {
         "id": "solid",
@@ -1431,6 +1598,38 @@ TABS = [
         "title": "FLAT PATTERN",
         "contextual": True,
         "groups": [INSPECT, SELECT, FLAT_PATTERN_EXPORT, FINISH_FLAT_PATTERN],
+    },
+    {
+        "id": "sim_setup",
+        "title": "SETUP",
+        "contextual": True,
+        "groups": [
+            SIM_STUDY,
+            SIM_SIMPLIFY,
+            SIM_MATERIALS,
+            SIM_CONSTRAINTS,
+            SIM_LOADS,
+            SIM_CONTACTS,
+            SIM_DISPLAY,
+            SIM_MANAGE,
+            SIM_SOLVE,
+            INSPECT,
+            SELECT,
+        ],
+    },
+    {
+        "id": "sim_results",
+        "title": "RESULTS",
+        "contextual": True,
+        "groups": [
+            SIMR_TOOLS,
+            SIMR_DEFORMATION,
+            SIMR_DISPLAY,
+            SIM_MANAGE,
+            SIMR_INSPECT,
+            SELECT,
+            SIMR_FINISH,
+        ],
     },
 ]
 
