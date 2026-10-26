@@ -298,9 +298,8 @@ class NodeConstraints(unittest.TestCase):
         ((node, terms),) = out["equations"]
         self.assertEqual(node, 7)
         self.assertEqual(terms[0][1], 1.0)  # the dependent term first, coefficient 1
-        dofs = sorted(d for d, _c in terms)
-        self.assertEqual(dofs, [0, 1])
-        self.assertAlmostEqual(dict(terms)[0] if terms[0][0] == 0 else dict(terms)[1], 1.0)
+        self.assertEqual(sorted(d for d, _c in terms), [0, 1])
+        self.assertAlmostEqual(terms[1][1], 1.0)  # ux + uy = 0
 
     def test_three_planes_hold_a_corner(self):
         rows = [(3, "a", "eq", (1, 0, 0)), (3, "b", "eq", (0, 1, 0)), (3, "c", "eq", (0, 0, 1))]
@@ -402,6 +401,50 @@ class Distributions(unittest.TestCase):
         self.assertEqual(count, 6)
         with self.assertRaises(core.SimulationError):
             core.three_two_one([(1, (0, 0, 0)), (2, (1, 0, 0)), (3, (2, 0, 0))])
+
+
+class HeldEnough(unittest.TestCase):
+    CORNERS = [(0, 0, 0), (0, 10, 0), (0, 0, 10), (0, 10, 10)]
+    AXES = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+
+    def test_a_fixed_face_holds_everything(self):
+        rows = [(p, d) for p in self.CORNERS for d in self.AXES]
+        self.assertEqual(core.free_modes(rows, (50, 5, 5), 100), [])
+
+    def test_held_along_x_only(self):
+        rows = [(p, (1, 0, 0)) for p in self.CORNERS]
+        words = [core.describe_free_mode(m) for m in core.free_modes(rows, (50, 5, 5), 100)]
+        self.assertEqual(
+            sorted(words),
+            ["slide along Y", "slide along Z", "turn about an axis along X through (50, 5, 5)"],
+        )
+
+    def test_a_pin_lets_it_turn_about_the_pin(self):
+        rows = []
+        for i in range(8):
+            a = i * math.pi / 4
+            for y in (0.0, 5.0, 10.0):
+                p = (10 + 3 * math.cos(a), y, 5 + 3 * math.sin(a))
+                rows.append((p, (math.cos(a), 0.0, math.sin(a))))  # radial
+                rows.append((p, (0.0, 1.0, 0.0)))  # axial
+        free = core.free_modes(rows, (50, 5, 5), 100)
+        self.assertEqual(len(free), 1)
+        kind, axis, through = free[0]
+        self.assertEqual(kind, "turn")
+        self.assertEqual([round(c, 6) for c in axis], [0.0, 1.0, 0.0])
+        self.assertAlmostEqual(through[0], 10.0, 6)
+        self.assertAlmostEqual(through[2], 5.0, 6)
+        # with tangential held too it is held completely
+        rows += [((10 + 3 * math.cos(0.3), 5, 5 + 3 * math.sin(0.3)), (0, 0, 1))]
+        self.assertEqual(core.free_modes(rows, (50, 5, 5), 100), [])
+
+    def test_jacobi(self):
+        values, vectors = core._jacobi([[2.0, 1.0], [1.0, 2.0]])
+        self.assertEqual(sorted(round(v, 9) for v in values), [1.0, 3.0])
+        for value, vector in zip(values, vectors):
+            mv = [2 * vector[0] + vector[1], vector[0] + 2 * vector[1]]
+            self.assertAlmostEqual(mv[0], value * vector[0])
+            self.assertAlmostEqual(mv[1], value * vector[1])
 
 
 class SolverText(unittest.TestCase):

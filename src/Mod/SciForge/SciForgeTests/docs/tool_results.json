@@ -6724,5 +6724,684 @@
    "text": "3 of 55 examples (read one with docs_read and its uri; a golden model's steps are design steps, the tools that build them are listed):\n{\n \"results\": [\n  {\n   \"kind\": \"recipe\",\n   \"id\": \"flange-bolt-pattern\",\n   \"title\": \"Recipe: flange with a bolt circle\",\n   \"tags\": [\n    \"flange\",\n    \"bolt-pattern\",\n    \"pcd\",\n    \"revolve\",\n    \"hole\",\n    \"circular_pattern\",\n    \"fillet\",\n    \"chamfer\",\n    \"turned-part\"\n   ],\n   \"ops\": [],\n   \"tools\": [\n    \"new_design\",\n    \"create_sketch\",\n    \"revolve\",\n    \"hole\",\n    \"circular_pattern\",\n    \"query_geometry\",\n    \"fillet\",\n    \"chamfer\",\n    \"diff_design\",\n    \"check_design\",\n    \"inspect_design\"\n   ],\n   \"note\": \"A pipe flange: a 100 mm disc, 10 mm thick, with a 40 mm hub 30 mm tall, a 20 mm bore, a\",\n   \"calls\": 12,\n   \"uri\": \"sciforge://docs/recipes/flange-bolt-pattern.md\",\n   \"score\": 22.22\n  },\n  {\n   \"kind\": \"golden\",\n   \"id\": \"pattern_circ_faces_bolt_circle\",\n   \"title\": \"Disc r40x10: the wall of a hole r4 patterned around Z, Full, 6 (Pattern Type Faces)\",\n   \"tags\": [\"pattern\", \"circular\", \"faces\", \"fusion-dialog\"],\n   \"ops\": [\"sketch\", \"extrude\", \"circular_pattern\"],\n   \"tools\": [\"create_sketch\", \"extrude\", \"circular_pattern\"],\n   \"note\": \"The picked wall is closed with the top and bottom faces into the hole's cylinder, which is cut at 60 degree steps. V = pi*40^2*10 - 6*pi*4^2*10; A = 2*1600pi + 2pi*40*10 - 12*16pi + 6*2pi*4*10 (same as flange_polar_holes).\",\n   \"known_gap\": false,\n   \"uri\": \"sciforge://examples/golden/pattern_circ_faces_bolt_circle\",\n   \"score\": 14.999\n  },\n  {\n   \"kind\": \"recipe\",\n   \"id\": \"threaded-fastener\",\n   \"title\": \"Recipe: threaded fastener (hex bolt M8 x 30)\",\n   \"tags\": [\"bolt\", \"screw\", \"fastener\", \"thread\", \"hexagon\", \"polygon\", \"chamfer\", \"modeled-thread\"],\n   \"ops\": [],\n   \"tools\": [\n    \"new_design\",\n    \"create_sketch\",\n    \"extrude\",\n    \"chamfer\",\n    \"inspect_design\",\n    \"thread\",\n    \"diff_design\",\n    \"check_design\"\n   ],\n   \"note\": \"A hex head bolt M8 x 30: a 13 mm across-flats head 5.3 mm high (ISO 4017), a 30 mm shank\",\n   \"calls\": 10,\n   \"uri\": \"sciforge://docs/recipes/threaded-fastener.md\",\n   \"score\": 8.989\n  }\n ],\n \"total\": 55\n}",
    "is_error": false
   }
+ },
+ "create_study#1": {
+  "setup": "plate",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   }
+  ],
+  "args": {},
+  "note": "a study of the plate",
+  "answer": {
+   "text": "Done: new Static Stress study 'Study 1 - Static Stress' (id 'SimStudy') of Body1. Next: add_constraint (where it is held), add_load (what pushes on it), then solve_study.",
+   "is_error": false
+  }
+ },
+ "add_constraint#1": {
+  "setup": "sim_study",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_study",
+    "args": {}
+   }
+  ],
+  "args": {
+   "kind": "fixed",
+   "on": [
+    {
+     "face": {
+      "normal": [
+       -1,
+       0,
+       0
+      ],
+      "count": 1
+     }
+    }
+   ]
+  },
+  "note": "the plate's left end held in place",
+  "answer": {
+   "text": "Done: Fixed 'Fixed 1' (id 'SimItem') in Study 1 - Static Stress, on Body.Face4.",
+   "is_error": false
+  }
+ },
+ "add_load#1": {
+  "setup": "sim_held",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_study",
+    "args": {}
+   },
+   {
+    "tool": "add_constraint",
+    "args": {
+     "kind": "fixed",
+     "on": [
+      {
+       "face": {
+        "normal": [
+         -1,
+         0,
+         0
+        ],
+        "count": 1
+       }
+      }
+     ]
+    }
+   }
+  ],
+  "args": {
+   "kind": "force",
+   "on": [
+    {
+     "face": {
+      "normal": [
+       1,
+       0,
+       0
+      ],
+      "count": 1
+     }
+    }
+   ],
+   "magnitude": 2000,
+   "direction": "vector",
+   "vector": [
+    0,
+    0,
+    -1
+   ]
+  },
+  "note": "2 kN down on its right end",
+  "answer": {
+   "text": "Done: Force 2000 N 'Force 1' (id 'SimItem001') in Study 1 - Static Stress, on Body.Face2.",
+   "is_error": false
+  }
+ },
+ "local_mesh_control#1": {
+  "setup": "sim_held",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_study",
+    "args": {}
+   },
+   {
+    "tool": "add_constraint",
+    "args": {
+     "kind": "fixed",
+     "on": [
+      {
+       "face": {
+        "normal": [
+         -1,
+         0,
+         0
+        ],
+        "count": 1
+       }
+      }
+     ]
+    }
+   }
+  ],
+  "args": {
+   "on": [
+    {
+     "face": {
+      "normal": [
+       -1,
+       0,
+       0
+      ],
+      "count": 1
+     }
+    }
+   ],
+   "size": 2
+  },
+  "note": "2 mm elements on the held end",
+  "answer": {
+   "text": "Done: Local Mesh Control 2 mm 'Local Mesh Control 1' (id 'SimItem001') in Study 1 - Static Stress, on Body.Face4.",
+   "is_error": false
+  }
+ },
+ "set_study_material#1": {
+  "setup": "sim_study",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_study",
+    "args": {}
+   }
+  ],
+  "args": {
+   "body": "Extrude1",
+   "material": "aluminium"
+  },
+  "note": "the study in aluminium (the design stays steel)",
+  "answer": {
+   "text": "Done: Body1 is Aluminum-Generic in Study 1 - Static Stress (units MPa, kg/m3).\n{\n \"material\": \"Aluminum-Generic\",\n \"from\": \"this study\",\n \"youngs_mpa\": 70000.0,\n \"poisson\": 0.3499999940395355,\n \"density\": 2700.0,\n \"yield_mpa\": 95.0,\n \"ultimate_mpa\": 310.0,\n \"filled_in\": [\n  \"yield_mpa\"\n ],\n \"safety_basis\": \"yield\"\n}",
+   "is_error": false
+  }
+ },
+ "study_settings#1": {
+  "setup": "sim_study",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_study",
+    "args": {}
+   }
+  ],
+  "args": {
+   "mesh_size": 5,
+   "gravity": true
+  },
+  "note": "a finer mesh and gravity on",
+  "answer": {
+   "text": "Done: Study 1 - Static Stress's settings changed.\n{\n \"study\": \"Study 1 - Static Stress\",\n \"id\": \"SimStudy\",\n \"mesh_size\": 5.0,\n \"mesh_size_mm\": 0.0,\n \"element_order\": \"parabolic\",\n \"curved_elements\": true,\n \"gravity\": true,\n \"gravity_direction\": [\n  0.0,\n  0.0,\n  -1.0\n ],\n \"remove_rigid_body_modes\": false,\n \"contact_tolerance\": 0.1,\n \"safety_basis\": \"yield\",\n \"keep_results\": true,\n \"local_mesh_controls\": []\n}",
+   "is_error": false
+  }
+ },
+ "precheck_study#1": {
+  "setup": "sim_ready",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_study",
+    "args": {}
+   },
+   {
+    "tool": "add_constraint",
+    "args": {
+     "kind": "fixed",
+     "on": [
+      {
+       "face": {
+        "normal": [
+         -1,
+         0,
+         0
+        ],
+        "count": 1
+       }
+      }
+     ]
+    }
+   },
+   {
+    "tool": "add_load",
+    "args": {
+     "kind": "force",
+     "on": [
+      {
+       "face": {
+        "normal": [
+         1,
+         0,
+         0
+        ],
+        "count": 1
+       }
+      }
+     ],
+     "magnitude": 2000,
+     "direction": "vector",
+     "vector": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  ],
+  "args": {},
+  "note": "ready to solve?",
+  "answer": {
+   "text": "Study 1 - Static Stress: ready to solve.\n{\n \"study\": \"Study 1 - Static Stress\",\n \"id\": \"SimStudy\",\n \"verdict\": \"ready\",\n \"messages\": [],\n \"constraints\": [\n  \"Fixed 1\"\n ],\n \"loads\": [\n  \"Force 1\"\n ],\n \"gravity\": false,\n \"bodies\": [\n  \"Body1\"\n ],\n \"contacts\": []\n}",
+   "is_error": false
+  }
+ },
+ "solve_study#1": {
+  "setup": "sim_ready",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_study",
+    "args": {}
+   },
+   {
+    "tool": "add_constraint",
+    "args": {
+     "kind": "fixed",
+     "on": [
+      {
+       "face": {
+        "normal": [
+         -1,
+         0,
+         0
+        ],
+        "count": 1
+       }
+      }
+     ]
+    }
+   },
+   {
+    "tool": "add_load",
+    "args": {
+     "kind": "force",
+     "on": [
+      {
+       "face": {
+        "normal": [
+         1,
+         0,
+         0
+        ],
+        "count": 1
+       }
+      }
+     ],
+     "magnitude": 2000,
+     "direction": "vector",
+     "vector": [
+      0,
+      0,
+      -1
+     ]
+    }
+   }
+  ],
+  "args": {},
+  "note": "solve it",
+  "answer": {
+   "text": "Done: Study 1 - Static Stress solved (1137 nodes, 528 elements). Lowest safety factor 1.27 at (6.121, 26.13, 10) mm on Body1: below 2. Largest von Mises stress 163.2 MPa, largest displacement 0.212 mm. study_results has every number.",
+   "is_error": false
+  }
+ },
+ "study_results#1": {
+  "setup": "sim_solved",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_study",
+    "args": {}
+   },
+   {
+    "tool": "add_constraint",
+    "args": {
+     "kind": "fixed",
+     "on": [
+      {
+       "face": {
+        "normal": [
+         -1,
+         0,
+         0
+        ],
+        "count": 1
+       }
+      }
+     ]
+    }
+   },
+   {
+    "tool": "add_load",
+    "args": {
+     "kind": "force",
+     "on": [
+      {
+       "face": {
+        "normal": [
+         1,
+         0,
+         0
+        ],
+        "count": 1
+       }
+      }
+     ],
+     "magnitude": 2000,
+     "direction": "vector",
+     "vector": [
+      0,
+      0,
+      -1
+     ]
+    }
+   },
+   {
+    "tool": "solve_study",
+    "args": {}
+   }
+  ],
+  "args": {
+   "results": [
+    "safety",
+    "von_mises",
+    "displacement"
+   ],
+   "target": 2
+  },
+  "note": "three results and the verdict",
+  "answer": {
+   "text": "Lowest safety factor 1.27 at (6.121, 26.13, 10) mm on Body1: below 2.\n{\n \"study\": \"Study 1 - Static Stress\",\n \"id\": \"SimStudy\",\n \"solved\": true,\n \"out_of_date\": false,\n \"verdict\": \"Lowest safety factor 1.27 at (6.121, 26.13, 10) mm on Body1: below 2.\",\n \"safety\": {\n  \"lowest\": 1.2682905880492756,\n  \"at\": [\n   6.121,\n   26.1309,\n   10.0\n  ],\n  \"body\": \"Body1\",\n  \"target\": 2.0\n },\n \"results\": {\n  \"safety\": {\n   \"title\": \"Safety Factor\",\n   \"unit\": \"\",\n   \"min\": 1.2682905880492756,\n   \"min_at\": [\n    6.121,\n    26.1309,\n    10.0\n   ],\n   \"max\": 15.0,\n   \"max_at\": [\n    60.0,\n    0.0,\n    0.0\n   ]\n  },\n  \"von_mises\": {\n   \"title\": \"Stress: Von Mises\",\n   \"unit\": \"MPa\",\n   \"min\": 0.8704580045044562,\n   \"min_at\": [\n    0.0,\n    26.5958,\n    5.0118\n   ],\n   \"max\": 163.21180804344,\n   \"max_at\": [\n    6.121,\n    26.1309,\n    10.0\n   ]\n  },\n  \"displacement\": {\n   \"title\": \"Displacement: Total\",\n   \"unit\": \"mm\",\n   \"min\": 0.0,\n   \"min_at\": [\n    0.0,\n    0.0,\n    0.0\n   ],\n   \"max\": 0.21201575620458465,\n   \"max_at\": [\n    60.0,\n    20.0,\n    0.0\n   ]\n  }\n },\n \"bodies\": {\n  \"Body1\": {\n   \"displacement_max\": 0.21201575620458465,\n   \"material\": \"Steel-Generic\",\n   \"safety_min\": 1.2682905880492756,\n   \"von_mises_max\": 163.21180804344\n  }\n },\n \"reactions\": {\n  \"Fixed 1\": {\n   \"total\": 2000.0,\n   \"x\": 8.71978e-11,\n   \"y\": 8.421353e-11,\n   \"z\": 2000.0\n  }\n },\n \"mesh\": {\n  \"elements\": 528,\n  \"largest\": 13.167346157534286,\n  \"mesher\": \"gmsh\",\n  \"nodes\": 1137,\n  \"order\": \"parabolic\",\n  \"over_limit\": 0,\n  \"size\": 7.280109889280518,\n  \"smallest\": 4.296612122541806,\n  \"worst_aspect\": 5.295692544936329\n },\n \"safety_basis\": \"yield\",\n \"notes\": [],\n \"units\": \"mm, N, MPa\"\n}",
+   "is_error": false
+  }
+ },
+ "delete_study#1": {
+  "setup": "sim_study",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_study",
+    "args": {}
+   }
+  ],
+  "args": {
+   "study": "Study 1 - Static Stress"
+  },
+  "note": "delete the study",
+  "answer": {
+   "text": "Done: Study 1 - Static Stress deleted with its constraints, loads and results.",
+   "is_error": false
+  }
  }
 }

@@ -252,6 +252,8 @@ def set_settings(study, new):
             merged[key] = value
     data["settings"] = core.settings(merged)
     _save(study, STUDY_PROP, data)
+    if "keep_results" in (new or {}):
+        apply_keep_results(study)
     return data["settings"]
 
 
@@ -364,7 +366,8 @@ def add_item(study, category, kind, refs, opts=None, label=None):
     obj.References = _link_list(refs)
     number = _label_number(_all_item_labels(doc, obj), info["title"])
     obj.Label = label or "%s %d" % (info["title"], number)
-    _save(obj, ITEM_PROP, {"category": category, "kind": kind, "options": opts})
+    data = {"category": category, "kind": kind, "options": opts, "sigs": _signatures(refs)}
+    _save(obj, ITEM_PROP, data)
     return obj
 
 
@@ -378,6 +381,7 @@ def update_item(item, refs=None, opts=None, suppressed=None):
         raise SimulationError(" ".join(problems))
     if refs is not None:
         item.References = _link_list(refs)
+        data["sigs"] = _signatures(refs)
     data["options"] = new_opts
     _save(item, ITEM_PROP, data)
     if suppressed is not None:
@@ -396,39 +400,275 @@ def _link_list(refs):
         if obj.Name not in grouped:
             grouped[obj.Name] = (obj, [])
             order.append(obj.Name)
-        if sub and sub not in grouped[obj.Name][1]:
+        if sub not in grouped[obj.Name][1]:
             grouped[obj.Name][1].append(sub)
-    return [(grouped[n][0], grouped[n][1]) for n in order]
+    # (a whole object is the element "": FreeCAD drops an entry with no element at all)
+    return [(grouped[n][0], grouped[n][1] or [""]) for n in order]
 
 
 def lost_items(study):
-    """Items whose picks are gone (deleted geometry): the pre-check refuses them."""
+    """Items whose picks are gone (deleted geometry, found nowhere by their shape): the
+    pre-check refuses them."""
     lost = []
     for item in items(study):
         if item.Suppressed:
             continue
-        picks = _picks(item.References)
-        if not picks:
+        resolved = resolve_picks(item)
+        if not resolved or any(not names for _obj, names, _moved in resolved):
             lost.append(item)
-            continue
-        for obj, sub in picks:
-            try:
-                if not bodies.alive(obj):
-                    lost.append(item)
-                    break
-                if not sub:  # a whole body (a local mesh control)
-                    if not bodies.has_solid(obj):
-                        lost.append(item)
-                        break
-                    continue
-                element = bodies.global_shape(obj, copy=False).getElement(sub.split(".")[-1])
-                if element is None or element.isNull():
-                    lost.append(item)
-                    break
-            except Exception:
-                lost.append(item)
-                break
     return lost
+
+
+# -- picks that survive edits ----------------------------------------------------------------------
+# FreeCAD follows a picked face through later edits by its history, and marks it lost ("?Face5")
+# when it cannot (a Press Pull, a direct edit, a step changed early in the timeline). Every pick
+# also remembers its shape (_signature: the kind of surface, its normal or axis, where it is,
+# its size), and a pick FreeCAD lost is found again by that shape: the same face where it was
+# (split in pieces: all of them), or the face it moved to.
+def _vec(v):
+    return [round(v.x, 9), round(v.y, 9), round(v.z, 9)]
+
+
+def _signature(element):
+    """What a picked face / edge / corner looks like, in design coordinates."""
+    kind = element.ShapeType
+    out = {"kind": kind}
+    try:
+        if kind == "Face":
+            surface = element.Surface
+            out["type"] = surface.TypeId.split("::")[-1]
+            out["center"] = _vec(element.CenterOfMass)
+            out["area"] = element.Area
+            box = element.BoundBox
+            out["box"] = [box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax]
+            if out["type"] == "GeomPlane":
+                n = element.normalAt(*_middle_uv(element))
+                out["normal"] = _vec(n)
+                out["offset"] = n.dot(element.CenterOfMass)
+            elif out["type"] == "GeomCylinder":
+                out["axis"] = _vec(surface.Axis)
+                out["origin"] = _vec(surface.Center)
+                out["radius"] = surface.Radius
+        elif kind == "Edge":
+            out["type"] = element.Curve.TypeId.split("::")[-1]
+            out["center"] = _vec(element.CenterOfMass)
+            out["length"] = element.Length
+        elif kind == "Vertex":
+            out["center"] = _vec(element.Point)
+    except Exception:
+        pass
+    return out
+
+
+def _signatures(refs):
+    """[[object name, element name, signature]] of picks, in the order of the picks (FreeCAD
+    may rename a pick it lost, "?Face1" for what was Face8, but keeps their order)."""
+    out = []
+    for obj, sub in _picks(refs):
+        name = sub.split(".")[-1]
+        sig = None
+        if name:
+            try:
+                sig = _signature(bodies.global_shape(obj, copy=False).getElement(name))
+            except Exception:
+                sig = None
+        out.append([obj.Name, name, sig])
+    return out
+
+
+def _signature_of(sigs, index, obj, name):
+    """The remembered shape of the index-th pick (by its place in the list when the list
+    still matches the picks, else by its name)."""
+    if isinstance(sigs, list):
+        if index < len(sigs) and sigs[index][0] == obj.Name:
+            return sigs[index][2]
+        for owner, element, sig in sigs:
+            if owner == obj.Name and element == name.lstrip("?"):
+                return sig
+        return None
+    if isinstance(sigs, dict):  # (the first form, never released)
+        return sigs.get("%s:%s" % (obj.Name, name.lstrip("?")))
+    return None
+
+
+def _same_direction(a, b, tol=1e-6):
+    return abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2]) > 1.0 - tol
+
+
+def _distance(a, b):
+    return ((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2) ** 0.5
+
+
+def _boxes_touch(a, b, tol):
+    return all(a[i] <= b[i + 3] + tol and b[i] <= a[i + 3] + tol for i in range(3))
+
+
+def _fits(element, sig, tol):
+    """Whether an element still is the picked one (FreeCAD kept the name): the same kind of
+    surface turned the same way (a face that moved or grew is still the same face)."""
+    now = _signature(element)
+    if now.get("kind") != sig.get("kind") or now.get("type") != sig.get("type"):
+        return False
+    if "normal" in sig:
+        n, m = now.get("normal"), sig["normal"]
+        return bool(n) and sum(a * b for a, b in zip(n, m)) > 1.0 - 1e-6
+    if "axis" in sig:
+        return (
+            _same_direction(now.get("axis", [0, 0, 0]), sig["axis"])
+            and abs(now.get("radius", 0) - sig["radius"]) <= tol
+        )
+    return True
+
+
+def _refind(shape, sig, tol):
+    """Names of the elements of `shape` that are the picked one by its shape: the same face
+    where it was (all its pieces when an edit split it), else the face it moved to."""
+    kind = sig.get("kind")
+    if kind == "Vertex":
+        best = None
+        for i, v in enumerate(shape.Vertexes, 1):
+            d = _distance(_vec(v.Point), sig["center"])
+            if best is None or d < best[0]:
+                best = (d, "Vertex%d" % i)
+        return [best[1]] if best and best[0] <= max(10 * tol, 1e-3) else []
+    if kind == "Edge":
+        best = None
+        for i, e in enumerate(shape.Edges, 1):
+            try:
+                if e.Curve.TypeId.split("::")[-1] != sig.get("type"):
+                    continue
+            except Exception:
+                continue
+            d = _distance(_vec(e.CenterOfMass), sig["center"]) + abs(e.Length - sig["length"])
+            if best is None or d < best[0]:
+                best = (d, "Edge%d" % i)
+        return [best[1]] if best and best[0] <= max(0.05 * sig["length"], tol) else []
+    same, moved = [], []
+    for i, f in enumerate(shape.Faces, 1):
+        try:
+            now = _signature(f)
+        except Exception:
+            continue
+        if now.get("type") != sig.get("type"):
+            continue
+        name = "Face%d" % i
+        if "normal" in sig:
+            if not now.get("normal") or sum(a * b for a, b in zip(now["normal"], sig["normal"])) < (
+                1.0 - 1e-6
+            ):
+                continue
+            if abs(now["offset"] - sig["offset"]) <= tol and _boxes_touch(
+                now["box"], sig["box"], tol
+            ):
+                same.append(name)
+            else:
+                # moved along its normal: how far its middle is from the old middle across it
+                n = sig["normal"]
+                d = [now["center"][k] - sig["center"][k] for k in range(3)]
+                along = sum(d[k] * n[k] for k in range(3))
+                across = _distance(d, [along * n[k] for k in range(3)])
+                moved.append((across + abs(now["area"] - sig["area"]) ** 0.5, name))
+        elif "axis" in sig:
+            if not _same_direction(now.get("axis", [0, 0, 0]), sig["axis"]):
+                continue
+            if abs(now.get("radius", 0) - sig["radius"]) > tol:
+                continue
+            o = [now["origin"][k] - sig["origin"][k] for k in range(3)]
+            a = sig["axis"]
+            along = sum(o[k] * a[k] for k in range(3))
+            off_axis = _distance(o, [along * a[k] for k in range(3)])
+            if off_axis <= tol and _boxes_touch(now["box"], sig["box"], tol):
+                same.append(name)
+            else:
+                moved.append((off_axis + _distance(now["center"], sig["center"]), name))
+        else:
+            if abs(now["area"] - sig["area"]) <= 0.2 * sig["area"]:
+                moved.append((_distance(now["center"], sig["center"]), name))
+    if same:
+        return same
+    if moved:
+        moved.sort()
+        size = max(sig["box"][3] - sig["box"][0], sig["box"][4] - sig["box"][1])
+        size = max(size, sig["box"][5] - sig["box"][2], 1.0)
+        if moved[0][0] <= 0.5 * size:
+            return [moved[0][1]]
+    return []
+
+
+def resolve_picks(item):
+    """[(object, [element names], moved)] of an item's picks as the design is now: FreeCAD's
+    own name when it still fits, else the elements found again by the pick's shape (moved =
+    True), else [] (lost). A whole-body pick gives [""]."""
+    data = item_data(item)
+    sigs = data.get("sigs")
+    picks = _picks(item.References)
+    if isinstance(sigs, list) and len(sigs) != len(picks):
+        sigs = [row for row in sigs if row[1]]  # (whole-body picks: no shape to remember)
+    out = []
+    for index, (obj, sub) in enumerate(picks):
+        if not bodies.alive(obj):
+            out.append((obj, [], False))
+            continue
+        if not sub:
+            out.append((obj, [""] if bodies.has_solid(obj) else [], False))
+            continue
+        name = sub.split(".")[-1]
+        sig = _signature_of(sigs, index, obj, name)
+        try:
+            shape = bodies.global_shape(obj, copy=False)
+        except Exception:
+            out.append((obj, [], False))
+            continue
+        tol = max(1e-6 * _shape_size(shape), 1e-4)
+        element = None
+        if not name.startswith("?"):
+            try:
+                element = shape.getElement(name)
+                if element is None or element.isNull():
+                    element = None
+            except Exception:
+                element = None
+        if element is not None and (sig is None or _fits(element, sig, tol)):
+            out.append((obj, [name], False))
+            continue
+        if sig is None:
+            out.append((obj, [], False))
+            continue
+        found = _refind(shape, sig, tol)
+        out.append((obj, found, bool(found)))
+    return out
+
+
+def _shape_size(shape):
+    box = shape.BoundBox
+    return max(box.XLength, box.YLength, box.ZLength, 1.0)
+
+
+def repair_picks(study):
+    """Point every item whose picks FreeCAD lost (or that moved) at the faces found again by
+    their shape, and remember their shape there. Returns the labels of the items changed.
+    (The Job calls it before a solve; the workspace may call it after an edit.)"""
+    changed = []
+    for item in items(study):
+        resolved = resolve_picks(item)
+        if not any(moved for _obj, _names, moved in resolved):
+            continue
+        if any(not names for _obj, names, _moved in resolved):
+            continue  # (lost: the pre-check says so, nothing is changed)
+        refs = []
+        for obj, names, _moved in resolved:
+            refs += [(obj, n) for n in names]
+        data = item_data(item)
+        item.References = _link_list(refs)
+        data["sigs"] = _signatures(refs)
+        _save(item, ITEM_PROP, data)
+        changed.append(item.Label)
+    if changed:
+        log(
+            "simulation: found again what %s %s on"
+            % (", ".join(changed), "is" if len(changed) == 1 else "are")
+        )
+    return changed
 
 
 # -- materials -------------------------------------------------------------------------------------
@@ -613,6 +853,131 @@ def _twice(study):
     return out
 
 
+# -- held enough? -------------------------------------------------------------------------------
+def _sample_points(element):
+    """Points spread over a picked face, edge or corner (design coordinates)."""
+    kind = element.ShapeType
+    if kind == "Vertex":
+        return [element.Point]
+    if kind == "Edge":
+        a, b = element.FirstParameter, element.LastParameter
+        return [element.valueAt(a + (b - a) * f) for f in (0.0, 0.25, 0.5, 0.75, 1.0)]
+    pts = [v.Point for v in element.Vertexes]
+    try:
+        u0, u1, v0, v1 = element.ParameterRange
+        for i in range(5):
+            for j in range(5):
+                u = u0 + (u1 - u0) * (0.1 + 0.2 * i)
+                v = v0 + (v1 - v0) * (0.1 + 0.2 * j)
+                if element.isPartOfDomain(u, v):
+                    pts.append(element.valueAt(u, v))
+    except Exception:
+        pts.append(element.CenterOfMass)
+    return pts
+
+
+def _held_rows(item):
+    """[(body, point, direction)]: where an item's constraint stops the model moving and
+    along which directions (sampled over its picks)."""
+    data = item_data(item)
+    kind = data["kind"]
+    opts = core.options("constraint", kind, data["options"])
+    axes = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    out = []
+    for obj, names, _moved in resolve_picks(item):
+        body = obj if bodies.is_body(obj) else (bodies.body_of(obj) or obj)
+        try:
+            shape = bodies.global_shape(obj, copy=False)
+        except Exception:
+            continue
+        for name in names:
+            if not name:
+                continue
+            try:
+                element = shape.getElement(name)
+            except Exception:
+                continue
+            frame = None
+            if kind == "pin" and element.ShapeType == "Face":
+                try:
+                    frame = _cylinder_frame(element)
+                except Exception:
+                    frame = None
+            for p in _sample_points(element):
+                point = (p.x, p.y, p.z)
+                if kind == "fixed":
+                    dirs = [axes[i] for i, a in enumerate("xyz") if opts.get(a)]
+                elif kind == "displacement":
+                    dirs = [axes[i] for i, a in enumerate("xyz") if opts.get(a) is not None]
+                elif kind == "pin" and frame is not None:
+                    centre, axis, _sign = frame
+                    radial = _radial(point, centre, axis)
+                    dirs = []
+                    if radial is not None:
+                        if opts.get("radial"):
+                            dirs.append(tuple(radial))
+                        if opts.get("tangential"):
+                            dirs.append(tuple(core._cross(axis, radial)))
+                    if opts.get("axial"):
+                        dirs.append(tuple(axis))
+                elif kind == "frictionless" and element.ShapeType == "Face":
+                    dirs = [_face_normal_at(element, point)]
+                else:
+                    dirs = []
+                out += [(body, point, d) for d in dirs]
+    return out
+
+
+def _pieces(study, touching=None):
+    """The study's bodies grouped by what touches what (glued pieces move together)."""
+    found = study_bodies(study)
+    if touching is None:
+        touching = contacts(study) if len(found) > 1 else []
+    parent = {b.Name: b.Name for b in found}
+
+    def root(name):
+        while parent[name] != name:
+            parent[name] = parent[parent[name]]
+            name = parent[name]
+        return name
+
+    for a, b, _kind in touching:
+        if a.Name in parent and b.Name in parent:
+            parent[root(b.Name)] = root(a.Name)
+    groups = {}
+    for b in found:
+        groups.setdefault(root(b.Name), []).append(b)
+    return list(groups.values())
+
+
+def not_held(study, touching=None):
+    """[(bodies, [free movement in words])] of the pieces of the study that its constraints
+    hold (at least one constraint on them) but not completely: they could still slide or turn
+    as a whole, and the solve would fail or give nonsense (Fusion's rigid body motion)."""
+    rows = []
+    for item in items(study, "constraint"):
+        if not item.Suppressed:
+            rows += _held_rows(item)
+    out = []
+    for piece in _pieces(study, touching):
+        names = set(b.Name for b in piece)
+        mine = [(p, d) for body, p, d in rows if body.Name in names]
+        if not mine:
+            continue  # (held by nothing: loose_bodies / Remove rigid body modes)
+        box = None
+        for b in piece:
+            bb = bodies.global_shape(b, copy=False).BoundBox
+            if box is None:
+                box = bb
+            else:
+                box.add(bb)
+        centre = (box.Center.x, box.Center.y, box.Center.z)
+        free = core.free_modes(mine, centre, max(box.DiagonalLength, 1.0))
+        if free:
+            out.append((piece, [core.describe_free_mode(m) for m in free]))
+    return out
+
+
 # -- pre-check -------------------------------------------------------------------------------------
 def precheck(study):
     """[(level, sentence)] of simulation_core.precheck for this study as it is now."""
@@ -657,6 +1022,18 @@ def precheck(study):
     if found and any(not c[2] for c in summary["constraints"]):
         summary["loose"] = [b.Label for b in loose_bodies(study, touching)]
     checks = core.precheck(summary)
+    try:
+        for piece, free in not_held(study, touching if len(found) > 1 else []):
+            checks.append(
+                (
+                    "error",
+                    "%s is not held enough: it could still %s. Add a constraint that stops "
+                    "it (a Fixed face is the simplest)."
+                    % (" and ".join(b.Label for b in piece), " or ".join(free)),
+                )
+            )
+    except Exception as exc:
+        warn("simulation pre-check (held enough): %s" % exc)
     for label in summary.get("unbuilt", []):
         checks.append(("error", "%s is not in SciForge yet: suppress or delete it." % label))
     return checks
@@ -745,7 +1122,10 @@ def map_picks(item, model, owners=None):
     import Part
 
     names = []
-    for obj, sub in _picks(item.References):
+    picked = []
+    for obj, found, _moved in resolve_picks(item):
+        picked += [(obj, n) for n in found]
+    for obj, sub in picked:
         if not sub:
             body = obj if bodies.is_body(obj) else bodies.body_of(obj)
             for i, owner in enumerate(owners or [], 1):
@@ -1514,14 +1894,20 @@ def _size_fields(study, model, owners, subs, global_size):
 
 
 def _write_fields(geo_path, lines):
-    if not lines:
-        return
+    """SciForge's lines into FreeCAD's Gmsh input: the size fields, and one thread (Gmsh's
+    threads mesh the surfaces in a different order on every run, so the same study gave a
+    slightly different mesh and different numbers each time; its 3D meshing is on one thread
+    anyway)."""
+    import re
+
     with open(geo_path, encoding="utf-8") as handle:
         text = handle.read()
-    marker = "// optimize the mesh"
-    if marker not in text:
-        marker = "Mesh  3;"
-    text = text.replace(marker, "\n".join(lines) + "\n" + marker, 1)
+    text = re.sub(r"General\.NumThreads\s*=\s*\d+;", "General.NumThreads = 1;", text)
+    if lines:
+        marker = "// optimize the mesh"
+        if marker not in text:
+            marker = "Mesh  3;"
+        text = text.replace(marker, "\n".join(lines) + "\n" + marker, 1)
     with open(geo_path, "w", encoding="utf-8") as handle:
         handle.write(text)
 
@@ -1761,6 +2147,16 @@ class Job:
     # -- stages (main thread)
     def _stage_model(self):
         _close_open_transaction(self.doc)
+        try:
+            repaired = repair_picks(self.study)
+        except Exception as exc:
+            warn("simulation: finding picks again: %s" % exc)
+            repaired = []
+        if repaired:
+            self.notes.append(
+                "The design changed, so SciForge found again the faces of %s by their shape."
+                % ", ".join(repaired)
+            )
         checks = precheck(self.study)
         if self.mesh_only:
             errors = [
@@ -1898,6 +2294,7 @@ class Job:
             _remove_run(self.study, "SimMeshRun")
             self.study.SimMeshRun = self._analysis
             _save(self.study, MESH_PROP, self.mesh_info)
+            apply_keep_results(self.study)
             self.summary = dict(self.mesh_info)
             self._analysis = None  # (kept)
             return self._stop("done", "Done")
@@ -1982,12 +2379,26 @@ class Job:
                         "total": (fx * fx + fy * fy + fz * fz) ** 0.5,
                     }
         self.timings["results"] = time.time() - t
+        try:
+            moved = max(result.DisplacementLengths) if result.DisplacementLengths else 0.0
+        except Exception:
+            moved = 0.0
+        size = self._model_shape.BoundBox.DiagonalLength
+        if not (moved == moved) or moved > size:
+            # CalculiX does not always notice a model that can still move: its numbers are
+            # then nonsense (it "moved" by more than its own size)
+            raise SimulationError(
+                "The model is not held enough: the solve moved it by more than its own size, "
+                "so a part can still move or spin freely. Add constraints so every body is held "
+                "in X, Y and Z (a Fixed face is the simplest)."
+            )
         _close_open_transaction(self.doc)
         self.summary = _finish(self.study, result, self._mesh, self._owners, self, reactions)
         _remove_run(self.study, "SimRun")
         _remove_run(self.study, "SimMeshRun")
         self.study.SimRun = self._analysis
         _save(self.study, MESH_PROP, self.mesh_info)
+        apply_keep_results(self.study)
         self._analysis = None  # (kept)
         self._stop("done", "Done")
 
@@ -2231,9 +2642,63 @@ def result_object(study):
 
 
 def results(study):
-    """The Results of the study's last solve, or None when it has not been solved."""
+    """The Results of the study's last solve, or None when it has not been solved (or its
+    results were not kept in the file: results_dropped())."""
     obj = result_object(study)
-    return Results(obj) if obj is not None else None
+    return Results(obj) if obj is not None and _has_data(obj) else None
+
+
+def _has_data(result):
+    try:
+        mesh = result.Mesh.FemMesh if result.Mesh is not None else None
+        return len(result.NodeNumbers) > 1 and mesh is not None and mesh.NodeCount > 0
+    except Exception:
+        return False
+
+
+def results_dropped(study):
+    """True when the study was solved but its coloured results are not here: the design was
+    saved with Keep results in the file off (its numbers, summary(), are kept). Solve again
+    to see them."""
+    if not summary(study):
+        return False
+    obj = result_object(study)
+    return obj is None or not _has_data(obj)
+
+
+# What a solve adds to the design file: the meshes and the results (about 10 MB for 25 000
+# nodes). With the study setting keep_results off they are left out of the file (FreeCAD's
+# Transient status: the objects stay, empty after reopening; the summary's numbers stay).
+def _heavy_properties(obj):
+    out = []
+    for prop in obj.PropertiesList:
+        try:
+            kind = obj.getTypeIdOfProperty(prop)
+        except Exception:
+            continue
+        if prop in ("FemMesh", "Data"):
+            out.append(prop)
+        elif obj.isDerivedFrom("Fem::FemResultObject") and (
+            "FloatList" in kind or "VectorList" in kind or "IntegerList" in kind
+        ):
+            out.append(prop)
+    return out
+
+
+def apply_keep_results(study):
+    """Mark the study's meshes and results as saved or not saved with the design, as its
+    keep_results setting says."""
+    keep = bool(settings(study)["keep_results"])
+    for link in ("SimRun", "SimMeshRun"):
+        run = run_of(study, link)
+        if run is None:
+            continue
+        for obj in _run_members(run):
+            for prop in _heavy_properties(obj):
+                try:
+                    obj.setPropertyStatus(prop, "-Transient" if keep else "Transient")
+                except Exception:
+                    pass
 
 
 def summary(study):
@@ -2342,6 +2807,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
         "safety_basis": basis,
         "reactions": reactions or {},
         "notes": list(job.notes),
+        "results_kept": bool(data["settings"]["keep_results"]),
         "seconds": round(time.time() - job.started, 2),
         "timings": {k: round(v, 3) for k, v in job.timings.items()},
     }

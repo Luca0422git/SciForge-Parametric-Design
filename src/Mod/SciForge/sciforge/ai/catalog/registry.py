@@ -29,6 +29,7 @@ CATEGORIES = (
     ("import_export", "Import and export"),
     ("drawing", "Drawings"),
     ("view", "View"),
+    ("simulate", "Simulation"),  # (beta 3, sim-core: Static Stress studies)
 )
 CATEGORY_KEYS = tuple(c[0] for c in CATEGORIES)
 

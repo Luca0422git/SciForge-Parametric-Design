@@ -56,6 +56,7 @@ New design 'Bracket' (id 'Bracket') with an empty body 'Body'; it is the active 
 - Recipe: [stepped shaft with a keyway](sciforge://docs/recipes/shaft-with-keyway.md)
 - Recipe: [sheet-like U bracket (thin extrude with bends)](sciforge://docs/recipes/sheet-like-part.md)
 - Recipe: [cantilever snap-fit hook](sciforge://docs/recipes/snap-fit.md)
+- Recipe: [is this bracket strong enough? (Static Stress)](sciforge://docs/recipes/static-stress.md)
 - Recipe: [curved panel from a surface patch](sciforge://docs/recipes/surface-patch.md)
 - Recipe: [threaded fastener (hex bolt M8 x 30)](sciforge://docs/recipes/threaded-fastener.md)
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)
