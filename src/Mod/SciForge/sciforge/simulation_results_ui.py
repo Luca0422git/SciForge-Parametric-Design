@@ -707,7 +707,7 @@ class Session:
         for name in list(self.hidden):
             if doc.getObject(name) is None:
                 self.hidden.pop(name, None)
-        self._hide_design()
+        Session._hide_design(self)  # (Compare's session borrows it too)
 
     def _show_design(self):
         doc = self.doc
@@ -1705,10 +1705,15 @@ def finish_compare():
 
 
 class CompareSession:
-    """Several studies' results side by side (Fusion's Compare): one colour scale for all of
-    them (the same colour is the same value), the same deformation scale (the largest movement
-    of them all drawn at Adjusted's size, so a bigger bend looks bigger), a tag with each study's
-    name, min and max. No probes or slices meanwhile (Fusion's Compare has none either)."""
+    """Several studies' results at once (Fusion's Compare): the 3D view split in panes, one
+    study in each (two side by side; three or four in four panes), their cameras turning
+    together; one colour scale for all of them (the same colour is the same value), the same
+    deformation scale (the largest movement of them all drawn at Adjusted's size, so a bigger
+    bend looks bigger), a tag with each study's name, min and max. When the view cannot be split
+    the studies lie side by side in the one view. No probes or slices meanwhile (Fusion's
+    Compare has none either)."""
+
+    LAYOUTS = {2: "Two Views Horizontal", 3: "Multiple Views", 4: "Multiple Views"}
 
     def __init__(self, studies):
         self.doc_name = studies[0].Document.Name
@@ -1731,6 +1736,10 @@ class CompareSession:
         self._camera = None
         self._ticks = 0
         self._glyphs_before = None
+        self.panes = []  # [{"view", "gl", "sub", "tags", "camera", "key", "note"}]
+        self.split = False
+        self._layout_before = None
+        self._cameras_before = None
 
     def alive(self):
         doc = _doc(self.doc_name)
@@ -1746,13 +1755,25 @@ class CompareSession:
         doc = _doc(self.doc_name)
         return [doc.getObject(n) for n in self.study_names] if doc is not None else []
 
+    def _panes_alive(self):
+        return bool(self.panes) and all(
+            p["gl"] is not None and view_mod._alive(p["gl"]) for p in self.panes
+        )
+
     def activate(self):
         gl = view_mod.gl_widget_of(self.doc_name)
-        if self.active and gl is not None and gl is self.gl:
+        if self.active and gl is not None and self._panes_alive():
+            if any(p["gl"] is gl for p in self.panes):
+                return
+        if self.active and self.split and not self._panes_alive() and self._single_chosen():
+            # (Navigation bar > Viewports > Single View: the person wants one view)
+            log("results: one view chosen: Compare ends")
+            QtCore.QTimer.singleShot(0, finish_compare)
             return
         if self.active:
             self.deactivate()
         doc = _doc(self.doc_name)
+        gui = Gui.getDocument(doc.Name)
         self.items = []
         boxes = []
         for study in self.studies():
@@ -1760,20 +1781,38 @@ class CompareSession:
             display = view_mod.ResultDisplay(data)
             pts = data.points
             boxes.append(tuple(pts.min(axis=0)) + tuple(pts.max(axis=0)))
-            self.items.append({"study": study, "data": data, "display": display})
-        axis = core.compare_axis(boxes)
-        for item, shift in zip(self.items, core.compare_offsets(boxes, axis=axis)):
-            offset = [0.0, 0.0, 0.0]
-            offset[axis] = shift
-            item["display"].set_offset(offset)
-        self.view = Gui.getDocument(doc.Name).ActiveView
-        self.gl = gl
-        for item in self.items:
-            item["display"].attach(self.view)
+            self.items.append({"study": study, "data": data, "display": display, "pane": None})
+        try:
+            camera = gui.ActiveView.getCamera()  # (the panes start from the view's camera)
+        except Exception:
+            camera = None
+        panes = self._split(gui)
+        self.split = bool(panes)
+        if self.split:
+            for item, pane in zip(self.items, panes):
+                item["display"].attach(pane["view"])
+                item["pane"] = pane
+            if camera:
+                try:
+                    panes[0]["view"].setCamera(camera)
+                except Exception:
+                    pass
+        else:  # (one view: the studies side by side, across the way they are thinnest)
+            axis = core.compare_axis(boxes)
+            for item, shift in zip(self.items, core.compare_offsets(boxes, axis=axis)):
+                offset = [0.0, 0.0, 0.0]
+                offset[axis] = shift
+                item["display"].set_offset(offset)
+            panes = [{"view": gui.ActiveView, "gl": gl, "sub": None}]
+            for item in self.items:
+                item["display"].attach(panes[0]["view"])
+                item["pane"] = panes[0]
+        self.panes = panes
+        self.view, self.gl = panes[0]["view"], panes[0]["gl"]
         Session._hide_design(self)
-        if gl is not None:
+        if self.gl is not None:
             self.legend = view_mod.Legend(
-                gl,
+                self.gl,
                 {
                     "result": self.set_result,
                     "unit": self.set_unit,
@@ -1786,18 +1825,120 @@ class CompareSession:
             )
             self.legend.details_button.setEnabled(False)
             self.legend.options_button.setEnabled(False)
-            self.tags = view_mod.TagLayer(gl, self.view)
+        for number, pane in enumerate(self.panes):
+            pane["tags"] = (
+                view_mod.TagLayer(pane["gl"], pane["view"]) if pane["gl"] is not None else None
+            )
+            pane["note"] = None
+            if self.split and number >= len(self.items) and pane["gl"] is not None:
+                pane["note"] = view_mod.PaneNote(
+                    pane["gl"], "Compare: %d studies (this view stays empty)" % len(self.items)
+                )
+        self.tags = self.panes[0].get("tags")
         self.active = True
         self.apply()
         try:
             self.view.fitAll()
         except Exception:
             pass
+        self._follow_camera(0)
         self._timer = QtCore.QTimer()
         self._timer.setInterval(70)
         self._timer.timeout.connect(self._tick)
         self._timer.start()
-        log("results: comparing %s" % ", ".join(i["study"].Label for i in self.items))
+        log(
+            "results: comparing %s%s"
+            % (
+                ", ".join(i["study"].Label for i in self.items),
+                " (%s)" % self._layout_name() if self.split else " (side by side)",
+            )
+        )
+
+    def _layout_name(self):
+        return self.LAYOUTS.get(len(self.items), "Multiple Views")
+
+    def _split(self, gui):
+        """Fusion's Compare splits the canvas: the design's 3D view in panes (Navigation bar >
+        Viewports' layouts), one study in each. [{"view", "gl", "sub"}] in the panes' order,
+        or None when it cannot be split."""
+        try:
+            from . import viewports_ui
+        except Exception:
+            return None
+        name = self._layout_name()
+        try:
+            mdi = viewports_ui.area()
+            if mdi is None:
+                return None
+            if self._layout_before is None:
+                self._layout_before = viewports_ui.current()
+            if viewports_ui.current() != name and not viewports_ui.set_layout(name):
+                return None
+            subs = viewports_ui.panes()
+            if len(subs) < len(self.items):
+                return None
+            panes = []
+            for sub in subs:
+                mdi.setActiveSubWindow(sub)
+                gl = None
+                for widget in sub.findChildren(QtWidgets.QWidget):
+                    if widget.metaObject().className() == "QOpenGLWidget":
+                        gl = widget
+                        break
+                panes.append({"view": gui.ActiveView, "gl": gl, "sub": sub})
+            mdi.setActiveSubWindow(subs[0])
+            if len({id(p["gl"]) for p in panes}) != len(panes) or any(
+                p["gl"] is None for p in panes
+            ):
+                return None
+            if self._cameras_before is None and self._layout_before == name:
+                # (the person's own panes: their cameras come back after Compare)
+                self._cameras_before = [p["view"].getCamera() for p in panes]
+            return panes
+        except Exception as exc:
+            warn("Compare: the view could not be split: %s" % exc)
+            return None
+
+    def _single_chosen(self):
+        try:
+            from . import viewports_ui
+
+            return viewports_ui.is_single()
+        except Exception:
+            return False
+
+    def _unsplit(self):
+        """The view as it was before Compare (its layout, or its panes' cameras)."""
+        before, cameras = self._layout_before, self._cameras_before
+        self._layout_before = self._cameras_before = None
+        if before is None:
+            return
+        try:
+            from . import viewports_ui
+
+            if viewports_ui.current() != before:
+                viewports_ui.set_layout(before, quiet=True)
+            elif cameras:
+                for pane, camera in zip(self.panes, cameras):
+                    try:
+                        pane["view"].setCamera(camera)
+                    except Exception:
+                        continue
+        except Exception as exc:
+            warn("Compare: %s" % exc)
+
+    def _follow_camera(self, lead):
+        """Every pane takes pane `lead`'s camera (the panes turn together)."""
+        if not self.panes:
+            return
+        source = self.panes[lead]["view"]
+        for number, pane in enumerate(self.panes):
+            if number != lead and self.split:
+                view_mod.copy_camera(source, pane["view"])
+        for pane in self.panes:
+            key = view_mod.camera_key(pane["view"], pane["gl"]) if pane["gl"] is not None else None
+            pane["camera"] = key[:5] if key else None
+            pane["key"] = key
 
     def deactivate(self):
         if self._timer is not None:
@@ -1806,7 +1947,10 @@ class CompareSession:
             except RuntimeError:
                 pass
             self._timer = None
-        for widget in (self.legend, self.tags):
+        widgets = [self.legend]
+        for pane in self.panes:
+            widgets += [pane.get("tags"), pane.get("note")]
+        for widget in widgets:
             if widget is None:
                 continue
             try:
@@ -1824,6 +1968,10 @@ class CompareSession:
         self.items = []
         Session._show_design(self)
         Session._restore_glyphs(self)
+        if self.split:
+            self._unsplit()
+        self.panes = []
+        self.split = False
         self.active = False
         self.gl = None
         self.view = None
@@ -1874,10 +2022,11 @@ class CompareSession:
             self.legend.compare_button.show()
         self.update_tags()
         Session._glyphs(self)
-        try:
-            self.view.redraw()
-        except Exception:
-            pass
+        for pane in self.panes or [{"view": self.view}]:
+            try:
+                pane["view"].redraw()
+            except Exception:
+                pass
 
     def update_tags(self):
         tags = []
@@ -1888,7 +2037,12 @@ class CompareSession:
             st = data.stats(self.result)
             top = data.points[:, 2].max()
             centre = data.points.mean(axis=0)
-            point = (float(centre[0] + display.offset[0]), float(centre[1]), float(top))
+            shift = [float(c) for c in display.offset]
+            point = (
+                float(centre[0]) + shift[0],
+                float(centre[1]) + shift[1],
+                float(top) + shift[2],
+            )
             text = "%s   min %s   max %s" % (
                 item["study"].Label,
                 core.with_unit(core.convert(st.get("min"), unit), unit),
@@ -1906,8 +2060,16 @@ class CompareSession:
                 }
             )
         self.tag_list = tags
-        if self.tags is not None and view_mod._alive(self.tags):
-            self.tags.set_tags(tags)
+        for pane in self.panes:
+            layer = pane.get("tags")
+            if layer is None or not view_mod._alive(layer):
+                continue
+            mine = [
+                tag
+                for item, tag in zip(self.items, tags)
+                if item.get("pane") is pane or not self.split
+            ]
+            layer.set_tags(mine)
 
     def set_result(self, key):
         if key in core.result_keys():
@@ -1932,14 +2094,37 @@ class CompareSession:
         try:
             if not self.active or self.gl is None:
                 return
-            if not view_mod._alive(self.gl):
-                QtCore.QTimer.singleShot(0, sync)
+            if not self._panes_alive():
+                if self.split and self._single_chosen():
+                    # (Navigation bar > Viewports > Single View: the person wants one view)
+                    log("results: one view chosen: Compare ends")
+                    QtCore.QTimer.singleShot(0, finish_compare)
+                else:
+                    QtCore.QTimer.singleShot(0, sync)
                 return
-            key = view_mod.camera_key(self.view, self.gl)
-            if key != self._camera:
-                self._camera = key
-                if self.tags is not None and view_mod._alive(self.tags):
-                    self.tags.relayout()
+            keys = [view_mod.camera_key(p["view"], p["gl"]) for p in self.panes]
+            if self.split:  # one pane turned: the others follow
+                active = view_mod.gl_widget_of(self.doc_name)
+                moved = [
+                    n
+                    for n, (pane, key) in enumerate(zip(self.panes, keys))
+                    if key is not None and key[:5] != pane.get("camera")
+                ]
+                if moved:
+                    lead = moved[0]
+                    for n in moved:
+                        if self.panes[n]["gl"] is active:
+                            lead = n
+                    self._follow_camera(lead)
+                    for pane in self.panes:
+                        pane["key"] = None  # (their tags are laid out again below)
+                    keys = [view_mod.camera_key(p["view"], p["gl"]) for p in self.panes]
+            for pane, key in zip(self.panes, keys):
+                if key != pane.get("key"):
+                    pane["key"] = key
+                    layer = pane.get("tags")
+                    if layer is not None and view_mod._alive(layer):
+                        layer.relayout()
             self._ticks += 1
             if self._ticks % 6 == 0:
                 Session._keep_design_hidden(self)

@@ -635,6 +635,25 @@ def camera_key(view, gl):
         return None
 
 
+def copy_camera(source, target):
+    """Give 3D view `target` the camera of `source` (Compare's views turn together). True when
+    it was copied."""
+    try:
+        kind = source.getCameraType()
+        if target.getCameraType() != kind:
+            target.setCameraType(kind)
+        a, b = source.getCameraNode(), target.getCameraNode()
+        b.position.setValue(a.position.getValue())
+        b.orientation.setValue(a.orientation.getValue())
+        b.focalDistance.setValue(a.focalDistance.getValue())
+        for name in ("height", "heightAngle"):
+            if hasattr(a, name) and hasattr(b, name):
+                getattr(b, name).setValue(getattr(a, name).getValue())
+        return True
+    except Exception:
+        return False
+
+
 def ray(view, gl, pos):
     """(origin, direction) of the line of sight through widget pixel `pos` (QPoint)."""
     ratio = gl.devicePixelRatioF()
@@ -1254,6 +1273,55 @@ BAR_STYLE = """
     border-radius: 3px; padding: 2px 8px; }
 #SciForgeSimAnimation QToolButton:hover { background: #56647a; }
 """
+
+
+class PaneNote(QtWidgets.QLabel):
+    """A line of text in the middle of a 3D view (Compare's pane with no study in it)."""
+
+    def __init__(self, gl, text):
+        super().__init__(text, overlay_parent(gl))
+        self.gl = gl
+        self.setObjectName("SciForgeSimPaneNote")
+        self.setStyleSheet(
+            "QLabel { color: #c3cad4; background: rgba(40, 46, 56, 200); padding: 6px 10px;"
+            " border-radius: 4px; }"
+        )
+        gl.installEventFilter(self)
+        self.show()
+        self.place()
+
+    def eventFilter(self, obj, event):
+        try:
+            if obj is self.gl and event.type() in (QtCore.QEvent.Resize, QtCore.QEvent.Show):
+                QtCore.QTimer.singleShot(0, self.place)
+        except Exception:
+            pass
+        return False
+
+    def place(self):
+        try:
+            if not _alive(self) or not _alive(self.gl):
+                return
+            self.adjustSize()
+            x = (self.gl.width() - self.width()) // 2
+            y = (self.gl.height() - self.height()) // 2
+            self.move(in_parent(self.gl, max(0, x), max(0, y)))
+            self.raise_()
+        except Exception as exc:
+            warn("results: %s" % exc)
+
+    def remove(self):
+        try:
+            if _alive(self.gl):
+                self.gl.removeEventFilter(self)
+        except Exception:
+            pass
+        try:
+            self.hide()
+            self.setParent(None)
+            self.deleteLater()
+        except RuntimeError:
+            pass
 
 
 class AnimationBar(QtWidgets.QFrame):
