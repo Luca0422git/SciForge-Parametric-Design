@@ -2072,6 +2072,56 @@ def normal_of_curved(doc, out):
     out.append(("a force along a vector on it: taken", sim.is_item(item), ""))
 
 
+@engine_check("out of date after a change that keeps the size")
+def out_of_date_same_size(doc, out):
+    """Changes that keep a body's volume, area, face count and box: a hole moved along a
+    plate, a square bar turned a quarter about its own axis (the loaded face is then a side).
+    The results must show out of date (the fingerprint went by those numbers only)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    def plate(x):
+        return Part.makeBox(100, 40, 5).cut(Part.makeCylinder(5, 5, App.Vector(x, 20, 0)))
+
+    body = sb.make_body(doc, plate(30.0), "Plate")
+    study = sim.create_study(doc, study_bodies=[body])
+    sim.add_item(
+        study,
+        "constraint",
+        "fixed",
+        [(body, sb.one_face(body, lambda f: sb.near(f.CenterOfMass.x, 0)))],
+    )
+    sim.add_item(
+        study,
+        "load",
+        "force",
+        [(body, sb.one_face(body, lambda f: sb.near(f.CenterOfMass.x, 100)))],
+        {"direction": "vector", "vector": [0, 0, -1], "magnitude": 100.0},
+    )
+    sim.solve(study, timeout=900)
+    out.append(("solved: in date", not sim.out_of_date(study), ""))
+    body.BaseFeature.Shape = plate(60.0)
+    doc.recompute()
+    out.append(("the hole moved from x 30 to 60: out of date", sim.out_of_date(study), ""))
+    bar_body, bar = _cantilever_study(doc, label="Bar")
+    # 1 MPa on its top face: after a quarter turn that face is a side, pushed sideways
+    top = sb.one_face(bar_body, lambda f: sb.near(f.CenterOfMass.z, 10))
+    sim.add_item(bar, "load", "pressure", [(bar_body, top)], {"magnitude": 1.0})
+    bar_body.Placement = App.Placement(App.Vector(0, 100, 0), App.Rotation())
+    doc.recompute()
+    sim.solve(bar, timeout=900)
+    out.append(("the bar solved: in date", not sim.out_of_date(bar), ""))
+    # a quarter turn about its own axis (x through the middle of its 10 x 10 section): the
+    # same box, volume, area and faces, but its top face (the pressure's) is now a side
+    bar_body.Placement = App.Placement(
+        App.Vector(0, 100, 0), App.Rotation(App.Vector(1, 0, 0), 90), App.Vector(0, 5, 5)
+    )
+    doc.recompute()
+    out.append(("the bar turned a quarter about its axis: out of date", sim.out_of_date(bar), ""))
+
+
 @engine_check("results kept in and dropped from the file")
 def kept_and_dropped(doc, out):
     """A solved study saved and reopened: the results come back with the same numbers; with

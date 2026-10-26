@@ -3606,10 +3606,15 @@ def mesh_signature(study):
 
 
 def _shape_key(body):
+    """What of a body the results depend on: its size, its box, where its material lies
+    (centre of mass) and how it is turned (its place in the design, its component's too).
+    The size and the box alone missed changes that keep them: a hole moved along a plate, a
+    square bar turned a quarter about its axis (its loaded top face then a side): the results
+    stayed "in date"."""
     try:
         shape = bodies.global_shape(body, copy=False)
         box = shape.BoundBox
-        return [
+        key = [
             body.Name,
             round(shape.Volume, 4),
             round(shape.Area, 4),
@@ -3623,6 +3628,25 @@ def _shape_key(body):
         ]
     except Exception:
         return [body.Name, "?"]
+    try:
+        # (a body's shape is often a compound, which has no centre of mass of its own)
+        solids = shape.Solids
+        volume = sum(solid.Volume for solid in solids)
+        if solids and volume > 0:
+            middle = [
+                sum(getattr(solid.CenterOfMass, axis) * solid.Volume for solid in solids) / volume
+                for axis in "xyz"
+            ]
+            key.append([round(c, 4) + 0.0 for c in middle])
+    except Exception:
+        key.append("?")
+    try:
+        place = body.getGlobalPlacement()
+    except Exception:
+        place = getattr(body, "Placement", None)
+    if place is not None:
+        key.append([round(v, 6) + 0.0 for v in place.toMatrix().A])
+    return key
 
 
 # -- results ---------------------------------------------------------------------------------------
