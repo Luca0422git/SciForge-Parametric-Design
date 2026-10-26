@@ -19,6 +19,8 @@ Attributes, Pre-check, gravity), simulation_panels.py (Structural Constraints / 
 the model), simulation_solve_dialog.py (Solve and its progress, Generate Mesh).
 """
 
+import time
+
 import FreeCAD as App
 import FreeCADGui as Gui
 
@@ -391,7 +393,12 @@ def sync():
     try:
         want = in_workspace()
         _finish_sim_dialog()
-        _close_leftover_step()
+        closed = STATE.get("closed_doc")
+        if closed:
+            if time.time() - closed > 5.0 or _close_leftover_step():
+                STATE["closed_doc"] = None
+            else:
+                QtCore.QTimer.singleShot(200, sync)  # (the closed design's dialog still ends)
         if want != STATE["on"]:
             _apply(want)
         elif want:
@@ -429,15 +436,17 @@ def _doc_open(doc):
 def _close_leftover_step():
     """A design closed while a dialog of it was open leaves the dialog's undo step open in
     FreeCAD (the step's name is application-wide): the next design's changes went into a step
-    of that name, and a solve waited for it forever. With no dialog open it is closed (keeping
-    what is in it)."""
+    of that name, and a solve waited for it forever. Once no dialog is open it is closed
+    (keeping what is in it). False while a dialog is still open (it is tried again)."""
     try:
-        if Gui.Control.activeDialog() or not App.getActiveTransaction():
-            return
-        App.closeActiveTransaction(False)
-        log("an undo step left open by a closed design's dialog was closed")
+        if Gui.Control.activeDialog():
+            return False
+        if App.getActiveTransaction():
+            App.closeActiveTransaction(False)
+            log("an undo step left open by a closed design's dialog was closed")
     except Exception as exc:
         log("undo step: %s" % exc)
+    return True
 
 
 def refresh():
@@ -465,6 +474,7 @@ class _Watch:
             name = doc.Name
             STATE["docs"].pop(name, None)
             STATE["active"].pop(name, None)
+            STATE["closed_doc"] = time.time()  # (sync closes an undo step its dialog left open)
             QtCore.QTimer.singleShot(50, sync)
         except Exception as exc:
             warn("simulation workspace: %s" % exc)
