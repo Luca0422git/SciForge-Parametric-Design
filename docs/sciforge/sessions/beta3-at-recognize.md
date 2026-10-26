@@ -110,6 +110,16 @@
 - `edge.discretize(n)` with two different n gives two different "tops" of a 3D curve (the rim of
   a bore that meets a round face): the hole reader found the bore's end with 24 samples and
   looked for the faces at that end with 12, found none and called the end open. Both use 24 now.
+- OpenCASCADE's defeaturing crashed FreeCAD (a segfault in `BOPAlgo_PaveFiller`, out of memory
+  under my 7 GB limit) on `data/tests/ModelRefineTests/refine_breaks_cylinder.brep`: the reader
+  had taken the 41 pieces of its split outer wall (r 30) for a fillet. Pieces of one round wall
+  that together go half way round or more are no fillet now (their arcs are joined, so a fillet
+  in stacked pieces still is one). The same part's central bore, crossed by a ring of 13 slots,
+  then took 181 s (266 s on the refined copy) in one defeaturing call: a hole whose faces meet
+  more than 16 other faces is left in the base without trying (7 s for the whole describe()).
+- The QA builder found that `Face.cutHoles` answers None (it changes the face in place):
+  `_drop_holes` took the answer, so every face that keeps another loop failed and its holes
+  went to defeaturing; I took their fix and fixed the same mistake in `_fill_copies`.
 - `face.normalAt(u, v)` counts the face's orientation (the outward normal of the solid), and
   `face.Surface.parameter(point)` gives the (u, v) of the surface point nearest any point: that
   tells a floor that faces back into a bore from an opening that faces out.
