@@ -109,8 +109,6 @@ def describe_reference(ctx, args):
     options = {"detail": "summary" if detail == "summary" else "full"}
     if args.get("max_features"):
         options["max_features"] = args["max_features"]
-    if getattr(ref, "SourceKind", "") == "mesh":
-        options["source"] = "mesh"
     # the plan's ids are the ones SciForge will give (Sketch1 when no Sketch1 is taken yet)
     options["taken_ids"] = sorted({o.Name for o in doc.Objects} | {o.Label for o in doc.Objects})
     try:

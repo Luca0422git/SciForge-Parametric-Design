@@ -404,11 +404,31 @@ def out_of_frame(shape, place):
 
 def describe(ref, options=None):
     """recognize.describe() of the reference, in the rebuilt body's frame (the numbers an AI
-    passes to the tools)."""
+    passes to the tools). A reference made from a mesh is read from the mesh's triangles
+    while the mesh body is there (recognize_mesh fits its round regions)."""
     from . import recognize
 
-    shape = in_frame(reference_shape(ref), frame(ref))
-    return recognize.describe(shape, options or {})
+    options = dict(options or {})
+    place = frame(ref)
+    if getattr(ref, "SourceKind", "") == "mesh":
+        source = source_of(ref)
+        if source is not None:
+            try:
+                from . import insert, recognize_mesh
+            except ImportError:
+                recognize_mesh = None
+            if recognize_mesh is not None and hasattr(recognize_mesh, "describe_mesh"):
+                mesh = insert.kernel_copy(source)
+                try:
+                    whole = place.inverse().multiply(source.getGlobalPlacement())
+                except Exception:
+                    whole = place.inverse().multiply(source.Placement)
+                if not whole.isIdentity():
+                    mesh.transform(whole.toMatrix())
+                return recognize_mesh.describe_mesh(mesh, options)
+        options.setdefault("source", "mesh")
+    shape = in_frame(reference_shape(ref), place)
+    return recognize.describe(shape, options)
 
 
 # -- compare ---------------------------------------------------------------------------------------
