@@ -613,6 +613,14 @@ class ProgramText(unittest.TestCase):
         self.assertIsNone(core.mesh_quality_note(rod, 10))
         self.assertIsNone(core.mesh_quality_note({}, 10))
 
+    def test_thin_wall_note(self):
+        # a 2.5 mm plate at the default size: elements 5 times its thickness (10 % too stiff)
+        note = core.thin_wall_note([("Plate", 2.38, 12.17), ("Block", 4.76, 8.42)])
+        self.assertIn("Plate's walls are about 2.4 mm thick", note)
+        self.assertNotIn("Block", note)  # a solid block: 2V/A is a third of its size
+        self.assertIsNone(core.thin_wall_note([("Beam", 4.76, 8.42), ("Ball", 2.0, 5.09)]))
+        self.assertIsNone(core.thin_wall_note([]))
+
     def test_gmsh_errors(self):
         out = (
             "Info    : Meshing 2D...\n"

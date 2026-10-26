@@ -2488,6 +2488,46 @@ print("SciForge netgen: %d nodes" % femmesh.NodeCount)
 """
 
 
+def _thin_wall_note(femmesh, owners, groups, sample=2000):
+    """simulation_core.thin_wall_note for the mesh: each body's wall thickness (2 V / A of
+    its solid) against the median edge of its elements (Gmsh's groups say which elements are
+    whose; without them, the whole mesh against all the bodies together). A sample of at most
+    `sample` elements a body is measured."""
+    import statistics
+
+    solids = (groups or {}).get("Solid", {})
+    per_body = {}
+    for index, body in enumerate(owners, 1):
+        entry = per_body.setdefault(body.Name, (body, []))
+        found = solids.get(index)
+        if found:
+            entry[1].extend(found[0])
+    if not any(elements for _b, elements in per_body.values()):
+        everything = list(femmesh.Volumes)
+        unique = [b for b, _e in per_body.values()]
+        rows_in = [(" and ".join(b.Label for b in unique), unique, everything)]
+    else:
+        rows_in = [(b.Label, [b], elements) for b, elements in per_body.values() if elements]
+    nodes = femmesh.Nodes
+    rows = []
+    for label, owned, elements in rows_in:
+        volume = sum(b.Shape.Volume for b in owned)
+        area = sum(b.Shape.Area for b in owned)
+        if area <= 0 or volume <= 0:
+            continue
+        step = max(1, len(elements) // sample)
+        sizes = []
+        for e in elements[::step]:
+            corners = femmesh.getElementNodes(e)[:4]
+            if len(corners) < 4:
+                continue
+            p = [nodes[n] for n in corners]
+            sizes.append(sum((p[i] - p[j]).Length for i in range(4) for j in range(i + 1, 4)) / 6)
+        if sizes:
+            rows.append((label, 2.0 * volume / area, statistics.median(sizes)))
+    return core.thin_wall_note(rows)
+
+
 def _mesh_stats(femmesh, limit):
     """{"nodes", "elements", "smallest", "largest", "worst_aspect", "over_limit", "sampled"}
     of a volume mesh (element edge lengths and aspect ratios from the corner nodes; a big
@@ -2618,6 +2658,7 @@ class Job:
         self._fingerprints = None  # (signature, mesh signature) when the solve started
         self._mesh_scale = 1.0  # smaller elements (0.5, 0.25) after Gmsh's mesh crossed itself
         self._quality_text = None  # the note on stretched mesh elements
+        self._thin_text = None  # the note on walls much thinner than the elements
         self._checked = False  # the pre-check passed (the model is built on the next turn)
         self._getter = None  # FreeCAD's mesh tables for the input (made a turn earlier)
         self._results_step = None  # the next turn of reading the results
@@ -2954,6 +2995,16 @@ class Job:
         self._quality_text = quality
         if quality:
             self.notes.append(quality)
+        try:
+            thin = _thin_wall_note(mesh, self._owners, self._groups)
+        except Exception as exc:
+            warn("simulation: measuring the walls against the mesh: %s" % exc)
+            thin = None
+        if self._thin_text in self.notes:
+            self.notes.remove(self._thin_text)
+        self._thin_text = thin
+        if thin:
+            self.notes.append(thin)
         if self.mesh_only:
             _close_open_transaction(self.doc)
             _remove_run(self.study, "SimMeshRun")

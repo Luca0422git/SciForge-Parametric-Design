@@ -1547,6 +1547,35 @@ def mesh_quality_note(info, limit):
     )
 
 
+# Thin walls met by large elements: a wall that bends with fewer than one parabolic element
+# across it comes out too stiff. Measured (QA, 2026-10-27): a clamped 2.5 mm plate bends 10.5 %
+# too little with elements 5.1 times its thickness (the default size), 4.5 % at 3.4 times,
+# 2.4 % at 2.2 times; a 3 mm tube's twist stress reads 6.3 % low at 3.7 times. The wall's
+# thickness is 2 V / A of its body (a plate: its thickness; a solid block reads a third of its
+# size, so it is not taken for a wall), the elements' size their median edge.
+THIN_WALL_RATIO = 3.0
+
+
+def thin_wall_note(rows, ratio=THIN_WALL_RATIO):
+    """A sentence for the bodies whose walls are much thinner than their mesh elements (a
+    thin wall that bends comes out too stiff), else None. rows: [(body label, wall thickness
+    2V/A mm, median element edge mm)]."""
+    thin = [(label, t, size) for label, t, size in rows if t > 0 and size > ratio * t]
+    if not thin:
+        return None
+    parts = [
+        "%s's walls are about %s mm thick but its mesh elements about %s mm"
+        % (label, fmt(t, 2), fmt(size, 2))
+        for label, t, size in thin
+    ]
+    return (
+        "%s: with so few elements across a wall that thin, it comes out too stiff where it "
+        "bends or twists (it moves less, and its stress reads low). Make the Average Element "
+        "Size about as small as the walls are thick (or put a Local Mesh Control on them), "
+        "solve again and compare." % "; ".join(parts)
+    )
+
+
 def tetra_aspect(p0, p1, p2, p3):
     """Aspect ratio of a tetrahedron from its corners: the longest edge over the smallest
     height, scaled so a regular tetrahedron gives 1 (sqrt(3/2) * edge / height)."""

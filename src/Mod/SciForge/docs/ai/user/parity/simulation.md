@@ -92,7 +92,12 @@ again) runs in the docs runner.
   elements made smaller (automatic, with a note) and stays coarse across the wall: a tube
   pushed along its axis came out 11 % too stiff, with the note that elements are stretched
   131:1. Fusion's mesh settings apply the same way: a smaller Average Element Size or a Local
-  Mesh Control on the wall gives the accurate answer (the same tube at 3 %: 1 % off).
+  Mesh Control on the wall gives the accurate answer (the same tube at 3 %: 1 % off). A wall
+  that is not stretched far enough for that note can still be too thin for its elements: a
+  2.5 mm clamped plate at the default size bends 10.5 % too little, a 3 mm tube's twist stress
+  reads 6.3 % low (QA cases clamped_plate, tube_torsion), so a note now says so whenever a
+  body's elements are more than 3 times its wall thickness (2 V / A of the body; 4.5 % off at
+  3.4 times, 2.4 % at 2.2 times), and the finer mesh is within 1 %.
 - **Big parts**: the window still pauses up to about 3-4 s at a time on a 140 000-node part
   (FreeCAD's tables of the mesh, its result mesh, mapping 120 picked faces onto the model); the
   rest runs in the background. A 300 000-node mesh (20 stacked plates with 500 holes) needs over
