@@ -135,6 +135,7 @@ def classify_region(region, side):
     dims = _dims(region)
     found = (
         _cylinder(region, volume, side)
+        or _faceted_cylinder(region, volume, dims, side)
         or _fillet(region, volume, side)
         or _chamfer(region, volume, dims, side)
         or _block(region, volume, dims, side)
@@ -223,6 +224,73 @@ def _cylinder(region, volume, side):
             end,
         )
     return out
+
+
+def _faceted_cylinder(region, volume, dims, side):
+    """A round hole or boss of a mesh: flat faces only, many narrow sides along one origin
+    axis and two ends square to it. The mesh's polygon has its corners on the round face, so
+    its radius comes from the polygon's area (a regular n-gon of radius R: n/2 R^2 sin 2pi/n)."""
+    planes = _planes(region)
+    if _curved(region) or len(planes) < 10:
+        return None
+    for k in range(3):
+        axis = [1.0 if i == k else 0.0 for i in range(3)]
+        sides = [f for f in planes if abs(f.get("normal", [0, 0, 0])[k]) < 1e-3]
+        ends = [f for f in planes if abs(abs(f.get("normal", [0, 0, 0])[k]) - 1.0) < 1e-6]
+        if len(sides) < 8 or len(ends) != 2 or len(sides) + len(ends) != len(planes):
+            continue
+        length = dims[k]
+        across = [dims[i] for i in range(3) if i != k]
+        if length <= 0 or abs(across[0] - across[1]) > 0.03 * max(across):
+            continue
+        n = len(sides)
+        radius = math.sqrt(2.0 * volume / length / (n * math.sin(2 * math.pi / n)))
+        if not 2 * radius * math.cos(math.pi / n) * 0.99 <= max(across) <= 2 * radius * 1.01:
+            continue
+        box = region.get("bbox") or [0, 0, 0, 0, 0, 0]
+        centre = [(box[i] + box[i + 3]) / 2.0 for i in range(3)]
+        low, high = list(centre), list(centre)
+        low[k], high[k] = box[k], box[k + 3]
+        diameter = _mesh_size(2 * radius)
+        out = {
+            "kind": "cylinder",
+            "faceted": True,
+            "diameter": diameter,
+            "depth": round(length, 9),
+            "axis": axis,
+            "at": [round(c, 9) for c in centre],
+            "ends": [[round(c, 9) for c in high], [round(c, 9) for c in low]],
+        }
+        if side == "extra":
+            out["looks_like"] = (
+                "a round hole about %s mm across, %s deep (%d facets of the mesh)"
+                % (
+                    about(diameter),
+                    about(length),
+                    n,
+                )
+            )
+        else:
+            out["looks_like"] = (
+                "a round boss (pin) about %s mm across, %s tall (%d facets of the mesh)"
+                % (
+                    about(diameter),
+                    about(length),
+                    n,
+                )
+            )
+        return out
+    return None
+
+
+def _mesh_size(value):
+    """A size measured on a mesh the way a person reads it: 7.98 -> 8 (within 1 %), else to
+    0.01 mm."""
+    for step in (1.0, 0.5, 0.1):
+        rounded = round(value / step) * step
+        if abs(rounded - value) <= 0.01 * max(value, 1e-9):
+            return round(rounded, 6)
+    return round(value, 2)
 
 
 def _extent_along(region, axis):

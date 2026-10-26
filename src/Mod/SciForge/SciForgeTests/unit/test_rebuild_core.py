@@ -103,6 +103,28 @@ class Regions(unittest.TestCase):
         self.assertIn("counterbore", found["looks_like"])
         self.assertIn("10 mm across 3 deep", found["looks_like"])
 
+    def test_a_hole_of_a_mesh(self):
+        n, r, depth = 32, 4.0, 8.0
+        area = n / 2.0 * r * r * math.sin(2 * math.pi / n)
+        sides = [
+            plane(
+                (math.cos(2 * math.pi * (i + 0.5) / n), math.sin(2 * math.pi * (i + 0.5) / n), 0.0)
+            )
+            for i in range(n)
+        ]
+        region = {
+            "volume": area * depth,
+            "center": [15, 20, 4],
+            "bbox": [11, 16, 0, 19, 24, 8],
+            "faces": sides + [plane((0, 0, 1)), plane((0, 0, -1))],
+        }
+        found = core.classify_region(region, "extra")
+        self.assertEqual(found["kind"], "cylinder")
+        self.assertTrue(found["faceted"])
+        self.assertEqual(found["diameter"], 8.0)
+        self.assertEqual(found["ends"], [[15, 20, 8], [15, 20, 0]])
+        self.assertIn("a round hole about 8 mm across, 8 deep (32 facets", found["looks_like"])
+
     def test_a_rounded_edge(self):
         found = core.classify_region(fillet_region(), "extra")
         self.assertEqual(found["kind"], "fillet")
