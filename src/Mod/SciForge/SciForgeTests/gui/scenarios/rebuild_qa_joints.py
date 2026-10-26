@@ -19,10 +19,12 @@ C  The base rebuilt next: half way (its base block built), saved (Ctrl+S), close
    again: the rebuilt body is the active body again and its ghost is drawn; the AI's next
    steps go into it and the comparison says done; Finish keeps the joint (now on two rebuilt
    bodies) and the ground.
-D  The base rebuilt once more, then given up: UTILITIES > AI > Stop Rebuild... (there was no
-   way back but Undo) > Stop Rebuild: no rebuild goes on, the base is shown again and is the
-   active body, the rebuilt body is gone, the joint still holds the base; one undo step; Undo
-   brings the rebuild back (the base hidden, the ghost drawn), Redo stops it again.
+D  The base rebuilt once more (its block built), and the arm too (its rebuilt body active):
+   the 3D view's right-click on the rebuilt base > Stop Rebuild... (there was no way back but
+   Undo) names the base, not the active arm's rebuild > Stop Rebuild: the base is shown
+   again and is the active body, its rebuilt body is gone, the joint still holds it, the arm's
+   rebuild goes on; one undo step; Undo brings the base's rebuild back (hidden base, ghost),
+   Redo stops it again; UTILITIES > AI > Stop Rebuild... stops the arm's.
 """
 
 import os
@@ -33,7 +35,7 @@ from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import rebuild_steps as r
 from SciForgeTests.gui import timeline_input as t
 from SciForgeTests.gui import versions_input as vi
-from PySide import QtCore
+from PySide import QtCore, QtWidgets
 
 V = App.Vector
 s = {}
@@ -402,7 +404,9 @@ def d_start_again():
 d_start_again.wait_ms = 2000
 
 
-def d_stop_menu():
+def d_two_rebuilds():
+    """The base's block built in its rebuilt body, then the arm's rebuild started too (its
+    rebuilt body is the active one now)."""
     from sciforge import rebuild
 
     r.close_dialogs()
@@ -411,17 +415,60 @@ def d_stop_menu():
     h.check("the base is being rebuilt again", len(live) == 1, live)
     target = rebuild.target_of(live[0]) if live else None
     s["stop_target"] = target.Name if target is not None else ""
+    answer, data = r.tool_json("describe_reference")
+    for step in ((data or {}).get("plan") or [])[:2]:  # the block only
+        r.tool(step["tool"], **step["args"])
+    answer = r.tool("start_rebuild", body=s["target_name"])
+    live = rebuild.active_references(doc)
+    h.check("the arm's rebuild started too", not answer["is_error"] and len(live) == 2, answer)
+    arm_refs = [x for x in live if x.SourceName == s["target_name"]]
+    arm_target = rebuild.target_of(arm_refs[0]) if arm_refs else None
+    s["arm_stop_target"] = arm_target.Name if arm_target is not None else ""
+    doc.recompute()
+    h.fit()
+    import FreeCADGui as Gui
+
+    Gui.Selection.clearSelection()  # (what the right-click is about: the body under the mouse)
     s["undo_before_stop"] = len(doc.UndoNames)
-    r.utilities_menu("Stop Rebuild...")
 
 
-d_stop_menu.wait_ms = 1500
+d_two_rebuilds.wait_ms = 2000
+
+
+def d_right_click():
+    from sciforge import bodies
+
+    doc = App.ActiveDocument
+    target = doc.getObject(s["stop_target"])
+    shape = bodies.global_shape(target) if target is not None else None
+    if shape is None or shape.isNull():
+        h.check("the base's block is built", False)
+        return
+    box = shape.BoundBox
+    menu = r.open_marking_menu(V(box.XMin + 6, box.YMin + 6, box.ZMax))
+    if menu is None:
+        return
+    rows = r.marking_rows(menu)
+    h.check(
+        "the rebuilt base's right-click list has Stop Rebuild...", "Stop Rebuild..." in rows, rows
+    )
+    r.click_marking_row(menu, "Stop Rebuild...")
+
+
+d_right_click.wait_ms = 1500
 
 
 def d_stop_press():
     box = r.dialog("SciForgeRebuildStop")
-    h.check("UTILITIES > AI > Stop Rebuild... opened its window", box is not None, h.popups())
+    h.check("the right-click's Stop Rebuild... opened its window", box is not None, h.popups())
     if box is not None:
+        words = box.findChild(QtWidgets.QLabel, "SciForgeRebuildStopState")
+        text = words.text() if words is not None else ""
+        h.check(
+            "... for the base under the mouse (not the active body's rebuild, the arm's)",
+            s["base_label"] in text and s["arm_label"] not in text,
+            text,
+        )
         h.check("deleting the rebuilt body is the default", box.delete_rebuilt.isChecked())
         r.click_button(box, "SciForgeRebuildStopOK")
 
@@ -434,14 +481,19 @@ def d_stopped():
 
     doc = App.ActiveDocument
     base = doc.getObject(s.get("base_target") or "")
-    h.check("Stop Rebuild: no rebuild goes on", not rebuild.references(doc))
+    live = rebuild.active_references(doc)
+    h.check(
+        "Stop Rebuild: the base's rebuild is stopped, the arm's goes on",
+        len(live) == 1 and live[0].SourceName == s["target_name"],
+        [(x.Name, x.SourceName) for x in live],
+    )
     h.check("... the base is shown again", base is not None and bool(base.Visibility))
     h.check(
         "... and it is the active body",
         base is not None and bodies.active_body(doc) is base,
         getattr(bodies.active_body(doc), "Label", None),
     )
-    h.check("... the rebuilt body is gone", doc.getObject(s["stop_target"]) is None)
+    h.check("... its rebuilt body is gone", doc.getObject(s["stop_target"]) is None)
     h.check(
         "... the joint still holds the base",
         base is not None and any(base.Name + "." in x for x in joint_subs()),
@@ -461,15 +513,16 @@ def d_undone():
     doc = App.ActiveDocument
     base = doc.getObject(s.get("base_target") or "")
     refs = rebuild.active_references(doc)
+    mine = [x for x in refs if x.SourceName == base.Name] if base is not None else []
     h.check(
-        "Undo: the rebuild is back (its rebuilt body there, the base hidden)",
-        len(refs) == 1
+        "Undo: the base's rebuild is back (its rebuilt body there, the base hidden)",
+        len(refs) == 2
         and doc.getObject(s["stop_target"]) is not None
         and base is not None
         and not base.Visibility,
         (refs, getattr(base, "Visibility", None)),
     )
-    h.check("... its ghost drawn", refs and r.ghost_drawn(refs[0]))
+    h.check("... its ghost drawn", mine and r.ghost_drawn(mine[0]))
     t.redo()
 
 
@@ -482,9 +535,34 @@ def d_redone():
     doc = App.ActiveDocument
     base = doc.getObject(s.get("base_target") or "")
     h.check(
-        "Redo: stopped again (the base shown, no rebuild)",
-        not rebuild.references(doc) and base is not None and bool(base.Visibility),
+        "Redo: stopped again (the base shown, the arm's rebuild going on)",
+        len(rebuild.active_references(doc)) == 1 and base is not None and bool(base.Visibility),
     )
+    r.utilities_menu("Stop Rebuild...")  # the one left: the arm's
+
+
+d_redone.wait_ms = 1500
+
+
+def d_stop_arm():
+    box = r.dialog("SciForgeRebuildStop")
+    h.check("UTILITIES > AI > Stop Rebuild... opened its window", box is not None, h.popups())
+    if box is not None:
+        r.click_button(box, "SciForgeRebuildStopOK")
+
+
+d_stop_arm.wait_ms = 2000
+
+
+def d_arm_stopped():
+    from sciforge import rebuild
+
+    doc = App.ActiveDocument
+    arm = doc.getObject(s["target_name"])
+    h.check("no rebuild goes on any more", not rebuild.references(doc))
+    h.check("... the arm is shown again", arm is not None and bool(arm.Visibility))
+    h.check("... its rebuilt body is gone", doc.getObject(s["arm_stop_target"]) is None)
+    h.check("the joint still holds both", joint_names() == ["Joint"], joint_subs())
 
 
 def finish():
@@ -512,11 +590,14 @@ h.run(
         c_reopened,
         c_both_rebuilt,
         d_start_again,
-        d_stop_menu,
+        d_two_rebuilds,
+        d_right_click,
         d_stop_press,
         d_stopped,
         d_undone,
         d_redone,
+        d_stop_arm,
+        d_arm_stopped,
         finish,
     ],
 )

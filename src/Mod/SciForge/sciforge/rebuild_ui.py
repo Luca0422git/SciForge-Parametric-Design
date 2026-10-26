@@ -965,7 +965,7 @@ def marking_entries(global_pos):
             cfg.SEP,
             cfg.item("Compare with Reference", "SciForge_CompareReference", "rebuild_compare"),
             cfg.item("Finish Rebuild", "SciForge_FinishRebuild", "rebuild_finish"),
-            cfg.item("Stop Rebuild...", "SciForge_StopRebuild", "cancel"),  # (beta 3 QA)
+            cfg.item("Stop Rebuild...", "SciForge_StopRebuildUnderMouse", "cancel"),  # (QA)
         ]
     return [
         cfg.SEP,
@@ -1102,12 +1102,32 @@ class StopCommand:
             warn("Stop Rebuild: %s" % exc)
 
 
+class StopUnderMouseCommand(StopCommand):
+    """The 3D view's right-click entry: the rebuild of the body under the mouse (with
+    several going on, not the active body's)."""
+
+    def Activated(self):
+        try:
+            doc = App.listDocuments().get(_PENDING.get("doc") or "")
+            body = doc.getObject(_PENDING.get("name") or "") if doc is not None else None
+            _PENDING.update(doc=None, name=None)
+            ref = rebuild.reference_for(body) if body is not None else None
+            if ref is None or not getattr(ref, "Shown", True):
+                StopCommand.Activated(self)
+                return
+            if commands.finish_open_dialog():
+                open_stop(ref)
+        except Exception as exc:
+            warn("Stop Rebuild: %s" % exc)
+
+
 COMMANDS = {
     "SciForge_RebuildWithTimeline": RebuildCommand,
     "SciForge_RebuildUnderMouse": RebuildUnderMouseCommand,
     "SciForge_CompareReference": CompareCommand,
     "SciForge_FinishRebuild": FinishCommand,
     "SciForge_StopRebuild": StopCommand,
+    "SciForge_StopRebuildUnderMouse": StopUnderMouseCommand,
 }
 
 _install_marking()
