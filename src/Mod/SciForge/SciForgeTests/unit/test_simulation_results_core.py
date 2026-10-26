@@ -205,6 +205,12 @@ class TargetTests(unittest.TestCase):
         self.assertEqual(core.verdict(None, 3, 6)[0], "none")
         self.assertEqual(core.verdict(float("nan"), 3, 6)[0], "none")
 
+    def test_verdict_names_the_weakest_body(self):
+        head = core.verdict(2.0, 3, 6, "Bracket")[1]
+        self.assertIn("the lowest safety factor is 2, in Bracket (target 3)", head)
+        self.assertIn("is 4, in Arm (target 3 to 6)", core.verdict(4.0, 3, 6, "Arm")[1])
+        self.assertNotIn(", in", core.verdict(4.0, 3, 6)[1])
+
 
 class CompareTests(unittest.TestCase):
     def test_offsets_put_models_side_by_side(self):

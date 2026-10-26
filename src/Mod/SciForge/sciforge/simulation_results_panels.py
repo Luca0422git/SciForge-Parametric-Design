@@ -1434,7 +1434,10 @@ class DetailsDialog(QtWidgets.QDialog):
         if study is None:
             return
         lower, upper = session.targets
-        state, head, advice = core.verdict(results_data.min_safety(study), lower, upper)
+        rows = results_data.body_rows(study)
+        state, head, advice = core.verdict(
+            results_data.min_safety(study), lower, upper, results_data.weakest_body(study, rows)
+        )
         self.state = state
         colours = {"below": "#7a2b2b", "meets": "#6b5520", "above": "#24476e", "none": "#4b5262"}
         self.headline.setText(head)
@@ -1444,7 +1447,6 @@ class DetailsDialog(QtWidgets.QDialog):
         )
         self.advice.setText("\n".join("- " + a for a in advice))
         self.stale.setVisible(results_data.out_of_date(study))
-        rows = results_data.body_rows(study)
         stress = session.unit("von_mises") or "MPa"
         length = session.unit("displacement") or "mm"
         self.bodies.setHorizontalHeaderLabels(

@@ -376,6 +376,18 @@ def min_safety(study):
     return value if isinstance(value, (int, float)) else None
 
 
+def weakest_body(study, rows=None):
+    """The name of the body with the lowest safety factor when the study has several bodies
+    (Results Details and the report say where it is), else None."""
+    try:
+        rows = [r for r in (rows or body_rows(study)) if r.get("safety_min") is not None]
+    except Exception:
+        return None
+    if len(rows) < 2:
+        return None
+    return min(rows, key=lambda r: r["safety_min"])["body"]
+
+
 def reactions(study):
     """The reaction force at each constraint, {label: (fx, fy, fz)} in N, when the engine
     worked them out at the solve (summary "reactions"); None when it did not."""
@@ -571,7 +583,7 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None,
         "bodies": bodies_rows,
         "body_units": (stress, length),
         "reactions": reaction_rows,
-        "verdict": core.verdict(min_safety(study), lower, upper),
+        "verdict": core.verdict(min_safety(study), lower, upper, weakest_body(study)),
         "out_of_date": out_of_date(study),
         "images": list(images),
         "notes": notes,

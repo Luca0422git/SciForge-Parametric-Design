@@ -9,7 +9,8 @@ A  A component moved 20 mm up holds two bodies glued end to end (steel 0..50, al
 A2 The browser's eye of the aluminium body off: its results go (only the steel half drawn, its
    end face at x = 50 now outside, the min and max tags on the steel), the same colour scale;
    on again: the whole arm.
-B  Results Details: one row per body, each with its own material and strength.
+B  Results Details: one row per body, each with its own material and strength; the sentence
+   names the body with the lowest safety factor.
 C  INSPECT > Reaction Force: the fixed end takes the whole 100 N; while it is open a tag on the
    fixed face (x = 0) says so; Close takes the tag away.
 D  DISPLAY > Loads and Constraints shows the setup's glyphs on the results, and hides them again.
@@ -204,6 +205,14 @@ def b_check():
                 tuple(round(c, 2) for c in (got.redF(), got.greenF(), got.blueF())) == want,
                 (got.name(), band),
             )
+        values = {n: float(dialog.bodies.item(rows[n], 4).text()) for n in ("Steel", "Alu")}
+        head = dialog.headline.text()
+        named = [n for n in values if (", in %s " % n) in head]
+        h.check(
+            "the sentence names the weakest body",
+            len(named) == 1 and values[named[0]] == min(values.values()),
+            (head, values),
+        )
     dialog.close()
 
 

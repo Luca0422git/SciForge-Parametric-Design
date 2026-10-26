@@ -411,17 +411,18 @@ def targets(lower=None, upper=None):
     return lo, hi
 
 
-def verdict(min_safety, lower, upper):
+def verdict(min_safety, lower, upper, where=None):
     """(state, headline, advice) for the lowest safety factor of a study: state "below" /
-    "meets" / "above" / "none"; the headline says it in a sentence (SciForge's words); the advice
-    is a list of short sentences."""
+    "meets" / "above" / "none"; the headline says it in a sentence (SciForge's words), naming
+    the body it is in (`where`) when the study has several; the advice is a list of short
+    sentences."""
     if min_safety is None or min_safety != min_safety:
         return (
             "none",
             "No safety factor: the study material has no strength to compare the stress with.",
             ["Choose a study material with a yield strength (Study Materials)."],
         )
-    value = fmt(min_safety)
+    value = fmt(min_safety) + (", in %s" % where if where else "")
     state = target_band(min_safety, lower, upper)
     if state == "below":
         head = "Below the safety factor target: the lowest safety factor is %s (target %s)." % (
