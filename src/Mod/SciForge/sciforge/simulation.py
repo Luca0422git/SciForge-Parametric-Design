@@ -1532,7 +1532,11 @@ def _make_run(study, model_shape, owners, mesh_only=False, straight=False):
             turn = max(float(opts["mesh"]["max_turn"]), 5.0)
             mesh.MeshSizeFromCurvature = int(round(360.0 / turn))
         if "CoherenceMesh" in mesh.PropertiesList:
-            mesh.CoherenceMesh = True
+            # Gmsh's "Coherence Mesh" merges nodes closer than a millionth of the model's size:
+            # the two diagonals' middles of a flat sliver element became one node and CalculiX
+            # refused the element (a 3 mm plate at 2 %). The model's bodies share their faces
+            # (the general fuse), so the mesh needs no merging to be glued.
+            mesh.CoherenceMesh = False
         if straight and "SecondOrderLinear" in mesh.PropertiesList:
             mesh.SecondOrderLinear = True
         # (curved elements that turn inside out at a tight curve are made straight-sided

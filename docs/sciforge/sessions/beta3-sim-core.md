@@ -170,3 +170,10 @@ sections Engine and Benchmarks.
   warns when a study uses them (Fusion's help says parabolic is the accurate choice).
   Integration again with the latest engine: sim_setup_dialogs 76, sim_setup_workspace 43,
   simres_linear 27 checks pass.
+- 22:20-22:35 a 3 mm plate (200 x 100 mm) at 2 % mesh failed: "distorted elements". Gmsh left
+  a flat sliver element (corners nearly in one plane, 0.0002 mm3), and FreeCAD's "Coherence
+  Mesh" (merge nodes closer than a millionth of the model's size, 0.0002 mm here) made its two
+  diagonals' middles (0.00006 mm apart) one node: an element with a node twice, which CalculiX
+  refuses. The study's bodies share their faces through the general fuse, so the mesh needs no
+  merging: it is off now (every benchmark gives the same nodes and numbers; the plate solves,
+  its tip between beam and plate theory: engine check "a thin plate at a fine mesh").

@@ -1130,6 +1130,49 @@ def check_gone_material(doc, out):
     )
 
 
+@engine_check("a thin plate at a fine mesh")
+def check_thin_plate(doc, out):
+    """A 3 mm steel plate, 200 x 100 mm, cantilevered, 50 N at its free edge, at 2 % mesh: Gmsh
+    leaves a flat sliver element there, whose two diagonals' middles its node merging once
+    made one node (CalculiX then refused the mesh). The tip lies between beam theory and
+    plate theory (a wide plate is stiffer by 1 / (1 - nu^2))."""
+    import Part
+
+    from sciforge import simulation as sim
+
+    L, W, T, F = 200.0, 100.0, 3.0, 50.0
+    body = make_body(doc, Part.makeBox(L, W, T), "Plate")
+    study = sim.create_study(doc)
+    sim.set_settings(study, {"mesh": {"size_pct": 2.0}})
+    sim.add_item(
+        study, "constraint", "fixed", [(body, one_face(body, lambda f: near(f.CenterOfMass.x, 0)))]
+    )
+    sim.add_item(
+        study,
+        "load",
+        "force",
+        [(body, one_face(body, lambda f: near(f.CenterOfMass.x, L)))],
+        {"direction": "vector", "vector": [0, 0, -1], "magnitude": F},
+    )
+    job = sim.Job(study)
+    job.wait(600)
+    out.append(("solved", job.state == "done", job.message))
+    if job.state != "done":
+        return
+    props = material(study, body)
+    beam = F * L**3 / (3 * props["youngs_mpa"] * W * T**3 / 12.0)
+    plate = beam * (1 - props["poisson"] ** 2)
+    tip = job.summary["stats"]["displacement"]["max"]
+    out.append(
+        (
+            "the tip bends between plate and beam theory (%.3f .. %.3f mm): %.3f mm"
+            % (plate, beam, tip),
+            plate * 0.99 <= tip <= beam * 1.01,
+            (plate, tip, beam),
+        )
+    )
+
+
 @engine_check("a change while it solves")
 def check_change_during(doc, out):
     """The results are of the study as the solve started: a load changed while CalculiX runs
