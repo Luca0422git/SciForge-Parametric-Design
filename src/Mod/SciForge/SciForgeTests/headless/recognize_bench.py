@@ -424,6 +424,33 @@ EXTRA_MODELS = {
             {"op": "hole", "id": "h2", "sketch": "s3", "diameter": 6, "depth": 6},
         ],
     },
+    "bench_vex_plate": {
+        "title": "VEX-like plate 63.5 x 127 x 1.016 with 5 x 10 square holes 4.6 mm on a 12.7 mm "
+        "pitch (50 cuts: one cut and a pattern)",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"rect": [0, 0, 63.5, 127]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 1.016},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 1.016,
+                "geometry": [
+                    {"center_rect": [6.35 + 12.7 * i, 6.35 + 12.7 * j, 4.6, 4.6]}
+                    for i in range(5)
+                    for j in range(10)
+                ],
+            },
+            {
+                "op": "extrude",
+                "id": "c1",
+                "profile": "s2",
+                "operation": "cut",
+                "extent": "through_all",
+                "flip": True,
+            },
+        ],
+    },
     "bench_turned_bracket": {
         "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
         "placed in an assembly)",
@@ -511,6 +538,7 @@ BENCH = [
     ("bench_pipe_port", {"base": "extrude", "holes": [6, 24]}),
     ("bench_clevis", {"base": "extrude", "holes": [8]}),
     ("bench_opposed_holes", {"base": "extrude", "holes": [6, 6]}),
+    ("bench_vex_plate", {"base": "extrude", "holes": [], "patterns": 1}),
     ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
