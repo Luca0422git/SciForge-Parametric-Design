@@ -9,9 +9,9 @@ file is out of date.
 
 ## Headline
 
-**Fusion commands present: 478 / 631 (75.8%)**
+**Fusion commands present: 479 / 632 (75.8%)**
 
-In the areas SciForge builds (without the 69 entries left out on purpose, see the end): **478 / 562 (85.1%)**.
+In the areas SciForge builds (without the 69 entries left out on purpose, see the end): **479 / 563 (85.1%)**.
 
 What the number means:
 
@@ -20,7 +20,7 @@ What the number means:
   nothing about whether every option of Fusion's dialog is there, or whether the
   result is as good. The depth check is `docs/sciforge/dev/core-workflows.md` (everyday
   workflows, end to end) and the parity docs in `docs/sciforge/parity/`.
-- Fusion's list is recorded by hand, by name, from memory of stock Fusion; 125 of its
+- Fusion's list is recorded by hand, by name, from memory of stock Fusion; 126 of its
   names are marked "(not sure)" below and wait for a look at real Fusion.
 - Entries are menu entries: a command in two places (Delete in MODIFY and in the
   marking menu) counts twice; panels Fusion repeats on several tabs count once.
@@ -47,7 +47,7 @@ What the number means:
 | **WORKSPACES** | all | **7** | **3** | **42.9%** |
 | | (top level) | 6 | 2 | 33.3% |
 | | Drawing | 1 | 1 | 100.0% |
-| **SOLID** | all | **134** | **118** | **88.1%** |
+| **SOLID** | all | **135** | **119** | **88.1%** |
 | | CREATE | 27 | 25 | 92.6% |
 | | FINISH BASE FEATURE | 1 | 1 | 100.0% |
 | | MODIFY | 21 | 21 | 100.0% |
@@ -55,7 +55,7 @@ What the number means:
 | | CONSTRUCT | 20 | 20 | 100.0% |
 | | INSPECT | 12 | 12 | 100.0% |
 | | INSERT | 10 | 7 | 70.0% |
-| | ASSEMBLE | 13 | 12 | 92.3% |
+| | ASSEMBLE | 14 | 13 | 92.9% |
 | | POSITION | 2 | 2 | 100.0% |
 | | SELECT | 26 | 18 | 69.2% |
 | **SURFACE** | all | **13** | **13** | **100.0%** |

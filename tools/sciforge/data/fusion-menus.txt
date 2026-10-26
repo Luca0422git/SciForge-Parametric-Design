@@ -199,6 +199,7 @@ SOLID [in=tab:solid]
     As-built Joint
     Joint Origin
     Rigid Group
+    Duplicate With Joints?
     Tangent Relationship?
     Drive Joints
     Motion Link
