@@ -1209,7 +1209,11 @@ class _Reader:
                 found = None
             if found is None:
                 continue
-            score = (len(found["ops"]), found["slabs"], ("Z", "Y", "X").index(axis))
+            # fewest steps, then the least volume added / taken by them (a round boss on a
+            # block is a boss along Z, not the block's side profile with its corners cut off)
+            steps = len(_group_ops(found["ops"]))
+            moved = round(found.get("feature_volume", 0.0) / max(solid.Volume, 1e-9), 4)
+            score = (steps, moved, len(found["ops"]), found["slabs"], ("Z", "Y", "X").index(axis))
             if best is None or score < best[0]:
                 best = (score, found)
         revolved = None
@@ -1314,7 +1318,12 @@ class _Reader:
                     plane,
                     where,
                 )
-            prefix = "base" if first else ("pocket" if kind == "cut" else "boss")
+            if first:
+                prefix = "base"
+            elif kind != "cut":
+                prefix = "boss"
+            else:
+                prefix = "cut" if op["extrude"].get("through_all") else "pocket"
             geometry = core.name_items(op["geometry"], prefix)
             sketch = plan.add(
                 "create_sketch", core.sketch_args(plane, offset, geometry), why_sketch
@@ -2254,8 +2263,10 @@ def _levels(solid, axis_name, allow_taper=False):
     return None if got is None else got[0]
 
 
-def _walls(solid, axis_name, allow_taper=False):
-    """(levels, [taper angles in degrees, one per leaning wall]) or None."""
+def _walls(solid, axis_name, allow_taper=False, lenient=False):
+    """(levels, [taper angles in degrees, one per leaning wall]) or None. lenient: faces
+    that fit no rule are passed over (a boss or a cut along another axis: a piece of its
+    own) instead of refusing the axis."""
     from . import draft_walls
     from .ai.ops import selectors
 
@@ -2282,15 +2293,21 @@ def _walls(solid, axis_name, allow_taper=False):
                 ts = [core.dot(_t(v.Point), d) for v in face.Vertexes]
                 heights += [min(ts), max(ts)]  # (a draft may start where no flat face is)
                 continue
+            if lenient:
+                continue
             return None
         if kind == "cylinder":
             if core.parallel(_t(face.Surface.Axis), d, 1e-7):
                 straight += 1
                 continue
+            if lenient:
+                continue
             return None
         if kind == "cone" and allow_taper:
             if core.parallel(_t(face.Surface.Axis), d, 1e-7):
                 tapers.append(math.degrees(abs(face.Surface.SemiAngle)))
+                continue
+            if lenient:
                 continue
             return None
         try:
@@ -2299,6 +2316,8 @@ def _walls(solid, axis_name, allow_taper=False):
                 continue
         except Exception:
             pass
+        if lenient:
+            continue
         return None
     levels = []
     for h in sorted(heights):
@@ -2501,7 +2520,7 @@ def _prismatic(solid, axis_name):
     """The solid as extrudes along this origin axis: the base extrude (the biggest level's
     region over the levels whose outline it covers) and the bosses / cuts that make the
     rest, or None."""
-    walls = _walls(solid, axis_name, allow_taper=True)
+    walls = _walls(solid, axis_name, allow_taper=True, lenient=True)
     if walls is None or len(walls[0]) < 2:
         return None
     levels, tapers = walls
@@ -2554,12 +2573,83 @@ def _prismatic(solid, axis_name):
         for piece in piece_shape.Solids:
             if piece.Volume < 1e-9:
                 continue
-            got = _piece_ops(piece, plane, operation, hs[0], hs[-1], lo)
+            got = None
+            for other in _piece_planes(piece, solid, plane):
+                if other == plane:
+                    got = _piece_ops(piece, plane, operation, hs[0], hs[-1], lo)
+                else:  # a boss / cut along another axis (the holes in a channel's sides)
+                    span = _span(solid, other)
+                    got = _piece_ops(piece, other, operation, span[0], span[1])
+                if got is not None:
+                    break
             if got is None:
                 return None
             ops += got
+    _through_cuts(ops, solid)
     _mark_shell(ops, solid)
-    return _prismatic_result(first, ops, len(slabs), plane, axis_name, hs)
+    result = _prismatic_result(first, ops, len(slabs), plane, axis_name, hs)
+    result["feature_volume"] = extra.Volume + missing.Volume
+    return result
+
+
+def _piece_planes(piece, solid, plane):
+    """The origin planes to read a boss / cut piece on, best first: the one its open sides
+    face when they all face one way (where a cut opens to the air or a boss meets the rest of
+    the part: not the part's own surface), then the base's plane, then the others."""
+    order = [plane] + [p for p in ("XY", "XZ", "YZ") if p != plane]
+    axes = set()
+    try:
+        for face in piece.Faces:
+            p = face.valueAt(*_inner_uv(face))
+            if solid.isInside(p, 1e-6, True) and not solid.isInside(p, 1e-6, False):
+                continue  # (on the part's surface: a wall or the floor)
+            n = _flat_normal(face)
+            axis = None if n is None else core.origin_axis(n)
+            if axis is None:
+                return order
+            axes.add(axis)
+    except Exception:
+        return order
+    if len(axes) == 1:
+        best = core.PLANE_OF_AXIS[axes.pop()]
+        order.remove(best)
+        order.insert(0, best)
+    return order
+
+
+def _through_cuts(ops, solid):
+    """A cut that may go through the whole part without taking anything more (a hole in one
+    flange of a channel that lines up with one in the other) is made through all, from the
+    part's outer side: equal through cuts then go in one sketch (deduplicated)."""
+    for op in ops[1:]:
+        if op["kind"] != "cut" or op["extrude"].get("through_all") or op.get("taper"):
+            continue
+        lo, hi = _span(solid, op["plane"])
+        if op["lo"] <= lo + 1e-6 and op["hi"] >= hi - 1e-6:
+            continue
+        try:
+            prism = _extrude_faces(op["faces"], op["plane"], lo - 1.0, hi + 1.0)
+            if prism.common(solid).Volume > 1e-9:
+                continue  # (it would cut material the part has)
+        except Exception:
+            continue
+        op["extrude"] = {"through_all": True, "operation": "cut", "flip": True}
+        op["offset"] = hi
+        op["through_extended"] = True
+
+
+def _span(solid, plane):
+    """(lowest, highest) of the solid along the plane's normal."""
+    n = core.PLANES[plane]["n"]
+    box = solid.BoundBox
+    corners = [
+        (x, y, z)
+        for x in (box.XMin, box.XMax)
+        for y in (box.YMin, box.YMax)
+        for z in (box.ZMin, box.ZMax)
+    ]
+    ts = [core.dot(c, n) for c in corners]
+    return min(ts), max(ts)
 
 
 def _mark_shell(ops, solid):
@@ -2786,19 +2876,45 @@ def _group_ops(ops, pattern_args=None):
         buckets.setdefault(key, []).append(op)
     out = [ops[0]]
     for members in buckets.values():
+        unique = []  # (the same cut through all twice: a hole in each flange of a channel)
+        for op in members:
+            if not any(core.same_items(op["geometry"], u["geometry"], 1e-6) for u in unique):
+                unique.append(op)
+        members = unique
         found = _ops_pattern(members, pattern_args) if len(members) >= 2 else None
         if found is not None:
             out.append(found)
             continue
-        merged = dict(members[0])
-        for op in members[1:]:
-            merged["geometry"] = merged["geometry"] + op["geometry"]
-            merged["loops_public"] = merged["loops_public"] + op["loops_public"]
-            merged["words"] = merged["words"] + ", " + op["words"]
-        merged["count"] = len(members)
-        out.append(merged)
+        sets = []  # regions that touch go in separate sketches (one sketch would join them)
+        for op in members:
+            for group in sets:
+                if not any(_touching(op, other) for other in group):
+                    group.append(op)
+                    break
+            else:
+                sets.append([op])
+        for group in sets:
+            merged = dict(group[0])
+            for op in group[1:]:
+                merged["geometry"] = merged["geometry"] + op["geometry"]
+                merged["loops_public"] = merged["loops_public"] + op["loops_public"]
+                merged["words"] = merged["words"] + ", " + op["words"]
+            merged["count"] = len(group)
+            out.append(merged)
     order = {"base": 0, "join": 1, "cut": 2}
     return [out[0]] + sorted(out[1:], key=lambda o: order.get(o["kind"], 3))
+
+
+def _touching(a, b):
+    """Two extrudes' sketch regions (on one plane at one height) meet at an edge or a
+    point."""
+    import Part
+
+    try:
+        gap = Part.makeCompound(a["faces"]).distToShape(Part.makeCompound(b["faces"]))[0]
+        return gap < 1e-6
+    except Exception:
+        return True
 
 
 def _ops_pattern(members, pattern_args):

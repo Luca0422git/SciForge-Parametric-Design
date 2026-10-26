@@ -229,6 +229,76 @@ EXTRA_MODELS = {
             },
         ],
     },
+    "bench_vex_channel": {
+        "title": "VEX-like C-channel 25.4 x 12.7 x 63.5, 1.016 thick, 4.6 mm square holes on "
+        "a 12.7 mm pitch in the web and through both flanges",
+        "steps": [
+            {
+                "op": "sketch",
+                "id": "s1",
+                "plane": "YZ",
+                "geometry": [
+                    {
+                        "polyline": [
+                            [0, 0],
+                            [25.4, 0],
+                            [25.4, 12.7],
+                            [24.384, 12.7],
+                            [24.384, 1.016],
+                            [1.016, 1.016],
+                            [1.016, 12.7],
+                            [0, 12.7],
+                        ]
+                    }
+                ],
+            },
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 63.5},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 1.016,
+                "geometry": [{"center_rect": [6.35 + 12.7 * k, 12.7, 4.6, 4.6]} for k in range(5)],
+            },
+            {
+                "op": "extrude",
+                "id": "c1",
+                "profile": "s2",
+                "operation": "cut",
+                "extent": "through_all",
+                "flip": True,
+            },
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "XZ",
+                "geometry": [{"center_rect": [6.35 + 12.7 * k, 6.858, 4.6, 4.6]} for k in range(5)],
+            },
+            {
+                "op": "extrude",
+                "id": "c2",
+                "profile": "s3",
+                "operation": "cut",
+                "extent": "through_all",
+                "flip": True,
+            },
+        ],
+    },
+    "bench_side_boss": {
+        "title": "Block 40 x 30 x 10 with a boss d10 x 8 sticking out of its +X side",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 10},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "YZ",
+                "offset": 40,
+                "geometry": [{"circle": [15, 5, 5]}],
+            },
+            {"op": "extrude", "id": "e2", "profile": "s2", "distance": 8},
+        ],
+    },
     "bench_turned_bracket": {
         "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
         "placed in an assembly)",
@@ -310,6 +380,8 @@ BENCH = [
     ("sf_draft_four_sides", {"base": "extrude", "holes": []}),
     ("bench_turned_bracket", {"base": "extrude", "holes": [5, 5, 6], "fillets": [3]}),
     ("bench_shaft_cross_hole", {"base": "extrude", "holes": [4]}),
+    ("bench_vex_channel", {"base": "extrude", "holes": []}),
+    ("bench_side_boss", {"base": "extrude", "holes": []}),
     ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
