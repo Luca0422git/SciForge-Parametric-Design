@@ -440,7 +440,7 @@ def g_made():
     s.eye("Plane5")
 
 
-# -- H: Plane at Angle on the origin's Z axis --------------------------------------------------------
+# -- H: Plane at Angle on the origin's Z axis ------------------------------------------------------
 def h_start():
     h.click_empty()
     s.menu("CONSTRUCT", "Plane at Angle")

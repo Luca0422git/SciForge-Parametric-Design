@@ -10,7 +10,7 @@ import os
 import FreeCAD as App
 import FreeCADGui as Gui
 
-from . import bodies, commands, components, ui_icon_path, warn
+from . import bodies, commands, components, log, ui_icon_path, warn
 from . import exchange_core as core
 from .compat import QtCore, QtWidgets
 
@@ -37,18 +37,21 @@ def _refresh_browser():
 
 def place_after(doc_name, name):
     """Fusion's Initial Position after an insert: the Move dialog opens on the new
-    component (Esc leaves it where it came in)."""
+    component (several names: on all of them; Esc leaves them where they came in)."""
+    names = [name] if isinstance(name, str) else list(name)
 
     def run():
         try:
             if doc_name not in App.listDocuments():
                 return
-            obj = App.getDocument(doc_name).getObject(name)
-            if obj is None:
+            doc = App.getDocument(doc_name)
+            objs = [doc.getObject(n) for n in names]
+            objs = [o for o in objs if o is not None]
+            if not objs:
                 return
             from . import component_move_ui
 
-            component_move_ui.start(picks=[obj])
+            component_move_ui.start(picks=objs)
         except Exception as exc:
             warn("insert: the move could not start: %s" % exc)
 
@@ -170,44 +173,165 @@ class OpenCommand:
 
 
 # -- Insert STEP into the current design -------------------------------------------------------
+GAP = 10.0  # mm between parts inserted side by side
+
+
 def insert_cad_file(path):
     """Insert a STEP / IGES file into the active design as one component (named after the
     file, its products nested in it), one undo step; then place it (Fusion's Initial
-    Position). Returns the step_import.Made."""
+    Position). A file the design already holds comes in as another occurrence of it.
+    Returns the step_import.Made."""
+    made = insert_cad_files([path])
+    if not made:
+        raise core.ExchangeError("Nothing could be read from the file.")
+    return made[0]
+
+
+def insert_cad_files(paths, parent=None, place=True):
+    """Insert several STEP / IGES files in one go (SciForge: Fusion inserts one design at a
+    time): one undo step, one component per file named after it (a file the design already
+    holds: another occurrence, "Screw:2"), laid side by side along X from the origin instead
+    of on top of each other; then the Move dialog places them all (`place`). A file that
+    cannot be read is reported and left out; the others come in. `parent`: the component
+    they go into (default: the active one). Returns the step_import.Made list."""
+    import time
+
     from . import step_import
 
+    paths = [p for p in paths if p]
+    if not paths:
+        return []
     if App.ActiveDocument is None:
         App.newDocument("Design")
     doc = App.ActiveDocument
-    parent = components.active_component(doc) if App.GuiUp else None
+    if parent is None:
+        parent = components.active_component(doc) if App.GuiUp else None
+    started = time.perf_counter()
+    # every file is read first, outside the undo step (the reader's throw-away documents
+    # would cut the step short); a file already in the design needs no reading
+    trees = {}
+    failed = []
+    for path in paths:
+        if path in trees or step_import.inserted_from(doc, path) is not None:
+            continue
+        try:
+            trees[path] = step_import.read(path)
+        except core.ExchangeError as exc:
+            failed.append((path, str(exc)))
+    App.setActiveDocument(doc.Name)
     doc.openTransaction("Insert STEP")
+    made = []
     try:
-        made = step_import.import_file(doc, path, core.INSERT, parent)
+        for path in paths:
+            if any(p == path for p, _w in failed):
+                continue
+            try:
+                tree = trees.get(path) if step_import.inserted_from(doc, path) is None else None
+                made.append(
+                    (path, step_import.import_file(doc, path, core.INSERT, parent, tree=tree))
+                )
+            except core.ExchangeError as exc:
+                failed.append((path, str(exc)))
+        if len(made) > 1:
+            lay_side_by_side([m.top for _p, m in made if m.top is not None])
     except Exception:
         doc.abortTransaction()
         App.closeActiveTransaction(True)
         doc.recompute()
         raise
+    if not made:
+        doc.abortTransaction()
+        App.closeActiveTransaction(True)
+        if failed:
+            raise core.ExchangeError(failed[0][1])
+        return []
     doc.commitTransaction()
     App.closeActiveTransaction()
     doc.recompute()
-    step_import.apply_looks(made)
+    for _path, m in made:
+        step_import.apply_looks(m)
     try:
         Gui.Selection.clearSelection()
         Gui.SendMsgToActiveView("ViewFit")
     except Exception:
         pass
     _refresh_browser()
-    commands.tell(
-        "Inserted %s. Place it with the arrows (or type the values), then OK."
-        % core.describe(
-            len(made.components) - 1, len(made.instances), len(made.bodies), os.path.basename(path)
-        )
+    log(
+        "inserted %d file(s) in %.1f s%s"
+        % (len(made), time.perf_counter() - started, ", %d refused" % len(failed) if failed else "")
     )
-    report_cad_import(made, path, "Inserted")
-    if made.top is not None:
-        place_after(doc.Name, made.top.Name)
-    return made
+    commands.tell(_inserted_text(made, failed))
+    for path, m in made:
+        report_cad_import(m, path, "Inserted")
+    tops = [m.top for _p, m in made if m.top is not None]
+    if tops and place:
+        place_after(doc.Name, [t.Name for t in tops])
+    return [m for _p, m in made]
+
+
+def _inserted_text(made, failed):
+    """What the insert says (the one file's contents, or how many came in)."""
+    if len(made) == 1 and not failed:
+        path, m = made[0]
+        if getattr(m, "occurrence", False):
+            what = "%s: another occurrence (%s)" % (os.path.basename(path), m.top.Label)
+        else:
+            what = core.describe(
+                len(m.components) - 1, len(m.instances), len(m.bodies), os.path.basename(path)
+            )
+        return "Inserted %s. Place it with the arrows (or type the values), then OK." % what
+    again = len([m for _p, m in made if getattr(m, "occurrence", False)])
+    text = "Inserted %d files" % len(made)
+    if again:
+        text += " (%d of them again: occurrences of parts already here)" % again
+    text += ". Place them with the arrows (or type the values), then OK."
+    if failed:
+        text += " Not inserted: %s (%s)." % (
+            ", ".join(os.path.basename(p) for p, _w in failed),
+            failed[0][1],
+        )
+    return text
+
+
+def lay_side_by_side(parts, gap=GAP):
+    """Put freshly inserted components in a row along X (each one's box starting where the
+    previous one's ends, plus `gap`), the first where it came in."""
+    x = None
+    for part in parts:
+        try:
+            box = _global_box(part)
+            if box is None:
+                continue
+            if x is not None:
+                shift = x - box.XMin
+                if abs(shift) > 1e-9:
+                    plc = App.Placement(part.Placement)
+                    plc.Base = plc.Base + App.Vector(shift, 0, 0)
+                    part.Placement = plc
+                x = box.XMax + shift + gap
+            else:
+                x = box.XMax + gap
+        except Exception as exc:
+            warn("insert: %s not laid out (%s)" % (part.Label, exc))
+
+
+def _global_box(part):
+    """A component's box in design coordinates (its bodies' shapes), or None."""
+    import FreeCAD as _App
+
+    box = None
+    for body in components.bodies_in(part.Document, part, recursive=True):
+        try:
+            if body.Shape.isNull():
+                continue
+            b = bodies.global_shape(body, copy=False).BoundBox
+        except Exception:
+            continue
+        if box is None:
+            box = _App.BoundBox(b)
+        else:
+            box.add(b)
+    return box
 
 
 # -- Save As DXF / Save As Mesh ----------------------------------------------------------------

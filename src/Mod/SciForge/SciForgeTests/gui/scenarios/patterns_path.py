@@ -75,7 +75,7 @@ def path_finish():
     h.ribbon("Finish Sketch")
 
 
-# -- pattern on path --------------------------------------------------------------------------------
+# -- pattern on path -------------------------------------------------------------------------------
 def open_path_pattern():
     Gui.Selection.clearSelection()
     s["v0"] = h.solid_volume()
@@ -205,7 +205,7 @@ def after_edit():
     s["v"] = h.solid_volume()
 
 
-# -- a pattern of bodies --------------------------------------------------------------------------------
+# -- a pattern of bodies ---------------------------------------------------------------------------
 def bodies_start():
     Gui.Selection.clearSelection()
     h.ribbon("Rectangular Pattern")

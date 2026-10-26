@@ -20,6 +20,11 @@ from . import exchange_core as core
 UNIT_TYPES = ("App::LinkGroup", "App::Part", "App::Link")
 SKIP_TYPES = ("App::Origin", "App::Line", "App::Plane", "App::Point")
 SOURCE = "SourceFile"
+# on the component an Insert STEP made: the file and its size / date when it was read, so a
+# second insert of the same file is another occurrence of it (Fusion: another instance of
+# the same component), not a second copy of its solids
+FILE_PROP = "SciForgeSourceFile"
+STAMP_PROP = "SciForgeSourceStamp"
 
 
 class Made:
@@ -33,6 +38,7 @@ class Made:
         self.bodies = []
         self.built = {}  # file key -> component
         self.notes = {}  # what the file had that did not come in (export_report.cad_items)
+        self.occurrence = False  # the file was in the design already: `top` is an instance
 
 
 # -- reading -----------------------------------------------------------------------------------
@@ -198,13 +204,88 @@ def _pieces(shape, colours):
 
 
 # -- building ----------------------------------------------------------------------------------
-def import_file(doc, path, mode=core.OPEN, parent=None, label=None):
+def file_stamp(path):
+    """What tells one version of a file from another: its size and date ("" when the file
+    cannot be read)."""
+    import os
+
+    try:
+        st = os.stat(path)
+        return "%d:%d" % (st.st_size, int(st.st_mtime))
+    except OSError:
+        return ""
+
+
+def _same_file(a, b):
+    import os
+
+    try:
+        return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+    except Exception:
+        return a == b
+
+
+def inserted_from(doc, path):
+    """The component a STEP / IGES file was inserted as earlier in this design (the same
+    path, size and date: the file did not change since), or None."""
+    stamp = file_stamp(path)
+    if not stamp:
+        return None
+    for comp in components.list_components(doc):
+        try:
+            if instances.is_instance(comp):
+                continue
+            source = getattr(comp, FILE_PROP, "") or ""
+            if source and _same_file(source, path) and getattr(comp, STAMP_PROP, "") == stamp:
+                return comp
+        except Exception:
+            continue
+    return None
+
+
+def _remember_file(comp, path):
+    bodies.add_prop(comp, "App::PropertyString", FILE_PROP, "Insert", "The file it came from")
+    bodies.add_prop(comp, "App::PropertyString", STAMP_PROP, "Insert", "Its size and date")
+    setattr(comp, FILE_PROP, path)
+    setattr(comp, STAMP_PROP, file_stamp(path))
+
+
+def read(path):
+    """The file read ahead of an insert (FreeCAD's reader works in a throw-away document,
+    and making and closing a document in the middle of the insert's undo step cut that step
+    short when the insert did not come from a command: the Data Panel's menu). Returns
+    (tops, notes) for import_file's `tree`."""
+    notes = {}
+    return read_tree(path, notes), notes
+
+
+def import_file(doc, path, mode=core.OPEN, parent=None, label=None, reuse=True, tree=None):
     """Bring a STEP / IGES file into `doc` with its structure. mode OPEN: the file's top
     product is the design (File > Open into a new design); INSERT: the whole file becomes
-    one component (named `label`, else after the file) inside `parent` (None: the root).
-    No undo step of its own (the caller's). Returns a Made."""
+    one component (named `label`, else after the file) inside `parent` (None: the root);
+    a file this design already holds (inserted before, unchanged since) comes in as another
+    occurrence of that component ("Screw:2", linked: Fusion's second insert of a design),
+    unless `reuse` is False. `tree`: the file as read() gave it (else it is read here). No
+    undo step of its own (the caller's). Returns a Made."""
     made = Made()
-    tops = read_tree(path, made.notes)
+    if mode == core.INSERT and reuse and label is None:
+        source = inserted_from(doc, path)
+        if source is not None:
+            try:
+                at = components._container_placement(parent)  # where a fresh one lands
+                inst = instances.make_instance(source, parent, placement=at)
+                made.top = inst
+                made.instances.append(inst)
+                made.occurrence = True
+                doc.recompute()
+                log("inserted %s again: another occurrence, %s" % (source.Label, inst.Label))
+                return made
+            except Exception as exc:
+                warn("insert: %s comes in as its own copy (%s)" % (core.base_name(path), exc))
+    if tree is not None:
+        tops, made.notes = tree
+    else:
+        tops = read_tree(path, made.notes)
     name = label or core.base_name(path)
     level = core.plan(tops, mode, name)
     container = parent
@@ -212,6 +293,7 @@ def import_file(doc, path, mode=core.OPEN, parent=None, label=None):
         container = components.new_component(doc, _component_label(doc, name), parent)
         made.top = container
         made.components.append(container)
+        _remember_file(container, path)
     origin = components._container_placement(container)
     top = level["top"]
     at_root = container is None

@@ -66,6 +66,34 @@ def pick_file(kind):
     return None
 
 
+def pick_files(kind):
+    """The file dialog of an Insert command that takes several files at once (Insert STEP:
+    a folder of VEX parts in one go); remembers the folder. [] when cancelled. A test's
+    FILE_PICKER may give one path or a list."""
+    if FILE_PICKER is not None:
+        got = FILE_PICKER(kind)
+        if not got:
+            return []
+        return [got] if isinstance(got, str) else list(got)
+    try:
+        prefs = App.ParamGet(PREFS)
+        start = prefs.GetString("LastInsertFolder", "")
+        if not start or not os.path.isdir(start):
+            doc = App.ActiveDocument
+            start = (
+                os.path.dirname(doc.FileName) if doc and doc.FileName else os.path.expanduser("~")
+            )
+        paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            Gui.getMainWindow(), TITLES[kind], start, FILTERS[kind]
+        )
+        if paths:
+            prefs.SetString("LastInsertFolder", os.path.dirname(paths[0]))
+            return list(paths)
+    except Exception as exc:
+        warn("file dialog: %s" % exc)
+    return []
+
+
 def _open(panel_class, *args, **kwargs):
     """Open a dialog the way every SciForge command does: the open one is finished first;
     one that fails half way leaves nothing behind."""
@@ -1081,8 +1109,7 @@ class InsertCurvesPanel(_PlaneHandles, _InsertPanel):
         self.layers = [(name, geos) for name, geos in self.layers if geos]
         self.import_notes["skipped"] = max(
             0,
-            sum(len(edges) for _name, edges in raw)
-            - sum(len(geos) for _name, geos in self.layers),
+            sum(len(edges) for _name, edges in raw) - sum(len(geos) for _name, geos in self.layers),
         )
         if not self.layers:
             raise insert.InsertError("The file holds no curves that can go into a sketch.")
@@ -1870,16 +1897,19 @@ class ConvertMeshCommand(_Command):
 
 class InsertStepCommand(_Command):
     text = "Insert STEP"
-    tip = "A STEP or IGES file as a component: its parts, copies, names and colours"
+    tip = (
+        "STEP or IGES files as components: their parts, copies, names and colours (pick "
+        "several at once; a part inserted again is another occurrence of it)"
+    )
     icon = "insert_step"
 
     def run(self):
         if not commands.finish_open_dialog():
             return
-        path = pick_file("step")
-        if not path:
+        paths = pick_files("step")
+        if not paths:
             return
-        insert_step_file(path)
+        insert_step_files(paths)
 
 
 def insert_step_file(path):
@@ -1889,6 +1919,17 @@ def insert_step_file(path):
 
     try:
         return exchange_ui.insert_cad_file(path).bodies
+    except exchange_core.ExchangeError as exc:
+        raise insert.InsertError(str(exc))
+
+
+def insert_step_files(paths):
+    """Insert several STEP / IGES files in one go (one undo step, side by side, then the
+    Move dialog on all of them). Returns the step_import.Made list."""
+    from . import exchange_core, exchange_ui
+
+    try:
+        return exchange_ui.insert_cad_files(paths)
     except exchange_core.ExchangeError as exc:
         raise insert.InsertError(str(exc))
 

@@ -400,7 +400,7 @@ def check_view_deleted():
     h.check("saved view deleted", tree().row("Named View 1") is None, tree().labels())
 
 
-# -- a second body: one timeline ---------------------------------------------------------------------
+# -- a second body: one timeline -------------------------------------------------------------------
 def new_body():
     h.click_empty()
     h.press("s")
@@ -583,7 +583,7 @@ def check_body2_back():
     h.check("timeline has 4 steps again", len(tl().titles()) == 4, tl().titles())
 
 
-# -- sketch menu ---------------------------------------------------------------------------------------
+# -- sketch menu -----------------------------------------------------------------------------------
 def edit_sketch():
     menu("Base Profile", "Edit Sketch")
 

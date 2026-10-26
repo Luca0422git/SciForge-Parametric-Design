@@ -51,7 +51,7 @@ def message():
     return p.message.text() if p is not None else ""
 
 
-# -- the first pattern --------------------------------------------------------------------------------
+# -- the first pattern -----------------------------------------------------------------------------
 def make_start():
     Gui.Selection.clearSelection()
     h.ribbon("Rectangular Pattern")
@@ -80,7 +80,7 @@ def make_ok():
     h.task_button("OK")
 
 
-# -- Path 11: Press Pull after the pattern, the pattern rebuilt -------------------------------------------
+# -- Path 11: Press Pull after the pattern, the pattern rebuilt ------------------------------------
 def p11_q():
     h.check("3 holes", centres() == [(8, 8), (20, 8), (32, 8)], centres())
     Gui.Selection.clearSelection()
@@ -155,7 +155,7 @@ def p11_after():
     h.shot("11-press-pull")
 
 
-# -- Path 12: a pattern of a pattern -----------------------------------------------------------------------
+# -- Path 12: a pattern of a pattern ---------------------------------------------------------------
 def p12_start():
     Gui.Selection.clearSelection()
     h.ribbon("Rectangular Pattern")
@@ -227,7 +227,7 @@ def p12_both_rows():
     s["v"] = h.solid_volume()
 
 
-# -- Path 13: Total Angle past 180 typed, then the handle dragged ---------------------------------------------
+# -- Path 13: Total Angle past 180 typed, then the handle dragged ----------------------------------
 def p13_start():
     Gui.Selection.clearSelection()
     ps.menu("Circular Pattern")

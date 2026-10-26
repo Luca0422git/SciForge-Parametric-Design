@@ -203,7 +203,7 @@ def cylinder_edited():
     h.fit()
 
 
-# -- a second Cylinder from the selected top face: a hole ---------------------------------------------
+# -- a second Cylinder from the selected top face: a hole ------------------------------------------
 def select_top():
     pl.click_on_plane(V(0, -5, 15))
 
@@ -255,7 +255,7 @@ def cylinder2_kept():
     h.fit()
 
 
-# -- Sphere from the selected top face -----------------------------------------------------------------
+# -- Sphere from the selected top face -------------------------------------------------------------
 def select_top_2():
     pl.click_on_plane(V(6, 0, 15))
 
@@ -338,7 +338,7 @@ def sphere_edited():
     h.fit()
 
 
-# -- Torus, nothing selected: a new body ------------------------------------------------------------------
+# -- Torus, nothing selected: a new body -----------------------------------------------------------
 def torus_start():
     h.click_empty()
     pi.menu("Torus")
@@ -452,7 +452,7 @@ def torus_redone():
     h.fit()
 
 
-# -- Cancel and Esc ------------------------------------------------------------------------------------------
+# -- Cancel and Esc --------------------------------------------------------------------------------
 def sphere_cancel_start():
     h.click_empty()
     pi.menu("Sphere")

@@ -13,7 +13,8 @@ P3  Ctrl+Z: the move undone (robot at 0); Ctrl+Z: the insert undone (no robot, t
     stays); Ctrl+Y twice: back, moved.
 P4  Base activated (its ring), Insert STEP of two_parts.step: "two_parts" goes inside Base,
     with Plate and Peg; Esc in the Move dialog leaves it where it came in.
-P5  The design activated again, robot.step once more: "robot (2)".
+P5  The design activated again, robot.step once more: another occurrence of the first robot,
+    "robot:2", at the root (linked: its bodies are copies of the first's; beta 3, VEX).
 P6  The file dialog cancelled: nothing happens. A broken file: refused with the reason,
     nothing added.
 """
@@ -244,11 +245,21 @@ p5_escape.wait_ms = 1000
 
 
 def p5_check():
-    second = x.comp("robot (2)")
-    h.check("P5 a second robot: robot (2)", second is not None, x.labels())
+    from sciforge import components, instances
+
+    second = x.comp("robot:2")
+    first = x.comp("robot")
+    h.check("P5 the robot again: robot:2", second is not None, x.labels())
     h.check("P5 at the root", second is not None and x.parent_label(second) is None)
-    wheels = [o for o in x.comps() if o.Label.startswith("Wheel:")]
-    h.check("P5 each robot has its own wheel copy", len(wheels) == 2, [o.Label for o in wheels])
+    h.check(
+        "P5 an occurrence of the first robot",
+        second is not None and instances.source_of(second) is first,
+    )
+    if second is not None and first is not None:
+        doc = App.ActiveDocument
+        n1 = len(components.bodies_in(doc, first, recursive=True))
+        n2 = len(components.bodies_in(doc, second, recursive=True))
+        h.check("P5 with a copy of each of its bodies", n1 == n2 and n1 > 0, (n1, n2))
 
 
 # -- P6 ----------------------------------------------------------------------------------------

@@ -201,7 +201,7 @@ def box_gone():
     gone("Box")
 
 
-# -- Rectangular Pattern -----------------------------------------------------------------------------
+# -- Rectangular Pattern ---------------------------------------------------------------------------
 def pattern_open():
     Gui.Selection.clearSelection()
     h.fit()
@@ -251,7 +251,7 @@ def pattern_gone():
     gone("Pattern")
 
 
-# -- Rib --------------------------------------------------------------------------------------------
+# -- Rib -------------------------------------------------------------------------------------------
 def rib_setup():
     from sciforge import commands, extrude, sketch_ui
 

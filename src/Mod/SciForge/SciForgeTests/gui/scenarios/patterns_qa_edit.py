@@ -65,7 +65,7 @@ def boss_sketch():
     return doc().getObject(s["boss_sketch"]) if s.get("boss_sketch") else None
 
 
-# -- the pattern ------------------------------------------------------------------------------------
+# -- the pattern -----------------------------------------------------------------------------------
 def make_start():
     Gui.Selection.clearSelection()
     h.ribbon("Rectangular Pattern")
@@ -101,7 +101,7 @@ def made():
     s["undo"] = doc().UndoCount
 
 
-# -- Path 5: three edits, Ctrl+Z in the first ---------------------------------------------------------
+# -- Path 5: three edits, Ctrl+Z in the first ------------------------------------------------------
 def p5_edit1():
     ps.timeline_double_click("Rectangular Pattern 1")
 
@@ -184,7 +184,7 @@ def p5_redone2():
     s["v"] = h.solid_volume()
 
 
-# -- Path 6: a boss on the pattern's top face, the pattern rebuilt ---------------------------------------
+# -- Path 6: a boss on the pattern's top face, the pattern rebuilt ---------------------------------
 def on_top_face(top=10.0):
     """(ok, detail): the boss's sketch still hangs on a top face of the part. Clicked on the
     patterned part, it hangs on the pattern, or (when Create Sketch picks the step that made
@@ -285,7 +285,7 @@ def p6_back():
     h.check("volume as before", ps.close(h.solid_volume(), s["v"]), h.solid_volume())
 
 
-# -- Path 7: Ctrl+S with the dialog open, reopen, edit again ---------------------------------------------
+# -- Path 7: Ctrl+S with the dialog open, reopen, edit again ---------------------------------------
 def p7_save_as():
     s["path"] = os.path.join(h.OUT_DIR, "patterns_qa_edit.FCStd")
     if os.path.exists(s["path"]):

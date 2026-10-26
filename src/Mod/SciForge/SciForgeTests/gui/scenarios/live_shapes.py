@@ -413,7 +413,7 @@ def shell_cancelled():
     h.check("Shell: the box as before", close(body().Tip.Shape.Volume, 12000.0))
 
 
-# -- Extrude ----------------------------------------------------------------------------------------
+# -- Extrude ---------------------------------------------------------------------------------------
 def x_panel():
     from sciforge import extrude_ui
 

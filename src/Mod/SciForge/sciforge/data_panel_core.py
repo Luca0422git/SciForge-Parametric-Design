@@ -224,6 +224,12 @@ def insertable(path):
     return bool(path) and store.is_design(path) and os.path.isfile(path)
 
 
+def draggable(path):
+    """A card that can be dragged into an open design: a design (a copy goes in) or a STEP /
+    IGES file (inserted as a component: VEX parts come as STEP files)."""
+    return insertable(path) or (bool(path) and store.is_cad_file(path) and os.path.isfile(path))
+
+
 def upload_kind(path):
     """What Upload (or a file dropped on the panel from outside) does with a file: "design"
     (a SciForge / FreeCAD design, copied in), "cad" (STEP / IGES, copied in, opens as a new

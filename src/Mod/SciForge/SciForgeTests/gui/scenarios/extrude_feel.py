@@ -398,7 +398,7 @@ def redone():
     h.fit()
 
 
-# -- E inside an open sketch ------------------------------------------------------------------------
+# -- E inside an open sketch -----------------------------------------------------------------------
 def sketch_on_top():
     h.ribbon("Create Sketch")
 

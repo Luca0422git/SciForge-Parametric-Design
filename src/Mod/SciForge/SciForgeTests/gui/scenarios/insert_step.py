@@ -11,7 +11,9 @@ A  INSERT > Insert STEP: one component "two_parts" (the file, as Fusion inserts 
    Appearance and on screen. The Move dialog opens on two_parts (Fusion's Initial
    Position); Esc leaves it where it came in.
 B  Ctrl+Z: no bodies. Ctrl+Y: both again, still coloured.
-C  The same file again: "two_parts (2)" with its own Plate and Peg.
+C  The same file again: another occurrence of the first, "two_parts:2" (linked to it, its
+   Plate and Peg bodies copies of the first's; Fusion: a second insert of a design is
+   another instance of the same component; beta 3, VEX).
 D  The imported bodies work like any body: Create Sketch on the Plate's top face puts a
    sketch into the Plate's body.
 """
@@ -145,9 +147,16 @@ def c_check():
     h.press(QtCore.Qt.Key_Escape)
     labels = x.labels()
     h.check(
-        "a second two_parts with its own Plate and Peg",
-        labels == ["Peg", "Peg", "Plate", "Plate", "two_parts", "two_parts (2)"],
+        "the same file again: another occurrence, two_parts:2",
+        labels == ["Peg", "Plate", "two_parts", "two_parts:2"],
         labels,
+    )
+    from sciforge import instances
+
+    second = x.comp("two_parts:2")
+    h.check(
+        "linked to the first two_parts",
+        second is not None and instances.source_of(second) is x.comp("two_parts"),
     )
     h.check("four bodies", len(s.bodies()) == 4, [b.Label for b in s.bodies()])
 
@@ -158,7 +167,7 @@ c_check.wait_ms = 1000
 # -- D ----------------------------------------------------------------------------------------
 def d_sketch():
     # the second insert lies on top of the first: hide it, as a person would
-    second = x.comp("two_parts (2)")
+    second = x.comp("two_parts:2")
     if second is not None:
         second.ViewObject.Visibility = False
     h.fit()

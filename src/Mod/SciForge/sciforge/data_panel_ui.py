@@ -257,7 +257,7 @@ class DataPanelList(QtWidgets.QListWidget):
 
     def startDrag(self, supported):
         try:
-            paths = self.panel.selected_designs()
+            paths = self.panel.selected_insertables()
             if not paths:
                 return
             if DRAG_HOOK is not None:
@@ -522,7 +522,7 @@ class _DropFilter(QtCore.QObject):
             pos = event.position().toPoint()
             target = drop_target(obj, pos)
             paths = dp.decode_paths(bytes(mime.data(dp.MIME)).decode("utf-8", "replace"))
-            paths = [p for p in paths if dp.insertable(p)]
+            paths = [p for p in paths if dp.draggable(p)]
             if target is None or not paths:
                 event.ignore()
                 return True
@@ -578,7 +578,9 @@ class DropSession:
 
 def drop_designs(kind, doc_name, component_name, paths):
     """Designs dropped on a design: each comes in as a copy (versions_ui.insert_copy); the
-    last one's Move dialog places it."""
+    last one's Move dialog places it. STEP / IGES files dropped go in like Insert STEP of
+    them all at once (one undo step, side by side, a part already there is another
+    occurrence of it)."""
     try:
         if doc_name not in App.listDocuments():
             return []
@@ -588,8 +590,17 @@ def drop_designs(kind, doc_name, component_name, paths):
         if component_name:
             parent = doc.getObject(component_name) or vui.ACTIVE
         made = []
-        for i, path in enumerate(paths):
-            comp = vui.insert_copy(path, doc, parent, place=(i == len(paths) - 1))
+        cad = [p for p in paths if core.is_cad_file(p)]
+        designs = [p for p in paths if p not in cad]
+        if cad:
+            from . import exchange_ui
+
+            target = None if parent is vui.ACTIVE else parent
+            for m in exchange_ui.insert_cad_files(cad, parent=target, place=not designs):
+                if m.top is not None:
+                    made.append(m.top)
+        for i, path in enumerate(designs):
+            comp = vui.insert_copy(path, doc, parent, place=(i == len(designs) - 1))
             if comp is not None:
                 made.append(comp)
         log(
@@ -1336,6 +1347,39 @@ class DataPanel(QtWidgets.QWidget):
             if i.data(ROLE)[0] == "design" and dp.insertable(i.data(ROLE)[1])
         ]
 
+    def selected_insertables(self):
+        """The selected cards that can be dragged into a design: designs and STEP / IGES
+        files (folders are not)."""
+        return [
+            i.data(ROLE)[1]
+            for i in self.list.selectedItems()
+            if i.data(ROLE)[0] == "design" and dp.draggable(i.data(ROLE)[1])
+        ]
+
+    def selected_cad(self, path=None):
+        """The selected STEP / IGES cards (with `path`, the one right-clicked)."""
+        found = [p for p in self.selected_paths() if core.is_cad_file(p)]
+        if path and path not in found:
+            found.append(path)
+        return found
+
+    def insert_cad(self, path=None):
+        """Right-click > Insert into Current Design on STEP / IGES cards: every selected one
+        goes in at once (one undo step, side by side, then the Move dialog)."""
+        from . import exchange_core, exchange_ui
+
+        try:
+            paths = self.selected_cad(path)
+            if not paths:
+                return []
+            return exchange_ui.insert_cad_files(paths)
+        except exchange_core.ExchangeError as exc:
+            commands.tell(str(exc))
+        except Exception as exc:
+            warn("insert: %s" % exc)
+            commands.tell("The files could not be inserted: %s" % exc)
+        return []
+
     def select(self, path):
         """Click the card of `path` (tests, Upload, New Folder)."""
         item = self.item_for(path)
@@ -1403,22 +1447,26 @@ class DataPanel(QtWidgets.QWidget):
             warn("data panel: %s" % exc)
 
     def upload_file(self, path=None):
-        """Fusion's Upload: a design, or a STEP / IGES file, is copied into the folder
-        shown; double-click opens it (a STEP file as a new design with its components)."""
+        """Fusion's Upload: designs, or STEP / IGES files (several at once, as Fusion's
+        upload takes them), are copied into the folder shown; double-click opens one (a
+        STEP file as a new design with its components). Returns the first file made (the
+        others with upload_files)."""
         try:
-            if path is None:
-                path = vui.UPLOAD_PICKER() if vui.UPLOAD_PICKER is not None else None
-            if path is None:
-                path, _filter = QtWidgets.QFileDialog.getOpenFileName(
+            paths = [path] if path else None
+            if paths is None and vui.UPLOAD_PICKER is not None:
+                got = vui.UPLOAD_PICKER()
+                paths = ([got] if isinstance(got, str) else list(got)) if got else None
+            if paths is None:
+                paths, _filter = QtWidgets.QFileDialog.getOpenFileNames(
                     self,
                     "Upload",
                     os.path.expanduser("~"),
                     "Designs and STEP / IGES files (*.FCStd *.fcstd *.step *.stp *.STEP "
                     "*.STP *.iges *.igs *.IGES *.IGS)",
                 )
-            if not path:
+            if not paths:
                 return None
-            made = self.upload_files([path], self.folder)
+            made = self.upload_files(list(paths), self.folder)
             return made[0] if made else None
         except Exception as exc:
             warn("upload: %s" % exc)
@@ -1525,7 +1573,7 @@ class DataPanel(QtWidgets.QWidget):
                 elif core.is_cad_file(path):  # an uploaded STEP / IGES file
                     menu.addAction("Open", lambda: vui.open_design(path))
                     menu.addAction(
-                        "Insert into Current Design", lambda: vui._insert_cad(path)
+                        "Insert into Current Design", lambda: self.insert_cad(path)
                     ).setEnabled(has_doc)
                     menu.addSeparator()
                     menu.addAction("Delete", lambda: self._trash(path))

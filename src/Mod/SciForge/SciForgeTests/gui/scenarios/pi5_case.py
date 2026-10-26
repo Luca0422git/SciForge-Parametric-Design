@@ -118,7 +118,7 @@ def close(a, c, tol=1e-6):
     return abs(a - c) <= tol * max(1.0, abs(c))
 
 
-# -- helpers ----------------------------------------------------------------------------------------
+# -- helpers ---------------------------------------------------------------------------------------
 def doc():
     return App.ActiveDocument
 
@@ -195,7 +195,7 @@ def sketch_rects(sk, rects):
     doc().recompute()
 
 
-# -- 1. the block ------------------------------------------------------------------------------------
+# -- 1. the block ----------------------------------------------------------------------------------
 def new_design():
     view_params = App.ParamGet("User parameter:BaseApp/Preferences/View")
     view_params.SetBool("UseNavigationAnimations", False)
@@ -263,7 +263,7 @@ def block_made():
     h.shot("02-block")
 
 
-# -- 2. rounded corners -------------------------------------------------------------------------------
+# -- 2. rounded corners ----------------------------------------------------------------------------
 def fillet_start():
     h.fit()
     Gui.Selection.clearSelection()
@@ -306,7 +306,7 @@ def fillet_made():
     h.shot("03-rounded")
 
 
-# -- 3. shell ------------------------------------------------------------------------------------------
+# -- 3. shell --------------------------------------------------------------------------------------
 def shell_start():
     h.fit()
     Gui.Selection.clearSelection()
@@ -335,7 +335,7 @@ def shell_made():
     h.shot("04-shell")
 
 
-# -- 4. posts ------------------------------------------------------------------------------------------
+# -- 4. posts --------------------------------------------------------------------------------------
 def post_centres():
     return [V(BOARD.x + x, BOARD.y + y, T) for x, y in HOLES]
 
@@ -401,7 +401,7 @@ def posts_made():
     part_ok("posts")
 
 
-# -- 5. screw holes ------------------------------------------------------------------------------------
+# -- 5. screw holes --------------------------------------------------------------------------------
 def holes_sketch():
     look("top")
     Gui.Selection.clearSelection()
@@ -597,7 +597,7 @@ def wall_steps(wall, stage):
     return [turn, pick_face, draw, finish, extrude, click_openings, depth, ok, made]
 
 
-# -- 7. the lid ----------------------------------------------------------------------------------------
+# -- 7. the lid ------------------------------------------------------------------------------------
 def lip_rects():
     o = T + LIP_PLAY
     i = o + LIP_W
@@ -1062,7 +1062,7 @@ def fit_check():
     h.check("every port can be reached from outside", not blocked, blocked)
 
 
-# -- 9. export -----------------------------------------------------------------------------------------
+# -- 9. export -------------------------------------------------------------------------------------
 def export_dir():
     return os.path.join(h.OUT_DIR, "pi5_case")
 

@@ -221,7 +221,7 @@ def b_undone():
     h.check("the joint origin stays", len(jm().joint_origins(doc())) == 1)
 
 
-# -- C as-built joint -------------------------------------------------------------------------------
+# -- C as-built joint ------------------------------------------------------------------------------
 def c_command():
     h.fit()
     j.menu("As-built Joint")
@@ -468,7 +468,7 @@ def d_unsuppressed():
     h.check("the solver is happy", jm().solve(doc()) == 0)
 
 
-# -- E the solver cannot ------------------------------------------------------------------------------
+# -- E the solver cannot ---------------------------------------------------------------------------
 def e_press_j():
     j.press_j()
 
@@ -518,7 +518,7 @@ def e_back():
     h.check("the solver is happy again", jm().solve(doc()) == 0)
 
 
-# -- F delete the pin -------------------------------------------------------------------------------
+# -- F delete the pin ------------------------------------------------------------------------------
 def f_delete():
     state["undo_count"] = doc().UndoCount
     j.browser_menu(pin().Label, "Delete")

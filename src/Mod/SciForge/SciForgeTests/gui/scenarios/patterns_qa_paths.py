@@ -99,7 +99,7 @@ def p1_after_esc():
     h.check("nothing selected", not Gui.Selection.getSelectionEx())
 
 
-# -- Path 2: values and direction first, the feature last -------------------------------------------
+# -- Path 2: values and direction first, the feature last ------------------------------------------
 def p2_start():
     Gui.Selection.clearSelection()
     h.ribbon("Rectangular Pattern")
@@ -153,7 +153,7 @@ def p2_after_ok():
     s["v"] = h.solid_volume()
 
 
-# -- Path 3: Esc in the middle of a pick ------------------------------------------------------------
+# -- Path 3: Esc in the middle of a pick -----------------------------------------------------------
 def p3_start():
     Gui.Selection.clearSelection()
     s["nodes"] = nodes()
@@ -193,7 +193,7 @@ def p3_starts_empty():
     h.press(QtCore.Qt.Key_Escape)
 
 
-# -- Path 4: values while the preview runs ----------------------------------------------------------
+# -- Path 4: values while the preview runs ---------------------------------------------------------
 def p4_start():
     Gui.Selection.clearSelection()
     h.ribbon("Rectangular Pattern")

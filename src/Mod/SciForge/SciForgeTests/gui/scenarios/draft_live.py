@@ -264,7 +264,7 @@ def dragged(label, expect_sign=None):
         )
 
 
-# -- box, the front face ----------------------------------------------------------------------------
+# -- box, the front face ---------------------------------------------------------------------------
 def box_build():
     Gui.activateWorkbench("SciForgeWorkbench")
     build("LiveBox", parts.BOX)
@@ -293,7 +293,7 @@ def box_dragged():
 box_dragged.wait_ms = 1000
 
 
-# -- box, its four sides, typed ----------------------------------------------------------------------
+# -- box, its four sides, typed --------------------------------------------------------------------
 def four_sides():
     p = panel()
     if p is None:
@@ -325,7 +325,7 @@ def four_exact():
     exact_ok("four sides", sd.drafted_box(4.0))
 
 
-# -- negative ------------------------------------------------------------------------------------------
+# -- negative --------------------------------------------------------------------------------------
 def negative_drag():
     drag(-5.0, "four sides, negative")
 
@@ -365,7 +365,7 @@ def moved_dragged():
 moved_dragged.wait_ms = 1000
 
 
-# -- Two Side, Symmetric, Parting Line ----------------------------------------------------------------
+# -- Two Side, Symmetric, Parting Line -------------------------------------------------------------
 SYM = [
     {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"center_rect": [0, 0, 30, 20]}]},
     {"op": "extrude", "id": "e1", "profile": "s1", "distance": 10, "direction": "symmetric"},
@@ -471,7 +471,7 @@ def parting_exact():
     h.task_button("Cancel")
 
 
-# -- pocket walls --------------------------------------------------------------------------------------
+# -- pocket walls ----------------------------------------------------------------------------------
 POCKET = parts.BOX + [
     {
         "op": "sketch",
@@ -518,7 +518,7 @@ def pocket_dragged():
 pocket_dragged.wait_ms = 1000
 
 
-# -- a curved wall ------------------------------------------------------------------------------------
+# -- a curved wall ---------------------------------------------------------------------------------
 ELLIPSE = [
     {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"ellipse": [0, 0, 12.0, 6.0]}]},
     {"op": "extrude", "id": "e1", "profile": "s1", "distance": 10.0},
@@ -549,7 +549,7 @@ def curved_dragged():
 curved_dragged.wait_ms = 2000
 
 
-# -- edited from the timeline ---------------------------------------------------------------------------
+# -- edited from the timeline ----------------------------------------------------------------------
 EDITED = parts.BOX + [
     {
         "op": "sf_draft",
@@ -613,7 +613,7 @@ def edit_done():
     h.check("the body ends with the fillet", S["b"].body.Tip is fillet)
 
 
-# -- past the steepest angle -----------------------------------------------------------------------------
+# -- past the steepest angle -----------------------------------------------------------------------
 def steep_build():
     build("LiveSteep", parts.PART)
 

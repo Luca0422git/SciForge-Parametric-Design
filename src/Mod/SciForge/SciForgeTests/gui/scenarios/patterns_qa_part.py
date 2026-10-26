@@ -71,7 +71,7 @@ def message():
     return p.message.text() if p is not None else ""
 
 
-# -- Path 8: a second body, the first body's hole patterned and mirrored -------------------------------
+# -- Path 8: a second body, the first body's hole patterned and mirrored ---------------------------
 def p8_sketch():
     h.fit()
     h.ribbon("Create Sketch")
@@ -213,7 +213,7 @@ def p8_mirror_done():
     s["v"] = vol(body1())
 
 
-# -- Path 9: the hole the steps repeat is deleted ----------------------------------------------------
+# -- Path 9: the hole the steps repeat is deleted --------------------------------------------------
 def p9_delete():
     button = ps.timeline_button("Extrude 2")
     if h.check("the hole in the timeline", button is not None, ps.timeline_titles()):
@@ -273,7 +273,7 @@ def p9_undo_delete():
         h.check("%s fine again" % title, kind == "", (kind, why))
 
 
-# -- Path 10: another command's key while a dialog is open ----------------------------------------------
+# -- Path 10: another command's key while a dialog is open -----------------------------------------
 def p10_start():
     Gui.Selection.clearSelection()
     s["n"] = len(ps.patterns())
