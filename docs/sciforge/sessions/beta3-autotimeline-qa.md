@@ -39,6 +39,8 @@ up to bc1bf483); `sf/at-recognize` merged again as it went on (see "Merges").
 | A modelled thread after at-recognize's merges (28b49f4d, dd0b0fe2) | **Regressions, fixed**: its new round-floor rule took the thread's flanks for a floor, then its tangled-hole rule took them for crossing features: no hole, base none, both times |
 | A finely exported STL (37,740 triangles) | **Bug, fixed**: start_rebuild 160 s and describe_reference 250 s with FreeCAD frozen; now refused at once over 10,000 triangles, with what to do |
 | Two rebuilds going on, the 3D view's right-click on one rebuilt body | **Bug, fixed**: Compare, Finish and Stop took the other one (the active body's) |
+| The rebuilt body renamed by the person half way; the original renamed half way | **Bug, fixed**: Finish put the original's old name on both |
+| check_design after a Finish that kept the original | **Bug, fixed**: "NOT OK: Body and Body (original) overlap" |
 
 ## Fixes (each with a check that fails on the code before it)
 
@@ -92,6 +94,12 @@ Commits on `sf/autotimeline-qa` (oldest first):
 23. The 3D view's right-click Compare / Finish / Stop act on the body under the mouse (with
     two rebuilds going on they took the active body's: "Stop rebuilding Arm?" on the base).
     Scenario `rebuild_qa_joints` D.
+24. Finish keeps a name the person gave the rebuild meanwhile ("Arm v2" became "Body001"),
+    and uses the original's name as it is now (renamed "Arm A", it was kept as "Body001
+    (original)"). Check `renamed`.
+25. An original Finish kept (hidden, under its rebuild) is no overlap in check_design /
+    interference (it said NOT OK, and an AI could move a body to "fix" it). Check
+    `follower` (its check_design).
 
 `SciForgeTests/headless/rebuild_qa.py` is run by `rebuild_e2e.main()` (so by
 `run_tests.sh --only headless / base`); `SCIFORGE_REBUILD_FILTER=qa` runs only it. On the code
