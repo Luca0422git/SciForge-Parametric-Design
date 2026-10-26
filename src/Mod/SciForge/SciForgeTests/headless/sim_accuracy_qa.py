@@ -1927,6 +1927,48 @@ def force_picks(doc, out):
     )
 
 
+@engine_check("reactions of two holds that share an edge, linear elements")
+def reactions_shared_edge(doc, out):
+    """The bracket held at its wall face and, by a second Fixed, at the wall's bottom face
+    (they share an edge), under gravity and a sideways force, with linear elements (4-node
+    tetrahedra: the loads at held nodes worked out for them too): the two reactions add up
+    to minus the loads; before, a node both held counted its whole force in both."""
+    import FreeCAD as App
+
+    from sciforge import simulation as sim
+
+    body = sb.make_body(doc, boxes((0, 0, 0, 6, 40, 60), (6, 0, 0, 54, 40, 6)), "Bracket")
+    study = sim.create_study(doc)
+    sim.set_settings(
+        study,
+        {"gravity": {"on": True, "direction": [0, 0, -1]}, "mesh": {"order": "linear"}},
+    )
+    wall = sb.one_face(body, lambda f: sb.near(f.CenterOfMass.x, 0))
+    foot = sb.one_face(body, lambda f: sb.near(f.CenterOfMass.z, 0) and f.CenterOfMass.x < 6)
+    sim.add_item(study, "constraint", "fixed", [(body, wall)], label="Wall")
+    sim.add_item(study, "constraint", "fixed", [(body, foot)], label="Foot")
+    sim.add_item(
+        study,
+        "load",
+        "force",
+        [(body, sb.one_face(body, lambda f: sb.near(f.CenterOfMass.x, 60)))],
+        {"direction": "vector", "vector": [0, 1, 0], "magnitude": 30.0},
+    )
+    m = sim.solve(study, timeout=900)
+    rho = sb.material(study, body)["density"] * 1e-12
+    weight = 9806.65 * rho * body.Shape.Volume
+    applied = App.Vector(0.0, 30.0, -weight)
+    total = App.Vector(*[m["reactions"]["Wall"][a] + m["reactions"]["Foot"][a] for a in "xyz"])
+    out.append(
+        (
+            "Wall + Foot + loads = %s N (loads %s)"
+            % (tuple(round(v, 6) for v in total + applied), tuple(round(v, 4) for v in applied)),
+            (total + applied).Length <= 0.002 * applied.Length,
+            m["reactions"],
+        )
+    )
+
+
 @engine_check("reactions on sliding planes")
 def reactions_on_planes(doc, out):
     """A quarter of a thick ring (inner 20, outer 40, 10 mm long) on Frictionless planes (its
