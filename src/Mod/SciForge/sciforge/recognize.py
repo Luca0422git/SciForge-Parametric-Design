@@ -169,7 +169,7 @@ def turned_frame(shape):
 
     dirs = []  # [direction, area]
     for face in shape.Faces:
-        kind = selectors.face_type(face)
+        kind = _face_kind(face)
         try:
             if kind == "plane":
                 d = selectors.face_normal(face)
@@ -324,7 +324,7 @@ class FaceFacts:
         self.index = index
         self.name = "Face%d" % (index + 1)
         self.face = face
-        self.kind = selectors.face_type(face)
+        self.kind = _face_kind(face)
         self.area = face.Area
         self.center = _t(face.CenterOfMass)
         self.normal = None  # planes: outward normal
@@ -337,8 +337,8 @@ class FaceFacts:
         self.semi = None  # cones: half angle (radians)
         self.apex = None
         self.minor = None  # tori
-        surface = face.Surface
         try:
+            surface = face.Surface
             if self.kind == "plane":
                 self.normal = core.unit(selectors.face_normal(face))
                 self.h = core.dot(self.center, self.normal)
@@ -568,13 +568,25 @@ class _Reader:
         t = time.time()
         plan = core.Plan(self.options.get("taken_ids") or ())
         features = []
-        self.plan_base(base, plan, features)
         kept_holes = [h for h in holes if h["id"] in removed["ok"]]
-        self.plan_holes(kept_holes, plan, features)
         kept_chamfers = [c for c in chamfers if c["id"] in removed["ok"]]
-        self.plan_chamfers(kept_chamfers, removed, plan, features)
         kept_blends = [b for b in blends if b["id"] in removed["ok"]]
-        self.plan_fillets(kept_blends, removed, plan, features)
+        for what, stage, args in (
+            ("base", self.plan_base, (base, plan, features)),
+            ("holes", self.plan_holes, (kept_holes, plan, features)),
+            ("chamfers", self.plan_chamfers, (kept_chamfers, removed, plan, features)),
+            ("fillets", self.plan_fillets, (kept_blends, removed, plan, features)),
+        ):
+            try:  # (each stage on its own: one that fails does not stop the others)
+                stage(*args)
+            except Exception as exc:
+                import traceback
+
+                warn("recognize: the %s not planned: %s\n%s" % (what, exc, traceback.format_exc()))
+                self.notes.append(
+                    "The %s could not be planned (%s): make them yourself after the rest of "
+                    "the plan." % (what, exc)
+                )
         for b in getattr(self, "bends", []):
             item = {k: v for k, v in b.items() if not k.startswith("_")}
             item["faces"] = self.face_refs(b["_faces"])
@@ -1099,7 +1111,7 @@ class _Reader:
                 continue
             for key in self.topo.shared(f.index, j):
                 edge = self.topo.edges[key]
-                if type(edge.Curve).__name__ not in ("Line", "LineSegment"):
+                if _curve_name(edge) not in ("Line", "LineSegment"):
                     continue
                 if self.topo.smooth(key):
                     continue
@@ -1303,7 +1315,7 @@ class _Reader:
             length = 0.0
             for name in names:
                 e = base.getElement(name)
-                if type(e.Curve).__name__ in ("Line", "LineSegment"):
+                if _curve_name(e) in ("Line", "LineSegment"):
                     d = _t(e.Vertexes[-1].Point - e.Vertexes[0].Point)
                     if core.parallel(d, axis, 1e-6):
                         length += e.Length
@@ -1953,8 +1965,12 @@ class _Reader:
                 d1, d2 = d2, d1
             by_size.setdefault((d1, d2), []).append(c)
         for (d1, d2), group in sorted(by_size.items(), key=lambda kv: -kv[0][0]):
-            edges = self._sharp_edges(shape, group) if shape is not None else []
-            sel = self._edge_selector(shape, edges) if edges else None
+            try:
+                edges = self._sharp_edges(shape, group) if shape is not None else []
+                sel = self._edge_selector(shape, edges) if edges else None
+            except Exception as exc:
+                warn("recognize: chamfer edges not found (%s)" % exc)
+                edges, sel = [], None
             fids = [c["id"] for c in group]
             if sel is None:
                 self.notes.append(
@@ -2056,8 +2072,12 @@ class _Reader:
                 shape = self._defeature(later)
             if k == 0:
                 first_shape = shape
-            edges = self._sharp_edges(shape, group) if shape is not None else []
-            sel = self._edge_selector(shape, edges) if edges else None
+            try:
+                edges = self._sharp_edges(shape, group) if shape is not None else []
+                sel = self._edge_selector(shape, edges) if edges else None
+            except Exception as exc:
+                warn("recognize: fillet edges not found (%s)" % exc)
+                edges, sel = [], None
             fids = [b["id"] for b in group]
             radius = group[0]["radius"]
             if sel is None:
@@ -2201,7 +2221,7 @@ class _Reader:
                 return False
 
         edges = [shape.getElement(n) for n in names]
-        kinds = {selectors.edge_type(e) for e in edges}
+        kinds = {_edge_kind(e) for e in edges}
         if len(want) == len(shape.Edges):
             return {"all": True, "count": len(want)}
         kind = kinds.pop() if len(kinds) == 1 else None
@@ -2233,7 +2253,11 @@ class _Reader:
         for spec in candidates:
             if picks(spec):
                 return spec
-        refs = geometry_facts.stable_refs(shape, "edges", wanted=want)
+        try:
+            refs = geometry_facts.stable_refs(shape, "edges", wanted=want)
+        except Exception as exc:  # (an edge FreeCAD has no curve type for, ...)
+            warn("recognize: edge refs not made (%s)" % exc)
+            return None
         parts = [refs.get(n) for n in names]
         if any(p is None for p in parts):
             return None
@@ -2300,6 +2324,15 @@ def _chain_complete(shape, names):
 def _natural(name):
     digits = "".join(ch for ch in name if ch.isdigit())
     return (name.rstrip("0123456789"), int(digits) if digits else 0)
+
+
+def _curve_name(edge):
+    """The edge's curve type name ("Line", "Circle"...), "other" when FreeCAD has no Python
+    type for it (an offset or intersection curve: "undefined curve type")."""
+    try:
+        return type(edge.Curve).__name__
+    except Exception:
+        return "other"
 
 
 def _vertex(point):
@@ -2387,9 +2420,7 @@ def _line_key(f):
 
 def _same_surface(a, b, tol=1e-6):
     """Two faces lie on one surface (a plane, a cylinder...)."""
-    from .ai.ops import selectors
-
-    ka, kb = selectors.face_type(a), selectors.face_type(b)
+    ka, kb = _face_kind(a), _face_kind(b)
     if "bspline" in (ka, kb) and {ka, kb} <= {"bspline", "plane"}:
         na = _flat_normal(a) if ka == "bspline" else core.unit(_t(a.Surface.Axis))
         nb = _flat_normal(b) if kb == "bspline" else core.unit(_t(b.Surface.Axis))
@@ -2480,9 +2511,23 @@ def _chamfer_distances(fa, fb, ea, eb):
 
 # -- prismatic and turned bases -----------------------------------------------------------------
 def _face_kind(face):
+    """The face's surface kind (plane, cylinder...), "other" when FreeCAD has no Python type
+    for its surface ("undefined surface type")."""
     from .ai.ops import selectors
 
-    return selectors.face_type(face)
+    try:
+        return selectors.face_type(face)
+    except Exception:
+        return "other"
+
+
+def _edge_kind(edge):
+    from .ai.ops import selectors
+
+    try:
+        return selectors.edge_type(edge)
+    except Exception:
+        return "other"
 
 
 def _levels(solid, axis_name, allow_taper=False):
@@ -2703,7 +2748,7 @@ def _wire_loop(wire, plane):
     edges = list(wire.OrderedEdges)
     if len(edges) == 1 and edges[0].isClosed():
         e = edges[0]
-        if type(e.Curve).__name__ == "Circle":
+        if _curve_name(e) == "Circle":
             return [{"kind": "circle", "c": p2(e.Curve.Center), "r": e.Curve.Radius}]
         return [{"kind": "other", "a": p2(e.Vertexes[0].Point), "b": p2(e.Vertexes[0].Point)}]
     ends = [(e.Vertexes[0].Point, e.Vertexes[-1].Point) for e in edges]
@@ -2722,7 +2767,7 @@ def _wire_loop(wire, plane):
             start, end = a, b
         else:
             start, end = b, a
-        kind = type(e.Curve).__name__
+        kind = _curve_name(e)
         if kind in ("Line", "LineSegment"):
             loop.append({"kind": "line", "a": p2(start), "b": p2(end)})
         elif kind == "Circle":
@@ -3605,7 +3650,10 @@ def _revolved(solid):
         ok = True
         round_faces = 0
         for face in solid.Faces:
-            kind = selectors.face_type(face)
+            kind = _face_kind(face)
+            if kind not in ("plane", "cylinder", "cone", "torus", "sphere"):
+                ok = False
+                break
             s = face.Surface
             if kind == "plane":
                 n = core.unit(selectors.face_normal(face))
@@ -3613,7 +3661,7 @@ def _revolved(solid):
                     ok = False
                 else:
                     for e in face.Edges:  # its edges: circles about the axis
-                        if type(e.Curve).__name__ != "Circle":
+                        if _curve_name(e) != "Circle":
                             ok = False
                         elif not _on_axis(_t(e.Curve.Center), d) or not core.parallel(
                             _t(e.Curve.Axis), d, 1e-7
