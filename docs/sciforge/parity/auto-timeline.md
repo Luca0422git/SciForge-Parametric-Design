@@ -167,21 +167,28 @@ Every solid of every STEP file in the repository (made by other programs: the AS
 assembly, a part library of electronic packages, a forged lever, the Pi 5 case) and of four of
 FreeCAD's example documents (the CAM hole puzzle, PartDesignExample, EngineBlock,
 AssemblyExample), 71 distinct solids from 36 files, each described and rebuilt from the plan
-through the headless AI executor (a scratch sweep; four of them are also in the benchmark):
+through the headless AI executor (a scratch sweep; seven of them are also in the benchmark):
 
 | Result | Solids | Which |
 |---|---|---|
-| rebuilt exactly | 19 | the Pi 5 case (both parts), PartDesignExample, EngineBlock's block, two assembly parts, IDF bodies with chamfers and patterns |
+| rebuilt exactly | 23 | the Pi 5 case (both parts), PartDesignExample, EngineBlock's block, six assembly parts (four of them rods and tubes that end in an eye, placed at angles), IDF bodies with chamfers and patterns |
 | exactly, faces split in the file | 12 | the AS1 plates, brackets and nuts (each bore in two half faces), CAM test blocks, an assembly bracket: the same volume and surfaces, whole faces in the rebuild |
 | within 1e-7 of the volume | 4 | a lead with tiny two-distance chamfers, two excavator links whose tangent arcs missed each other by 5e-7 mm |
 | a step stopped | 1 | an excavator bucket (97 faces): a fillet's selector found 5 edges where it expected 1 (the step stops; nothing is rounded wrongly) |
-| base not read (said so) | 35 | free-form bodies (SMD chips, a capacitor, the forged lever), molded IC bodies drafted both ways from a parting line, a CAM test part of turned and hexagonal features, assembly parts where a round boss crosses a rod; their holes, fillets and chamfers are still listed |
+| base not read (said so) | 31 | free-form bodies (SMD chips, a capacitor, the forged lever), molded IC bodies drafted from a parting line with leads on them, CAM test parts with oblique holes, a bracket whose round ribs stay in it; their holes, fillets and chamfers are still listed, and a note names the axis most of the part fits |
 
-Before this sweep: a curve type FreeCAD has no Python class for stopped the whole reading, a
+The BREP files in the repository (FreeCAD's model-refine test shapes: unrefined booleans, two
+3D-printer parts): 27 solids, 18 rebuilt exactly (two of them in the benchmark); the rest are
+free-form, a bore crossed by a ring of slots (left in the base), a grid of 144 blocks, slanted
+features, and a 3D-printer part whose root fillets the original made before the cut that trims
+them (Known gaps).
+
+Before these sweeps: a curve type FreeCAD has no Python class for stopped the whole reading, a
 base ended 1e-6 mm short of the boss on it (two snaps in a row), tangent arcs did not close a
 sketch, a hole whose rim is rounded started below the round, slanted groove faces read as
-chamfers filled the groove (+15 % volume), and three files took 26 to 169 s; all fixed (see the
-session log).
+chamfers filled the groove (+15 % volume), three files took 26 to 169 s, and one BREP file
+crashed FreeCAD (a round wall in 41 pieces read as a fillet: OpenCASCADE's defeaturing ran out
+of memory); all fixed (see the session log).
 
 ### Known gaps
 
@@ -198,6 +205,7 @@ session log).
 | A face split in two in the original (a split face, a face cut for a sketch region) | the plan rebuilds it as one face | volume exact; the bench's face check fails on those golden models (`direct_split_face_*`) |
 | Meshes | only parts that are prismatic or turned once their holes are closed, from CAD-quality meshes (not scans); fillets across a mesh are not recovered | open meshes are refused with repair advice; the rest is read as the faceted solid and listed |
 | Speed of fillet-heavy and complex parts | OpenCASCADE's defeaturing: one call for all fillets (in chunks it is slower), which cannot be interrupted | a 202-face part with 98 fillet faces takes about 19 s (15 s of it defeaturing); a 434-face connector about 45 s |
+| A fillet the original made before a cut that trims it (the root fillets of a 3D-printer part's uprights, cut short by the opening in its plate) | the plan rounds edges last, as Fusion users do; the fillet then runs into the cut's edge and OpenCASCADE refuses it | the step stops with the largest radius that fits (nothing is rounded wrongly); the volume is short by the fillet's material |
 | A fillet or chamfer step whose short selector ("the edge along X at the top") finds more edges on the rebuilt part | the edges are picked on the part as it will be; when an earlier step rebuilt something slightly differently, more edges can match | the step stops with a count error (never rounds the wrong edges); pick the edges with query_geometry |
 
 ## Reference, compare and finish
@@ -278,15 +286,17 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
   arguments checked by the catalogue, frames and Euler angles, circle / cylinder fits, arcs
   fitted on mesh sections, round values beyond a value, where a base extrude may end inside a
   feature along another axis); `SciForgeTests/headless/recognize_bench.py`
-  (real FreeCAD 1.1.4: 50 parts built, sent through STEP and back as bodies without a
+  (real FreeCAD 1.1.4: 52 parts built, sent through STEP and back as bodies without a
   timeline, described, rebuilt from the plan by the headless AI executor, compared: volume
   within 0.1 % and every face of the original matched; 4 solids of STEP files made by other
-  programs and 3 parts of FreeCAD's example assembly placed at angles, compared face by face
-  or surface by surface; 5 meshes of golden models through recognize_mesh;
-  the contract on odd input; describe() on a 300-face part under 5 s), run by
+  programs, 3 parts of FreeCAD's example assembly placed at angles and 2 BREP parts of its
+  model-refine tests, compared face by face or surface by surface; 5 meshes of golden models
+  through recognize_mesh; the contract on odd input, with the part that crashed FreeCAD once
+  answered in under 30 s; describe() on a 300-face part under 5 s), run by
   `tools/sciforge/run_tests.sh --only recognize` and at the end of `--only headless` / `--only
-  base`. Two scratch sweeps (not in the suite) found the bugs listed in the session log: every
-  golden model that builds one solid (505 described, 404 rebuilt exactly, 418 with a base read;
+  base`. Scratch sweeps (not in the suite) found the bugs listed in the session log: the 27
+  BREP solids above, every golden model that builds one solid (505 described, 406 rebuilt
+  exactly, 420 with a base read, no crash and no regression between runs;
   the rest are free-form, sheet metal bent both ways or split faces) and the 71 real solids
   above.
 

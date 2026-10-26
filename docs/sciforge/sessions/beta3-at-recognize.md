@@ -117,6 +117,10 @@
   in stacked pieces still is one). The same part's central bore, crossed by a ring of 13 slots,
   then took 181 s (266 s on the refined copy) in one defeaturing call: a hole whose faces meet
   more than 16 other faces is left in the base without trying (7 s for the whole describe()).
+- The BREP files in the repository (FreeCAD's model-refine test shapes: unrefined booleans, two
+  3D-printer parts) were swept too: 27 solids, 18 rebuilt exactly, no crash after the fix
+  above. The Y rod mount's root fillets (r 3.997) were made before the opening in its plate cut
+  them short: the plan rounds edges last, OpenCASCADE refuses the fillet there (a Known gap).
 - The QA builder found that `Face.cutHoles` answers None (it changes the face in place):
   `_drop_holes` took the answer, so every face that keeps another loop failed and its holes
   went to defeaturing; I took their fix and fixed the same mistake in `_fill_copies`.
@@ -126,24 +130,23 @@
 
 ## Tests
 
-- `tools/sciforge/run_tests.sh --freecad /home/user/fc/freecad --only base` on my branch
-  (21:59-22:11 UTC, the code of e59e4f28): golden models 614 pass, 2 xfail (expected);
-  headless AI tools 284 calls, 0 failed (117 tools); documentation examples 141 items, 0
-  failed; AI agent end to end (MCP) 81 checks, 0 failed; **recognition benchmark 61 parts, 0
-  failed**; GUI smoke 79 checks, journey 25, restarts 8 + 9, all pass. The unit stage failed on
-  two AI-docs contract tests: the generated copy of the parity doc
-  (`docs/ai/user/parity/auto-timeline.md`) was stale after my edits; regenerated with
-  `tools/sciforge/make_ai_docs.py`, `--only unit` then passed (2519 tests, 9 skipped).
-- `SciForgeTests/unit/test_recognize_core.py`: 51 tests, OK.
-- Recognition benchmark: 49 parts built from golden steps or my own (the VEX-like channel,
-  plate and angle, a keyed shaft, a pipe with a port, a clevis, opposed blind holes, a shaft
-  collar, chamfered round edges, the 300-face plate...), sent through STEP and back, described,
-  rebuilt by the headless AI executor: every one within 0.1 % volume with every face matched;
-  4 solids of real STEP files from other programs (surface by surface); 5 meshes; the
-  contract on odd input. The 300-face plate: describe 2.1 s (limit 5 s). Table: the parity
-  doc's Benchmark section.
-- Scratch sweeps (not in the suite): every golden model that builds one solid: 505 described,
-  404 rebuilt exactly (391 earlier in the session), 418 with a base read, 0 crashes, no
-  regression between runs; 71 solids of 36 real files: 19 exact, 12 exact with faces split in
-  the file, 4 within 1e-7 of the volume, 1 step stopped (a fillet selector), 35 base not read
-  (said so).
+- BASE_RUN_PLACEHOLDER
+- Earlier, `--only base` at 21:59-22:11 UTC (the code of e59e4f28): the same stages all passed
+  but the unit stage, whose two AI-docs contract tests failed on a stale generated copy of the
+  parity doc (`docs/ai/user/parity/auto-timeline.md`): after every edit of the parity doc,
+  `tools/sciforge/make_ai_docs.py` must be run (then `--only unit` passed: 2519 tests).
+- `SciForgeTests/unit/test_recognize_core.py`: 56 tests, OK (5 new: where a base extrude may end).
+- Recognition benchmark (`--only recognize`): 52 parts built from golden steps or my own (the
+  VEX-like channel, plate and angle, a keyed shaft, a pipe with a port, a clevis, opposed blind
+  holes, a shaft collar, chamfered round edges, a link rod, the 300-face plate...), sent through
+  STEP and back, described, rebuilt by the headless AI executor: every one within 0.1 % volume
+  with every face matched; 9 real solids (4 STEP files from other programs, 3 parts of FreeCAD's
+  example assembly placed at angles, 2 BREP parts) face by face or surface by surface; 5 meshes;
+  the contract on odd input, with the BREP part that crashed FreeCAD answered in under 30 s.
+  Table: the parity doc's Benchmark section.
+- Scratch sweeps (not in the suite), with the final code: every golden model that builds one
+  solid: 601 models, 505 described, 406 rebuilt exactly (391 earlier in the session), 420 with
+  a base read, 0 crashes, no regression between runs; 71 solids of 36 real files: 23 exact
+  (19 before the rods with an eye), 12 exact with faces split in the file, 4 within 1e-7 of the
+  volume, 1 step stopped (a fillet selector), 31 base not read (said so); 27 BREP solids: 18
+  exact, no crash.

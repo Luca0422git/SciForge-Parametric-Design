@@ -134,6 +134,9 @@ def describe(shape, options=None):
             return _describe_turned(shape, options, frame, started)
     try:
         _Reader(shape, options).read(out)
+    except RecognizeError as exc:  # (a shape with no solid: said, not a crash)
+        log("recognize: %s" % exc)
+        out["notes"].append("%s Nothing to rebuild: describe a solid." % exc)
     except Exception as exc:  # never raise for a shape it does not understand
         import traceback
 
@@ -467,7 +470,7 @@ class _Reader:
         self.original = shape
         solids = list(shape.Solids)
         if not solids:
-            raise RecognizeError("The shape has no solid.")
+            raise RecognizeError("The shape has no solid (only faces or a shell).")
         if len(solids) > 1:
             solids.sort(key=lambda s: -s.Volume)
             self.notes.append(
@@ -1220,11 +1223,12 @@ class _Reader:
             for f in self.facts
             if f.kind == "cylinder" and f.index not in skip and f.radius and f.span is not None
         ]
-        out = set()
+        out, seen = set(), set()
         for f in cyl:
-            if f.index in out or f.span >= math.pi - 1e-3:
+            if f.index in seen or f.span >= math.pi - 1e-3:
                 continue
             same = [g for g in cyl if abs(g.radius - f.radius) < 1e-6 and _coaxial(f, g)]
+            seen.update(g.index for g in same)  # (each wall weighed once)
             if len(same) < 2:
                 continue
             try:
@@ -1418,6 +1422,7 @@ class _Reader:
                     "why": "a %s crossed by other features, left in the base" % h["kind"],
                 }
             )
+            self.listed.update(h["_faces"])
         return out
 
     def _tangled(self, group, most=16):

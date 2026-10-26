@@ -1028,6 +1028,8 @@ REAL_FILES = [
     ("data/examples/AssemblyExample.FCStd", "Shape016", "a rod with an eye, placed at 45 degrees"),
     ("data/examples/AssemblyExample.FCStd", "Shape020", "a tube whose bore ends on its eye"),
     ("data/examples/AssemblyExample.FCStd", "Shape022", "a tube that ends inside its eye"),
+    ("data/tests/ModelRefineTests/holesInFace2.brep", 0, "a plate with holes, faces split"),
+    ("data/tests/ModelRefineTests/shelf.brep", 0, "a shelf, faces split"),
 ]
 
 
@@ -1114,6 +1116,10 @@ def bench_real(rel, index, title):
             return row
         if isinstance(index, str):  # an object of a FreeCAD document
             solid = document_solid(path, index)
+        elif path.lower().endswith(".brep"):
+            import Part
+
+            solid = Part.read(path).Solids[index]
         else:
             solid = distinct_solids(path)[index]
         row["faces"] = len(solid.Faces)
@@ -1207,6 +1213,19 @@ def bench_contract():
         out = answers(box, {"taken_ids": ["Sketch1", "Extrude1"]})
         ids = [st.get("id") for st in (out or {}).get("plan", [])]
         check(ids[:2] == ["Sketch2", "Extrude2"], "taken_ids not used: %s" % ids)
+        root = repo_root()
+        split = root and os.path.join(
+            root, "data", "tests", "ModelRefineTests", "refine_breaks_cylinder.brep"
+        )
+        if split and os.path.exists(split):
+            # its outer wall in 41 pieces was read as a fillet whose defeaturing ran out of
+            # memory and crashed FreeCAD; its bore crossed by 13 slots took 3 minutes
+            began = time.time()
+            out = answers(Part.read(split).Solids[0])
+            spent = time.time() - began
+            check(spent < 30.0, "the split-wall part took %.1f s" % spent)
+            radii = [f.get("radius") for f in (out or {}).get("features", [])]
+            check(30.0 not in radii, "its split outer wall was read as a fillet")
         open_mesh = Mesh.Mesh(box.tessellate(0.1))
         open_mesh.removeFacets([0])  # (a hole in the mesh: no solid)
         try:
