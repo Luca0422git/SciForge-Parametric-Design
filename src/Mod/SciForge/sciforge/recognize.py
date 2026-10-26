@@ -585,8 +585,10 @@ class _Reader:
 
     # -- holes ----------------------------------------------------------------------------------
     def find_holes(self):
-        """Concave round faces that go all the way round, grouped by their axis line, with the
-        coaxial faces that make a counterbore, a countersink, a drill point or a flat bottom."""
+        """Concave round faces that go all the way round, grouped by their axis line (one
+        group while only air lies between them: the same hole through both sides of a
+        channel), with the coaxial faces that make a counterbore, a countersink, a drill point
+        or a flat bottom."""
         bores = {}  # (line key, radius) -> [face indexes]
         for f in self.facts:
             if f.kind == "cylinder" and f.concave and f.radius:
@@ -596,22 +598,50 @@ class _Reader:
         used = set()
         lines = {}
         for (line, radius), idx in bores.items():
-            span = sum(self.facts[i].span or 0 for i in idx)
-            if span < 2 * math.pi - 1e-4:
-                continue  # a part of a round face (a notch, an inside corner): no hole
-            lines.setdefault(line, []).append((radius, idx))
+            for run in self._bore_runs(idx):
+                span = sum(self.facts[i].span or 0 for i in run)
+                if span < 2 * math.pi - 1e-4:
+                    continue  # a part of a round face (a notch, an inside corner): no hole
+                lines.setdefault(line, []).append((radius, run))
         for line, bore_list in lines.items():
-            bore_list.sort()
-            radius, idx = bore_list[0]
-            if any(i in used for i in idx):
-                continue
-            hole = self._hole(idx, bore_list[1:])
-            if hole is None:
-                continue
-            for i in hole["_faces"]:
-                used.add(i)
-            holes.append(hole)
+            bore_list.sort(key=lambda b: (b[0], min(b[1])))
+            for n, (radius, idx) in enumerate(bore_list):
+                if any(i in used for i in idx):
+                    continue  # (the wider bore of a counterbore already read)
+                bigger = [
+                    b
+                    for b in bore_list[n + 1 :]
+                    if b[0] > radius + 1e-9 and not any(i in used for i in b[1])
+                ]
+                hole = self._hole(idx, bigger)
+                if hole is None:
+                    continue
+                used.update(hole["_faces"])
+                holes.append(hole)
         return holes
+
+    def _bore_runs(self, idx):
+        """The faces of one bore (one line, one radius) in runs along its axis that no
+        material separates (two blind holes drilled from both sides are two holes)."""
+        if len(idx) < 2:
+            return [list(idx)]
+        f0 = self.facts[idx[0]]
+        axis, origin = f0.axis, f0.point
+        spans = sorted(self._extent([i], axis, origin) + (i,) for i in idx)
+        runs = [[spans[0]]]
+        for a, b, i in spans[1:]:
+            top = max(x[1] for x in runs[-1])
+            if a > top + 1e-6:
+                mid = core.add(origin, core.mul(axis, 0.5 * (top + a)))
+                try:
+                    between = self.shape.isInside(_vec(mid), 1e-6, False)
+                except Exception:
+                    between = False
+                if between:  # material between: another hole
+                    runs.append([(a, b, i)])
+                    continue
+            runs[-1].append((a, b, i))
+        return [[i for _a, _b, i in run] for run in runs]
 
     def _extent(self, indexes, axis, origin):
         """(lowest, highest) position of the faces' corners along the axis (from origin)."""
@@ -3036,7 +3066,7 @@ def _open_piece_op(piece, solid, plane, operation, part_lo, part_hi):
     else:
         return None
     # a boss may start anywhere inside the part: a round value (the origin plane, ...)
-    tries = [far] if operation == "cut" else _rounder(far, not above)
+    tries = [far] if operation == "cut" else core.rounder_values(far, not above)
     tol = 1e-7 * solid.Volume + 1e-6
     found = None
     for value in tries:
@@ -3064,24 +3094,6 @@ def _open_piece_op(piece, solid, plane, operation, part_lo, part_hi):
         op["extrude"] = {"through_all": True, "operation": "cut", "flip": True}
         op["offset"] = hi
     return [op]
-
-
-def _rounder(value, down):
-    """value and rounder values beyond it (below it when down), roundest first: the origin
-    plane, then multiples of 10, 5 and 1, then value itself."""
-    out = []
-    if (0.0 <= value + 1e-9) if down else (0.0 >= value - 1e-9):
-        out.append(0.0)
-    for unit in (10.0, 5.0, 1.0):
-        if down:
-            v = math.floor(value / unit + 1e-9) * unit
-        else:
-            v = math.ceil(value / unit - 1e-9) * unit
-        if all(abs(v - o) > 1e-9 for o in out):
-            out.append(v)
-    if all(abs(value - o) > 1e-9 for o in out):
-        out.append(value)
-    return out
 
 
 def _same_region(a, b):
@@ -3148,8 +3160,12 @@ def _touching(a, b):
     import Part
 
     try:
-        gap = Part.makeCompound(a["faces"]).distToShape(Part.makeCompound(b["faces"]))[0]
-        return gap < 1e-6
+        ca, cb = Part.makeCompound(a["faces"]), Part.makeCompound(b["faces"])
+        ba, bb = ca.BoundBox, cb.BoundBox
+        ba.enlarge(1e-5)
+        if not ba.intersect(bb):
+            return False  # (far apart: no distance to work out)
+        return ca.distToShape(cb)[0] < 1e-6
     except Exception:
         return True
 

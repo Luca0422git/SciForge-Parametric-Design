@@ -60,6 +60,24 @@ def nice(value, tol):
     return snap(round(value, 4), 1e-9)
 
 
+def rounder_values(value, down):
+    """value and rounder values beyond it (below it when down), roundest first: the origin
+    plane, then multiples of 10, 5 and 1, then value itself."""
+    out = []
+    if (0.0 <= value + 1e-9) if down else (0.0 >= value - 1e-9):
+        out.append(0.0)
+    for unit in (10.0, 5.0, 1.0):
+        if down:
+            v = math.floor(value / unit + 1e-9) * unit
+        else:
+            v = math.ceil(value / unit - 1e-9) * unit
+        if all(abs(v - o) > 1e-9 for o in out):
+            out.append(v)
+    if all(abs(value - o) > 1e-9 for o in out):
+        out.append(value)
+    return out
+
+
 def snap_point(p, tol=TOL):
     return tuple(snap(c, tol) for c in p)
 
