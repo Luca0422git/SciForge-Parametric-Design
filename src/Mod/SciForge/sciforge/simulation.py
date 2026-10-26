@@ -42,6 +42,7 @@ everything that touches the document on the caller's thread (`Job.poll()` from a
 open is closed first), and its temporary folder is removed whatever happens.
 """
 
+import functools
 import hashlib
 import json
 import os
@@ -2283,6 +2284,8 @@ class Job:
         self._straight = False  # mesh again with straight-sided elements (bad curved ones)
         self._curved = None  # (made straight, still bad, error) of the check before a solve
         self._curved_text = None  # its note
+        self._getter = None  # FreeCAD's mesh tables for the input (made a turn earlier)
+        self._results_step = None  # the next turn of reading the results
         self._solid_nodes = {}  # model solid index -> its mesh nodes (from Gmsh's groups)
         self._groups = {}  # Gmsh's groups: model faces / edges / solids -> elements, nodes
         self._previous_run = None  # adaptive refinement: the last pass's run, until the next
@@ -2591,11 +2594,21 @@ class Job:
                 return found
             return real_search(femmesh, ref)
 
+        if self._getter is None:
+            # FreeCAD's tables of the mesh (seconds on a big one) on this turn, the input on
+            # the next: the window gets a moment between the two
+            meshtools.get_femnodes_by_refshape = search
+            try:
+                self._getter = meshsetsgetter.MeshSetsGetter(
+                    self._analysis, solver, self._mesh, membertools.AnalysisMember(self._analysis)
+                )
+            finally:
+                meshtools.get_femnodes_by_refshape = real_search
+            self.timings["input"] = time.time() - t
+            return
+        getter, self._getter = self._getter, None
         meshtools.get_femnodes_by_refshape = search
         try:
-            getter = meshsetsgetter.MeshSetsGetter(
-                self._analysis, solver, self._mesh, membertools.AnalysisMember(self._analysis)
-            )
             getter.get_mesh_sets()
             # the writer makes a second getter of its own "for compatibility" that CalculiX's
             # writer never reads (4 s of tables on a big mesh): it gets this one
@@ -2622,7 +2635,7 @@ class Job:
         self._reactions = cards["reactions"]
         self.notes += cards["notes"]
         self._input = os.path.splitext(os.path.basename(path))[0]
-        self.timings["input"] = time.time() - t
+        self.timings["input"] = self.timings.get("input", 0.0) + time.time() - t
         self.stage, self.message = "solve", "Solving"
         env = dict(os.environ)
         if not env.get("OMP_NUM_THREADS"):
@@ -2646,6 +2659,9 @@ class Job:
         )
 
     def _stage_results(self):
+        if self._results_step is not None:  # (the next turn of reading the results)
+            step, self._results_step = self._results_step, None
+            return step()
         t = time.time()
         frd = os.path.join(self.work, self._input + ".frd")
         if self._returncode not in (0, None) or not os.path.isfile(frd) or not os.path.getsize(frd):
@@ -2683,17 +2699,30 @@ class Job:
         # node at once with numpy (FreeCAD's loop over the nodes took 9 s for 140 000 nodes)
         from femresult import resulttools
 
-        real_vm, real_principal = resulttools.add_von_mises, resulttools.add_principal_stress_std
+        real = (
+            resulttools.add_von_mises,
+            resulttools.add_principal_stress_std,
+            resulttools.add_disp_apps,
+            resulttools.compact_result,
+        )
         importCcxFrdResults.setupPipeline = lambda *args, **kwargs: None
         resulttools.add_von_mises = _fast_von_mises
         resulttools.add_principal_stress_std = _fast_principal_stresses
+        resulttools.add_disp_apps = _fast_displacement_lengths
+        # FreeCAD renumbers the result mesh without gaps (seconds on a big mesh): on the next
+        # turn (nothing in between reads the numbering)
+        resulttools.compact_result = lambda res_obj: res_obj
         try:
             importCcxFrdResults.importFrd(frd, self._analysis, "Sim")
         finally:
             importCcxFrdResults.read_frd_result = real_read
             importCcxFrdResults.setupPipeline = real_pipeline
-            resulttools.add_von_mises = real_vm
-            resulttools.add_principal_stress_std = real_principal
+            (
+                resulttools.add_von_mises,
+                resulttools.add_principal_stress_std,
+                resulttools.add_disp_apps,
+                resulttools.compact_result,
+            ) = real
             self._frd_data = None
         made = [o for o in self.doc.Objects if o.Name not in before]
         result = next((o for o in made if o.isDerivedFrom("Fem::FemResultObject")), None)
@@ -2719,6 +2748,22 @@ class Job:
                         "total": (fx * fx + fy * fy + fz * fz) ** 0.5,
                     }
         self.timings["results"] = time.time() - t
+        self._results_step = functools.partial(self._results_compact, result, reactions)
+
+    def _results_compact(self, result, reactions):
+        """(results, second turn) FreeCAD's renumbering of the result mesh."""
+        from femresult import resulttools
+
+        t = time.time()
+        if not result.MassFlowRate:  # (as FreeCAD's import does it)
+            resulttools.compact_result(result)
+        self.timings["results"] = self.timings.get("results", 0.0) + time.time() - t
+        self._results_step = functools.partial(self._results_finish, result, reactions)
+
+    def _results_finish(self, result, reactions):
+        """(results, last turn) the checks, the safety factor, the summary, the run linked to
+        the study (or the next adaptive pass)."""
+        t = time.time()
         try:
             moved = max(result.DisplacementLengths) if result.DisplacementLengths else 0.0
         except Exception:
@@ -2736,6 +2781,7 @@ class Job:
         if plan is not None and self._adapt(result, plan):
             return  # (another pass, on a mesh refined where the result changes the most)
         _close_open_transaction(self.doc)
+        self.timings["results"] = self.timings.get("results", 0.0) + time.time() - t
         self.summary = _finish(self.study, result, self._mesh, self._owners, self, reactions)
         _remove_run(self.study, "SimRun")
         _remove_run(self.study, "SimMeshRun")
@@ -2860,6 +2906,7 @@ class Job:
                 except Exception:
                     pass
         self._analysis = self._previous_run = None
+        self._getter = self._results_step = None
         shutil.rmtree(self.work, ignore_errors=True)
         return state
 
@@ -2884,6 +2931,48 @@ def _stress_arrays(res_obj):
         ],
         dtype=float,
     )
+
+
+def _fast_stats(values):
+    """simulation_core.stats with numpy, the same answer (15 results of 130 000 nodes took a
+    second in plain Python)."""
+    import numpy as np
+
+    try:
+        a = np.asarray(values, dtype=float)
+    except (TypeError, ValueError):
+        return core.stats(values)
+    if a.ndim != 1:
+        return core.stats(values)
+    ok = ~np.isnan(a)
+    count = int(ok.sum())
+    if not count:
+        return {"min": None, "max": None, "min_index": -1, "max_index": -1, "count": 0}
+    lo_i = int(np.argmin(np.where(ok, a, np.inf)))
+    hi_i = int(np.argmax(np.where(ok, a, -np.inf)))
+    if np.isnan(a[lo_i]) or np.isnan(a[hi_i]):  # (only infinities besides NaN)
+        return core.stats(values)
+    return {
+        "min": float(a[lo_i]),
+        "max": float(a[hi_i]),
+        "min_index": lo_i,
+        "max_index": hi_i,
+        "count": count,
+    }
+
+
+def _fast_displacement_lengths(res_obj):
+    """FreeCAD's resulttools.add_disp_apps, for every node at once (it called numpy once per
+    node: 1.3 s for 130 000 nodes)."""
+    import numpy as np
+
+    vectors = res_obj.DisplacementVectors
+    if not vectors:
+        res_obj.DisplacementLengths = []
+        return res_obj
+    a = np.array([(v.x, v.y, v.z) for v in vectors], dtype=float)
+    res_obj.DisplacementLengths = np.sqrt((a * a).sum(axis=1)).tolist()
+    return res_obj
 
 
 def _fast_von_mises(res_obj):
@@ -3256,7 +3345,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
             values = res.values(key)
         except Exception:
             continue
-        st = core.stats(values)
+        st = _fast_stats(values)
         if st["count"]:
             st["min_at"] = _point(res.points, st["min_index"])
             st["max_at"] = _point(res.points, st["max_index"])
@@ -3280,9 +3369,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
             "nodes": mesh.NodeCount,
             "elements": mesh.VolumeCount,
             "size": (
-                core.element_size(_bbox(mesh_obj.Shape.Shape), data["settings"]["mesh"]["size_pct"])
-                if mesh_obj.Shape is not None
-                else None
+                _global_size(study, mesh_obj.Shape.Shape) if mesh_obj.Shape is not None else None
             ),
             "order": data["settings"]["mesh"]["order"],
         },

@@ -693,12 +693,20 @@ def check_cancel(doc, out):
     def background_done(job):
         return job._thread is None or not job._thread.is_alive()
 
+    def results_step(job):
+        step = getattr(job, "_results_step", None)
+        return getattr(getattr(step, "func", None), "__name__", None)
+
     moments = (
         ("model", lambda job: True),  # before the first turn
         ("mesh", lambda job: job.stage == "mesh" and not background_done(job)),
         ("input", lambda job: job.stage == "mesh" and background_done(job)),
+        # (the input is written over two turns, the results read over three)
+        ("input's second turn", lambda job: job.stage == "input" and job._getter is not None),
         ("solve", lambda job: job.stage == "solve" and not background_done(job)),
         ("results", lambda job: job.stage == "solve" and background_done(job)),
+        ("results' second turn", lambda job: results_step(job) == "_results_compact"),
+        ("results' last turn", lambda job: results_step(job) == "_results_finish"),
     )
     for stage, ready in moments:
         job = sim.Job(study)
