@@ -13,8 +13,9 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   Chamfer. Everything that session needs: `docs/sciforge/dev/briefs/patch-beta2.2.md`. Status:
   [x] joint delete bug (the delete itself not reproduced; the related "joint loses its face
   after a later fillet" fixed)  [x] drag to set limits  [x] hover ghost  [x] diagonal arrows
-  [ ] released (pushed to `develop`; waiting for green "SciForge tests", then Luca runs
-  Actions > SciForge patch release). Newest session log "Patch 0.1.0-beta.2.2".
+  [x] released: **PUBLISHED 2026-10-26 21:37 UTC**, tag `sciforge-v0.1.0-beta.2.2` on `fac2005e`
+  (CI #274 green; patch release run 40402286290, 25 min; Release moved 1a511933..fac2005e by
+  the workflow). Newest session log "Patch 0.1.0-beta.2.2".
 - **Beta 3 (`0.1.0-beta.3`, this line of sessions): Auto Timeline and Simulation.** Auto
   Timeline = tools and instructions so a connected AI turns a model with no timeline (an
   imported STEP body; simple meshes) into a real parametric one. Simulation = Fusion's Static
@@ -1672,6 +1673,12 @@ Brief `docs/sciforge/dev/briefs/patch-beta2.2.md` (four items, SciForge files on
   parity/fillet.md). Tests updated: `fillet` (arrow distance = r × per_unit), `chamfer_arrow`
   (diagonal direction; screen size allows the view's foreshortening), `blend_steps.arrow_screen`
   drags the growing way.
+- **Published 2026-10-26 21:37 UTC** (Luca: "publish the patch"): CI #274 green on fac2005e;
+  patch release run 40402286290 started with the GitHub tools (ref Release, publish true):
+  prepare 1 min, Linux AppImage + tests 15 min, Windows portable + installer + golden 22 min,
+  publish 2 min. Base = 0.1.0-beta.2.1 (same core fd4a01850d). Assets: installer 494 MB, .7z
+  421 MB, AppImage 826 MB, quick update 7 MB, sciforge-release.json, SHA256SUMS. The notes say
+  "A patch release" once now.
 - Release: VERSION / `_FALLBACK_VERSION` 0.1.0-beta.2.2, CHANGELOG (### Fixed + ### Improved;
   no intro line: the brief asked for one, but patch-release.md says the generated notes already
   say "A patch release" and beta.2.1's notes said it twice), README, known-issues title,
