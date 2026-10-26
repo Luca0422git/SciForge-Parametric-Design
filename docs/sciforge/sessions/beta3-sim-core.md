@@ -68,6 +68,17 @@ sections Engine and Benchmarks.
 - **No VTK pipeline** is made with the results any more (`Pipeline_SimResults` is gone): draw
   from `results(study)` / the result object.
 
+- **Changed since `fe3bf6a5`** (the commit sim-ui and sim-results merged last), all
+  compatible: a Job's stages take more turns (model: pre-check, then the model; input: FreeCAD's
+  mesh tables, then the input; results: import, renumbering, summary), each closing an undo
+  step left open first; `Job.wait(timeout, idle=None)`; the solve's message is "Solving N nodes
+  with CalculiX" (plus a warning for a big mesh); per-body rows can be keyed "Body1 (Bracket)"
+  and name their body; the out-of-date fingerprints are taken when a solve starts; contacts and
+  overlaps are remembered per geometry; new notes (curved elements made straight, elements made
+  smaller for a thin wall, stretched elements) and pre-check warnings (linear elements, a study
+  material no longer in the materials); a solve first removes what an unfinished solve left in
+  a design saved while it ran.
+
 ## Log
 
 - 18:05 read the briefs, research, code. Baseline cantilever 0.1995 mm at the default mesh.
