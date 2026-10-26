@@ -58,7 +58,8 @@ or exported report, G = guess (SciForge's choice where the sources are silent).
 ### AI tools
 
 `create_study`, `add_constraint`, `add_load`, `local_mesh_control`, `set_study_material`,
-`study_settings`, `precheck_study`, `solve_study`, `study_results` (min / max / where per result
+`study_settings`, `precheck_study`, `solve_study` (the window keeps painting while it solves),
+`study_results` (min / max / where per result
 and per body, reactions, and the verdict "Lowest safety factor 1.27 at (6.121, 26.13, 10) mm on
 Body1: below 2."), `delete_study`; picks by the same selectors as every other tool; the recipe
 `docs/ai/recipes/static-stress.md` (a bracket held at its holes, 1 kN, solve, thicken, solve
@@ -87,8 +88,10 @@ again) runs in the docs runner.
   curved, took minutes on a big part). The face there becomes a little flat: a coarse round
   shaft in torsion is 1.2 % too soft at the default mesh (0.01 % at the finer one). A finer mesh
   or a local mesh control on the curved faces avoids it; the solve's notes say how many.
-- **Big parts**: the window still pauses up to about 3 s at a time on a 140 000-node part
-  (FreeCAD's tables of the mesh, its result mesh); the rest runs in the background.
+- **Big parts**: the window still pauses up to about 3-4 s at a time on a 140 000-node part
+  (FreeCAD's tables of the mesh, its result mesh, mapping 120 picked faces onto the model); the
+  rest runs in the background. A 300 000-node mesh (20 stacked plates with 500 holes) needs over
+  6 GB in CalculiX: the solve's message warns when a mesh is that big.
 - **Stress at a fixed edge**: a fixed constraint is perfectly rigid, so the stress right at its
   edge grows as the mesh gets finer (a singularity, the same in Fusion). The recipe explains it.
 
@@ -113,34 +116,34 @@ The evidence outline 0.8 asks for; acceptance of outline 7.18 ("golden studies m
 calculations within a few percent").
 
 Run of 2026-10-26 (report `sim-benchmarks.json` in the output folder): 48 accuracy checks
-and 77 engine checks, all PASS; the whole run takes about a minute.
+and 83 engine checks, all PASS; the whole run takes about a minute.
 
 | Case | Check | Hand calculation | Default mesh: SciForge (error) | Finer mesh: SciForge (error) | Tolerance | Nodes (default / finer) | Seconds (default / finer) | Result |
 |---|---|---|---|---|---|---|---|---|
-| **cantilever**: Cantilever 100 x 10 x 10 mm, steel, 100 N at the tip | tip deflection (mm) | 0.2 | 0.1995 (0.27 %) | 0.2005 (0.25 %) | 3 % | 459 / 3953 | 0.93 / 1.67 | PASS |
-|  | bending stress / (M c / I), top face 20-80 mm | 1 | 1 (0.01 %) | 1 (0.01 %) | 3 % | 459 / 3953 | 0.93 / 1.67 | PASS |
-|  | reaction at the fixed end (N) | 100 | 100 (0.00 %) | 100 (0.00 %) | 1 % | 459 / 3953 | 0.93 / 1.67 | PASS |
-| **plate_hole**: Plate 200 x 100 x 5 mm with a 20 mm hole, 10 MPa tension both ends, Remove rigid body modes | max 1st principal stress at the hole (MPa), Kt 2.506 on the net section | 31.33 | 32.04 (2.26 %) | 31.99 (2.12 %) | 5 % | 7174 / 30674 | 3.34 / 18.66 | PASS |
-| **thick_cylinder**: Thick ring, inner 20 / outer 40 mm, 10 MPa inside; quarter model on Frictionless planes | hoop stress at the bore (MPa), Lame | 16.67 | 16.65 (0.10 %) | 16.67 (0.00 %) | 3 % | 800 / 7949 | 0.42 / 3.99 | PASS |
-|  | bore growth (mm), Lame plane strain | 0.001907 | 0.00191 (0.18 %) | 0.001907 (0.03 %) | 3 % | 800 / 7949 | 0.42 / 3.99 | PASS |
-| **symmetry_half**: Half cantilever on a Frictionless symmetry plane against the full model | half model tip deflection = full model's (mm) | 0.1995 | 0.1995 (0.02 %) | 0.2005 (0.02 %) | 2 % | 441 / 2541 | 0.24 / 1.03 | PASS |
-|  | half model max von Mises = full model's (MPa) | 59.08 | 59.2 (0.20 %) | 59.91 (1.10 %) | 4 % | 441 / 2541 | 0.24 / 1.03 | PASS |
-| **bonded_bars**: Steel and aluminium bars glued end to end (one 0.05 mm apart), 10 kN pull | end of the bars moves (mm), two springs in series | 0.0965 | 0.09625 (0.26 %) | 0.09631 (0.20 %) | 3 % | 459 / 4377 | 0.49 / 1.94 | PASS |
-|  | stress in both bars (MPa) = F / A | 100 | 100 (0.00 %) | 100 (0.00 %) | 3 % | 459 / 4377 | 0.49 / 1.94 | PASS |
-|  | the two bodies are glued (one contact found) | 1 | 1 (0.00 %) | 1 (0.00 %) | 0 % | 459 / 4377 | 0.49 / 1.94 | PASS |
-| **torsion**: Round shaft 20 mm x 100 mm twisted by 10 N m at its end (a Moment) | von Mises on the surface, 30-70 mm (MPa) = sqrt(3) T r / J | 11.03 | 11.18 (1.39 %) | 11.04 (0.15 %) | 3 % | 488 / 4446 | 0.52 / 2.1 | PASS |
-|  | rim turns (mm) = T L r / (G J) | 0.008276 | 0.008374 (1.18 %) | 0.008277 (0.01 %) | 3 % | 488 / 4446 | 0.52 / 2.1 | PASS |
-| **hanging_bar**: Steel bar 20 x 20 x 200 mm hanging from its top, gravity only | stress at the top (MPa) = rho g L | 0.01549 | 0.01545 (0.28 %) | 0.01547 (0.17 %) | 3 % | 457 / 2385 | 0.39 / 1.07 | PASS |
-|  | the bottom drops (mm) = rho g L^2 / 2E | 7.75e-06 | 7.76e-06 (0.14 %) | 7.76e-06 (0.14 %) | 3 % | 457 / 2385 | 0.39 / 1.07 | PASS |
-|  | the hold carries the weight (N) = rho g V | 6.198 | 6.149 (0.79 %) | 6.171 (0.42 %) | 1 % | 457 / 2385 | 0.39 / 1.07 | PASS |
-| **remote_force**: Cantilever with 100 N acting 50 mm beyond its tip (a Remote Force) | tip deflection (mm) = F L^3 / 3EI + F a L^2 / 2EI | 0.35 | 0.3477 (0.67 %) | 0.3491 (0.24 %) | 3 % | 459 / 3953 | 0.3 / 1.61 | PASS |
-|  | reaction (N) | 100 | 100 (0.00 %) | 100 (0.00 %) | 1 % | 459 / 3953 | 0.3 / 1.61 | PASS |
-| **prescribed**: Cantilever whose tip is pushed down 0.2 mm (a Prescribed Displacement) | force it takes (N) = 3 E I d / L^3 | 100 | 100.6 (0.56 %) | 100 (0.04 %) | 3 % | 459 / 3953 | 0.35 / 1.77 | PASS |
-|  | the tip moved 0.2 mm | 0.2 | 0.2006 (0.28 %) | 0.2006 (0.28 %) | 1 % | 459 / 3953 | 0.35 / 1.77 | PASS |
-| **pinned_beam**: Beam 420 x 20 x 10 mm on two pins 400 mm apart, 1 N/mm on top | middle of the span drops (mm), bending + shear | 0.2508 | 0.2495 (0.51 %) | 0.2504 (0.18 %) | 3 % | 701 / 2254 | 0.49 / 0.85 | PASS |
-|  | the pins carry the load (N) | 420 | 420 (0.00 %) | 420 (0.00 %) | 1 % | 701 / 2254 | 0.49 / 0.85 | PASS |
-| **bearing_lug**: Lug fixed at its foot, 1 kN bearing load in its 10 mm hole | the foot holds the load (N, along it) | 1000 | 1000 (0.00 %) | 1000 (0.00 %) | 1 % | 1535 / 9563 | 0.64 / 4.25 | PASS |
-|  | nothing sideways (N) | 0 | 3.11e-12 (0.00 %) | 0.05364 (0.05 %) | 1 % | 1535 / 9563 | 0.64 / 4.25 | PASS |
+| **cantilever**: Cantilever 100 x 10 x 10 mm, steel, 100 N at the tip | tip deflection (mm) | 0.2 | 0.1995 (0.27 %) | 0.2005 (0.25 %) | 3 % | 459 / 3953 | 0.78 / 1.79 | PASS |
+|  | bending stress / (M c / I), top face 20-80 mm | 1 | 1 (0.01 %) | 1 (0.01 %) | 3 % | 459 / 3953 | 0.78 / 1.79 | PASS |
+|  | reaction at the fixed end (N) | 100 | 100 (0.00 %) | 100 (0.00 %) | 1 % | 459 / 3953 | 0.78 / 1.79 | PASS |
+| **plate_hole**: Plate 200 x 100 x 5 mm with a 20 mm hole, 10 MPa tension both ends, Remove rigid body modes | max 1st principal stress at the hole (MPa), Kt 2.506 on the net section | 31.33 | 32.04 (2.26 %) | 31.99 (2.12 %) | 5 % | 7174 / 30674 | 4.33 / 20.3 | PASS |
+| **thick_cylinder**: Thick ring, inner 20 / outer 40 mm, 10 MPa inside; quarter model on Frictionless planes | hoop stress at the bore (MPa), Lame | 16.67 | 16.65 (0.10 %) | 16.67 (0.00 %) | 3 % | 800 / 7949 | 0.56 / 3.64 | PASS |
+|  | bore growth (mm), Lame plane strain | 0.001907 | 0.00191 (0.18 %) | 0.001907 (0.03 %) | 3 % | 800 / 7949 | 0.56 / 3.64 | PASS |
+| **symmetry_half**: Half cantilever on a Frictionless symmetry plane against the full model | half model tip deflection = full model's (mm) | 0.1995 | 0.1995 (0.02 %) | 0.2005 (0.02 %) | 2 % | 441 / 2541 | 0.31 / 0.89 | PASS |
+|  | half model max von Mises = full model's (MPa) | 59.08 | 59.2 (0.20 %) | 59.91 (1.10 %) | 4 % | 441 / 2541 | 0.31 / 0.89 | PASS |
+| **bonded_bars**: Steel and aluminium bars glued end to end (one 0.05 mm apart), 10 kN pull | end of the bars moves (mm), two springs in series | 0.0965 | 0.09625 (0.26 %) | 0.09631 (0.20 %) | 3 % | 459 / 4377 | 0.42 / 1.65 | PASS |
+|  | stress in both bars (MPa) = F / A | 100 | 100 (0.00 %) | 100 (0.00 %) | 3 % | 459 / 4377 | 0.42 / 1.65 | PASS |
+|  | the two bodies are glued (one contact found) | 1 | 1 (0.00 %) | 1 (0.00 %) | 0 % | 459 / 4377 | 0.42 / 1.65 | PASS |
+| **torsion**: Round shaft 20 mm x 100 mm twisted by 10 N m at its end (a Moment) | von Mises on the surface, 30-70 mm (MPa) = sqrt(3) T r / J | 11.03 | 11.18 (1.39 %) | 11.04 (0.15 %) | 3 % | 488 / 4446 | 0.41 / 1.75 | PASS |
+|  | rim turns (mm) = T L r / (G J) | 0.008276 | 0.008374 (1.18 %) | 0.008277 (0.01 %) | 3 % | 488 / 4446 | 0.41 / 1.75 | PASS |
+| **hanging_bar**: Steel bar 20 x 20 x 200 mm hanging from its top, gravity only | stress at the top (MPa) = rho g L | 0.01549 | 0.01545 (0.28 %) | 0.01547 (0.17 %) | 3 % | 457 / 2385 | 0.6 / 1.09 | PASS |
+|  | the bottom drops (mm) = rho g L^2 / 2E | 7.75e-06 | 7.76e-06 (0.14 %) | 7.76e-06 (0.14 %) | 3 % | 457 / 2385 | 0.6 / 1.09 | PASS |
+|  | the hold carries the weight (N) = rho g V | 6.198 | 6.149 (0.79 %) | 6.171 (0.42 %) | 1 % | 457 / 2385 | 0.6 / 1.09 | PASS |
+| **remote_force**: Cantilever with 100 N acting 50 mm beyond its tip (a Remote Force) | tip deflection (mm) = F L^3 / 3EI + F a L^2 / 2EI | 0.35 | 0.3477 (0.67 %) | 0.3491 (0.24 %) | 3 % | 459 / 3953 | 0.36 / 1.26 | PASS |
+|  | reaction (N) | 100 | 100 (0.00 %) | 100 (0.00 %) | 1 % | 459 / 3953 | 0.36 / 1.26 | PASS |
+| **prescribed**: Cantilever whose tip is pushed down 0.2 mm (a Prescribed Displacement) | force it takes (N) = 3 E I d / L^3 | 100 | 100.6 (0.56 %) | 100 (0.04 %) | 3 % | 459 / 3953 | 0.26 / 1.44 | PASS |
+|  | the tip moved 0.2 mm | 0.2 | 0.2006 (0.28 %) | 0.2006 (0.28 %) | 1 % | 459 / 3953 | 0.26 / 1.44 | PASS |
+| **pinned_beam**: Beam 420 x 20 x 10 mm on two pins 400 mm apart, 1 N/mm on top | middle of the span drops (mm), bending + shear | 0.2508 | 0.2495 (0.51 %) | 0.2504 (0.18 %) | 3 % | 701 / 2254 | 0.46 / 0.79 | PASS |
+|  | the pins carry the load (N) | 420 | 420 (0.00 %) | 420 (0.00 %) | 1 % | 701 / 2254 | 0.46 / 0.79 | PASS |
+| **bearing_lug**: Lug fixed at its foot, 1 kN bearing load in its 10 mm hole | the foot holds the load (N, along it) | 1000 | 1000 (0.00 %) | 1000 (0.00 %) | 1 % | 1535 / 9563 | 0.69 / 4.41 | PASS |
+|  | nothing sideways (N) | 0 | 3.11e-12 (0.00 %) | 0.05364 (0.05 %) | 1 % | 1535 / 9563 | 0.69 / 4.41 | PASS |
 
 | Engine check | What is checked | Checks | Result |
 |---|---|---|---|
@@ -151,6 +154,9 @@ and 77 engine checks, all PASS; the whole run takes about a minute.
 | a body in a moved component | same bend as unmoved; the tip is where the component put it; reaction 100 N | 3 | PASS |
 | two components' bodies with the same name | both named Body1, two rows: Body1 (Bracket), Body1 (Plate); each row is its own body (bends 0.2 mm, as one cantilever) | 2 | PASS |
 | a body whose middle is a hole, glued to another | each piece of the model belongs to its own plate; each plate keeps its material in the results | 2 | PASS |
+| a design saved while it solves | a running job's run is not taken for left over; reopened: the half-made run is in the file; the next solve removes it and solves | 3 | PASS |
+| undo steps opened while it solves | solved; every step undone: the results stay (9 turns) | 2 | PASS |
+| a study material that is gone | the body's own material is used, and the pre-check warns | 1 | PASS |
 | a change while it solves | solved; out of date: the load changed while it solved; solved again: up to date | 3 | PASS |
 | a deleted body | a load on a body the study leaves out: refused, naming both; the pre-check names the load that lost its face; the solve refuses with that sentence | 3 | PASS |
 | a solve is no undo step | the undo list did not grow with the solve; no undo step left open; undo takes the setup back; redo brings it back with its results | 4 | PASS |
