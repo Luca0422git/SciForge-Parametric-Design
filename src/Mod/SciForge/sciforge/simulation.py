@@ -3630,13 +3630,16 @@ def _shape_key(body):
         return [body.Name, "?"]
     try:
         # (a body's shape is often a compound, which has no centre of mass of its own)
+        # (each property is worked out again at every read: read each once)
         solids = shape.Solids
-        volume = sum(solid.Volume for solid in solids)
-        if solids and volume > 0:
-            middle = [
-                sum(getattr(solid.CenterOfMass, axis) * solid.Volume for solid in solids) / volume
-                for axis in "xyz"
-            ]
+        if len(solids) == 1:  # (the usual body: no volumes to weigh)
+            c = solids[0].CenterOfMass
+            middle = [c.x, c.y, c.z]
+        else:
+            parts = [(solid.CenterOfMass, solid.Volume) for solid in solids]
+            total = sum(w for _c, w in parts) or 1.0
+            middle = [sum(getattr(c, a) * w for c, w in parts) / total for a in "xyz"]
+        if solids:
             key.append([round(c, 4) + 0.0 for c in middle])
     except Exception:
         key.append("?")
