@@ -11,6 +11,9 @@ C  Settings > Adaptive Mesh Refinement: Low; OK. Solve: done after more than one
 D  New Simulation Study (Study 2): two equal forces pushing on the bracket's two ends (the view
    turned to reach the far one), nothing holding it: the pre-check is red; Settings > General:
    Remove rigid body modes; OK: the pre-check is no longer red; Solve: done.
+E  SOLVE > Job Status (its window was closed): the last solve and every earlier mesh and solve
+   of the session listed; a double-click on Study 1's solve shows its results (RESULTS tab,
+   Study 1 active).
 """
 
 import FreeCAD as App
@@ -19,6 +22,7 @@ from PySide import QtCore
 from SciForgeTests.gui import dialog_input as ui
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import simsetup_steps as s
+from SciForgeTests.gui import widget_input as w
 
 state = {}
 
@@ -230,6 +234,42 @@ def d_check():
     summary = s.sim().summary(s.active_study()) or {}
     h.check("Study 2 solved without constraints", bool(summary), summary.get("notes"))
     s.close_popup("SciForgeSimJobStatus")
+    s.click_tab("sim_setup")
+
+
+# -- E ------------------------------------------------------------------------------------------
+def e_status():
+    h.check(
+        "the progress window closed", s.status_dialog() is None or not s.status_dialog().isVisible()
+    )
+    s.menu_item("SOLVE", "Job Status")
+
+
+def e_rows():
+    status = s.status_dialog()
+    if not h.check("Job Status opened", status is not None and status.isVisible()):
+        return
+    rows = [status.studies.item(i).text() for i in range(status.studies.count())]
+    h.check(
+        "the last solve", rows and rows[0].startswith("Study 2") and rows[0].endswith("Done"), rows
+    )
+    earlier = [r for r in rows if r.startswith("Earlier, ")]
+    meshes = [r for r in earlier if "Mesh of Study 1" in r]
+    solves = [r for r in earlier if "Mesh of" not in r and "Study 1" in r]
+    h.check("both meshes listed", len(meshes) == 2, rows)
+    h.check("Study 1's solve listed", len(solves) == 1, rows)
+    if solves:
+        item = status.studies.item(rows.index(solves[0]))
+        w.double_click(status.studies.viewport(), status.studies.visualItemRect(item).center())
+
+
+def e_shown():
+    h.check("RESULTS tab", s.current_tab() == "sim_results", s.current_tab())
+    h.check(
+        "Study 1 active",
+        s.active_study() is not None and s.active_study().Label.startswith("Study 1"),
+    )
+    s.close_popup("SciForgeSimJobStatus")
 
 
 h.run(
@@ -261,5 +301,8 @@ h.run(
         d_go,
         s.wait_solved("wait_rigid"),
         d_check,
+        e_status,
+        e_rows,
+        e_shown,
     ],
 )

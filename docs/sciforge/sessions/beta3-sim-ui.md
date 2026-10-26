@@ -42,9 +42,10 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   window says the study is gone (`simulation_solve_dialog._gone`).
 - **Glyphs** (`simulation_glyphs.py`), **browser** (`simulation_browser.py` + hooks in
   `browser_ui.py`), **ribbon** (the SETUP entries in `ribbon_config.py`, DISPLAY > Show Mesh,
-  a big button in every group), **icons** (`tools/sciforge/icons_simulation.py`, 43 icons, also
-  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 37), fourteen GUI
-  scenarios `sim_setup_*.py`.
+  a big button in every group; SOLVE > Job Status opens the progress window any time), **icons**
+  (`tools/sciforge/icons_simulation.py`, 44 icons, also for the greyed commands; written one by
+  one so the other builders' icons are untouched), unit tests (`test_simulation_setup_core.py`,
+  37), fourteen GUI scenarios `sim_setup_*.py`.
 - **The design's units** (Fusion's Simulation follows the document's units, research 6): the
   value fields, the browser's texts, Load Case Attributes, Study Materials' properties and the
   mesh / contact lengths show N, MPa, N mm, mm in a metric design and lbf, psi, lbf in, in in an
@@ -55,7 +56,9 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   still move (three slides and three turns when nothing holds it; the turn about a held edge
   for a model held by one edge, from the engine's not-held analysis), the bodies selected and
   named; the arrows follow the setup until it is switched off. **Job Status** also lists this
-  session's earlier solves and meshes (a solved one's row shows its results on a double-click). **OK right after a click** keeps that pick (pickpanel
+  session's earlier solves and meshes (a solved one's row shows its results on a double-click,
+  its design brought to the front in SIMULATION: `simulation_ui.open_results`; the rows name
+  each study from its own design, whichever is in front). **OK right after a click** keeps that pick (pickpanel
   handles a click 30 ms later; my dialogs take the queued click first: a busy machine once lost
   it in `sim_setup_dialogs`).
 - **The 3D view in SIMULATION**: the right-click marking menu offers the setup's commands
@@ -81,7 +84,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_bracket` | 80 | PASS |
 | `sim_setup_dialogs` | 85 | PASS |
 | `sim_setup_browser` | 61 | PASS |
-| `sim_setup_documents` | 61 | PASS |
+| `sim_setup_documents` | 71 | PASS |
 | `sim_setup_kinds` | 70 | PASS |
 | `sim_setup_workspace` | 70 | PASS |
 | `sim_setup_components` | 42 | PASS |
@@ -91,7 +94,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_more` | 63 | PASS |
 | `sim_setup_lost` | 48 | PASS |
 | `sim_setup_two` | 40 | PASS |
-| `sim_setup_mesh` | 34 | PASS |
+| `sim_setup_mesh` | 42 | PASS |
 
 Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser`,
 `drawing_new`, `browser_opacity_hover`, `ribbon_sweep` and `hole_qa_more` (the marking menu) pass; unit tests 2534 OK.
@@ -103,6 +106,9 @@ Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `
   only when the study's design is in front in SIMULATION: show() enters the workspace when it
   is not on, which took a person who went on in DESIGN (a sketch open) out of their work when a
   solve ended; now they stay and are told where the results are (`simulation_ui.show_results`).
+- A person's own request to see results (a Job Status row double-clicked) brings the study's
+  design to the front in SIMULATION first (`simulation_ui.open_results`), then the same
+  `show_results(study)`.
 - sim-results calls `simulation_ui.active()`, `active_study(doc)`, `set_active_study(study)`,
   `enter_workspace("sim_results")`, and `simulation_glyphs.set_visible(on)` / `visible()`.
 - A study without results made active while RESULTS is in front shows SETUP

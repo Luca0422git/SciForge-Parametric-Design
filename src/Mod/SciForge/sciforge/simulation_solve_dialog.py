@@ -36,6 +36,7 @@ RUN = {
     "timer": None,
     "status": None,  # the progress window
     "results": {},  # study name -> "done" / "failed" / "cancelled" / message, this run
+    "where": {},  # study name -> (document name, label) of this run's results
     "last_done": None,
     "waiting": False,  # a command's dialog is open: the job waits
     "run": 0,  # how many runs this session (Solve or Generate Mesh)
@@ -333,6 +334,7 @@ def start(studies, kind="solve"):
     RUN["queue"] = list(studies)
     RUN["kind"] = kind
     RUN["results"] = {}
+    RUN["where"] = {}
     RUN["last_done"] = None
     show_status()
     if RUN["timer"] is None:
@@ -370,6 +372,7 @@ def _next():
         except Exception as exc:
             RUN["job"] = None
             RUN["results"][study.Name] = ("failed", str(exc))
+            _where(study)
             _remember(study, "failed")
             continue
         log("%s %s" % ("meshing" if RUN["kind"] == "mesh" else "solving", study.Label))
@@ -459,6 +462,7 @@ def _after(study, state, message):
     sim = _sim()
     if study is not None:
         RUN["results"][study.Name] = (state, message)
+        _where(study)
         if state == "done":
             if RUN["kind"] == "mesh":
                 show_mesh(study)
@@ -480,6 +484,28 @@ def _after(study, state, message):
     _update_status()
     if _next() is None:
         _finish_all()
+
+
+def _where(study):
+    """The design and label of a study with a result in this run: the progress window names it
+    and finds it from any design in front (a person may switch designs while it solves)."""
+    try:
+        RUN.setdefault("where", {})[study.Name] = (study.Document.Name, study.Label)
+    except Exception:
+        pass
+
+
+def _result_study(name):
+    """(study or None, label) of a name in this run's results."""
+    doc_name, label = RUN.get("where", {}).get(name, (None, name))
+    try:
+        doc = App.getDocument(doc_name) if doc_name in App.listDocuments() else None
+        study = doc.getObject(name) if doc is not None else None
+        if study is not None and bodies.alive(study):
+            return study, study.Label
+    except Exception:
+        pass
+    return None, label
 
 
 def _gone(label):
@@ -702,11 +728,19 @@ def _update_status(final=False):
             dialog.cancel_button.setVisible(False)
             dialog.close_button.setDefault(True)
             results = RUN["results"]
+            if not RUN.get("run"):
+                dialog.title.setText("Nothing solved yet in this session")
+                dialog.message.setStyleSheet("")
+                dialog.message.setText(
+                    "SOLVE > Solve (or Generate Mesh) runs here: its stages, the time it takes "
+                    "and Cancel show in this window, and each solve stays listed."
+                )
+                dialog.bar.setValue(0)
+                dialog.stages.clear()
             failed = [(n, r) for n, r in results.items() if r[0] != "done"]
             if failed:
                 name, (state, message) = failed[-1]
-                study = App.ActiveDocument.getObject(name) if App.ActiveDocument else None
-                label = study.Label if study is not None else name
+                _study, label = _result_study(name)
                 dialog.title.setText("%s: %s" % (label, score.STATE_WORDS.get(state, state)))
                 dialog.message.setStyleSheet(
                     "color: #ff8a80;" if state in ("failed", "suspect") else ""
@@ -752,14 +786,12 @@ def _fill_studies(dialog):
     (greyed); a solved one is double-clicked to show its results (Fusion's Job Status has an
     action per completed solve)."""
     rows = []  # (text, (document name, study name) to show the results of, or None, earlier)
-    doc = App.ActiveDocument
     for name, (state, _message) in RUN["results"].items():
-        obj = doc.getObject(name) if doc is not None else None
-        target = (doc.Name, name) if (obj is not None and state == "done") else None
+        obj, label = _result_study(name)
+        target = (obj.Document.Name, name) if (obj is not None and state == "done") else None
         rows.append(
             (
-                "%s: %s"
-                % (obj.Label if obj is not None else name, score.STATE_WORDS.get(state, state)),
+                "%s: %s" % (label, score.STATE_WORDS.get(state, state)),
                 target if RUN["kind"] == "solve" else None,
                 False,
             )
@@ -794,8 +826,8 @@ def _fill_studies(dialog):
 
 
 def _show_row(item):
-    """A solved study's row double-clicked in the progress window: its results show (in front
-    in SIMULATION; else the person is told where they are)."""
+    """A solved study's row double-clicked in the progress window: its design comes to the
+    front in SIMULATION and its results show (simulation_ui.open_results)."""
     try:
         target = item.data(QtCore.Qt.UserRole) if item is not None else None
         if not target:
@@ -807,7 +839,7 @@ def _show_row(item):
 
             commands.tell("Those results are gone (the study was deleted or solved again).")
             return
-        _ui().show_results(study)
+        _ui().open_results(study)
     except Exception as exc:
         warn("job status: %s" % exc)
 

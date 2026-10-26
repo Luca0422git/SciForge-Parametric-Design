@@ -246,6 +246,20 @@ def _():
     )
 
 
+@icon("sim_job_status")
+def _():
+    # a list of jobs: two lines, a progress bar, a tick for the one that is done
+    return (
+        rect(4, 7, 40, 34, GREY[2], 3)
+        + rect(7, 10, 34, 28, DARK, 1)
+        + rect(10, 14, 17, 3, STROKE, 1)
+        + rect(10, 20, 12, 3, STROKE, 1)
+        + rect(10, 29, 28, 5, GREY[1], 1)
+        + rect(10, 29, 18, 5, OK_GREEN, 1)
+        + _check(34, 18, 5.5)
+    )
+
+
 @icon("sim_loadcase")
 def _():
     return (
