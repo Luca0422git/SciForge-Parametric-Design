@@ -137,6 +137,7 @@ def enter_workspace(tab=None):
             Gui.Selection.clearSelection()
         except Exception:
             pass
+        _from_drawing(doc)
         _connect()
         STATE["docs"][doc.Name] = True
         _apply(True, tab)
@@ -146,6 +147,19 @@ def enter_workspace(tab=None):
     except Exception as exc:
         warn("simulation workspace: %s" % exc)
         return False
+
+
+def _from_drawing(doc):
+    """Simulation picked while a drawing's tab is in front: the design's own 3D view comes to
+    the front first (the workspace works on the model)."""
+    try:
+        from . import drawing_ui
+
+        if drawing_ui.is_on():
+            drawing_ui.show_design(doc)
+            drawing_ui.sync_mode()
+    except Exception as exc:
+        warn("simulation workspace: %s" % exc)
 
 
 def _new_study_on_entry():
@@ -381,7 +395,8 @@ def _tick():
         if key != STATE["glyph_key"]:
             STATE["glyph_key"] = key
             simulation_glyphs.refresh(doc, study)
-        refresh_light()
+        if not STATE.get("light_slow"):
+            refresh_light()
     except Exception as exc:
         warn("simulation workspace: %s" % exc)
 
@@ -411,7 +426,13 @@ def refresh_light():
         if key == STATE["light_key"]:
             return
         STATE["light_key"] = key
+        import time
+
+        started = time.perf_counter()
         state, checks = precheck_state(study) if STATE["on"] else (None, [])
+        # a pre-check that takes long (many bodies: contacts, overlaps) is not redone after
+        # every change, only after a SETUP command (refresh()) and on Pre-check
+        STATE["light_slow"] = time.perf_counter() - started > 0.3
         STATE["light"] = (doc.Name if doc else None, study.Name if study else None, state)
         ribbon = _ribbon()
         if ribbon is None:
