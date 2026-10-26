@@ -189,8 +189,10 @@ def _take_back(doc, copies, made):
 
 def _duplicate(doc, members, joint, side, pick, snap, copies, made):
     for member in members:
+        # beside the component picked (an occurrence in a sub-assembly: in it), not beside
+        # its original (make_instance's default)
         copies[member.Name] = instances.make_instance(
-            member, components.KEEP, placement=joints.global_placement(member)
+            member, components.container_of(member), placement=joints.global_placement(member)
         )
     doc.recompute()  # the occurrences' copies take their shapes
     inside = _part(joint, side)

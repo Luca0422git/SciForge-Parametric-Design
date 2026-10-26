@@ -239,6 +239,81 @@ def check_duplicate_limits():
         _close(doc)
 
 
+def check_duplicate_in_place():
+    """Duplicate With Joints of a screw's occurrence that sits in a sub-assembly ("Frame"):
+    the copy goes into that sub-assembly, beside the screw picked (it went beside the
+    original, at the root of the design)."""
+    from SciForgeTests.fixtures.vex import vex_parts as vp
+    from sciforge import components
+    from sciforge import duplicate_joints as dj
+    from sciforge import exchange_core, joints, step_import
+
+    files = _files(["c_channel_1x2x1x5", "screw_8_32_x_0_5"])
+    doc = App.newDocument("VexQaInPlace")
+    try:
+        frame = components.new_component(doc, "Frame", None)
+        channel = _insert(doc, files["c_channel_1x2x1x5"]).top
+        _insert(doc, files["screw_8_32_x_0_5"], App.Placement(V(-20, 19.05, 20), App.Rotation()))
+        doc.openTransaction("Insert STEP")
+        made = step_import.import_file(doc, files["screw_8_32_x_0_5"], exchange_core.INSERT, frame)
+        doc.commitTransaction()
+        screw = made.top  # an occurrence of the first screw, in Frame
+        screw.Placement = App.Placement(V(-40, 19.05, 20), App.Rotation())
+        doc.recompute()
+        t, p = vp.AL, vp.PITCH
+
+        def hole(i, j):
+            return V(p / 2 + i * p, p / 2 + j * p, t)
+
+        web = _face(
+            doc,
+            channel,
+            lambda f: f.Surface.TypeId == "Part::GeomPlane"
+            and abs(f.BoundBox.ZMin - t) < 1e-9
+            and f.BoundBox.ZLength < 1e-9
+            and f.BoundBox.YLength > 20,
+        )
+        under = _face(
+            doc,
+            screw,
+            lambda f: f.Surface.TypeId == "Part::GeomPlane"
+            and abs(f.BoundBox.ZMax) < 1e-9
+            and len(f.Wires) == 2,
+        )
+        p1 = joints.Pick(screw, _body(doc, screw), under)
+        p2 = joints.Pick(channel, _body(doc, channel), web, hole(1, 1))
+        s1 = [c for c in joints.snap_candidates(p1) if c["kind"] == "centre"][0]
+        s2 = joints.nearest_snap(
+            [c for c in joints.snap_candidates(p2) if c["kind"] == "loop"], hole(1, 1)
+        )
+        doc.openTransaction("Joint")
+        joint = joints.create_joint(doc, "rigid", p1, s1, p2, s2)
+        joints.align(joint, first=True)
+        doc.commitTransaction()
+        doc.recompute()
+        pick = joints.Pick(channel, _body(doc, channel), web, hole(3, 1))
+        snap = joints.nearest_snap(
+            [c for c in joints.snap_candidates(pick) if c["kind"] == "loop"], hole(3, 1)
+        )
+        doc.openTransaction("Duplicate With Joints")
+        copies, _made = dj.duplicate(doc, [screw], joint, 0, pick, snap)
+        doc.commitTransaction()
+        doc.recompute()
+        holder = components.container_of(copies[0])
+        box = _gbox(doc, copies[0])
+        centre = V((box.XMin + box.XMax) / 2.0, (box.YMin + box.YMax) / 2.0, 0)
+        _out(
+            "duplicate_in_place",
+            holder is frame
+            and abs(centre.x - hole(3, 1).x) < 1e-4
+            and abs(centre.y - hole(3, 1).y) < 1e-4,
+            "the copy %s went into %s (the picked screw is in %s), at %s"
+            % (copies[0].Label, holder.Label if holder else "the root", frame.Label, centre),
+        )
+    finally:
+        _close(doc)
+
+
 # -- the first occurrence deleted ----------------------------------------------------------------
 def _parts_list(doc):
     from sciforge import drawing, drawing_core
@@ -504,6 +579,7 @@ def check_big_channel_snaps():
 CHECKS = [
     check_duplicate_rigid_group,
     check_duplicate_limits,
+    check_duplicate_in_place,
     check_parts_list_original_deleted,
     check_occurrence_names_after_delete,
     check_same_file_again,
