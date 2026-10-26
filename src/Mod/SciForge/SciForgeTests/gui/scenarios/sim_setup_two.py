@@ -12,6 +12,9 @@ C  Clone Study: Study 2, active. Its Study Materials: Aluminium for the top bloc
 D  Solve with both studies ticked ("Solve 2 Studies"): both solved one after the other, each
    with a result for each body; Study 2 solved the top in aluminium, which moves more (it is
    softer); the progress lists both as done.
+E  Right-click Top > Exclude from Study (Study 2): its force is on a body the study leaves
+   out: red. Solve > Repair on Study 2's row: Study Materials opens, told why; Top ticked In
+   Study, OK: the top is back and the pre-check is not red.
 """
 
 import FreeCAD as App
@@ -231,6 +234,57 @@ def d_check():
         rows,
     )
     s.close_popup("SciForgeSimJobStatus")
+    s.click_tab("sim_setup")  # (the results took the RESULTS tab)
+
+
+# -- E ------------------------------------------------------------------------------------------
+def e_exclude():
+    h.check(
+        "Study 2 active",
+        s.active_study() is not None and s.active_study().Label.startswith("Study 2"),
+    )
+    s.right_click_row("Top", "Exclude from Study")
+
+
+def e_red():
+    found = [b.Label for b in s.sim().study_bodies(s.active_study())]
+    h.check("Top left out of Study 2", found == ["Base"], found)
+    h.check("pre-check red: its force is on a body left out", s.light() == "red", s.light())
+    h.ribbon("Solve")
+
+
+def e_repair():
+    dialog = s.solve_dialog()
+    if not h.check("Solve dialog (E)", dialog is not None):
+        return
+    button = None
+    for row in range(dialog.table.rowCount()):
+        if dialog.table.item(row, 0).text().startswith("Study 2"):
+            button = dialog.table.cellWidget(row, 3)
+    if h.check("Repair next to Study 2", button is not None):
+        s.click_widget(button)
+
+
+def e_materials():
+    from sciforge import simulation_dialogs
+
+    p = simulation_dialogs.MaterialsPanel.last
+    if not h.check("Repair opened Study Materials", p is not None and not p._closed):
+        return
+    text = s.told()
+    h.check("told why", "Top" in text and "leaves out" in text, text)
+    rows = [p.table.item(r, 0).text() for r in range(p.table.rowCount())]
+    if h.check("Top listed", "Top" in rows, rows):
+        tick = p.ticks[rows.index("Top")]
+        w.click(tick, QtCore.QPoint(8, tick.height() // 2))
+        h.check("Top ticked In Study", tick.isChecked())
+    s.ok()
+
+
+def e_back():
+    found = sorted(b.Label for b in s.sim().study_bodies(s.active_study()))
+    h.check("Top back in Study 2", found == ["Base", "Top"], found)
+    h.check("pre-check not red", s.light() in ("green", "yellow"), s.light())
 
 
 h.run(
@@ -256,5 +310,10 @@ h.run(
         d_both,
         s.wait_solved(),
         d_check,
+        e_exclude,
+        e_red,
+        e_repair,
+        e_materials,
+        e_back,
     ],
 )
