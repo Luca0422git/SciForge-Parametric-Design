@@ -2512,12 +2512,21 @@ class ReportDialog(QtWidgets.QDialog):
         cancel = QtWidgets.QPushButton("Cancel")
         cancel.setObjectName("SciForgeSimReportCancel")
         cancel.clicked.connect(self.reject)
+        self.preview_button = QtWidgets.QPushButton("Preview")
+        self.preview_button.setObjectName("SciForgeSimReportPreview")
+        self.preview_button.setAutoDefault(False)
+        self.preview_button.setToolTip(
+            "Open the report in the web browser without saving it (the dialog stays open)"
+        )
+        self.preview_button.clicked.connect(self._preview)
+        buttons.addWidget(self.preview_button)
         buttons.addStretch(1)
         buttons.addWidget(self.save_button)
         buttons.addWidget(self.open_button)
         buttons.addWidget(cancel)
         layout.addRow(buttons)
         self.written = None
+        self.previewed = None
 
     def chosen(self):
         """The studies ticked, the active one first."""
@@ -2570,6 +2579,45 @@ class ReportDialog(QtWidgets.QDialog):
         except Exception as exc:
             warn("Report: %s" % exc)
 
+    def _ready(self):
+        """The studies ticked when the report can be made (the cover's files found), else
+        None with the reason said."""
+        studies = self.chosen()
+        if not studies:
+            self.message.setText("Tick at least one study.")
+            return None
+        for key, name in (("logo", "logo"), ("picture", "cover picture")):
+            picture = self.cover()[key]
+            if picture and not os.path.isfile(picture):
+                self.message.setText("The %s file was not found: %s" % (name, picture))
+                return None
+        return studies
+
+    def _preview(self):
+        """Fusion's Preview: the report opened in the web browser, nothing saved where the
+        person chose (a page in the computer's temporary folder)."""
+        try:
+            studies = self._ready()
+            if studies is None:
+                return
+            path = os.path.join(tempfile.gettempdir(), "SciForge report preview.html")
+            self.message.setText("Making the preview...")
+            QtWidgets.QApplication.processEvents()
+            self.previewed = write(
+                self.session,
+                path,
+                self.title_field.text().strip(),
+                self.author_field.text().strip(),
+                self.pictures.isChecked(),
+                studies=studies,
+                cover=self.cover(),
+            )
+            open_in_browser(self.previewed)
+            self.message.setText("The preview opened in the web browser (not saved).")
+        except Exception as exc:
+            self.message.setText("The preview could not be made: %s" % exc)
+            log("report preview not made: %s" % exc)
+
     def _save_now(self, open_after):
         path = self.path_field.text().strip()
         if not path:
@@ -2577,15 +2625,9 @@ class ReportDialog(QtWidgets.QDialog):
             return
         if not path.lower().endswith((".html", ".htm")):
             path += ".html"
-        studies = self.chosen()
-        if not studies:
-            self.message.setText("Tick at least one study.")
+        studies = self._ready()
+        if studies is None:
             return
-        for key, name in (("logo", "logo"), ("picture", "cover picture")):
-            picture = self.cover()[key]
-            if picture and not os.path.isfile(picture):
-                self.message.setText("The %s file was not found: %s" % (name, picture))
-                return
         try:
             self.message.setText("Writing the report...")
             QtWidgets.QApplication.processEvents()
@@ -2604,7 +2646,7 @@ class ReportDialog(QtWidgets.QDialog):
             return
         if open_after:
             try:
-                QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(self.written))
+                open_in_browser(self.written)
             except Exception as exc:
                 warn("Report: could not open it: %s" % exc)
         self.accept()
@@ -2612,6 +2654,11 @@ class ReportDialog(QtWidgets.QDialog):
     def done(self, code):
         OPEN["report"] = None
         super().done(code)
+
+
+def open_in_browser(path):
+    """Open a page in the web browser (Save and Open, Preview)."""
+    QtGui.QDesktopServices.openUrl(QtCore.QUrl.fromLocalFile(path))
 
 
 def report(session):

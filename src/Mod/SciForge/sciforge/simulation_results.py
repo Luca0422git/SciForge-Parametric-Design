@@ -531,6 +531,10 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None,
                 core.fmt(core.convert(row["displacement_max"], length)),
             )
         )
+    reaction_rows = []
+    for label, (fx, fy, fz) in sorted((reactions(study) or {}).items()):
+        total = (fx * fx + fy * fy + fz * fz) ** 0.5
+        reaction_rows.append((label, core.fmt(fx), core.fmt(fy), core.fmt(fz), core.fmt(total)))
     convergence = None
     adaptive = done.get("adaptive") or {}
     if adaptive.get("passes"):
@@ -566,6 +570,7 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None,
         "results": results,
         "bodies": bodies_rows,
         "body_units": (stress, length),
+        "reactions": reaction_rows,
         "verdict": core.verdict(min_safety(study), lower, upper),
         "out_of_date": out_of_date(study),
         "images": list(images),

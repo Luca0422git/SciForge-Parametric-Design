@@ -480,6 +480,7 @@ class Session:
         self.reaction_tags = False  # Reaction Force's tags at the constraints (window open)
         self.shown_bodies = None  # indices of the study's bodies drawn (None: all of them)
         self._shown_key = None
+        self._extreme_cache = None
 
     # -- the study
     @property
@@ -840,11 +841,11 @@ class Session:
             lo, hi, reverse = self.scale()
             unit = self.unit()
             if self.minmax:
+                extremes = self._extremes(np, values, stats)
                 for kind in ("max", "min"):
-                    index = stats.get("%s_index" % kind)
+                    index, value = extremes[kind]
                     if index is None or index < 0:
                         continue
-                    value = stats.get(kind)
                     tags.append(
                         {
                             "kind": kind,
@@ -882,6 +883,32 @@ class Session:
         self.tag_list = tags
         if self.tags is not None and view_mod._alive(self.tags):
             self.tags.set_tags(tags)
+
+    def _extremes(self, np, values, stats):
+        """{"min": (node, value), "max": (node, value)} of the result drawn: the result's own, or
+        with a body's eye off those of the bodies shown (a tag never points at a hidden body;
+        the legend keeps the whole study's range)."""
+        out = {kind: (stats.get("%s_index" % kind), stats.get(kind)) for kind in ("min", "max")}
+        if self.shown_bodies is None or self.data is None:
+            return out
+        key = (tuple(self.shown_bodies), self.result, self.data.stamp)
+        if self._extreme_cache is not None and self._extreme_cache[0] == key:
+            return self._extreme_cache[1]
+        rows = self.data.subset(self.shown_bodies)[0]
+        nodes = np.unique(self.data.tets[rows].reshape(-1))
+        found = np.asarray(values, dtype=float)[nodes]
+        ok = np.isfinite(found)
+        if ok.any():
+            nodes, found = nodes[ok], found[ok]
+            low, high = int(np.argmin(found)), int(np.argmax(found))
+            out = {
+                "min": (int(nodes[low]), float(found[low])),
+                "max": (int(nodes[high]), float(found[high])),
+            }
+        elif not len(nodes):  # (every body's eye off: nothing drawn, no tag)
+            out = {"min": (None, None), "max": (None, None)}
+        self._extreme_cache = (key, out)
+        return out
 
     def _tags_kept(self, np, tags):
         """The tags on the half of the result the slice keeps (the others would float where the

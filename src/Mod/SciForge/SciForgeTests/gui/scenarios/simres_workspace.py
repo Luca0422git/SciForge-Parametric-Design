@@ -7,7 +7,8 @@ A  A component moved 20 mm up holds two bodies glued end to end (steel 0..50, al
    component is (design coordinates); both bodies, the component and the mesh SETUP's Show
    Mesh drew are hidden on the view only while they show.
 A2 The browser's eye of the aluminium body off: its results go (only the steel half drawn, its
-   end face at x = 50 now outside), the same colour scale; on again: the whole arm.
+   end face at x = 50 now outside, the min and max tags on the steel), the same colour scale;
+   on again: the whole arm.
 B  Results Details: one row per body, each with its own material and strength.
 C  INSPECT > Reaction Force: the fixed end takes the whole 100 N; while it is open a tag on the
    fixed face (x = 0) says so; Close takes the tag away.
@@ -147,6 +148,12 @@ def a2_hide_check():
     )
     h.check("the steel's end face at x = 50 drawn", len(xs) and (abs(xs - 50.0) < 1e-6).any())
     h.check("the same colour scale", sess.legend_info["hi"] == state["legend_hi"])
+    ends = [t for t in s.tags() if t["kind"] in ("min", "max")]
+    h.check(
+        "the min and max tags on the steel (none where the hidden body is)",
+        len(ends) == 2 and all(float(sess.data.points[t["node"]][0]) <= 50.0 + 1e-6 for t in ends),
+        [(t["kind"], float(sess.data.points[t["node"]][0])) for t in ends],
+    )
     _click_eye("Alu")
 
 

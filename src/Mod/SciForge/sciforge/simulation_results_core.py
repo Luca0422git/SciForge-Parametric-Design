@@ -1614,6 +1614,11 @@ def _study_html(data):
                 data["bodies"],
             )
         )
+    if data.get("reactions"):
+        parts.append("<h3>Reaction force</h3>")
+        parts.append(
+            _table(["Constraint", "X (N)", "Y (N)", "Z (N)", "Total (N)"], data["reactions"])
+        )
     images = data.get("images") or []
     if images:
         parts.append("<h2>Pictures</h2>")

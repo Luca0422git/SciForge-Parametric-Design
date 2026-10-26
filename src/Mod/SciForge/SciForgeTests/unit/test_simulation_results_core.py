@@ -776,6 +776,14 @@ class ReportTests(unittest.TestCase):
         self.assertIn("Static Stress report", text)
         self.assertNotIn("Adaptive mesh refinement", text)
 
+    def test_reaction_forces(self):
+        text = core.report_html(
+            {"reactions": [("Fixed 1", "0", "100", "0", "100")], "bodies": [("B",) * 6]}
+        )
+        self.assertIn("<h3>Reaction force</h3>", text)
+        self.assertIn("<td>Fixed 1</td>", text)
+        self.assertNotIn("Reaction force", core.report_html({"bodies": [("B",) * 6]}))
+
     def test_per_body_units(self):
         text = core.report_html(
             {"bodies": [("B", "Steel", 30.02, 8.58, 3.5, 0.0079)], "body_units": ("ksi", "in")}
