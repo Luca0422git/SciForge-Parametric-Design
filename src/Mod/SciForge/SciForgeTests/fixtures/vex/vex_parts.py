@@ -10,6 +10,7 @@ the shapes are in millimetres.
   c_channel_1x2x1x25        aluminium (0.064 in), web 2 holes wide, flanges 1 hole, 25 long
   c_channel_1x2x1x25_round  the same with slightly rounded hole corners (r 0.02 in)
   c_channel_1x5x1x35        steel (0.046 in), web 5 holes, 35 long, rounded hole corners
+  c_channel_1x2x1x5(_round) a short aluminium piece (5 holes) for close-up tests
   angle_2x2x25      aluminium angle, two legs 2 holes wide, 25 long
   plate_5x25        aluminium plate, 5 x 25 holes
   standoff_1in      a 1 in standoff: 0.25 in across the hex flats, a #8 hole through
@@ -38,7 +39,7 @@ PITCH = 0.5 * IN  # hole grid
 ROUND = 0.02 * IN  # the corner radius of the "rounded" square holes
 AL = 0.064 * IN  # aluminium thickness
 STEEL = 0.046 * IN  # steel thickness
-VERSION = 3  # bump when a shape changes: the cached STEP files are made again
+VERSION = 4  # bump when a shape changes: the cached STEP files are made again
 
 # name -> (builder name, keyword arguments, what it is)
 PARTS = {
@@ -56,6 +57,16 @@ PARTS = {
         "c_channel",
         {"web": 5, "flange": 1, "length": 35, "t": STEEL, "corner": ROUND},
         "Steel C-channel 1x5x1x35",
+    ),
+    "c_channel_1x2x1x5": (
+        "c_channel",
+        {"web": 2, "flange": 1, "length": 5, "t": AL},
+        "Aluminium C-channel 1x2x1x5 (a short piece for close-up tests)",
+    ),
+    "c_channel_1x2x1x5_round": (
+        "c_channel",
+        {"web": 2, "flange": 1, "length": 5, "t": AL, "corner": ROUND},
+        "Aluminium C-channel 1x2x1x5, rounded hole corners",
     ),
     "angle_2x2x25": ("angle", {"leg": 2, "length": 25, "t": AL}, "Aluminium angle 2x2x25"),
     "plate_5x25": ("plate", {"width": 5, "length": 25, "t": AL}, "Aluminium plate 5x25"),
