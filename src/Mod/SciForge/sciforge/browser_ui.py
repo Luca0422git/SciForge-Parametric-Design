@@ -314,8 +314,17 @@ def _never_a_row(obj, origins=None):
 def _row_data(node):
     """What a row's item keeps of its node: all but its children (the child items hold
     those). Qt copies an item's data in and out on every read, and the design's row held the
-    whole tree: a robot's 3300 rows spent 0.25 s a refresh on that (speed, beta 3)."""
+    whole tree: a robot's 3300 rows spent 0.25 s a refresh on that (speed, beta 3). What needs
+    the children asks _with_children."""
     return {k: v for k, v in node.items() if k != "children"}
+
+
+def _with_children(tree, node):
+    """A row's node as the tree holds it, with its children (its item keeps none)."""
+    if node is None or "children" in node:
+        return node
+    found = core.find(tree, node.get("key")) if tree is not None else None
+    return found if found is not None else dict(node, children=[])
 
 
 def _origin_index(doc):
@@ -1274,6 +1283,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
         return self._doc.getObject(node["object"]) if self._doc and node["object"] else None
 
     def _set_visible(self, node, visible):
+        node = _with_children(self._tree, node)  # (vex: a row's item keeps no children)
         targets = [n for n in core.walk(node) if n["object"] and n["visible"] is not None]
         if node["kind"] == "component":
             targets = self._component_eye(node, targets, visible)

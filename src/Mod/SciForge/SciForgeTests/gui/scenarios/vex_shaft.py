@@ -13,6 +13,8 @@ standing beside it.
   C  Drive Joints (right-click the joint in the browser): 45 degrees: the shaft turns about
      the hole's axis (its corners swing out to the square's diagonal) and stays on the
      hole's centre; the channel does not move. OK; Undo: back square to the channel.
+  D  The shaft's row in the browser, right-click > Hide: the shaft is hidden; right-click >
+     Show: shown again.
 """
 
 import math
@@ -242,6 +244,31 @@ def c_undone():
     vx.no_popups("Drive Joints")
 
 
+# -- D: Show/Hide from the browser ----------------------------------------------------------------
+def d_hide():
+    from SciForgeTests.gui import timeline_input as t
+
+    h.click_empty()
+    t.row_menu(shaft().Label, "Hide")  # (Show/Hide reads Hide on a shown row)
+
+
+d_hide.wait_ms = 800
+
+
+def d_hidden():
+    from SciForgeTests.gui import timeline_input as t
+
+    h.check("Hide: the shaft is hidden", not shaft().ViewObject.Visibility)
+    t.row_menu(shaft().Label, "Show")
+
+
+d_hidden.wait_ms = 800
+
+
+def d_shown():
+    h.check("Show: the shaft is shown again", shaft().ViewObject.Visibility)
+
+
 h.run(
     "vex_shaft",
     [
@@ -261,5 +288,8 @@ h.run(
         c_turned,
         c_undo,
         c_undone,
+        d_hide,
+        d_hidden,
+        d_shown,
     ],
 )
