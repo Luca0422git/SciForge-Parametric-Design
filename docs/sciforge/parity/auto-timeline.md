@@ -90,3 +90,15 @@ face) to milliseconds.
 ## Tests
 
 (builders at-recognize and at-tools, each its own lines)
+
+- **Recognition (at-recognize)**: `SciForgeTests/unit/test_recognize_core.py` (pure Python:
+  numbers and measured values, planes, loops and the create_sketch items they become, exact
+  arc / line closure, patterns with noise, ideal pattern points, the plan's ids and Fusion's
+  order, plan arguments checked by the catalogue, frames and Euler angles, circle / cylinder
+  fits, arcs fitted on mesh sections); `SciForgeTests/headless/recognize_bench.py` (real
+  FreeCAD 1.1.4: parts built, sent through STEP and back as bodies without a timeline,
+  described, rebuilt from the plan by the headless AI executor, compared: volume within 0.1 %
+  and every face of the original matched; meshes of golden models through recognize_mesh;
+  describe() on a 300-face part under 5 s), run by `tools/sciforge/run_tests.sh --only
+  recognize` and at the end of `--only headless` / `--only base`. A sweep over every golden
+  model (a scratch script, not in the suite) found the bugs listed in the session log.

@@ -208,7 +208,7 @@ def _describe_turned(shape, options, rot, started):
             setattr(m, "A%d%d" % (i + 1, j + 1), rot[j][i])  # the inverse turn (transpose)
     local = shape.copy()
     local.transformShape(m)
-    out = describe(local, dict(options, _in_frame=True))
+    out = describe(local, dict(options, _in_frame=True, _refs_shape=shape))
     rx, ry, rz = core.euler_xyz(rot)
     out["summary"] = summary(shape)
     out["frame"] = {
@@ -248,9 +248,10 @@ def _describe_turned(shape, options, rot, started):
     out["notes"].insert(
         0,
         "The part is turned away from the origin planes: the plan builds it lined up with "
-        "them (the base's and the features' numbers are in that frame) and its last step "
-        "turns it into place (Move, free: X %s, Y %s, Z %s degrees about the origin); compare "
-        "with the original after that step." % (core.fmt(rx), core.fmt(ry), core.fmt(rz)),
+        "them (the base's and the features' numbers are in that frame; the face selectors "
+        "pick the original's faces) and its last step turns it into place (Move, free: X %s, "
+        "Y %s, Z %s degrees about the origin); compare with the original after that step."
+        % (core.fmt(rx), core.fmt(ry), core.fmt(rz)),
     )
     out["timing"] = round(time.time() - started, 3)
     return out
@@ -483,8 +484,12 @@ class _Reader:
         if self.refs is None:
             from .ai import geometry_facts
 
+            target = self.shape
+            world = self.options.get("_refs_shape")
+            if world is not None and world.Solids:  # (a turned part: the real part's faces,
+                target = max(world.Solids, key=lambda sol: sol.Volume)  # same order)
             try:
-                self.refs = geometry_facts.stable_refs(self.shape, "faces")
+                self.refs = geometry_facts.stable_refs(target, "faces")
             except Exception as exc:
                 warn("recognize: face selectors not made (%s)" % exc)
                 self.refs = {}
@@ -1319,10 +1324,20 @@ class _Reader:
             else:
                 fid = self.new_id()
                 fids = [fid]
+                if kind != "cut":
+                    feature_kind = "boss"
+                elif len(op["geometry"]) == op.get("count", 1) and all(
+                    "slot" in item for item in op["geometry"]
+                ):
+                    feature_kind = "slot"
+                elif op["extrude"].get("through_all"):
+                    feature_kind = "cut"
+                else:
+                    feature_kind = "pocket"
                 features.append(
                     {
                         "id": fid,
-                        "kind": "pocket" if kind == "cut" else "boss",
+                        "kind": feature_kind,
                         "plane": plane,
                         "offset": core.snap(offset),
                         "height": core.snap(op["height"]),

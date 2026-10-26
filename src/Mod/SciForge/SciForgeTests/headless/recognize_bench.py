@@ -265,7 +265,13 @@ BENCH = [
     ("bench_turned_bracket", {"base": "extrude", "holes": [5, 5, 6], "fillets": [3]}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
-MESH_BENCH = ["plate_through_hole_cut", "flange_polar_holes", "l_bracket_profile"]
+MESH_BENCH = [
+    "plate_through_hole_cut",
+    "flange_polar_holes",
+    "l_bracket_profile",
+    "bench_knob",
+    "bench_mount_plate",
+]
 
 
 def _load(model_id):
