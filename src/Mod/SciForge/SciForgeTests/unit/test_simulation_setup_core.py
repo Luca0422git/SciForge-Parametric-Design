@@ -91,6 +91,8 @@ class Stages(unittest.TestCase):
         self.assertEqual((what, name), ("materials", "Top"))
         self.assertIn("tick Top In Study", text)
         self.assertEqual(s.repair_step(base)[0], "precheck")
+        # no body left: nothing can be picked, so not an item's dialog
+        self.assertEqual(s.repair_step(dict(base, bodies=0, lost=["Fixed 1"]))[0], "precheck")
 
 
 class Forces(unittest.TestCase):

@@ -12,6 +12,9 @@ C  Repair: the Solve dialog closes and Edit Load opens on Force 1 (told why): it
    (row, pre-check green, Load Case Attributes "OK").
 D  Fixed 1 deleted (Delete on its row): red. Solve > Repair: Structural Constraints opens,
    told that nothing holds the model; a hole clicked, OK: the pre-check is not red.
+E  Workspace > Design; the bracket deleted (by script); Workspace > Simulation: the study is
+   still there, red (no solid body); Solve > Repair: the Pre-check list says so (no Repair in
+   it: nothing can be picked).
 """
 
 import FreeCAD as App
@@ -172,6 +175,43 @@ def d_check():
     found = [s.sim().item_data(i)["kind"] for i in s.items("constraint")]
     h.check("a Fixed again", found == ["fixed"], found)
     h.check("pre-check not red", s.light() in ("green", "yellow"), s.light())
+    s.workspace("Design")
+
+
+# -- E ------------------------------------------------------------------------------------------
+def e_delete():
+    h.check("DESIGN shows", s.tab_visible("solid"))
+    doc = App.ActiveDocument
+    body = s.body()
+    body.removeObjectsFromDocument()
+    doc.removeObject(body.Name)
+    doc.recompute()
+    s.workspace("Simulation")
+
+
+def e_check():
+    h.check("no body left", s.body() is None)
+    labels = s.browser_labels()
+    h.check("the study is still there", "Study 1 - Static Stress" in labels, labels)
+    h.check("pre-check red: no body", s.light() == "red", s.light())
+    h.ribbon("Solve")
+
+
+def e_repair():
+    button = repair_button(s.solve_dialog())
+    if h.check("Repair offered", button is not None):
+        s.click_widget(button)
+
+
+def e_list():
+    dialog = s.popup_named("SciForgeSimPrecheck")
+    if not h.check("Repair opened the Pre-check list", dialog is not None):
+        return
+    texts = [dialog.list.item(i).text() for i in range(dialog.list.count())]
+    h.check("it says there is no body", any("no solid body" in x for x in texts), texts)
+    h.check("no Repair in it (nothing can be picked)", dialog.repair is None)
+    h.check("told why", "no solid body" in s.told(), s.told())
+    s.close_popup("SciForgeSimPrecheck")
 
 
 h.run(
@@ -192,5 +232,9 @@ h.run(
         d_constraints,
         d_ok,
         d_check,
+        e_delete,
+        e_check,
+        e_repair,
+        e_list,
     ],
 )

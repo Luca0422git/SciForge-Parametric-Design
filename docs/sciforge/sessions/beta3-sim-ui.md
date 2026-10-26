@@ -36,8 +36,8 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   RESULTS, Generate Mesh with the engine's mesh-only job, Show Mesh, the "not held enough" guard.
   A study that cannot solve has Fusion's **Repair** button: it closes the dialog and goes to the
   first thing to fix, with a sentence (`simulation_setup_core.repair_step`: a lost item's Edit
-  dialog, Structural Constraints, DOF View, Study Materials, else the Pre-check list); a red
-  Pre-check list has the same Repair.
+  dialog, Structural Constraints, DOF View, Study Materials, else the Pre-check list: a study
+  whose body was deleted has nothing to pick); a red Pre-check list has the same Repair.
 - **Glyphs** (`simulation_glyphs.py`), **browser** (`simulation_browser.py` + hooks in
   `browser_ui.py`), **ribbon** (the SETUP entries in `ribbon_config.py`, DISPLAY > Show Mesh,
   a big button in every group), **icons** (`tools/sciforge/icons_simulation.py`, 43 icons, also
@@ -87,7 +87,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
 | `sim_setup_more` | 63 | PASS |
-| `sim_setup_lost` | 37 | PASS |
+| `sim_setup_lost` | 48 | PASS |
 | `sim_setup_two` | 40 | PASS |
 | `sim_setup_mesh` | 34 | PASS |
 

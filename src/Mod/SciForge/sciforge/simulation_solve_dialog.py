@@ -203,6 +203,7 @@ def repair_info(study):
     found = sim.study_bodies(study)
     names = {b.Name for b in found}
     info = {
+        "bodies": len(found),
         "lost": [i.Label for i in sim.lost_items(study)],
         "held": len([i for i in sim.items(study, "constraint") if not i.Suppressed]),
         "remove_rigid": bool(settings.get("remove_rigid")),
@@ -264,6 +265,7 @@ def repair(study):
             commands.tell("Repair: " + sentence)
             simulation_dialogs.open_materials(study)
         if what == "precheck":
+            commands.tell("Repair: " + sentence)
             simulation_dialogs.open_precheck(study)
         log("repair of %s: %s" % (study.Label, what))
         return what

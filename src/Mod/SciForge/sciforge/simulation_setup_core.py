@@ -162,7 +162,14 @@ def repair_step(info):
     labels nothing holds], "materials": [body labels whose study material lacks what the solve
     needs], "outside": [(item label, body label) of items on bodies the study leaves out]}.
     what: "edit" (the item's dialog), "constraints" (Structural Constraints), "dof" (DOF View
-    shows how the bodies move), "materials" (Study Materials) or "precheck" (the list)."""
+    shows how the bodies move), "materials" (Study Materials) or "precheck" (the list). A
+    study without a solid body ("bodies": 0) goes to the list: nothing in it can be picked."""
+    if info.get("bodies") == 0:
+        return (
+            "precheck",
+            None,
+            "The study has no solid body to simulate: add one in Design (or tick one In Study).",
+        )
     lost = info.get("lost") or []
     if lost:
         return (
