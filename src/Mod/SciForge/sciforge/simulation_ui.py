@@ -37,6 +37,7 @@ STATE = {
     "light_key": None,
     "glyph_key": None,
     "dof": False,  # DOF View is on (SETUP > DISPLAY)
+    "held": [],  # the design's shortcuts switched off while SIMULATION shows
 }
 
 
@@ -240,6 +241,7 @@ def _apply(on, tab=None):
         except Exception as exc:
             warn("simulation ribbon: %s" % exc)
     _timeline(on)
+    _hold_design_keys(on)
     if not on:
         _results_hide()
         STATE["dof"] = False  # (DOF View is a SIMULATION display: off when it is left)
@@ -273,6 +275,76 @@ def _apply(on, tab=None):
             "%s workspace%s"
             % ("simulation" if on else "design", (": %s" % doc.Label) if doc is not None else "")
         )
+
+
+# Keys that change the design (Fusion's design shortcuts do nothing in Simulation): Press
+# Pull, Extrude, Fillet, Hole, Move, Joint, copy / paste, Compute All, Delete and the sketch
+# tools. Delete made a Delete Face step from a face picked in the view (or deleted a body DOF
+# View had selected); the browser takes Del itself, so a study item is still deleted there.
+DESIGN_KEYS = (
+    "Del",
+    "Backspace",
+    "Q",
+    "E",
+    "F",
+    "H",
+    "M",
+    "J",
+    "Ctrl+C",
+    "Ctrl+V",
+    "Ctrl+B",
+    "D",
+    "L",
+    "C",
+    "R",
+    "T",
+    "X",
+    "O",
+    "P",
+)
+
+
+def _hold_design_keys(on):
+    """In SIMULATION the design's keys are off (Fusion does not change the design from
+    Simulation); they are on again when it is left."""
+    try:
+        from . import shortcuts
+
+        if on:
+            for key in DESIGN_KEYS:
+                entry = shortcuts._bound.get(shortcuts.normalise(key))
+                if entry is not None and entry[1].isEnabled():
+                    entry[1].setEnabled(False)
+                    STATE["held"].append(entry[1])
+        else:
+            held, STATE["held"] = STATE["held"], []
+            for shortcut in held:
+                try:
+                    shortcut.setEnabled(True)
+                except RuntimeError:
+                    pass  # (rebound meanwhile: the new one is on)
+    except Exception as exc:
+        warn("simulation workspace: keys: %s" % exc)
+
+
+def open_marking_menu(global_pos):
+    """The right-click marking menu with the SETUP commands (ribbon_config.SIM_MARKING_MENU
+    and SIM_MARKING_LIST) instead of the design's."""
+    from . import marking_menu, recent, ribbon_config as cfg
+
+    ring, listing, last = cfg.MARKING_MENU, cfg.MARKING_LIST, recent.last
+
+    def simulation_last():
+        # Repeat offers the last SETUP command only (not a design command run before)
+        found = last()
+        return found if found and str(found[0]).startswith("SciForge_Sim") else None
+
+    cfg.MARKING_MENU, cfg.MARKING_LIST = cfg.SIM_MARKING_MENU, cfg.SIM_MARKING_LIST
+    recent.last = simulation_last
+    try:
+        return marking_menu.open_at(global_pos)
+    finally:
+        cfg.MARKING_MENU, cfg.MARKING_LIST, recent.last = ring, listing, last
 
 
 def _timeline(on):

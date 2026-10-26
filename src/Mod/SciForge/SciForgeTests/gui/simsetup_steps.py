@@ -11,7 +11,7 @@ import time
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtWidgets
+from PySide import QtCore, QtGui, QtWidgets
 from PySide6 import QtTest
 
 from SciForgeTests.gui import dialog_input as ui
@@ -300,9 +300,19 @@ def click_widget(widget):
 
 
 def menu_item(group, label):
-    """GROUP > label in the ribbon (the group's name opens its menu), with the mouse."""
+    """GROUP > label in the ribbon (the group's name opens its menu), with the mouse. The
+    pointer first goes over the 3D view, as a person's does: QMenu ignores a click on an
+    entry when the pointer has not moved since the menu opened (it rested on that very
+    entry after the same click a moment before: DISPLAY > Show Mesh twice)."""
     from SciForgeTests.gui import sketch_input
 
+    try:
+        gl = h.gl_widget()
+        QtGui.QCursor.setPos(gl.mapToGlobal(QtCore.QPoint(gl.width() // 2, gl.height() // 2)))
+        QtTest.QTest.mouseMove(gl, QtCore.QPoint(gl.width() // 2, gl.height() // 2))
+        _process()
+    except Exception:
+        pass
     return sketch_input.menu_item(group, label)
 
 

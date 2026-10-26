@@ -32,7 +32,7 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 - **Glyphs** (`simulation_glyphs.py`), **browser** (`simulation_browser.py` + hooks in
   `browser_ui.py`), **ribbon** (the SETUP entries in `ribbon_config.py`, DISPLAY > Show Mesh,
   a big button in every group), **icons** (`tools/sciforge/icons_simulation.py`, 43 icons, also
-  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 35), nine GUI
+  for the greyed commands), unit tests (`test_simulation_setup_core.py`, 35), ten GUI
   scenarios `sim_setup_*.py`.
 - **The design's units** (Fusion's Simulation follows the document's units, research 6): the
   value fields, the browser's texts, Load Case Attributes, Study Materials' properties and the
@@ -47,6 +47,11 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
   session's earlier solves and meshes. **OK right after a click** keeps that pick (pickpanel
   handles a click 30 ms later; my dialogs take the queued click first: a busy machine once lost
   it in `sim_setup_dialogs`).
+- **The 3D view in SIMULATION**: the right-click marking menu offers the setup's commands
+  (`ribbon_config.SIM_MARKING_MENU` / `SIM_MARKING_LIST`, chosen by a hook in
+  `marking_menu._open_for_state`), Repeat only repeats a setup command; the design's keys are
+  off while SIMULATION shows (`simulation_ui.DESIGN_KEYS`: a face clicked in the view and Delete
+  made a Delete Face step in the design; E opened Extrude).
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
@@ -67,6 +72,7 @@ this branch three times (`sf/sim-core` at 117f9162, 18fdf61c and fe3bf6a5).
 | `sim_setup_components` | 36 | PASS |
 | `sim_setup_glyphs` | 12 | PASS |
 | `sim_setup_units` | 39 | PASS |
+| `sim_setup_canvas` | 28 | PASS |
 
 Shared files touched (`browser_ui.py`, `ribbon_config.py`): `timeline_browser`, `drawing_new`,
 `browser_opacity_hover` and `ribbon_sweep` pass; unit tests 2534 OK.

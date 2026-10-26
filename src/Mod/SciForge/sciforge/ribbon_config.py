@@ -1464,6 +1464,34 @@ SIM_SOLVE = group(
         item("Generate Mesh", "SciForge_SimGenerateMesh", "sim_mesh"),  # owner: sim-ui
     ],
 )
+# The right-click marking menu in the SIMULATION workspace (Fusion's offers the setup's
+# commands there, not the design's; the places are SciForge's choice). No Delete: in
+# SIMULATION the design is not changed (a study item is deleted from the browser).
+# owner: sim-ui (simulation_ui.open_marking_menu)
+SIM_MARKING_MENU = [
+    item("Repeat", "__repeat__", "compute"),
+    item("Study Materials", "SciForge_SimStudyMaterials", "sim_materials"),
+    item("Structural Loads", "SciForge_SimLoads", "sim_loads"),
+    item("Undo", "Std_Undo", "qa_undo", "Ctrl+Z"),
+    item("Structural Constraints", "SciForge_SimConstraints", "sim_constraints"),
+    item("Pre-check", "SciForge_SimPrecheck", "sim_precheck"),
+    item("Solve", "SciForge_SimSolve", "sim_solve"),
+    item("Settings", "SciForge_SimSettings", "sim_settings"),
+]
+SIM_MARKING_LIST = [
+    item("Redo", "Std_Redo", "qa_redo", "Ctrl+Y"),
+    item("Generate Mesh", "SciForge_SimGenerateMesh", "sim_mesh"),
+    item("Local Mesh Control", "SciForge_SimLocalMesh", "sim_local_mesh"),
+    item("DOF View", "SciForge_SimDOFView", "sim_dof"),
+    SEP,
+    item("Hide", "Std_HideSelection", "nav_display"),
+    item("Show All", "Std_ShowObjects", "nav_display"),
+    item("Fit", "Std_ViewFitAll", "nav_fit", "F6"),
+    item("Look At", "Std_AlignToSelection", "nav_lookat"),
+    SEP,
+    item("Set Orbit Center", "SciForge_SetOrbitCenter", "orbit_center"),
+    item("Reset Orbit Center", "SciForge_ResetOrbitCenter", "orbit_center"),
+]
 SIMR_TOOLS = group(
     "simr_tools",
     "RESULT TOOLS",
