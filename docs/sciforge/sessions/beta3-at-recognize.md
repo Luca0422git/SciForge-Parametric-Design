@@ -14,6 +14,14 @@
   drafts, shells; or a revolve) -> plan (Fusion's order, ids and "uses", catalogue-checked) ->
   unrecognized, confidence, notes. Parts turned away from the origin: read in their own frame,
   plan ends with a free `move_copy`.
+- Later in the session: each boss / cut piece is read along the axis its open side faces (a
+  VEX-like channel reads as its U profile along X with through-all square holes and two
+  patterns); cuts that open onto round faces (keyways, flats) and bosses on round faces (a
+  port on a pipe); holes into a hollow get a depth instead of through all; coaxial bores with
+  material between them are separate holes; drafted pockets in a straight block; touching
+  regions in separate sketches; the readings compared by steps, then by the volume the steps
+  add or take (a round boss on a block reads as a boss along Z); axes where some faces belong
+  to features along another axis are tried only when no axis fits every face.
 - `sciforge/recognize_core.py` (pure Python): snapping, "nice" rounding of measured values,
   origin planes, 2D loops (clean-up, areas, create_sketch items that close exactly), patterns
   (grid / circle / row), the plan's ids, extents, frames and Euler angles, mesh helpers
@@ -51,6 +59,14 @@
 - Chamfer two distances: SciForge measures distance 1 on `shape.ancestorsOfType(edge,
   Part.Face)[0]` (blend.reference_face).
 - `pkill -f` with a pattern that appears in the command line kills your own shell (exit 144).
+- `shape.BoundBox` is padded by the tolerances (a 10 mm part reads 10.000025 after a STEP round
+  trip); `shape.optimalBoundingBox(False, False)` is the tight box.
+- `solid.isInside(p, tol, True)` and `solid.isInside(p, tol, False)` together tell a point on
+  the surface (True / False) from one inside (True / True) or outside (False / False): that is
+  how a boss or cut piece's open side (where it meets the part, or the air) is found.
+- A `create_sketch` whose loops touch at a point (two regions sharing a corner) made a cut that
+  took nothing off: such regions go in sketches of their own.
+- Some golden models (`sf_gear_*`) take minutes to build: the sweep skips them.
 
 ## Tests
 

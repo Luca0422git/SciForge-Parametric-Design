@@ -61,6 +61,13 @@ class Numbers(unittest.TestCase):
         self.assertEqual(core.fmt(0.125), "0.125")
         self.assertEqual(core.fmt(5.9999999999), "6")
 
+    def test_rounder_values_beyond_a_value(self):
+        # a boss on a pipe may start anywhere inside it: the origin plane first
+        self.assertEqual(core.rounder_values(13.75, True), [0.0, 10.0, 13.0, 13.75])
+        self.assertEqual(core.rounder_values(13.75, False), [20.0, 15.0, 14.0, 13.75])
+        self.assertEqual(core.rounder_values(-3.5, False), [0.0, -3.0, -3.5])
+        self.assertEqual(core.rounder_values(10.0, True), [0.0, 10.0])
+
 
 class Planes(unittest.TestCase):
     def test_frames_are_right_handed_like_sciforges_sketches(self):

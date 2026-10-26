@@ -401,6 +401,29 @@ EXTRA_MODELS = {
             {"op": "hole", "id": "h1", "sketch": "s2", "diameter": 8, "depth": 5},
         ],
     },
+    "bench_opposed_holes": {
+        "title": "Block 40 x 30 x 20 with a d6 blind hole 6 deep from the top and another from "
+        "the bottom on the same axis (two holes, not one through hole)",
+        "steps": [
+            {"op": "sketch", "id": "s1", "plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]},
+            {"op": "extrude", "id": "e1", "profile": "s1", "distance": 20},
+            {
+                "op": "sketch",
+                "id": "s2",
+                "plane": "XY",
+                "offset": 20,
+                "geometry": [{"circle": [20, 15, 3]}],
+            },
+            {"op": "hole", "id": "h1", "sketch": "s2", "diameter": 6, "depth": 6},
+            {
+                "op": "sketch",
+                "id": "s3",
+                "plane": "XY",
+                "geometry": [{"circle": [20, 15, 3]}],
+            },
+            {"op": "hole", "id": "h2", "sketch": "s3", "diameter": 6, "depth": 6},
+        ],
+    },
     "bench_turned_bracket": {
         "title": "The bracket with holes, turned 30 degrees about X and 20 about Z (a STEP part "
         "placed in an assembly)",
@@ -487,6 +510,7 @@ BENCH = [
     ("bench_keyed_shaft", {"base": "extrude", "holes": []}),
     ("bench_pipe_port", {"base": "extrude", "holes": [6, 24]}),
     ("bench_clevis", {"base": "extrude", "holes": [8]}),
+    ("bench_opposed_holes", {"base": "extrude", "holes": [6, 6]}),
     ("bench_offset_flange", {"base": "extrude", "holes": [6, 6, 6, 6, 6, 20], "patterns": 1}),
     ("bench_part_300", {"base": "extrude", "holes": [6] * 294, "patterns": 1, "speed": True}),
 ]
