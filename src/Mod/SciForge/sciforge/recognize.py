@@ -1211,11 +1211,12 @@ class _Reader:
             for f in self.facts
             if f.kind == "cylinder" and f.index not in skip and f.radius and f.span is not None
         ]
-        out = set()
+        out, seen = set(), set()
         for f in cyl:
-            if f.index in out or f.span >= math.pi - 1e-3:
+            if f.index in seen or f.span >= math.pi - 1e-3:
                 continue
             same = [g for g in cyl if abs(g.radius - f.radius) < 1e-6 and _coaxial(f, g)]
+            seen.update(g.index for g in same)  # (each wall weighed once)
             if len(same) < 2:
                 continue
             try:
@@ -1409,6 +1410,7 @@ class _Reader:
                     "why": "a %s crossed by other features, left in the base" % h["kind"],
                 }
             )
+            self.listed.update(h["_faces"])
         return out
 
     def _tangled(self, group, most=16):
