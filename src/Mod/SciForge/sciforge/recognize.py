@@ -2772,9 +2772,6 @@ class _Reader:
         return spec if picks(spec) else None
 
 
-_ANALYTIC = ("plane", "cylinder", "cone", "sphere", "torus")
-
-
 def _box_copy(box):
     """A copy of a FreeCAD BoundBox (add() changes it in place)."""
     import FreeCAD as App
