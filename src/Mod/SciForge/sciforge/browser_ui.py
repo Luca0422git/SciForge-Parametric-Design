@@ -9,6 +9,8 @@ that kind of row. Structure: browser_core.py; deleting goes through
 timeline_ops.py (one undo step, later steps kept working where possible).
 """
 
+import time
+
 import FreeCAD as App
 import FreeCADGui as Gui
 
@@ -202,6 +204,9 @@ def _objects(doc):
                 continue
             if marker_hidden and _in_hidden(obj, marker_hidden):
                 continue  # a component made after the history marker does not exist yet
+            if obj.TypeId in ORIGIN_FEATURE_TYPES:
+                rows.append(_origin_row(obj))  # (thousands in a big assembly: the short way)
+                continue
             parent = obj.getParentGeoFeatureGroup()
             visible = obj.ViewObject.Visibility if obj.ViewObject is not None else None
             if visible is not None and getattr(obj, "Role", None) in core.ORIGIN_ROLES:
@@ -272,6 +277,11 @@ def _objects(doc):
 
 
 ORIGIN_FEATURE_TYPES = ("App::Origin", "App::Line", "App::Plane", "App::Point")
+# The timer's read of the design waits this many times as long as the last read took: on a
+# design whose read takes a second (a VEX robot of 300 parts) dragging or driving a joint is
+# not stopped by a read every half second; small designs (a read of 30 ms) are read as often
+# as before. Commands still refresh the browser at once (refresh()).
+POLL_PAUSE = 4.0
 
 
 def _never_a_row(obj):
@@ -293,6 +303,34 @@ def _never_a_row(obj):
             and owner.getParentGeoFeatureGroup() is not None
         )
     return False
+
+
+def _origin_row(obj):
+    """The row of an origin plane / axis / point (or of the Origin): what _objects reads for
+    any object, without the questions that never apply to one (joints, sketches, meshes,
+    sheet metal...): a robot of 300 parts lists 2400 of them."""
+    parent = obj.getParentGeoFeatureGroup()
+    vobj = obj.ViewObject
+    visible = vobj.Visibility if vobj is not None else None
+    role = getattr(obj, "Role", None)
+    if visible is not None and role in core.ORIGIN_ROLES:
+        visible = _origin_visible(obj)
+    container = parent
+    while container is not None and container.TypeId != "App::Part":
+        container = container.getParentGeoFeatureGroup()
+    return {
+        "name": obj.Name,
+        "label": obj.Label,
+        "type_id": obj.TypeId,
+        "visible": visible,
+        "body": (
+            parent.Name if parent is not None and parent.TypeId == "PartDesign::Body" else None
+        ),
+        "role": role,
+        "sciforge_type": getattr(obj, "SciForgeType", ""),
+        "component": container.Name if container is not None else None,
+        "grounded": False,
+    }
 
 
 def _component_rename(obj, text):
@@ -789,6 +827,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
         self._timer.timeout.connect(self._poll)
         self._gate = doc_epoch.Gate()  # the poll reads the design only after a change
         self._observer = None
+        self._read_cost = 0.0  # how long the last read took (s), and when it ended
+        self._read_end = 0.0
 
     def start(self):
         doc_epoch.install()
@@ -869,6 +909,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             if key is not None and not self._gate.ready(key):
                 self._sync_selection()
                 return
+            if time.monotonic() - self._read_end < POLL_PAUSE * self._read_cost:
+                return  # a big design (a robot: a read takes a second): not on every tick
             self.refresh()
         except Exception as exc:
             _remember("info", "browser poll: %s" % exc)
@@ -880,6 +922,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             if self._renaming is not None:
                 return  # do not rebuild under the user's typing
             key = doc_epoch.key()  # (before reading: a change during the read is read again)
+            started = time.monotonic()
             tree = self.tree()
             _follow_active(self._doc)
             sig = core.signature(tree)
@@ -890,6 +933,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
                 self._tree = tree
                 self._rebuild(tree)
             self._sync_selection()
+            self._read_end = time.monotonic()
+            self._read_cost = self._read_end - started
         except Exception as exc:
             _remember("info", "browser refresh skipped: %s" % exc)
 

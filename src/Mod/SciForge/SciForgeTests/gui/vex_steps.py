@@ -144,19 +144,21 @@ def hover(point, modifiers=QtCore.Qt.NoModifier):
     widget = h.gl_widget()
     pixel = h.screen_point(point)
     # (a mouse already on that pixel sends no move: come from the next pixel, as a hand does)
-    h.move(pixel + QtCore.QPoint(2, 1))
     if modifiers == QtCore.Qt.NoModifier:
+        h.move(pixel + QtCore.QPoint(2, 1))
         h.move(pixel)
     else:
-        event = QtGui.QMouseEvent(
-            QtCore.QEvent.MouseMove,
-            QtCore.QPointF(pixel),
-            QtCore.QPointF(widget.mapToGlobal(pixel)),
-            QtCore.Qt.NoButton,
-            QtCore.Qt.NoButton,
-            modifiers,
-        )
-        QtWidgets.QApplication.sendEvent(widget, event)
+        for at in (pixel + QtCore.QPoint(2, 1), pixel):  # the keys stay held on the way
+            event = QtGui.QMouseEvent(
+                QtCore.QEvent.MouseMove,
+                QtCore.QPointF(at),
+                QtCore.QPointF(widget.mapToGlobal(at)),
+                QtCore.Qt.NoButton,
+                QtCore.Qt.NoButton,
+                modifiers,
+            )
+            QtWidgets.QApplication.sendEvent(widget, event)
+            QtWidgets.QApplication.processEvents()
     for _ in range(6):
         QtTest.QTest.qWait(40)
         QtWidgets.QApplication.processEvents()
