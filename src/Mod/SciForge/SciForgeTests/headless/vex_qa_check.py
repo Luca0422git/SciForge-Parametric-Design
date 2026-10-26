@@ -242,11 +242,58 @@ def check_occurrence_names_after_delete():
         _close(doc)
 
 
+def check_same_file_again():
+    """Insert STEP of the same file again: the same bytes are another occurrence even when
+    the file's date changed (a teammate copied the parts folder again, a git checkout);
+    a file that really changed comes in as a part of its own (its new shape), and inserting
+    that one again is an occurrence of it."""
+    import shutil
+    import time
+
+    from SciForgeTests.fixtures.vex import vex_parts as vp
+    from sciforge import instances
+
+    src = _files(["screw_8_32_x_0_5"])["screw_8_32_x_0_5"]
+    work = os.path.join(_folder(), "again")
+    os.makedirs(work, exist_ok=True)
+    path = os.path.join(work, "screw.step")
+    shutil.copyfile(src, path)
+    doc = App.newDocument("VexQaAgain")
+    try:
+        first = _insert(doc, path).top
+        later = time.time() + 120.0
+        os.utime(path, (later, later))  # the same bytes, a new date
+        copy = _insert(doc, path)
+        same = copy.occurrence and instances.source_of(copy.top) is first
+        longer = os.path.join(work, "longer.step")
+        vp.write_step(vp.screw(0.75), "screw", longer)
+        shutil.copyfile(longer, path)  # the file really changed
+        later += 120.0
+        os.utime(path, (later, later))
+        changed = _insert(doc, path)
+        length = _gbox(doc, changed.top).ZLength
+        again = _insert(doc, path)
+        _out(
+            "same_file_again",
+            same
+            and not changed.occurrence
+            and abs(length - (0.75 + 0.08) * vp.IN) < 1e-3
+            and again.occurrence
+            and instances.source_of(again.top) is changed.top,
+            "a new date: occurrence %s; a changed file: occurrence %s, length %.3f; that one "
+            "again: occurrence %s"
+            % (copy.occurrence, changed.occurrence, length, again.occurrence),
+        )
+    finally:
+        _close(doc)
+
+
 # -- the run -------------------------------------------------------------------------------------
 CHECKS = [
     check_duplicate_rigid_group,
     check_parts_list_original_deleted,
     check_occurrence_names_after_delete,
+    check_same_file_again,
 ]
 
 
@@ -257,3 +304,6 @@ def main():
         except Exception:
             _out(check.__name__, False, traceback.format_exc().replace("\n", " | "))
     print("vexqa done %d" % len(RESULTS), flush=True)
+    import shutil
+
+    shutil.rmtree(_folder(), ignore_errors=True)

@@ -14,7 +14,9 @@ Fusion. (The details and the sources: `docs/sciforge/parity/vex-assembly.md`.)
   right-click > **Insert into Current Design**, or drag a card into the 3D view.
 - Inserting the **same file again** gives another copy of the same part ("screw:2",
   "screw:3"...), linked to the first (a change to the part shows in every copy); the file
-  is not read again, and a drawing's parts list counts them in one row (Qty).
+  is not read again, and a drawing's parts list counts them in one row (Qty). A copy of the
+  same file (a teammate's parts folder, a fresh download) counts as the same file; a file
+  whose content changed comes in as a new part.
 
 ## 2. Use inches
 
