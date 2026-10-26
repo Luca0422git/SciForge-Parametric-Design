@@ -1664,8 +1664,8 @@ def picks_through_edits(doc, out):
         )
         out.append(
             (
-                "%s: the end (x = %s) bends %.4g mm (beam theory %.4g)"
-                % (step, sb._num(length), tip, expected),
+                "%s: the end (x = %s) bends %.4g mm (beam theory %.4g; %d nodes)"
+                % (step, sb._num(length), tip, expected, m["mesh"]["nodes"]),
                 ok,
                 "notes %s, reaction %s" % (m.get("notes"), m["reactions"]),
             )
@@ -1698,6 +1698,21 @@ def picks_through_edits(doc, out):
     sketch.setDatum(length_c, App.Units.Quantity("120 mm"))
     doc.recompute()
     check("then 120 mm long again", 120.0, slot=True)
+    # the end face's top edge rounded (r 2 mm): the end face gets smaller, a round face
+    # appears next to it; the force stays on the (flat) end face
+    tip = body.Tip
+    names = [
+        "Edge%d" % i
+        for i, e in enumerate(tip.Shape.Edges, 1)
+        if sb.near(e.CenterOfMass.x, 120.0, 1e-6) and sb.near(e.CenterOfMass.z, 10.0, 1e-6)
+    ]
+    fillet = body.newObject("PartDesign::Fillet", "Fillet")
+    fillet.Base = (tip, names)
+    fillet.Radius = 2.0
+    doc.recompute()
+    if len(names) != 1 or not fillet.Shape.isValid() or fillet.Shape.isNull():
+        raise AssertionError("the fillet was not made: %s" % names)
+    check("with the end's top edge rounded", 120.0, slot=True)
 
 
 @engine_check("materials stay with their bodies in any order")
