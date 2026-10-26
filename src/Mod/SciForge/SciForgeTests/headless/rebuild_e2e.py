@@ -175,6 +175,89 @@ MCP_PART = "hole_grid"
 FIX_ROUNDS = 6
 
 
+# -- every rebuild tool once, for SciForgeTests/headless/runner.py (its session format) ---------
+def _hole_fix(answer, run):
+    data = json_in(answer["text"]) or {}
+    fixes = [r.get("fix") for r in data.get("extra", []) if r.get("fix")]
+    if not fixes or fixes[0]["tool"] != "hole" or fixes[0]["args"].get("diameter") != 6:
+        return "no ready hole call for the 6 mm hole: %s" % data.get("extra")
+    if data.get("done") or abs(data.get("match", 0) - 0.97700) > 1e-3:
+        return "match %s (expected about 0.977)" % data.get("match")
+    return None
+
+
+def _kept(answer, run):
+    doc = run.doc()
+    labels = sorted(o.Label for o in doc.Objects if o.TypeId == "PartDesign::Body")
+    if "Body001 (original)" not in labels or "Body001" not in labels:
+        return "bodies after finish: %s" % labels
+    return None
+
+
+RUNNER_SESSION = [
+    {"tool": "new_design", "args": {"name": "RebuildTools"}},
+    {
+        "tool": "create_sketch",
+        "args": {"plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]},
+        "save": "rb_sk1",
+    },
+    {"tool": "extrude", "args": {"profile": "$rb_sk1", "distance": 10}},
+    {
+        "tool": "create_sketch",
+        "args": {"plane": "XY", "offset": 10, "geometry": [{"circle": [20, 15, 3]}]},
+        "save": "rb_sk2",
+    },
+    {"tool": "hole", "args": {"sketch": "$rb_sk2", "diameter": 6, "through_all": True}},
+    {"tool": "export", "args": {"format": "step", "path": "{tmp}/rebuild_tools.step"}},
+    {"tool": "new_design", "args": {"name": "RebuildToolsImported"}},
+    {"tool": "describe_reference", "args": {}, "expect": "error", "contains": ["start_rebuild"]},
+    {"tool": "compare_to_reference", "args": {}, "expect": "error", "contains": ["start_rebuild"]},
+    {"tool": "finish_rebuild", "args": {}, "expect": "error", "contains": ["start_rebuild"]},
+    {"tool": "import_file", "args": {"path": "{tmp}/rebuild_tools.step"}},
+    {
+        "tool": "start_rebuild",
+        "args": {"body": "NoSuchBody"},
+        "expect": "error",
+        "contains": ["NoSuchBody"],
+    },
+    {"tool": "start_rebuild", "args": {"body": "Body"}, "expect": "error", "contains": ["no solid"]},
+    {
+        "tool": "start_rebuild",
+        "args": {"body": "Body001"},
+        "save": "rb_rebuilt",
+        "contains": ["is the reference now", "(rebuilt)"],
+    },
+    {
+        "tool": "start_rebuild",
+        "args": {"body": "Body001"},
+        "expect": "error",
+        "contains": ["already being rebuilt"],
+    },
+    {"tool": "describe_reference", "args": {}, "contains": ['"plan"', "Body001"]},
+    {"tool": "describe_reference", "args": {"detail": "summary"}, "contains": ['"summary"']},
+    {"tool": "compare_to_reference", "args": {}, "contains": ["still empty"]},
+    {"tool": "finish_rebuild", "args": {}, "expect": "error", "contains": ["Not finished"]},
+    {
+        "tool": "create_sketch",
+        "args": {"plane": "XY", "geometry": [{"rect": [0, 0, 40, 30]}]},
+        "save": "rb_sk3",
+    },
+    {"tool": "extrude", "args": {"profile": "$rb_sk3", "distance": 10}},
+    {
+        "tool": "compare_to_reference",
+        "args": {"detail": "full", "show": False},
+        "contains": ["not cut yet", "groups[0].fix"],
+        "check": _hole_fix,
+    },
+    {
+        "tool": "finish_rebuild",
+        "args": {"even_if_different": True, "keep_original": True, "keep_reference": True},
+        "contains": ["kept hidden", "the reference kept hidden"],
+        "check": _kept,
+    },
+]
+
+
 def json_in(text):
     start = text.find("{")
     if start < 0:
@@ -562,6 +645,7 @@ def run_over_mcp(command, out_dir=None):
             return agent_e2e.text_of(result), bool(result.get("isError"))
 
         agent.raw_call = call
+        agent.call("new_design", {"name": "Nothing"})
         text, error = agent.call("describe_reference", {})
         agent.check(
             "before start_rebuild, describe_reference says what to do",

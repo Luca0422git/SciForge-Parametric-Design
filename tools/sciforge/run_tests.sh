@@ -169,6 +169,25 @@ EOF3
         "${MODULE}/SciForgeTests/headless/agent_e2e.py" --out "${OUT}" \
         > "${OUT}/agent-e2e.log" 2>&1 || FAILED+=("agent e2e")
     grep -aoE "\[SciForge\] agent (FAIL|summary).*" "${OUT}/agent-e2e.log"
+    # --- at-tools (beta 3): Auto Timeline, parts without a timeline rebuilt only through the
+    # AI tools, in-process and through the real MCP server (SciForgeTests/headless/rebuild_e2e.py)
+    echo "== [SciForge] Auto Timeline end to end (headless)"
+    SCIFORGE_HEADLESS_OUT="${OUT}" timeout 900 "${FC_CMD[@]}" -c \
+        "from SciForgeTests.headless import rebuild_e2e; rebuild_e2e.main()" \
+        > "${OUT}/rebuild-e2e.log" 2>&1
+    grep -aoE "\[SciForge\] rebuild (FAIL|summary).*" "${OUT}/rebuild-e2e.log"
+    python3 - "${OUT}/rebuild-e2e-report.json" <<'EOF_REBUILD' || FAILED+=("rebuild e2e")
+import json, sys
+try:
+    report = json.load(open(sys.argv[1]))
+except Exception as exc:
+    print("no rebuild report: %s" % exc); sys.exit(1)
+sys.exit(0 if report.get("passed") else 1)
+EOF_REBUILD
+    SCIFORGE_FREECAD="${FREECAD_DIR}" SCIFORGE_CLI_PROFILE="${PROFILE}" timeout 900 python3 \
+        "${MODULE}/SciForgeTests/headless/rebuild_e2e.py" --mcp --out "${OUT}" \
+        > "${OUT}/rebuild-mcp.log" 2>&1 || FAILED+=("rebuild e2e (MCP)")
+    grep -aoE "\[SciForge\] rebuild-mcp (FAIL|summary).*" "${OUT}/rebuild-mcp.log"
 }
 
 # run_gui_script NAME SCRIPT LOG RESULT: one GUI test in a real FreeCAD window.
