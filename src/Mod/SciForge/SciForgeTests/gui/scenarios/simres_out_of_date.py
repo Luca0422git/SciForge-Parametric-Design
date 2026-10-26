@@ -150,8 +150,11 @@ def d_solve_dialog():
 
 def _solved():
     sess = s.session()
-    return sess is not None and not sess.out_of_date and sess.data is not None and (
-        sess.data.max_displacement > state["disp"] * 1.2
+    return (
+        sess is not None
+        and not sess.out_of_date
+        and sess.data is not None
+        and (sess.data.max_displacement > state["disp"] * 1.2)
     )
 
 
