@@ -1078,7 +1078,11 @@ def solver_failure(output):
             "Remove rigid body modes if the loads balance each other."
         )
     if "nonpositive jacobian" in text or "negative jacobian" in text:
-        return "The mesh has distorted elements: make the Average Element Size smaller."
+        return (
+            "The mesh has distorted elements CalculiX cannot use (large elements at thin walls "
+            "or tight curves): try a smaller Average Element Size, or a Local Mesh Control on "
+            "the thin or curved faces."
+        )
     if (
         "dependent dof" in text
         or "is used as dependent" in text
@@ -1104,13 +1108,33 @@ def gmsh_errors(output):
     in order, so surface 12 is the model's Face12."""
     import re
 
-    errors = [line.strip() for line in (output or "").splitlines() if "Error" in line]
+    # (Gmsh ends with a summary of its errors: "-----", "Mesh generation error summary",
+    # "2 errors", "Check the full log for details": not reasons)
+    generic = ("------", "error summary", "warnings", "errors", "full log")
+    errors = [
+        line.strip()
+        for line in (output or "").splitlines()
+        if "Error" in line and not any(g in line for g in generic)
+    ]
     numbers = []
     for line in errors:
         for match in re.finditer(r"[Ss]urfaces?\s+(\d+)", line):
             if int(match.group(1)) not in numbers:
                 numbers.append(int(match.group(1)))
     return errors, numbers
+
+
+# Gmsh's complaints when the surface mesh crosses itself: the triangles of two faces closer
+# than the elements are large (a thin wall, a small gap) cut through each other. Smaller
+# elements mesh it.
+CROSSING_WORDS = ("intersect", "invalid boundary mesh", "overlapping facets", "self-intersect")
+
+
+def mesh_crossed_itself(output):
+    """True when Gmsh's output says the surface mesh crossed itself (see CROSSING_WORDS)."""
+    errors, _numbers = gmsh_errors(output)
+    text = " ".join(errors).lower()
+    return any(word in text for word in CROSSING_WORDS)
 
 
 # -- contacts --------------------------------------------------------------------------------------
@@ -1152,6 +1176,24 @@ def mesh_quality(edge_lengths, aspect_ratios, limit):
     return out
 
 
+def mesh_quality_note(info, limit):
+    """A sentence when the mesh has elements stretched far beyond the study's aspect ratio
+    limit (a thin wall or a sliver met by large elements: the results near them are less
+    accurate), else None. `info`: mesh_quality's dict with "elements"."""
+    worst = info.get("worst_aspect")
+    over = int(info.get("over_limit") or 0)
+    count = int(info.get("elements") or 0)
+    # (only far past the limit: a slender rod's 16:1 parabolic elements still bend within 2 %)
+    if not worst or worst <= 3.0 * float(limit):
+        return None
+    return (
+        "%d of the %d mesh elements are stretched more than %s:1 (the worst %s:1): results near "
+        "them are less accurate. A thin wall needs smaller elements (the Average Element Size, "
+        "or a Local Mesh Control on it); a tiny step or sliver face is better removed from the "
+        "model." % (over, count, fmt(limit, 3), fmt(worst, 3))
+    )
+
+
 def tetra_aspect(p0, p1, p2, p3):
     """Aspect ratio of a tetrahedron from its corners: the longest edge over the smallest
     height, scaled so a regular tetrahedron gives 1 (sqrt(3/2) * edge / height)."""
@@ -1168,6 +1210,109 @@ def tetra_aspect(p0, p1, p2, p3):
     return max(edges) / height / math.sqrt(1.5)
 
 
+# -- curved elements turned inside out -------------------------------------------------------------
+# A curved parabolic tetrahedron has its mid-side nodes on the model's curved faces. Where an
+# element is large next to a tight curve (a small hole in a coarse mesh) a curved edge can push
+# through the element's other faces: it turns inside out and CalculiX stops ("nonpositive
+# jacobian"). SciForge checks every curved element where CalculiX integrates it, at its corners
+# and in its middle, and makes the bad ones straight-sided (their mid-side nodes back to the
+# middle of their edges). Gmsh's own repair (HighOrderOptimize) took minutes on a big part.
+TET10_EDGES = ((0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3))  # CalculiX's C3D10 nodes 5-10
+_GA, _GB = 0.5854101966249685, 0.1381966011250105
+TET10_POINTS = (  # (L1, L2, L3, L4): CalculiX's four integration points, the corners, the middle
+    (_GA, _GB, _GB, _GB),
+    (_GB, _GA, _GB, _GB),
+    (_GB, _GB, _GA, _GB),
+    (_GB, _GB, _GB, _GA),
+    (1.0, 0.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0, 0.0),
+    (0.0, 0.0, 1.0, 0.0),
+    (0.0, 0.0, 0.0, 1.0),
+    (0.25, 0.25, 0.25, 0.25),
+)
+# Only elements inside out or nearly (the Jacobian somewhere below 1 % of the straight-sided
+# element's) are made straight: a low but positive Jacobian solves well, and every straightened
+# element flattens a bit of a curved face (straightening all below Gmsh's own aim of 10 % made
+# a coarse shaft 18 % too soft in torsion; this rule: 1.2 %)
+DISTORTION_LIMIT = 0.01
+
+
+def tet10_gradients(point):
+    """d N / d (xi, eta, zeta) of the ten shape functions of a parabolic tetrahedron at
+    `point` (L1..L4, with L2 = xi, L3 = eta, L4 = zeta), in CalculiX's node order."""
+    l1, l2, l3, l4 = point
+    return [
+        (1.0 - 4.0 * l1, 1.0 - 4.0 * l1, 1.0 - 4.0 * l1),
+        (4.0 * l2 - 1.0, 0.0, 0.0),
+        (0.0, 4.0 * l3 - 1.0, 0.0),
+        (0.0, 0.0, 4.0 * l4 - 1.0),
+        (4.0 * (l1 - l2), -4.0 * l2, -4.0 * l2),
+        (4.0 * l3, 4.0 * l2, 0.0),
+        (-4.0 * l3, 4.0 * (l1 - l3), -4.0 * l3),
+        (-4.0 * l4, -4.0 * l4, 4.0 * (l1 - l4)),
+        (4.0 * l4, 0.0, 4.0 * l2),
+        (0.0, 4.0 * l4, 4.0 * l3),
+    ]
+
+
+def tet10_distortion(xyz, elements, chunk=20000):
+    """For each parabolic tetrahedron, its smallest Jacobian over TET10_POINTS as a fraction
+    of its straight-sided one (1: as good as straight; 0 or less: inside out; -inf: its
+    corners themselves are inside out or flat, which straight sides do not mend). `xyz`:
+    numpy (nodes, 3) array; `elements`: numpy (elements, 10) array of rows of `xyz`, in
+    CalculiX's node order. Worked in chunks (a big mesh would need gigabytes at once)."""
+    import numpy as np
+
+    grads = np.array([tet10_gradients(p) for p in TET10_POINTS], dtype=float)
+    out = np.empty(len(elements))
+    for start in range(0, len(elements), chunk):
+        coords = xyz[elements[start : start + chunk]]
+        det = np.linalg.det(np.einsum("eai,paj->epij", coords, grads))
+        c = coords[:, :4]
+        straight = np.einsum(
+            "ei,ei->e", c[:, 1] - c[:, 0], np.cross(c[:, 2] - c[:, 0], c[:, 3] - c[:, 0])
+        )
+        part = np.full(len(coords), -np.inf)
+        good = straight > 0.0
+        part[good] = (det[good] / straight[good, None]).min(axis=1)
+        out[start : start + chunk] = part
+    return out
+
+
+def straighten_tets(xyz, elements, limit=DISTORTION_LIMIT, rounds=8):
+    """Make the parabolic tetrahedra whose distortion (tet10_distortion) is below `limit`
+    straight-sided, in place: their mid-side nodes moved to the middle of their edges; then
+    the same for the neighbours this changed, until none is left or after `rounds` passes.
+    `xyz`: numpy (nodes, 3) float array; `elements`: numpy (elements, 10) int array of rows
+    of `xyz`. Returns (sorted moved rows of `xyz`, how many elements were made straight, how
+    many are still bad: inside out at their corners, or left after `rounds`)."""
+    import numpy as np
+
+    elements = np.asarray(elements)
+    straight = np.zeros(len(elements), dtype=bool)
+    moved = set()
+    ends_a = [a for a, _b in TET10_EDGES]
+    ends_b = [b for _a, b in TET10_EDGES]
+    worst = tet10_distortion(xyz, elements)
+    check = np.arange(len(elements))
+    for _round in range(rounds):
+        bad = check[(worst[check] < limit) & np.isfinite(worst[check])]
+        if not len(bad):
+            break
+        rows = elements[bad]
+        mids = rows[:, 4:]
+        xyz[mids] = 0.5 * (xyz[rows[:, ends_a]] + xyz[rows[:, ends_b]])
+        straight[bad] = True
+        changed = np.unique(mids)
+        moved.update(int(n) for n in changed)
+        worst[bad] = 1.0
+        check = np.nonzero(np.isin(elements[:, 4:], changed).any(axis=1) & ~straight)[0]
+        if len(check):
+            worst[check] = tet10_distortion(xyz, elements[check])
+    left = int(np.count_nonzero(worst < limit))
+    return sorted(moved), int(np.count_nonzero(straight)), left
+
+
 # -- pre-check -------------------------------------------------------------------------------------
 def precheck(summary):
     """What is missing before a solve, as [(level, sentence)] with level "error" (cannot
@@ -1177,7 +1322,7 @@ def precheck(summary):
     "constraints": [(kind, picks count, suppressed)], "loads": [...], "gravity": bool,
     "safety_basis", "lost": [item labels whose picks are gone], "loose": [bodies held by
     nothing], "overlaps": [(body, body, volume mm3)], "twice": [(item, item)] constrained on
-    the same face, "remove_rigid": bool}"""
+    the same face, "remove_rigid": bool, "order": "parabolic" | "linear"}"""
     out = []
     bodies = summary.get("bodies") or []
     remove_rigid = bool(summary.get("remove_rigid"))
@@ -1257,6 +1402,17 @@ def precheck(summary):
                 "warning",
                 "%s and %s constrain the same face: where they ask for different things, "
                 "%s wins." % (a, b, a),
+            )
+        )
+    if summary.get("order") == "linear" and bodies:
+        # (measured: a cantilever bends 0.082 mm instead of 0.200 at the default size, 0.161
+        # at 3 %; parabolic: 0.1995)
+        out.append(
+            (
+                "warning",
+                "Linear elements are much too stiff where a part bends: a beam bends about half "
+                "as much as it should at the default mesh size. Use Parabolic (the default) "
+                "unless the mesh is very fine.",
             )
         )
     return out

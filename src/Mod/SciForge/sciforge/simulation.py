@@ -42,6 +42,7 @@ everything that touches the document on the caller's thread (`Job.poll()` from a
 open is closed first), and its temporary folder is removed whatever happens.
 """
 
+import functools
 import hashlib
 import json
 import os
@@ -460,11 +461,38 @@ def _signature(element):
     return out
 
 
+_LOCAL_SHAPES = {}
+
+
 def _local_shape(obj):
     """The object's shape in its own coordinates (its placement and its component's left
-    out), so a pick's remembered shape does not change when the body or its component moves."""
-    shape = obj.Shape.copy(False)  # (FreeCAD's own is read-only; this copy shares geometry)
+    out), so a pick's remembered shape does not change when the body or its component moves.
+    Remembered per shape (callers only read it): the copy of a 366-face part takes 27 ms, and
+    every pick asked for it (120 fixed holes: a pre-check of 8 s)."""
+    own = obj.Shape
+    key = None
+    try:
+        box = own.BoundBox
+        key = (
+            obj.Document.Name,
+            obj.Name,
+            own.hashCode(),
+            tuple(
+                round(v, 6) for v in (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)
+            ),
+            tuple(round(x, 9) for x in own.Placement.toMatrix().A),
+        )
+        hit = _LOCAL_SHAPES.get(key)
+        if hit is not None:
+            return hit
+    except Exception:
+        key = None
+    shape = own.copy(False)  # (FreeCAD's own is read-only; this copy shares geometry)
     shape.Placement = App.Placement()
+    if key is not None:
+        if len(_LOCAL_SHAPES) >= 8:
+            _LOCAL_SHAPES.pop(next(iter(_LOCAL_SHAPES)))
+        _LOCAL_SHAPES[key] = shape
     return shape
 
 
@@ -472,12 +500,15 @@ def _signatures(refs):
     """[[object name, element name, signature]] of picks, in the order of the picks (FreeCAD
     may rename a pick it lost, "?Face1" for what was Face8, but keeps their order)."""
     out = []
+    shapes = {}
     for obj, sub in _picks(refs):
         name = sub.split(".")[-1]
         sig = None
         if name:
             try:
-                sig = _signature(_local_shape(obj).getElement(name))
+                if obj.Name not in shapes:  # (once per object)
+                    shapes[obj.Name] = _local_shape(obj)
+                sig = _signature(shapes[obj.Name].getElement(name))
             except Exception:
                 sig = None
         out.append([obj.Name, name, sig])
@@ -614,6 +645,7 @@ def resolve_picks(item):
     # update_item: then they are matched by name)
     positional = isinstance(sigs, list) and len(sigs) == len(picks)
     out = []
+    sizes = {}
     for index, (obj, sub) in enumerate(picks):
         if not bodies.alive(obj):
             out.append((obj, [], False))
@@ -624,11 +656,13 @@ def resolve_picks(item):
         name = sub.split(".")[-1]
         sig = _signature_of(sigs, index, obj, name, positional)
         try:
-            shape = _local_shape(obj)
+            if obj.Name not in sizes:  # (once per object)
+                local = _local_shape(obj)
+                sizes[obj.Name] = (local, max(1e-6 * _shape_size(local), 1e-4))
+            shape, tol = sizes[obj.Name]
         except Exception:
             out.append((obj, [], False))
             continue
-        tol = max(1e-6 * _shape_size(shape), 1e-4)
         element = None
         if not name.startswith("?"):
             try:
@@ -782,50 +816,106 @@ def set_study_material(study, body, key):
 
 
 # -- contacts --------------------------------------------------------------------------------------
-def _gap(a, b, tol):
-    """The distance between two shapes, or None when their boxes are farther apart than
-    `tol` (the cheap test first)."""
-    box = a.BoundBox
-    box.enlarge(tol)
-    if not box.intersect(b.BoundBox):
-        return None
+# Contacts and overlaps of the study's bodies, worked out once per geometry: the pre-check
+# runs after every SETUP command, and for 20 stacked plates with holes they took 4 s and 2 s.
+_GEOMETRY_CACHE = {}
+
+
+def _geometry_key(found, tol):
+    """What the contacts depend on: every body's shape (FreeCAD makes a new one at every
+    change), its size and place, and its component's place; None when it cannot be told."""
+    rows = []
     try:
-        return a.distToShape(b)[0]
+        for b in found:
+            shape = b.Shape
+            parent = b.getParentGeoFeatureGroup()
+            place = parent.getGlobalPlacement() if parent is not None else App.Placement()
+            box = shape.BoundBox
+            rows.append(
+                (
+                    b.Name,
+                    shape.hashCode(),
+                    # (cheap checks besides the hash, which a new shape at a freed one's
+                    # memory could repeat)
+                    (len(shape.Faces), len(shape.Edges), len(shape.Vertexes)),
+                    tuple(
+                        round(v, 6)
+                        for v in (box.XMin, box.YMin, box.ZMin, box.XMax, box.YMax, box.ZMax)
+                    ),
+                    tuple(round(x, 9) for x in shape.Placement.toMatrix().A),
+                    tuple(round(x, 9) for x in place.toMatrix().A),
+                )
+            )
     except Exception:
         return None
+    return (tuple(rows), round(float(tol), 9))
+
+
+def _contact_data(study):
+    """([(body, body, "bonded")] touching or closer than the contact tolerance, [(body, body,
+    volume mm3)] overlapping) of the study's bodies, remembered for the same geometry (at most
+    16 answers kept). Two bodies whose boundaries cross (OpenCASCADE's section: a third of the
+    time of a distance) touch; the others are measured; only touching ones can overlap."""
+    found = study_bodies(study)
+    tol = float(settings(study)["contact_tolerance"])
+    key = _geometry_key(found, tol)
+    full = None if key is None else ("contacts", study.Document.Name, key)
+    by_name = {b.Name: b for b in found}
+    hit = _GEOMETRY_CACHE.get(full) if full is not None else None
+    if hit is not None:
+        return tuple([(by_name[a], by_name[b], v) for a, b, v in rows] for rows in hit)
+    shapes = [(b, bodies.global_shape(b, copy=False)) for b in found]
+    volumes = {}
+    touching, overlapping = [], []
+    for i, (a, sa) in enumerate(shapes):
+        box = sa.BoundBox
+        near = sa.BoundBox
+        near.enlarge(tol)
+        for b, sb in shapes[i + 1 :]:
+            if not near.intersect(sb.BoundBox):
+                continue
+            gap = None
+            try:
+                cut = sa.section(sb)
+                if cut.Edges or cut.Vertexes:
+                    gap = 0.0
+            except Exception:
+                gap = None
+            if gap is None:
+                try:
+                    gap = sa.distToShape(sb)[0]
+                except Exception:
+                    continue
+            if gap <= tol + 1e-9:
+                touching.append((a, b, "bonded"))
+            if gap <= 1e-9 and box.intersect(sb.BoundBox):
+                try:
+                    volume = sa.common(sb).Volume
+                    for body, shape in ((a, sa), (b, sb)):
+                        if body.Name not in volumes:
+                            volumes[body.Name] = shape.Volume
+                except Exception:
+                    continue
+                if volume > 1e-6 * max(1.0, min(volumes[a.Name], volumes[b.Name])):
+                    overlapping.append((a, b, volume))
+    if full is not None:
+        if len(_GEOMETRY_CACHE) >= 16:
+            _GEOMETRY_CACHE.pop(next(iter(_GEOMETRY_CACHE)))
+        _GEOMETRY_CACHE[full] = tuple(
+            [(x.Name, y.Name, v) for x, y, v in rows] for rows in (touching, overlapping)
+        )
+    return touching, overlapping
 
 
 def contacts(study):
     """Fusion's automatic contacts: [(body, body, "bonded")] of the study's bodies that touch
     or are closer than the contact tolerance (they are glued when the study solves)."""
-    tol = float(settings(study)["contact_tolerance"])
-    found = study_bodies(study)
-    shapes = [(b, bodies.global_shape(b, copy=False)) for b in found]
-    out = []
-    for i, (a, sa) in enumerate(shapes):
-        for b, sb in shapes[i + 1 :]:
-            gap = _gap(sa, sb, tol)
-            if gap is not None and gap <= tol + 1e-9:
-                out.append((a, b, "bonded"))
-    return out
+    return _contact_data(study)[0]
 
 
 def overlaps(study):
     """[(body, body, volume mm3)] of the study's bodies that overlap."""
-    found = study_bodies(study)
-    shapes = [(b, bodies.global_shape(b, copy=False)) for b in found]
-    out = []
-    for i, (a, sa) in enumerate(shapes):
-        for b, sb in shapes[i + 1 :]:
-            if not sa.BoundBox.intersect(sb.BoundBox):
-                continue
-            try:
-                volume = sa.common(sb).Volume
-            except Exception:
-                continue
-            if volume > 1e-6 * max(1.0, min(sa.Volume, sb.Volume)):
-                out.append((a, b, volume))
-    return out
+    return _contact_data(study)[1]
 
 
 def loose_bodies(study, touching=None):
@@ -886,6 +976,14 @@ def _sample_points(element):
         a, b = element.FirstParameter, element.LastParameter
         return [element.valueAt(a + (b - a) * f) for f in (0.0, 0.25, 0.5, 0.75, 1.0)]
     pts = [v.Point for v in element.Vertexes]
+    # points along the face's edges: the grid below can miss a narrow face entirely (a tube's
+    # end ring had only its two seam corners, both on one line, and "could still turn")
+    for edge in element.Edges:
+        try:
+            a, b = edge.FirstParameter, edge.LastParameter
+            pts += [edge.valueAt(a + (b - a) * f) for f in (0.125, 0.375, 0.625, 0.875)]
+        except Exception:
+            continue
     try:
         u0, u1, v0, v1 = element.ParameterRange
         for i in range(5):
@@ -1017,6 +1115,7 @@ def precheck(study):
         "lost": [i.Label for i in lost_items(study)],
         "remove_rigid": bool(opts["remove_rigid"]),
         "twice": _twice(study),
+        "order": opts["mesh"]["order"],
     }
     for body in found:
         name, props, _source = study_material(study, body)
@@ -1045,6 +1144,30 @@ def precheck(study):
     if found and any(not c[2] for c in summary["constraints"]):
         summary["loose"] = [b.Label for b in loose_bodies(study, touching)]
     checks = core.precheck(summary)
+    names = set(b.Name for b in found)
+    for item in items(study):
+        if item.Suppressed:
+            continue
+        outside = []
+        for obj, _sub in _picks(item.References):
+            body = obj if bodies.is_body(obj) else bodies.body_of(obj)
+            if body is not None and bodies.alive(body) and body.Name not in names:
+                if body.Label not in outside:
+                    outside.append(body.Label)
+        if outside:
+            checks.append(
+                (
+                    "error",
+                    "%s is on %s, which this study leaves out: include %s in the study, or "
+                    "suppress or delete %s."
+                    % (
+                        item.Label,
+                        " and ".join(outside),
+                        "it" if len(outside) == 1 else "them",
+                        item.Label,
+                    ),
+                )
+            )
     try:
         for piece, free in not_held(study, touching if len(found) > 1 else []):
             checks.append(
@@ -1059,6 +1182,23 @@ def precheck(study):
         warn("simulation pre-check (held enough): %s" % exc)
     for label in summary.get("unbuilt", []):
         checks.append(("error", "%s is not in SciForge yet: suppress or delete it." % label))
+    try:
+        from . import material
+
+        for body in found:
+            key = data["materials"].get(body.Name)
+            if key and material.entry(key) is None:
+                name = summary["materials"][body.Label][0]
+                checks.append(
+                    (
+                        "warning",
+                        "%s's study material %r is no longer in the materials: the study uses "
+                        "%s's own material (%s). Choose one in Study Materials."
+                        % (body.Label, key, body.Label, name),
+                    )
+                )
+    except Exception as exc:
+        warn("simulation pre-check (materials): %s" % exc)
     return checks
 
 
@@ -1088,29 +1228,63 @@ def build_model(study):
     tol = float(settings(study)["contact_tolerance"])
     first, rest = pieces[0][1], [p[1] for p in pieces[1:]]
     try:
-        fused, _history = first.generalFuse(rest, tol)
+        fused, history = first.generalFuse(rest, tol)
     except Exception as exc:
         raise SimulationError("The bodies could not be joined for the mesh: %s" % exc)
     solids = list(fused.Solids)
     owners = []
     for solid in solids:
-        centre = solid.CenterOfMass
+        # the general fuse says which body each piece came from (where two bodies overlap,
+        # the first); a piece's centre of mass is no guide: a plate with a hole in its middle
+        # has it in the hole, nearer the next plate
         owner = None
-        for body, piece in pieces:
-            try:
-                if piece.isInside(centre, 1e-6, True):
-                    owner = body
-                    break
-            except Exception:
-                continue
-        if owner is None:  # a thin piece whose centre falls outside: the nearest body
-            owner = min(pieces, key=lambda p: p[1].distToShape(Part.Vertex(centre))[0])[0]
+        for (body, _piece), made in zip(pieces, history or []):
+            if any(solid.isSame(m) for m in made):
+                owner = body
+                break
+        if owner is None:
+            owner = _owner_by_geometry(solid, pieces)
         owners.append(owner)
     return Part.makeCompound(solids), owners
 
 
-def _element(obj, sub):
-    return bodies.global_shape(obj, copy=False).getElement(sub.split(".")[-1])
+def _inside_point(solid):
+    """A point inside a solid: its centre of mass when that is inside, else a point just
+    under one of its faces."""
+    centre = solid.CenterOfMass
+    try:
+        if solid.isInside(centre, 1e-9, False):
+            return centre
+        size = max(solid.BoundBox.DiagonalLength, 1e-6)
+        for face in solid.Faces:
+            u0, u1, v0, v1 = face.ParameterRange
+            for fu, fv in ((0.5, 0.5), (0.3, 0.3), (0.7, 0.7), (0.3, 0.7), (0.7, 0.3)):
+                u, v = u0 + (u1 - u0) * fu, v0 + (v1 - v0) * fv
+                if not face.isPartOfDomain(u, v):
+                    continue
+                p, n = face.valueAt(u, v), face.normalAt(u, v)
+                for depth in (1e-4, 1e-3, 1e-2):
+                    q = p - n * (depth * size)
+                    if solid.isInside(q, 1e-9, False):
+                        return q
+    except Exception:
+        pass
+    return centre
+
+
+def _owner_by_geometry(solid, pieces):
+    """The body a model solid lies in (when the general fuse did not say): the first whose
+    solid holds a point inside it, else the nearest."""
+    import Part
+
+    point = _inside_point(solid)
+    for body, piece in pieces:
+        try:
+            if piece.isInside(point, 1e-6, True):
+                return body
+        except Exception:
+            continue
+    return min(pieces, key=lambda p: p[1].distToShape(Part.Vertex(point))[0])[0]
 
 
 def _model_element(model, sub):
@@ -1121,12 +1295,15 @@ def _model_element(model, sub):
 
 
 def _probe_points(face):
-    """A few points inside a face: points at chosen spots of its parameter range that lie on
-    the face (not in a hole of it), else its centre of mass."""
+    """A few points on a face: points at chosen spots of its parameter range that lie on the
+    face (not in a hole of it), else points along its edges (an L-shaped or a ring face can
+    have every chosen spot, and its centre of mass, off the face)."""
     pts = []
     try:
         u0, u1, v0, v1 = face.ParameterRange
-        for fu, fv in ((0.5, 0.5), (0.31, 0.43), (0.69, 0.57), (0.43, 0.69), (0.57, 0.31)):
+        spots = ((0.5, 0.5), (0.31, 0.43), (0.69, 0.57), (0.43, 0.69), (0.57, 0.31))
+        spots += tuple((0.1 + 0.2 * i, 0.1 + 0.2 * j) for i in range(5) for j in range(5))
+        for fu, fv in spots:
             u, v = u0 + (u1 - u0) * fu, v0 + (v1 - v0) * fv
             if face.isPartOfDomain(u, v):
                 pts.append(face.valueAt(u, v))
@@ -1134,20 +1311,45 @@ def _probe_points(face):
                 break
     except Exception:
         pass
+    if len(pts) < 3:
+        for edge in face.Edges:
+            try:
+                pts.append(edge.valueAt((edge.FirstParameter + edge.LastParameter) / 2.0))
+            except Exception:
+                continue
+            if len(pts) >= 3:
+                break
     if not pts:
         pts.append(face.CenterOfMass)
     return pts
 
 
-def map_picks(item, model, owners=None):
+def _model_index(model):
+    """The model's faces and edges with their boxes (made once for all the picks of a solve:
+    120 picked holes on a 366-face part asked for every face's box 120 times, 3.4 s)."""
+    faces, edges = list(model.Faces), list(model.Edges)
+    return {
+        "faces": faces,
+        "face_boxes": [f.BoundBox for f in faces],
+        "edges": edges,
+        "edge_boxes": [e.BoundBox for e in edges],
+        "vertexes": list(model.Vertexes),
+    }
+
+
+def map_picks(item, model, owners=None, index=None):
     """The model's sub-elements ("Face12", "Edge3", "Vertex5", "Solid2") that lie on the
-    item's picks (a whole-body pick: the model solids that body owns)."""
+    item's picks (a whole-body pick: the model solids that body owns). index: _model_index of
+    the model, when several items are mapped onto it."""
     import Part
 
+    if index is None:
+        index = _model_index(model)
     names = []
     picked = []
     for obj, found, _moved in resolve_picks(item):
         picked += [(obj, n) for n in found]
+    shapes = {}
     for obj, sub in picked:
         if not sub:
             body = obj if bodies.is_body(obj) else bodies.body_of(obj)
@@ -1156,7 +1358,9 @@ def map_picks(item, model, owners=None):
                     names.append("Solid%d" % i)
             continue
         try:
-            element = _element(obj, sub)
+            if obj.Name not in shapes:  # (once per object: a moved body's shape is a copy)
+                shapes[obj.Name] = bodies.global_shape(obj, copy=False)
+            element = shapes[obj.Name].getElement(sub.split(".")[-1])
         except Exception:
             continue
         if element is None or element.isNull():
@@ -1165,8 +1369,8 @@ def map_picks(item, model, owners=None):
         box = element.BoundBox
         box.enlarge(GEOMETRY_TOL * 10)
         if kind == "faces":
-            for i, face in enumerate(model.Faces, 1):
-                if not box.intersect(face.BoundBox):
+            for i, (face, face_box) in enumerate(zip(index["faces"], index["face_boxes"]), 1):
+                if not box.intersect(face_box):
                     continue
                 ok = True
                 for p in _probe_points(face):
@@ -1176,8 +1380,8 @@ def map_picks(item, model, owners=None):
                 if ok:
                     names.append("Face%d" % i)
         elif kind == "edges":
-            for i, edge in enumerate(model.Edges, 1):
-                if not box.intersect(edge.BoundBox):
+            for i, (edge, edge_box) in enumerate(zip(index["edges"], index["edge_boxes"]), 1):
+                if not box.intersect(edge_box):
                     continue
                 mid = edge.valueAt((edge.FirstParameter + edge.LastParameter) / 2.0)
                 ends = [v.Point for v in edge.Vertexes]
@@ -1186,7 +1390,7 @@ def map_picks(item, model, owners=None):
                 ):
                     names.append("Edge%d" % i)
         elif kind == "vertices":
-            for i, vertex in enumerate(model.Vertexes, 1):
+            for i, vertex in enumerate(index["vertexes"], 1):
                 if (vertex.Point - element.Point).Length <= GEOMETRY_TOL:
                     names.append("Vertex%d" % i)
     out = []
@@ -1238,6 +1442,34 @@ def _remove_run(study, link="SimRun"):
     _remove_objects(study.Document, list(reversed(_run_members(run))))
 
 
+# (document name, run name) of the runs a job is still making: not linked to their study yet
+_LIVE_RUNS = set()
+
+
+def _orphans(doc):
+    """The objects of solves that no study links and no job is still making: a design saved
+    while a solve ran keeps that solve's half-made run (its mesh too), which nothing else would
+    ever remove."""
+    kept = set()
+    for study in studies(doc):
+        for link in ("SimRun", "SimMeshRun"):
+            run = run_of(study, link)
+            if run is not None:
+                kept.update(o.Name for o in _run_members(run))
+    for doc_name, name in list(_LIVE_RUNS):
+        run = doc.getObject(name) if doc_name == doc.Name else None
+        if run is not None:
+            kept.update(o.Name for o in _run_members(run))
+    found = [o for o in doc.Objects if _type(o) in (RUN, MODEL, HELPER) and o.Name not in kept]
+    # (a run's members with it)
+    out = []
+    for obj in found:
+        for member in _run_members(obj) if _type(obj) == RUN else [obj]:
+            if member.Name not in kept and member not in out:
+                out.append(member)
+    return out
+
+
 def _hide(obj):
     try:
         obj.Visibility = False
@@ -1286,10 +1518,13 @@ def _make_run(study, model_shape, owners, mesh_only=False, straight=False):
         analysis.addObject(model)
 
         subs = {}
+        index = None
         for item in items(study, "mesh" if mesh_only else None):
             if item.Suppressed:
                 continue
-            found = map_picks(item, model_shape, owners)
+            if index is None:
+                index = _model_index(model_shape)
+            found = map_picks(item, model_shape, owners, index)
             if not found:
                 raise SimulationError(
                     "%s lost what it was on: edit it and pick again." % item.Label
@@ -1316,14 +1551,16 @@ def _make_run(study, model_shape, owners, mesh_only=False, straight=False):
             turn = max(float(opts["mesh"]["max_turn"]), 5.0)
             mesh.MeshSizeFromCurvature = int(round(360.0 / turn))
         if "CoherenceMesh" in mesh.PropertiesList:
-            mesh.CoherenceMesh = True
+            # Gmsh's "Coherence Mesh" merges nodes closer than a millionth of the model's size:
+            # the two diagonals' middles of a flat sliver element became one node and CalculiX
+            # refused the element (a 3 mm plate at 2 %). The model's bodies share their faces
+            # (the general fuse), so the mesh needs no merging to be glued.
+            mesh.CoherenceMesh = False
         if straight and "SecondOrderLinear" in mesh.PropertiesList:
             mesh.SecondOrderLinear = True
-        elif opts["mesh"]["order"] == "parabolic" and opts["mesh"]["curved"]:
-            # curved elements whose mid-side nodes are moved onto a hole's wall can turn
-            # inside out where the elements are large: Gmsh straightens them as needed
-            if "HighOrderOptimize" in mesh.PropertiesList:
-                mesh.HighOrderOptimize = "Optimization"
+        # (curved elements that turn inside out at a tight curve are made straight-sided
+        # before the solve, _straighten_input: Gmsh's HighOrderOptimize took minutes on a big
+        # part)
         _hide(mesh)
         analysis.addObject(mesh)
 
@@ -1903,6 +2140,60 @@ def _inject(path, cards):
         handle.write("\n".join(lines) + "\n")
 
 
+def _straighten_input(path):
+    """The curved elements of a CalculiX input that turned inside out (or nearly) made
+    straight-sided (core.straighten_tets): the lines of the nodes it moved are rewritten.
+    Pure file work (it runs in the background thread). Returns (elements made straight,
+    elements still bad)."""
+    import numpy as np
+
+    with open(path, encoding="utf-8", errors="replace") as handle:
+        lines = handle.read().split("\n")
+    ids, xyz, where, elements, pending = [], [], [], [], []
+    section = None
+    for i, line in enumerate(lines):
+        if line.startswith("*"):
+            upper = line.upper().replace(" ", "")
+            if upper == "*NODE" or upper.startswith("*NODE,"):
+                section = "node"
+            elif upper.startswith("*ELEMENT,") and "TYPE=C3D10," in upper + ",":
+                section, pending = "tet10", []
+            else:
+                section = None
+            continue
+        if section == "node":
+            parts = line.split(",")
+            if len(parts) >= 4:
+                ids.append(int(parts[0]))
+                xyz.append((float(parts[1]), float(parts[2]), float(parts[3])))
+                where.append(i)
+        elif section == "tet10":
+            pending += [int(p) for p in line.split(",") if p.strip()]
+            if len(pending) >= 11:  # (an element's numbers may go on over two lines)
+                elements.append(pending[1:11])
+                pending = []
+    if not elements or not ids:
+        return 0, 0
+    ids_a = np.array(ids, dtype=np.int64)
+    row_of = np.full(int(ids_a.max()) + 1, -1, dtype=np.int64)
+    row_of[ids_a] = np.arange(len(ids_a))
+    elements_a = np.array(elements, dtype=np.int64)
+    if elements_a.max() >= len(row_of) or elements_a.min() < 0:
+        return 0, 0  # (an element names a node that is not listed: CalculiX will say so)
+    rows = row_of[elements_a]
+    if (rows < 0).any():
+        return 0, 0
+    xyz_a = np.array(xyz, dtype=float)
+    moved, straightened, left = core.straighten_tets(xyz_a, rows)
+    if moved:
+        for row in moved:
+            x, y, z = xyz_a[row]
+            lines[where[row]] = "%d, %.13e, %.13e, %.13e" % (ids[row], x, y, z)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines))
+    return straightened, left
+
+
 # -- the mesh: Gmsh's size fields, Netgen when Gmsh fails, statistics ------------------------------
 def _size_fields(study, model, owners, subs, global_size, view=None):
     """Gmsh .geo lines for the local mesh controls and Scale Mesh Size Per Part: a size
@@ -2160,6 +2451,9 @@ def _freecad_cmd():
 
 # -- solving ---------------------------------------------------------------------------------------
 STAGES = ("model", "mesh", "input", "solve", "results")
+# a mesh this big takes CalculiX minutes and GBs (143 000 nodes: 2 minutes on 2 threads; 300 000
+# nodes: over 6 GB and 9 minutes): the solve's message says so
+BIG_MESH_NODES = 150000
 
 
 class Job:
@@ -2205,6 +2499,15 @@ class Job:
         self._netgen_out = None
         self._gmsh_problem = None
         self._straight = False  # mesh again with straight-sided elements (bad curved ones)
+        self._curved = None  # (made straight, still bad, error) of the check before a solve
+        self._curved_text = None  # its note
+        self._fingerprints = None  # (signature, mesh signature) when the solve started
+        self._mesh_scale = 1.0  # smaller elements (0.5, 0.25) after Gmsh's mesh crossed itself
+        self._quality_text = None  # the note on stretched mesh elements
+        self._checked = False  # the pre-check passed (the model is built on the next turn)
+        self._getter = None  # FreeCAD's mesh tables for the input (made a turn earlier)
+        self._results_step = None  # the next turn of reading the results
+        self._made = set()  # (document name, run name) of the runs this job made
         self._solid_nodes = {}  # model solid index -> its mesh nodes (from Gmsh's groups)
         self._groups = {}  # Gmsh's groups: model faces / edges / solids -> elements, nodes
         self._previous_run = None  # adaptive refinement: the last pass's run, until the next
@@ -2223,10 +2526,12 @@ class Job:
                 self._thread = None
                 if self._cancel:
                     return self._stop("cancelled", "Cancelled.")
+                _close_open_transaction(self.doc)  # (what a turn changes is no undo step)
                 self._after_background()
                 return self.state
             if self._cancel:
                 return self._stop("cancelled", "Cancelled.")
+            _close_open_transaction(self.doc)
             getattr(self, "_stage_" + self.stage)()
         except SimulationError as exc:
             return self._stop("failed", str(exc))
@@ -2235,14 +2540,21 @@ class Job:
             return self._stop("failed", "The solve failed: %s" % exc)
         return self.state
 
-    def wait(self, timeout=None):
-        """Run to the end on this thread (scripts, tests, the AI)."""
+    def wait(self, timeout=None, idle=None):
+        """Run to the end on this thread (scripts, tests, the AI). idle(): called between the
+        turns while the background thread works (the AI's solve keeps the window painted
+        with it)."""
         end = None if timeout is None else time.time() + timeout
         while self.poll() == "running":
             if end is not None and time.time() > end:
                 self.cancel()
                 self.poll()
                 return self._stop("failed", "The solve took longer than %d s." % timeout)
+            if idle is not None:
+                try:
+                    idle()
+                except Exception:
+                    pass
             if self._thread is not None:
                 self._thread.join(0.05)
         return self.state
@@ -2272,6 +2584,15 @@ class Job:
     # -- stages (main thread)
     def _stage_model(self):
         _close_open_transaction(self.doc)
+        if self._checked:
+            return self._build_model()
+        try:
+            left = _orphans(self.doc)
+            if left:
+                _remove_objects(self.doc, list(reversed(left)))
+                log("simulation: removed %d objects of an unfinished solve" % len(left))
+        except Exception as exc:
+            warn("simulation: tidying up: %s" % exc)
         try:
             repaired = repair_picks(self.study)
         except Exception as exc:
@@ -2286,6 +2607,10 @@ class Job:
             refresh_signatures(self.study)
         except Exception as exc:
             warn("simulation: remembering picks: %s" % exc)
+        if self._fingerprints is None:
+            # what the results and the mesh are of: the study as the solve starts (a design
+            # changed while it runs leaves them out of date)
+            self._fingerprints = (signature(self.study), mesh_signature(self.study))
         checks = precheck(self.study)
         if self.mesh_only:
             errors = [
@@ -2297,12 +2622,20 @@ class Job:
             errors = [text for level, text in checks if level == "error"]
         if errors:
             raise SimulationError(" ".join(errors))
+        # the model is built on the next turn (the window gets a moment between the two; a
+        # further pass of the same solve starts there)
+        self._checked = True
+
+    def _build_model(self):
         t = time.time()
         shape, self._owners = build_model(self.study)
         self._model_shape = shape
         self._analysis, self._model, self._mesh, self._subs = _make_run(
             self.study, shape, self._owners, self.mesh_only, self._straight
         )
+        made = (self.doc.Name, self._analysis.Name)
+        self._made.add(made)
+        _LIVE_RUNS.add(made)
         self.timings["model"] = time.time() - t
         self.stage, self.message = "mesh", "Meshing"
         self._start_mesh()
@@ -2310,6 +2643,15 @@ class Job:
     def _start_mesh(self):
         from femmesh.gmshtools import GmshTools
 
+        # (Gmsh first every time: a mesh made again after a failed solve tries Gmsh again)
+        self.mesher, self._netgen_out = "gmsh", None
+        if self._mesh_scale != 1.0:  # (smaller elements after Gmsh's mesh crossed itself)
+            size, smallest = _mesh_sizes(self.study, self._model_shape, self._owners)
+            self._mesh.CharacteristicLengthMax = "%r mm" % (size * self._mesh_scale)
+            self._mesh.CharacteristicLengthMin = "%r mm" % (smallest * self._mesh_scale)
+            if "MeshSizeFromCurvature" in self._mesh.PropertiesList:
+                turn = max(float(settings(self.study)["mesh"]["max_turn"]), 5.0)
+                self._mesh.MeshSizeFromCurvature = int(round(360.0 / turn / self._mesh_scale))
         tools = GmshTools(self._mesh)
         # GmshTools.prepare() without get_gmsh_command(): that one only looks on the PATH and
         # reports an error when Gmsh is elsewhere (next to SciForge on Windows)
@@ -2320,7 +2662,7 @@ class Job:
         tools.error = False
         tools.write_part_file()
         tools.write_geo()
-        size = _global_size(self.study, self._model_shape)
+        size = _global_size(self.study, self._model_shape) * self._mesh_scale
         _write_fields(
             tools.temp_file_geo,
             _size_fields(self.study, self._model_shape, self._owners, self._subs, size, self._pos),
@@ -2343,8 +2685,8 @@ class Job:
             handle.write(
                 NETGEN_SCRIPT.format(
                     brep=tools.temp_file_geometry,
-                    size=float(size),
-                    smallest=float(smallest),
+                    size=float(size) * self._mesh_scale,
+                    smallest=float(smallest) * self._mesh_scale,
                     second=opts["order"] == "parabolic",
                     out=self._netgen_out,
                 )
@@ -2368,6 +2710,7 @@ class Job:
         """The solver's result file read (parsed) in the background: the slow part of
         reading results (tens of MB for a big mesh), done without the document."""
         self.stage, self.message = "results", "Reading the results"
+        self._curved_note()
         frd = os.path.join(self.work, self._input + ".frd")
         if self._returncode not in (0, None) or not os.path.isfile(frd) or not os.path.getsize(frd):
             self._frd_data = None
@@ -2385,6 +2728,30 @@ class Job:
 
         self._background_call(work, "results")
 
+    def _curved_note(self):
+        """The note of the check of the curved elements that ran before the solver (the
+        last solve's only, with adaptive refinement)."""
+        done, self._curved = self._curved, None
+        if not done:
+            return
+        straightened, _left, error = done
+        if error:
+            warn("simulation: checking the curved mesh elements: %s" % error)
+        if self._curved_text in self.notes:
+            self.notes.remove(self._curved_text)
+        self._curved_text = None
+        if straightened:
+            self._curved_text = (
+                "SciForge made %d curved mesh element%s straight-sided: at tight curves %s "
+                "would have turned inside out."
+                % (
+                    straightened,
+                    "" if straightened == 1 else "s",
+                    "it" if straightened == 1 else "they",
+                )
+            )
+            self.notes.append(self._curved_text)
+
     def _after_mesh(self):
         t = time.time()
         if self.mesher == "gmsh":
@@ -2394,10 +2761,25 @@ class Job:
                 line.lstrip().startswith("Error") for line in self._output.splitlines()
             )
             if failed:
+                if self._mesh_scale > 0.3 and core.mesh_crossed_itself(self._output):
+                    # the surface mesh crossed itself (a wall thinner than the elements, a
+                    # small gap): elements half as big, at most twice, before Netgen
+                    self._mesh_scale *= 0.5
+                    self.message = "Meshing again with smaller elements"
+                    self._start_mesh()
+                    return
                 self._gmsh_problem = _gmsh_problem(self._output, self._model_shape, self._owners)
                 self._start_netgen()
                 return
             tools.read_and_set_new_mesh()
+            if self._mesh_scale < 1.0:
+                note = (
+                    "Gmsh could not mesh at the study's element size (its surface mesh crossed "
+                    "itself: a wall thinner than the elements, or a small gap), so SciForge "
+                    "made the elements %d times smaller." % int(round(1.0 / self._mesh_scale))
+                )
+                if note not in self.notes:
+                    self.notes.append(note)
         else:
             if not (self._netgen_out and os.path.isfile(self._netgen_out)):
                 raise SimulationError(
@@ -2407,10 +2789,11 @@ class Job:
             import Fem
 
             self._mesh.FemMesh = Fem.read(self._netgen_out)
-            self.notes.append(
-                "Gmsh could not mesh the model, so Netgen made the mesh (%s)."
-                % (self._gmsh_problem or "")
+            note = "Gmsh could not mesh the model, so Netgen made the mesh (%s)." % (
+                self._gmsh_problem or ""
             )
+            if note not in self.notes:
+                self.notes.append(note)
         # FreeCAD 1.1's Gmsh run names a group after every solid, face and edge; with any
         # group in the mesh, the solver input looks for groups named after the materials,
         # finds none and reports an error before searching the mesh itself. SciForge does
@@ -2437,19 +2820,28 @@ class Job:
         self.mesh_info.update(
             {
                 "mesher": self.mesher,
-                "size": _global_size(self.study, self._model_shape),
+                "size": _global_size(self.study, self._model_shape) * self._mesh_scale,
                 "order": settings(self.study)["mesh"]["order"],
-                "signature": mesh_signature(self.study),
+                "signature": (
+                    self._fingerprints[1] if self._fingerprints else mesh_signature(self.study)
+                ),
                 "made": time.strftime("%Y-%m-%d %H:%M:%S"),
             }
         )
         self.timings["mesh_stats"] = time.time() - t
+        quality = core.mesh_quality_note(self.mesh_info, limit)
+        if self._quality_text in self.notes:  # (the last mesh's only, with adaptive passes)
+            self.notes.remove(self._quality_text)
+        self._quality_text = quality
+        if quality:
+            self.notes.append(quality)
         if self.mesh_only:
             _close_open_transaction(self.doc)
             _remove_run(self.study, "SimMeshRun")
             self.study.SimMeshRun = self._analysis
             _save(self.study, MESH_PROP, self.mesh_info)
             apply_keep_results(self.study)
+            _untouch(self.study)
             self.summary = dict(self.mesh_info)
             self._analysis = None  # (kept)
             return self._stop("done", "Done")
@@ -2484,11 +2876,21 @@ class Job:
                 return found
             return real_search(femmesh, ref)
 
+        if self._getter is None:
+            # FreeCAD's tables of the mesh (seconds on a big one) on this turn, the input on
+            # the next: the window gets a moment between the two
+            meshtools.get_femnodes_by_refshape = search
+            try:
+                self._getter = meshsetsgetter.MeshSetsGetter(
+                    self._analysis, solver, self._mesh, membertools.AnalysisMember(self._analysis)
+                )
+            finally:
+                meshtools.get_femnodes_by_refshape = real_search
+            self.timings["input"] = time.time() - t
+            return
+        getter, self._getter = self._getter, None
         meshtools.get_femnodes_by_refshape = search
         try:
-            getter = meshsetsgetter.MeshSetsGetter(
-                self._analysis, solver, self._mesh, membertools.AnalysisMember(self._analysis)
-            )
             getter.get_mesh_sets()
             # the writer makes a second getter of its own "for compatibility" that CalculiX's
             # writer never reads (4 s of tables on a big mesh): it gets this one
@@ -2515,14 +2917,40 @@ class Job:
         self._reactions = cards["reactions"]
         self.notes += cards["notes"]
         self._input = os.path.splitext(os.path.basename(path))[0]
-        self.timings["input"] = time.time() - t
-        self.stage, self.message = "solve", "Solving"
+        self.timings["input"] = self.timings.get("input", 0.0) + time.time() - t
+        nodes = self._mesh.FemMesh.NodeCount
+        self.stage = "solve"
+        self.message = "Solving %s nodes with CalculiX" % "{:,}".format(nodes).replace(",", " ")
+        if nodes > BIG_MESH_NODES:
+            self.message += (
+                ": a big mesh, it can take several minutes and some GB of memory (a larger "
+                "element size solves faster)"
+            )
         env = dict(os.environ)
         if not env.get("OMP_NUM_THREADS"):
             env["OMP_NUM_THREADS"] = str(max(1, (os.cpu_count() or 2) - 1))
-        self._background([_binary("ccx"), "-i", self._input], "solve", env=env)
+        opts = settings(self.study)["mesh"]
+        self._curved = None
+        check = opts["order"] == "parabolic" and opts["curved"] and not self._straight
+
+        def straighten():
+            # (background thread) curved elements turned inside out made straight-sided
+            try:
+                self._curved = _straighten_input(path) + (None,)
+            except Exception as exc:
+                self._curved = (0, 0, str(exc))
+
+        self._background(
+            [_binary("ccx"), "-i", self._input],
+            "solve",
+            env=env,
+            before=straighten if check else None,
+        )
 
     def _stage_results(self):
+        if self._results_step is not None:  # (the next turn of reading the results)
+            step, self._results_step = self._results_step, None
+            return step()
         t = time.time()
         frd = os.path.join(self.work, self._input + ".frd")
         if self._returncode not in (0, None) or not os.path.isfile(frd) or not os.path.getsize(frd):
@@ -2534,6 +2962,8 @@ class Job:
             ):
                 # curved elements turned inside out: the same mesh with straight sides
                 self._straight = True
+                if self._curved_text in self.notes:
+                    self.notes.remove(self._curved_text)
                 self.notes.append(
                     "Some curved mesh elements turned inside out, so SciForge made the mesh "
                     "again with straight-sided elements."
@@ -2558,17 +2988,30 @@ class Job:
         # node at once with numpy (FreeCAD's loop over the nodes took 9 s for 140 000 nodes)
         from femresult import resulttools
 
-        real_vm, real_principal = resulttools.add_von_mises, resulttools.add_principal_stress_std
+        real = (
+            resulttools.add_von_mises,
+            resulttools.add_principal_stress_std,
+            resulttools.add_disp_apps,
+            resulttools.compact_result,
+        )
         importCcxFrdResults.setupPipeline = lambda *args, **kwargs: None
         resulttools.add_von_mises = _fast_von_mises
         resulttools.add_principal_stress_std = _fast_principal_stresses
+        resulttools.add_disp_apps = _fast_displacement_lengths
+        # FreeCAD renumbers the result mesh without gaps (seconds on a big mesh): on the next
+        # turn (nothing in between reads the numbering)
+        resulttools.compact_result = lambda res_obj: res_obj
         try:
             importCcxFrdResults.importFrd(frd, self._analysis, "Sim")
         finally:
             importCcxFrdResults.read_frd_result = real_read
             importCcxFrdResults.setupPipeline = real_pipeline
-            resulttools.add_von_mises = real_vm
-            resulttools.add_principal_stress_std = real_principal
+            (
+                resulttools.add_von_mises,
+                resulttools.add_principal_stress_std,
+                resulttools.add_disp_apps,
+                resulttools.compact_result,
+            ) = real
             self._frd_data = None
         made = [o for o in self.doc.Objects if o.Name not in before]
         result = next((o for o in made if o.isDerivedFrom("Fem::FemResultObject")), None)
@@ -2594,6 +3037,22 @@ class Job:
                         "total": (fx * fx + fy * fy + fz * fz) ** 0.5,
                     }
         self.timings["results"] = time.time() - t
+        self._results_step = functools.partial(self._results_compact, result, reactions)
+
+    def _results_compact(self, result, reactions):
+        """(results, second turn) FreeCAD's renumbering of the result mesh."""
+        from femresult import resulttools
+
+        t = time.time()
+        if not result.MassFlowRate:  # (as FreeCAD's import does it)
+            resulttools.compact_result(result)
+        self.timings["results"] = self.timings.get("results", 0.0) + time.time() - t
+        self._results_step = functools.partial(self._results_finish, result, reactions)
+
+    def _results_finish(self, result, reactions):
+        """(results, last turn) the checks, the safety factor, the summary, the run linked to
+        the study (or the next adaptive pass)."""
+        t = time.time()
         try:
             moved = max(result.DisplacementLengths) if result.DisplacementLengths else 0.0
         except Exception:
@@ -2611,12 +3070,14 @@ class Job:
         if plan is not None and self._adapt(result, plan):
             return  # (another pass, on a mesh refined where the result changes the most)
         _close_open_transaction(self.doc)
+        self.timings["results"] = self.timings.get("results", 0.0) + time.time() - t
         self.summary = _finish(self.study, result, self._mesh, self._owners, self, reactions)
         _remove_run(self.study, "SimRun")
         _remove_run(self.study, "SimMeshRun")
         self.study.SimRun = self._analysis
         _save(self.study, MESH_PROP, self.mesh_info)
         apply_keep_results(self.study)
+        _untouch(self.study)
         self._analysis = None  # (kept)
         self._stop("done", "Done")
 
@@ -2683,13 +3144,19 @@ class Job:
         self._thread = threading.Thread(target=work, name="SciForge %s" % stage, daemon=True)
         self._thread.start()
 
-    def _background(self, command, stage, env=None):
+    def _background(self, command, stage, env=None, before=None):
+        """Run `command` in the background thread (after `before()`, Python work on files
+        only, when given); poll() picks up its output."""
         self.stage = stage
         self._output, self._returncode, self._run_error = "", None, None
         t = time.time()
 
         def work():
             try:
+                if before is not None and not self._cancel:
+                    before()
+                if self._cancel:  # (cancelled before the program started)
+                    return
                 self._process = subprocess.Popen(
                     command,
                     cwd=self.work,
@@ -2698,6 +3165,8 @@ class Job:
                     env=env,
                     **_no_window(),
                 )
+                if self._cancel:  # (cancelled while it was starting: cancel() saw no process)
+                    self._process.kill()
                 out, _err = self._process.communicate()
                 self._output = (out or b"").decode("utf-8", "replace")
                 self._returncode = self._process.returncode
@@ -2714,8 +3183,13 @@ class Job:
 
     def _stop(self, state, message):
         self.state, self.message = state, message
+        # FreeCAD's GmshTools holds a QProcess with a connected signal: dropped now, not when
+        # Python shuts down (freecadcmd crashed in Qt at exit with a job still referenced)
+        self._mesh_tools = None
         if state != "done":
             log("simulation %s: %s" % (state, message))
+        # (no undo step is closed here: a cancel can come while a dialog of the person has
+        # its own open, which its Cancel must still be able to undo)
         for run in (self._analysis, self._previous_run):
             if run is not None:  # a run that did not make it: nothing left behind
                 try:
@@ -2723,13 +3197,17 @@ class Job:
                 except Exception:
                     pass
         self._analysis = self._previous_run = None
+        self._getter = self._results_step = None
+        for doc_name, name in list(self._made):
+            _LIVE_RUNS.discard((doc_name, name))
         shutil.rmtree(self.work, ignore_errors=True)
         return state
 
 
 MESH_ADVICE = (
-    "Try a larger Average Element Size in the mesh settings, or look for tiny gaps, slivers "
-    "and very short edges in the model."
+    "Thin walls need elements about as small as they are thick: try a smaller Average Element "
+    "Size, or a Local Mesh Control on the thin faces; also look for tiny gaps, slivers and very "
+    "short edges in the model."
 )
 
 
@@ -2747,6 +3225,48 @@ def _stress_arrays(res_obj):
         ],
         dtype=float,
     )
+
+
+def _fast_stats(values):
+    """simulation_core.stats with numpy, the same answer (15 results of 130 000 nodes took a
+    second in plain Python)."""
+    import numpy as np
+
+    try:
+        a = np.asarray(values, dtype=float)
+    except (TypeError, ValueError):
+        return core.stats(values)
+    if a.ndim != 1:
+        return core.stats(values)
+    ok = ~np.isnan(a)
+    count = int(ok.sum())
+    if not count:
+        return {"min": None, "max": None, "min_index": -1, "max_index": -1, "count": 0}
+    lo_i = int(np.argmin(np.where(ok, a, np.inf)))
+    hi_i = int(np.argmax(np.where(ok, a, -np.inf)))
+    if np.isnan(a[lo_i]) or np.isnan(a[hi_i]):  # (only infinities besides NaN)
+        return core.stats(values)
+    return {
+        "min": float(a[lo_i]),
+        "max": float(a[hi_i]),
+        "min_index": lo_i,
+        "max_index": hi_i,
+        "count": count,
+    }
+
+
+def _fast_displacement_lengths(res_obj):
+    """FreeCAD's resulttools.add_disp_apps, for every node at once (it called numpy once per
+    node: 1.3 s for 130 000 nodes)."""
+    import numpy as np
+
+    vectors = res_obj.DisplacementVectors
+    if not vectors:
+        res_obj.DisplacementLengths = []
+        return res_obj
+    a = np.array([(v.x, v.y, v.z) for v in vectors], dtype=float)
+    res_obj.DisplacementLengths = np.sqrt((a * a).sum(axis=1)).tolist()
+    return res_obj
 
 
 def _fast_von_mises(res_obj):
@@ -2784,6 +3304,21 @@ def _fast_principal_stresses(res_obj):
     res_obj.PrincipalMin = small.tolist()
     res_obj.MaxShear = ((big - small) / 2.0).tolist()
     return res_obj
+
+
+def _untouch(study):
+    """What a solve changed on the study, its items and its runs needs no recompute (their
+    execute does nothing): cleared, so the design does not ask for one after the solve."""
+    objects = [study] + items(study)
+    for link in ("SimRun", "SimMeshRun"):
+        run = run_of(study, link)
+        if run is not None:
+            objects += _run_members(run)
+    for obj in objects:
+        try:
+            obj.purgeTouched()
+        except Exception:
+            pass
 
 
 class _Quiet:
@@ -3032,7 +3567,10 @@ def signature(study):
         h.update(json.dumps(_shape_key(body)).encode())
         name, props, _source = study_material(study, body)
         h.update(json.dumps([name, props], sort_keys=True, default=str).encode())
-    h.update(json.dumps(study_data(study), sort_keys=True).encode())
+    data = dict(study_data(study))
+    # (whether the results are kept in the file changes nothing they say)
+    data["settings"] = {k: v for k, v in data["settings"].items() if k != "keep_results"}
+    h.update(json.dumps(data, sort_keys=True).encode())
     for item in items(study):
         h.update(json.dumps(_item_key(item), sort_keys=True).encode())
     return h.hexdigest()
@@ -3051,6 +3589,42 @@ def out_of_date(study):
     return bool(done) and done.get("signature") != signature(study)
 
 
+def body_key(study, body):
+    """The key of `body` in the result summary's "bodies": its label, with its component's
+    label (or its name) added when another body of the study has the same label (two
+    components' "Body1")."""
+    return _body_keys(study_bodies(study)).get(body.Name, body.Label)
+
+
+def _body_keys(found):
+    """{body name: summary key} for the bodies `found` (see body_key)."""
+    unique = []
+    for b in found:
+        if b not in unique:
+            unique.append(b)
+    count = {}
+    for b in unique:
+        count[b.Label] = count.get(b.Label, 0) + 1
+    out = {}
+    for b in unique:
+        if count[b.Label] == 1:
+            out[b.Name] = b.Label
+            continue
+        try:
+            parent = b.getParentGeoFeatureGroup()
+        except Exception:
+            parent = None
+        out[b.Name] = "%s (%s)" % (b.Label, parent.Label if parent is not None else b.Name)
+    seen = {}
+    for name, key in out.items():
+        seen.setdefault(key, []).append(name)
+    for key, names in seen.items():
+        if len(names) > 1:  # (the same label in components of the same label)
+            for name in names:
+                out[name] = "%s (%s)" % (key, name)
+    return out
+
+
 def _finish(study, result, mesh_obj, owners, job, reactions=None):
     """Safety factors into the result, and the study's result summary."""
     data = study_data(study)
@@ -3062,6 +3636,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
     strengths = [None] * len(node_ids)
     per_body = {}
     grouped = getattr(job, "_solid_nodes", None) or {}
+    keys = _body_keys(owners)
     if model is not None:
         for index, (solid, body) in enumerate(zip(model.Solids, owners)):
             name, props, _source = study_material(study, body)
@@ -3075,8 +3650,11 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
                         nodes = mesh.getNodesBySolid(solid)
                     except Exception:
                         nodes = []
-            per_body.setdefault(body.Label, {"nodes": set(), "strength": s, "material": name})
-            per_body[body.Label]["nodes"].update(nodes)
+            key = keys.get(body.Name, body.Label)
+            per_body.setdefault(
+                key, {"nodes": set(), "strength": s, "material": name, "name": body.Name}
+            )
+            per_body[key]["nodes"].update(nodes)
             for n in nodes:
                 i = position.get(n)
                 if i is None:
@@ -3101,7 +3679,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
             values = res.values(key)
         except Exception:
             continue
-        st = core.stats(values)
+        st = _fast_stats(values)
         if st["count"]:
             st["min_at"] = _point(res.points, st["min_index"])
             st["max_at"] = _point(res.points, st["max_index"])
@@ -3113,6 +3691,7 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
             continue
         sf = [safety[i] for i in idx if safety[i] == safety[i]]
         bodies_out[label] = {
+            "name": entry["name"],
             "material": entry["material"],
             "von_mises_max": max(vm[i] for i in idx),
             "displacement_max": max(lengths[i] for i in idx),
@@ -3120,14 +3699,15 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
         }
     out = {
         "solved": time.strftime("%Y-%m-%d %H:%M:%S"),
-        "signature": signature(study),
+        # (taken when the solve started: a design changed while it ran is out of date)
+        "signature": (
+            job._fingerprints[0] if getattr(job, "_fingerprints", None) else signature(study)
+        ),
         "mesh": {
             "nodes": mesh.NodeCount,
             "elements": mesh.VolumeCount,
             "size": (
-                core.element_size(_bbox(mesh_obj.Shape.Shape), data["settings"]["mesh"]["size_pct"])
-                if mesh_obj.Shape is not None
-                else None
+                _global_size(study, mesh_obj.Shape.Shape) if mesh_obj.Shape is not None else None
             ),
             "order": data["settings"]["mesh"]["order"],
         },

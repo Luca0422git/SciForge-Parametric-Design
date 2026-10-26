@@ -15,7 +15,9 @@ C  Solve again to the end: done, the tip bends 0.2 mm (beam theory 0.2000, withi
 D  Generate Mesh (a mesh-only job): the mesh statistics, the results kept.
 E  A third solve cancelled while meshing: the last results stay (same summary, the result
    object still there), nothing left behind.
-F  Nothing printed as an error at any step (the harness checks after every step).
+F  solve_study from SciForge's AI chat: solved, and the window's timers kept running while it
+   solved (the window repaints; no mouse or keys meanwhile).
+G  Nothing printed as an error at any step (the harness checks after every step).
 """
 
 import os
@@ -190,7 +192,8 @@ def after_mesh():
 def start_third_and_cancel_in_mesh():
     _start()
     job = S["job"]
-    job.poll()  # the first turn builds the model and starts Gmsh in the background
+    job.poll()  # the first turn checks the study (the pre-check)
+    job.poll()  # the second builds the model and starts Gmsh in the background
     h.check("E: the job is meshing", job.stage == "mesh", (job.state, job.stage))
     job.cancel()
 
@@ -204,6 +207,28 @@ def after_second_cancel():
     runs = _run_objects(S["doc"])
     h.check("E: only the kept runs are in the design", len(runs) == 4, runs)  # results + mesh
     h.check("E: its temporary folder is gone", not os.path.isdir(job.work), job.work)
+
+
+def ai_solve():
+    from sciforge.ai import bridge
+
+    ticks = []
+    timer = QtCore.QTimer()
+    timer.setInterval(100)
+    timer.timeout.connect(lambda: ticks.append(time.time()))
+    timer.start()
+    started = time.time()
+    answer = bridge.call("solve_study", {"study": S["study"].Name}, from_chat=True)
+    took = time.time() - started
+    timer.stop()
+    text = str(answer)
+    h.check("F: the AI's solve is done", "solved" in text, text[:300])
+    during = [t for t in ticks if started <= t <= started + took]
+    h.check(
+        "F: the window's timers ran while the AI solved",
+        len(during) >= max(1, int(took / 0.5)),
+        "%d ticks in %.1f s" % (len(during), took),
+    )
 
 
 def close():
@@ -228,6 +253,7 @@ h.run(
         start_third_and_cancel_in_mesh,
         _wait_for(lambda: S["job"].state != "running", "wait_cancelled2"),
         after_second_cancel,
+        ai_solve,
         close,
     ],
 )
