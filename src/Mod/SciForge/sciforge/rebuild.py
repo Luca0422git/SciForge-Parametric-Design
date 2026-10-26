@@ -2040,7 +2040,12 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
     if keep_reference:
         ref.Shown = False
     else:
-        doc.removeObject(ref.Name)
+        name = ref.Name  # (a removed object has no name any more)
+        _FINISHING.add(name)
+        try:
+            doc.removeObject(name)
+        finally:
+            _FINISHING.discard(name)
     bodies.set_shown(target, True)
     try:
         components.activate_body(target)
@@ -2223,6 +2228,12 @@ def sync(doc):
 
 
 class _Watch:
+    def __init__(self):
+        self.closing = set()  # documents being closed: their objects are torn down
+
+    def slotCreatedDocument(self, doc):
+        self.closing.discard(doc.Name)
+
     def slotUndoDocument(self, doc):
         sync(doc)
 
@@ -2231,10 +2242,39 @@ class _Watch:
 
     def slotDeletedDocument(self, doc):
         try:
+            self.closing.add(doc.Name)
             _HIDDEN.pop(doc.Name, None)
             forget(doc)
         except Exception:
             pass
+
+    def slotDeletedObject(self, obj):
+        """A reference deleted some other way than Finish (the AI's delete_step, a script):
+        the rebuild is given up, so its original is shown again (QA: it stayed hidden, and
+        a person could not find the part)."""
+        try:
+            if not is_reference(obj):
+                return
+            doc = obj.Document
+            if doc is None or doc.Name in self.closing or getattr(doc, "Transacting", False):
+                return  # (closing; undo / redo: sync() puts it right afterwards)
+            if obj.Name in _FINISHING:
+                return
+            hidden = _HIDDEN.get(doc.Name, {})
+            source_name = hidden.pop(obj.Name, None)
+            source = doc.getObject(source_name) if source_name else None
+            if source is not None and bodies.alive(source):
+                bodies.set_shown(source, True)
+                log(
+                    "rebuild of %s given up (its reference was deleted): shown again" % source.Label
+                )
+            NOTES.pop(obj.Name, None)
+            _KNOWN.pop((doc.Name, obj.Name), None)
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
+
+
+_FINISHING = set()  # references being removed by finish (their original is dealt with there)
 
 
 _WATCH = {"on": None}

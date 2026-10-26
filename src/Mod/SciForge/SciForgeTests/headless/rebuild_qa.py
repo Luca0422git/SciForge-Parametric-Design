@@ -1,0 +1,431 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""Auto Timeline QA checks (beta 3 QA): the cases the builders' end-to-end test did not try,
+each a bug found (and fixed) by the QA pass. Run by rebuild_e2e.main() (so by
+tools/sciforge/run_tests.sh --only headless / base), after the six parts:
+
+* jointed: two imported STEP parts in components, a revolute joint between them; the arm is
+  rebuilt and finished: the joint must survive and sit on the rebuilt body (it was deleted
+  with the original: joints.remove_joints_of), the arm must not move, the joint must still
+  drive; no stray imported shape of the original is left (it stayed in its component as a
+  timeline step); the rebuild takes the original's place in the timeline (before the joint);
+  undo / redo of Finish.
+* dependents: a body at the design's root, grounded, with a pattern of bodies of it and a
+  sketch of another body on its top face; all three follow the rebuild.
+* kept: a link that cannot follow (to the original's own sketch): the original is kept,
+  hidden, instead of deleted, and the answer says why.
+* reopened: a design saved half way through a rebuild and opened again: the next plan step
+  goes into the rebuilt body (it went into the design's first body).
+* deleted reference: the reference deleted with delete_step: the original is shown again.
+
+Each check takes `agent` (rebuild_e2e.Agent: call / check) and runs in-process.
+"""
+
+import json
+import os
+import tempfile
+import traceback
+
+
+def _json(text):
+    start = text.find("{")
+    if start < 0:
+        return None
+    try:
+        return json.loads(text[start:])
+    except ValueError:
+        return None
+
+
+def _golden(agent, name, calls, folder):
+    agent.call("new_design", {"name": name})
+    for tool, args in calls:
+        text, error = agent.call(tool, args)
+        if error:
+            raise RuntimeError("%s: %s" % (tool, text))
+    path = os.path.join(folder, name + ".step")
+    text, error = agent.call("export", {"format": "step", "path": path})
+    if error:
+        raise RuntimeError(text)
+    return path
+
+
+ARM = [
+    ("create_sketch", {"plane": "XY", "geometry": [{"rect": [0, 0, 80, 20]}]}),
+    ("extrude", {"profile": "Sketch1", "distance": 5}),
+    (
+        "create_sketch",
+        {
+            "plane": "XY",
+            "offset": 5,
+            "geometry": [{"circle": [10, 10, 2.5]}, {"circle": [70, 10, 2.5]}],
+        },
+    ),
+    ("hole", {"sketch": "Sketch2", "diameter": 5, "through_all": True}),
+]
+BASE = [
+    ("create_sketch", {"plane": "XY", "geometry": [{"rect": [0, 0, 40, 40]}]}),
+    ("extrude", {"profile": "Sketch1", "distance": 10}),
+    ("create_sketch", {"plane": "XY", "offset": 10, "geometry": [{"circle": [20, 20, 2.5]}]}),
+    ("hole", {"sketch": "Sketch2", "diameter": 5, "through_all": True}),
+]
+
+
+def rebuild_through_tools(agent, body):
+    """start_rebuild, describe_reference, the plan, compare (with its fixes): the compare
+    answer at the end."""
+    from . import rebuild_e2e as e2e
+
+    agent.call("start_rebuild", {"body": body})
+    text, error = agent.call("describe_reference", {})
+    data = _json(text) or {}
+    plan = data.get("plan") or []
+    made = {}
+    for step in plan:
+        args = agent._with_ids(step, made, plan)
+        text, error = agent.call(step["tool"], args)
+        ident = e2e.made_id(text) if not error else None
+        if ident:
+            made[step.get("step")] = ident
+    result = None
+    for _round in range(4):
+        text, error = agent.call("compare_to_reference", {})
+        result = _json(text) or {}
+        if result.get("done"):
+            break
+        fixes = agent._fixes(result)
+        if not fixes:
+            break
+        for fix in fixes:
+            agent.call(fix["tool"], fix["args"])
+    return result or {}
+
+
+# -- jointed parts (the VEX case) ----------------------------------------------------------------
+def jointed(agent, folder):
+    import FreeCAD as App
+
+    from sciforge import joints, timeline_ops
+
+    arm = _golden(agent, "QaArm", ARM, folder)
+    base = _golden(agent, "QaBase", BASE, folder)
+    agent.call("new_design", {"name": "QaJointed"})
+    agent.call("import_file", {"path": arm})
+    agent.call("import_file", {"path": base})
+    doc = App.ActiveDocument
+    agent.call("ground", {"component": "Component001"})
+    text, error = agent.call(
+        "joint",
+        {
+            "type": "revolute",
+            "first": {
+                "component": "Component",
+                "face": {"type": "cylinder", "count": 1, "at": {"axis": "x", "value": "min"}},
+                "snap": "circle",
+            },
+            "second": {
+                "component": "Component001",
+                "face": {"type": "cylinder", "count": 1},
+                "snap": "circle",
+            },
+        },
+    )
+    if not agent.check("jointed: the revolute joint is made", not error, text):
+        return
+    arm_part = doc.getObject("Component")
+    agent.call("drive_joint", {"joint": "Joint", "angle": 60})
+    at_60 = App.Placement(arm_part.Placement)
+    agent.call("drive_joint", {"joint": "Joint", "angle": 30})
+    at_30 = App.Placement(arm_part.Placement)
+    result = rebuild_through_tools(agent, "Body001")
+    if not agent.check("jointed: the arm is rebuilt (done)", result.get("done"), result):
+        return
+    text, error = agent.call("finish_rebuild", {})
+    agent.check("jointed: finish_rebuild", not error, text)
+    found = joints.joints(doc)
+    rebuilt = doc.getObject("Body003")
+    ok = (
+        len(found) == 1
+        and rebuilt is not None
+        and rebuilt.Label == "Body001"
+        and all("Body003." in s for s in found[0].Reference1[1])
+    )
+    agent.check(
+        "jointed: the joint survives Finish, on the rebuilt body (it was deleted with the "
+        "original)",
+        ok,
+        [(j.Name, j.Reference1) for j in found],
+    )
+    agent.check(
+        "jointed: the answer says the joint now uses the rebuild",
+        "Revolute 1" in text and "instead of the original" in text,
+        text,
+    )
+    agent.check(
+        "jointed: the arm did not move",
+        arm_part.Placement.isSame(at_30, 1e-7),
+        (arm_part.Placement, at_30),
+    )
+    text, error = agent.call("drive_joint", {"joint": "Joint", "angle": 60})
+    agent.check(
+        "jointed: the joint still drives the arm (to where the original went)",
+        not error and arm_part.Placement.isSame(at_60, 1e-6),
+        (text, arm_part.Placement, at_60),
+    )
+    stray = [o.Label for o in doc.Objects if o.Label == "Body001 (imported)"]
+    agent.check("jointed: no stray imported shape of the original is left", not stray, stray)
+    order = timeline_ops.step_order(doc)
+    first = [n for n in order if doc.getObject(n) in rebuilt.Group]
+    agent.check(
+        "jointed: the rebuild takes the original's place in the timeline (before the joint)",
+        first and order.index(first[-1]) < order.index("Joint"),
+        order,
+    )
+    agent.call("undo", {})  # the drive
+    agent.call("undo", {})  # finish
+    found = joints.joints(doc)
+    agent.check(
+        "jointed: undo of Finish puts the joint back on the original",
+        len(found) == 1 and all("Body001." in s for s in found[0].Reference1[1]),
+        [(j.Name, j.Reference1) for j in found],
+    )
+    agent.call("redo", {})
+    found = joints.joints(doc)
+    agent.check(
+        "jointed: redo moves it onto the rebuild again",
+        len(found) == 1 and all("Body003." in s for s in found[0].Reference1[1]),
+        [(j.Name, j.Reference1) for j in found],
+    )
+
+
+# -- a root body with a ground, a pattern of bodies and a sketch on its face ----------------------
+def _featureless(doc, name, shape):
+    from sciforge import bodies
+
+    doc.openTransaction("QA setup")
+    body = bodies.new_body(doc, name)
+    base = doc.addObject("Part::Feature", "Imported")
+    base.Shape = shape
+    body.BaseFeature = base
+    doc.commitTransaction()
+    doc.recompute()
+    return body
+
+
+def _plate():
+    import FreeCAD as App
+    import Part
+
+    plate = Part.makeBox(60, 40, 8)
+    for x, y in ((15, 20), (45, 20)):
+        plate = plate.cut(Part.makeCylinder(3, 8, App.Vector(x, y, 0)))
+    return plate
+
+
+def dependents(agent, folder):
+    import FreeCAD as App
+    import Part
+
+    from sciforge import bodies, joints, pattern
+
+    agent.call("new_design", {"name": "QaDependents"})
+    doc = App.ActiveDocument
+    plate = _featureless(doc, "Plate", _plate())
+    top = [
+        i + 1
+        for i, f in enumerate(plate.Shape.Faces)
+        if f.Surface.TypeId == "Part::GeomPlane" and abs(f.CenterOfMass.z - 8) < 1e-6
+    ][0]
+    doc.openTransaction("QA riser")
+    riser = bodies.new_body(doc, "Riser")
+    sketch = riser.newObject("Sketcher::SketchObject", "RiserSketch")
+    sketch.AttachmentSupport = [(plate, "Face%d" % top)]
+    sketch.MapMode = "FlatFace"
+    sketch.addGeometry(Part.Circle(App.Vector(30, 32, 0), App.Vector(0, 0, 1), 4))
+    pad = riser.newObject("PartDesign::Pad", "RiserPad")
+    pad.Profile = sketch
+    pad.Length = 6
+    doc.commitTransaction()
+    doc.recompute()
+    riser_box = App.BoundBox(riser.Shape.BoundBox)
+    agent.call("activate", {"target": plate.Name})
+    agent.call(
+        "rectangular_pattern",
+        {"body": True, "direction": "Y", "quantity": 2, "distance": 50, "distribution": "spacing"},
+    )
+    agent.call("ground", {"component": plate.Name})
+    patterns = [o for o in doc.Objects if pattern.is_body_pattern(o)]
+    copies = [o for o in doc.Objects if o.TypeId == "PartDesign::Body" and o.Label == "Body4"]
+    result = rebuild_through_tools(agent, plate.Name)
+    if not agent.check("dependents: the plate is rebuilt (done)", result.get("done"), result):
+        return
+    text, error = agent.call("finish_rebuild", {})
+    agent.check("dependents: finish_rebuild", not error, text)
+    rebuilt = [o for o in doc.Objects if o.TypeId == "PartDesign::Body" and o.Label == "Plate"]
+    rebuilt = rebuilt[0] if rebuilt else None
+    grounds = [g.ObjectToGround for g in joints.grounds(doc)]
+    agent.check(
+        "dependents: the ground follows the rebuild",
+        rebuilt is not None and grounds and grounds[0] is rebuilt,
+        [getattr(g, "Name", None) for g in grounds],
+    )
+    agent.check(
+        "dependents: the pattern of bodies copies the rebuild",
+        patterns
+        and bodies.alive(patterns[0])
+        and rebuilt is not None
+        and patterns[0].SourceBody == rebuilt.Name
+        and bodies.body_of(patterns[0].Source) is rebuilt,
+        [(p.Name, getattr(p.Source, "Name", None), p.SourceBody) for p in patterns],
+    )
+    support = sketch.AttachmentSupport
+    face = None
+    try:
+        face = rebuilt.Shape.getElement(support[0][1][0])
+    except Exception:
+        pass
+    agent.check(
+        "dependents: the other body's sketch stays on the top face (now the rebuild's)",
+        support
+        and support[0][0] is rebuilt
+        and face is not None
+        and abs(face.CenterOfMass.z - 8) < 1e-6
+        and sketch.MapMode == "FlatFace",
+        support,
+    )
+    doc.recompute()
+    agent.check(
+        "dependents: the other body and the pattern's copy are unchanged",
+        riser.Shape.BoundBox.isInside(riser_box.Center)
+        and abs(riser.Shape.BoundBox.ZMax - riser_box.ZMax) < 1e-6
+        and copies
+        and abs(copies[0].Shape.Volume - result["volume"]["reference"]) < 1e-3,
+        (riser.Shape.BoundBox, riser_box, [c.Shape.Volume for c in copies]),
+    )
+    text, error = agent.call("check_design", {"interference": False})
+    report = _json(text) or {}
+    agent.check(
+        "dependents: check_design finds no failed step", not report.get("failed_steps"), text
+    )
+
+
+# -- a link that cannot follow: the original is kept --------------------------------------------
+def kept(agent, folder):
+    import FreeCAD as App
+
+    agent.call("new_design", {"name": "QaKept"})
+    doc = App.ActiveDocument
+    plate = _featureless(doc, "Plate", _plate())
+    result = rebuild_through_tools(agent, plate.Name)
+    if not agent.check("kept: the plate is rebuilt (done)", result.get("done"), result):
+        return
+    # something that uses a sketch of the original's own (no counterpart in the rebuild)
+    doc.openTransaction("QA link")
+    own = plate.newObject("Sketcher::SketchObject", "OwnSketch")
+    holder = doc.addObject("App::FeaturePython", "QaHolder")
+    holder.addProperty("App::PropertyLink", "Uses", "QA")
+    holder.Uses = own
+    doc.commitTransaction()
+    text, error = agent.call("finish_rebuild", {})
+    labels = sorted(o.Label for o in doc.Objects if o.TypeId == "PartDesign::Body")
+    agent.check(
+        "kept: what cannot follow keeps the original (hidden, renamed) and the answer says so",
+        not error
+        and "Plate (original)" in labels
+        and "kept hidden" in text
+        and "QaHolder" in text
+        and holder.Uses is own
+        and not plate.Visibility,
+        (text, labels),
+    )
+
+
+# -- saved half way, opened again ---------------------------------------------------------------
+def reopened(agent, folder):
+    import FreeCAD as App
+
+    plate = _golden(
+        agent,
+        "QaReopen",
+        [
+            ("create_sketch", {"plane": "XY", "geometry": [{"rect": [0, 0, 60, 40]}]}),
+            ("extrude", {"profile": "Sketch1", "distance": 8}),
+            (
+                "create_sketch",
+                {"plane": "XY", "offset": 8, "geometry": [{"circle": [15, 20, 3]}]},
+            ),
+            ("hole", {"sketch": "Sketch2", "diameter": 6, "through_all": True}),
+        ],
+        folder,
+    )
+    agent.call("new_design", {"name": "QaMid"})
+    agent.call("import_file", {"path": plate})
+    text, error = agent.call("start_rebuild", {"body": "Body001"})
+    from . import rebuild_e2e as e2e
+
+    rebuilt_id = e2e.made_id(text) if not error else None
+    text, error = agent.call("describe_reference", {})
+    plan = (_json(text) or {}).get("plan") or []
+    for step in plan[:2]:
+        agent.call(step["tool"], step["args"])
+    path = os.path.join(folder, "qa_mid.FCStd")
+    agent.call("save_as", {"path": path})
+    agent.call("close_design", {})
+    agent.call("open_design", {"path": path})
+    doc = App.ActiveDocument
+    made = {}
+    for step in plan[2:]:
+        args = agent._with_ids(step, made, plan)
+        text, error = agent.call(step["tool"], args)
+        if not error and e2e.made_id(text):
+            made[step.get("step")] = e2e.made_id(text)
+    body = doc.getObject(rebuilt_id) if rebuilt_id else None
+    text, error = agent.call("compare_to_reference", {})
+    result = _json(text) or {}
+    agent.check(
+        "reopened: the plan carries on in the rebuilt body after the design is opened again",
+        body is not None and result.get("done") and len(body.Group) >= 4,
+        (text[:400], [o.Name for o in body.Group] if body is not None else None),
+    )
+
+
+# -- the reference deleted some other way than Finish ---------------------------------------------
+def deleted_reference(agent, folder):
+    import FreeCAD as App
+
+    from sciforge import rebuild
+
+    agent.call("new_design", {"name": "QaDeleted"})
+    doc = App.ActiveDocument
+    plate = _featureless(doc, "Plate", _plate())
+    agent.call("start_rebuild", {"body": plate.Name})
+    refs = rebuild.references(doc)
+    if not agent.check("deleted reference: a rebuild started", refs, refs):
+        return
+    text, error = agent.call("delete_step", {"steps": [refs[0].Name]})
+    agent.check(
+        "deleted reference: the original is shown again (it stayed hidden)",
+        not error and bool(plate.Visibility) and not rebuild.references(doc),
+        (text, plate.Visibility),
+    )
+    agent.call("undo", {})
+    agent.check(
+        "deleted reference: undo brings the rebuild back, the original hidden",
+        rebuild.references(doc) and not plate.Visibility,
+        plate.Visibility,
+    )
+
+
+CHECKS = (jointed, dependents, kept, reopened, deleted_reference)
+
+
+def run(agent):
+    """Every QA check (each in designs of its own; closed after)."""
+    from .rebuild_e2e import _close_all
+
+    folder = tempfile.mkdtemp(prefix="sciforge-rebuild-qa-")
+    for check in CHECKS:
+        try:
+            check(agent, folder)
+        except Exception:
+            agent.check("%s: the run" % check.__name__, False, traceback.format_exc())
+        _close_all()
