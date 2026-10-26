@@ -66,37 +66,50 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
   `marking_menu._open_for_state`), Repeat only repeats a setup command; the design's keys are
   off while SIMULATION shows (`simulation_ui.DESIGN_KEYS`: a face clicked in the view and Delete
   made a Delete Face step in the design; E opened Extrude).
-- **Exercising every option end to end** found more: a Bearing Load's default direction ran
-  along a hole drilled along Z (no arrow, a failed solve: now turned across the hole); editing a
-  load whose face a design change removed kept the gone pick (now left out with a sentence; the
-  faces the engine finds again by shape come under their new names); unticking "Keep the
-  results in the design file" made up-to-date results look out of date (the engine's
-  fingerprint counted it: fixed by sim-core) and the Results row then said they were kept;
-  with another design in front, Job Status named a study by its internal name and its
-  double-click said the results were gone; a design closed during its solve left the progress
-  window saying "Solving..."; a new load dialog opened after a click on another load's row
-  started on that load's face (the row lights it up: `simulation_browser.only_highlight`); a
-  deleted study whose mesh showed left Show Mesh ticked (and Undo drew the mesh again); a body
-  deleted while its study solved made the engine fail with "Cannot access attribute 'Label' of
-  deleted object" (the UI now stops the job first, with a sentence naming the body); a cancelled
-  solve's progress still showed its stage "running"; a design closed while a SETUP dialog was
-  open left the dialog's undo step open in FreeCAD (its name is application-wide): the next
-  design's changes went into it and every solve there waited forever for "the open command"
-  (now: `simulation_ui._close_leftover_step` after a design closes, `_finish_sim_dialog` lets
-  go of a closed design's Settings / Materials dialog without touching it, and the solve stops
-  waiting for an undo step open with no dialog after 2 s). Two rows picked with Ctrl and Delete
-  deleted only the last one: the browser's view-to-rows selection sync let go of a load's row
-  (it selects faces, not an object); now the rows stay picked while the view shows just what
-  they lit up (`simulation_browser.keep_selected`, a hook in `browser_ui._sync_selection`). The
-  Solve dialog, Pre-check list, Load Case Attributes and Contact Manager stayed open after their
-  design closed (a click in them worked on a deleted study): they now close with it
-  (`simulation_dialogs.close_for_closed_designs`); New Study reopens for the design in front.
+- **Exercising every option end to end, and odd things a person may do** (scenarios
+  `sim_setup_more`, `_lost`, `_two`, `_mesh`, `_odd`, `_during`, throwaway explorations) found,
+  all fixed:
+  - a Bearing Load's default direction ran along a hole drilled along Z (no arrow, a failed
+    solve): now turned across the hole;
+  - editing a load whose face a design change removed kept the gone pick: now left out with a
+    sentence (the faces the engine finds again by shape come under their new names);
+  - unticking "Keep the results in the design file" made up-to-date results look out of date
+    (the engine's fingerprint counted it: fixed by sim-core) and the Results row then said
+    they were kept;
+  - with another design in front, Job Status named a study by its internal name and its
+    double-click said the results were gone;
+  - a design closed during its solve left the progress window saying "Solving..."; a body
+    deleted while its study solved made the engine fail with "Cannot access attribute 'Label'
+    of deleted object" (the UI now stops the job first, with a sentence naming the body); a
+    cancelled solve's progress still showed its stage "running";
+  - a new load dialog opened after a click on another load's row started on that load's face
+    (the row lights it up: `simulation_browser.only_highlight`);
+  - a deleted study whose mesh showed left Show Mesh ticked (and Undo drew the mesh again);
+  - a design closed while a SETUP dialog was open left the dialog's undo step open in FreeCAD
+    (its name is application-wide): the next design's changes went into it and every solve
+    there waited forever for "the open command". Now `simulation_ui._close_leftover_step` runs
+    after a design closes, `_finish_sim_dialog` lets go of a closed design's Settings /
+    Materials dialog without touching it, and a solve stops waiting for an undo step open with
+    no dialog after 2 s;
+  - two rows picked with Ctrl and Delete deleted only the last one: the browser's view-to-rows
+    selection sync let go of a load's row (it selects faces, not an object); now the rows stay
+    picked while the view shows just what they lit up (`simulation_browser.keep_selected`, a
+    hook in `browser_ui._sync_selection`);
+  - the Solve dialog, Pre-check list, Load Case Attributes and Contact Manager stayed open
+    after their design closed (a click in them worked on a deleted study): they now close with
+    it (`simulation_dialogs.close_for_closed_designs`); New Study reopens for the design in
+    front;
+  - DOF View on a study without a body said "every body is held", Generate Mesh failed with
+    the pre-check's sentences: both now say there is no solid body.
 - **A look at every dialog on screen**: a throwaway scenario took screenshots of each SETUP
   dialog under xvfb (`h.shot` captures the widgets and FreeCAD's 3D view). Fixed from them: the
   Ux / Uy / Uz and Flip Direction buttons looked the same on and off, Study Settings pushed the
   task panel past the window's edge (tab names now scroll, long labels put their field below),
   an unticked study in the Solve dialog showed no box, a finished progress window kept Cancel,
-  the notes' grey was unreadable in the light look.
+  the notes' grey was unreadable in the light look. The later additions (Repair in the Solve
+  dialog and the Pre-check list, the Angle fields, Job Status before any solve) were looked at
+  in the dark and the light looks: Job Status before any solve is now as small as its
+  sentence, and Study Materials' table header has no blank end.
 
 ## Scenarios (last runs)
 
@@ -186,7 +199,6 @@ GUI smoke / journey / restart: all passed.
   active: the next change in any design opens an undo step of that name. SIMULATION closes it
   after a design closes; `hole_common.abandon` could call `App.closeActiveTransaction(False)`
   for every SciForge dialog (not changed here: not sim-ui's file).
-
 - A PropertyLinkSubListGlobal drops an entry with an empty sub-list; `(obj, "")` keeps it.
 - Without a window manager (xvfb), closing a top-level dialog leaves no active window: the main
   window's QShortcuts (Esc, Enter) stop firing. SciForge's dialogs now give the main window its
