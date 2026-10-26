@@ -691,15 +691,17 @@ class FinishDialog(QtWidgets.QDialog):
                     target.Label if target is not None else "The rebuilt body"
                 )
             elif data["done"]:
-                words = (
-                    "%s matches %s (match %s, all %d faces). It takes the original's name "
-                    "and place."
-                    % (
-                        target.Label,
-                        ref.SourceLabel,
-                        _pct(data["match"]),
-                        data["faces"]["reference"],
-                    )
+                own = not rebuild._default_rebuilt_label(target.Label, ref.SourceLabel)
+                words = "%s matches %s (match %s, all %d faces). %s" % (
+                    target.Label,
+                    ref.SourceLabel,
+                    _pct(data["match"]),
+                    data["faces"]["reference"],
+                    (
+                        "It keeps its name and takes the original's place."
+                        if own
+                        else "It takes the original's name and place."
+                    ),
                 )
             else:
                 words = (
@@ -790,6 +792,7 @@ def finish(ref, keep_original=False, keep_reference=False):
     except Exception:
         pass
     report = rebuild.FINISHED.get(name) or {}
+    original = report.get("original_label") or original  # (renamed while rebuilt: beta 3 QA)
     if report.get("followed"):
         log("Finish Rebuild: now on %s: %s" % (body.Label, ", ".join(report["followed"])))
     if report.get("kept_because") and not keep_original:

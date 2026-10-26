@@ -374,7 +374,8 @@ the category "Rebuild with a timeline":
   `fix`: the call that makes it; the faces not matched yet with selectors; `deviation`;
   `done`; and a `verdict` that says what to do next. In the window the differences show in
   the 3D view: missing red, extra green.
-- `finish_rebuild`: when done, the rebuild takes the original's name, component and place;
+- `finish_rebuild`: when done, the rebuild takes the original's name (unless the person
+  renamed it meanwhile), component and place;
   whatever used the original (joints, a ground, a pattern of it, sketches on its faces)
   moves onto the rebuild; the original is deleted or kept hidden (`keep_original`; also kept
   when something cannot move, said in the answer); one undo step. It refuses a rebuild that

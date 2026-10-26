@@ -40,6 +40,9 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * big mesh: a 37,740-triangle STL took 160 s in start_rebuild and as long again in
   describe_reference (FreeCAD frozen); now a mesh over 10,000 triangles is refused at once
   with what to do, and describe reads the reference's solid instead of making it again.
+* renamed: the rebuild renamed by the person while it was built lost that name at Finish
+  (back to the original's name at start); the original renamed meanwhile: the rebuild took
+  its old name.
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -1073,6 +1076,49 @@ def big_mesh(agent, folder):
     )
 
 
+# -- names changed while the part is rebuilt -------------------------------------------------------
+def renamed(agent, folder):
+    import FreeCAD as App
+
+    from sciforge import rebuild
+
+    path = _golden(agent, "QaArm5", ARM, folder)
+    for case in ("rebuild", "original"):
+        agent.call("new_design", {"name": "QaRenamed_" + case})
+        agent.call("import_file", {"path": path})
+        doc = App.ActiveDocument
+        agent.call("start_rebuild", {"body": "Body001"})
+        refs = rebuild.active_references(doc)
+        if not agent.check("renamed (%s): a rebuild started" % case, refs, refs):
+            continue
+        target_name = rebuild.target_of(refs[0]).Name
+        if case == "rebuild":  # the person names the new part while it is built
+            agent.call("rename", {"target": target_name, "name": "Arm v2"})
+            wanted = "Arm v2"
+        else:  # the person renames the (hidden) original
+            agent.call("rename", {"target": "Body001", "name": "Arm A"})
+            wanted = "Arm A"
+        text, error = agent.call("describe_reference", {})
+        rebuild_through_tools(agent, None, plan=(_json(text) or {}).get("plan") or [])
+        text, error = agent.call("finish_rebuild", {"keep_original": case == "original"})
+        target = doc.getObject(target_name)
+        original = doc.getObject("Body001")
+        agent.check(
+            "renamed (%s): Finish keeps the name the person gave (it put back the original's "
+            "name at start, Body001)" % case,
+            not error and target is not None and target.Label == wanted,
+            (text[:300], getattr(target, "Label", None)),
+        )
+        if case == "original":
+            agent.check(
+                "renamed (original): the kept original and the answer use its new name",
+                original is not None
+                and original.Label == "Arm A (original)"
+                and "'Arm A (original)'" in text,
+                (getattr(original, "Label", None), text[:300]),
+            )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -1091,6 +1137,7 @@ CHECKS = (
     text_plate,
     stopped,
     big_mesh,
+    renamed,
 )
 
 

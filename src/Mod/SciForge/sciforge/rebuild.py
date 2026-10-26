@@ -2082,8 +2082,16 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
             % target.Label
         )
     source = source_of(ref)
-    label = getattr(ref, "SourceLabel", "") or (source.Label if source is not None else "")
-    report = {"followed": [], "kept_because": [], "kept_original": bool(keep_original)}
+    # the original's name as it is now (beta 3 QA: renamed while it was rebuilt, the rebuild
+    # took the old name), else the one it had at start
+    label = (source.Label if source is not None else "") or getattr(ref, "SourceLabel", "")
+    renamed = not _default_rebuilt_label(target.Label, getattr(ref, "SourceLabel", "") or label)
+    report = {
+        "followed": [],
+        "kept_because": [],
+        "kept_original": bool(keep_original),
+        "original_label": label,
+    }
     if source is not None:
         container = components.container_of(source)
         if components.container_of(target) is not container:
@@ -2119,7 +2127,7 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
         if place is not None:
             place()
     FINISHED[ref.Name] = report
-    if label:
+    if label and not renamed:  # (a name the person gave the rebuild stays: beta 3 QA)
         target.Label = label
     _HIDDEN.get(doc.Name, {}).pop(ref.Name, None)
     NOTES.pop(ref.Name, None)
@@ -2151,6 +2159,12 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
 
 
 FINISHED = {}  # reference name -> what its finish did: {"followed", "kept_because", ...}
+
+
+def _default_rebuilt_label(label, original):
+    """Whether a rebuilt body still has the name start gave it ("<original> (rebuilt)", with
+    a number FreeCAD may have added): not renamed by the person."""
+    return not original or str(label).startswith("%s (rebuilt)" % original)
 
 
 def stop(ref, keep_rebuilt=False):

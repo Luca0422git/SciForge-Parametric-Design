@@ -229,6 +229,7 @@ def finish_rebuild(ctx, args):
     except Exception:
         steps = []
     report = rebuild.FINISHED.get(ref_name) or {}
+    original = report.get("original_label") or original  # (renamed while rebuilt: beta 3 QA)
     kept = bool(args.get("keep_original") or report.get("kept_original"))
     text = (
         "Done: %s. %s is now the rebuilt part (id %r) with %d timeline steps; the original "

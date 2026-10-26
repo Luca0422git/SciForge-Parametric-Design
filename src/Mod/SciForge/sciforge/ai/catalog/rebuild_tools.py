@@ -157,7 +157,8 @@ define(
     "Finish rebuild",
     "rebuild",
     "Rebuild > Finish Rebuild (beyond Fusion)",
-    "Finish a rebuild: the rebuilt body takes the original's name, component and place, "
+    "Finish a rebuild: the rebuilt body takes the original's name (unless it was given one "
+    "of its own meanwhile), component and place, "
     "with its timeline; the original (the featureless body or the mesh body) is deleted, or "
     "kept hidden as '<name> (original)' with keep_original: true; the reference is removed "
     "(keep_reference: true keeps it, hidden). Whatever used the original (joints, grounds, a "
