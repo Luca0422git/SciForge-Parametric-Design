@@ -312,8 +312,9 @@ class Topology:
             edge = self.edges[key]
             try:
                 p = edge.valueAt(0.5 * (edge.FirstParameter + edge.LastParameter))
-                n1 = _normal_at(self.facts[owners[0]].face, p)
-                n2 = _normal_at(self.facts[owners[1]].face, p)
+                f1, f2 = self.facts[owners[0]], self.facts[owners[1]]
+                n1 = f1.normal if f1.normal is not None else _normal_at(f1.face, p)
+                n2 = f2.normal if f2.normal is not None else _normal_at(f2.face, p)
                 result = core.dot(core.unit(n1), core.unit(n2)) > SMOOTH
             except Exception:
                 result = False
@@ -403,6 +404,7 @@ class _Reader:
         removed = self.defeature(holes, chamfers, blends)
         timing["defeaturing"] = time.time() - t
         t = time.time()
+        self.base_shape = removed["base"]
         base = self.find_base(removed["base"])
         timing["base"] = time.time() - t
         t = time.time()
@@ -488,11 +490,22 @@ class _Reader:
         return holes
 
     def _extent(self, indexes, axis, origin):
-        ts = []
+        """(lowest, highest) position of the faces' corners along the axis (from origin)."""
+        lo, hi = None, None
         for i in indexes:
-            for v in self.facts[i].face.Vertexes:
-                ts.append(core.dot(core.sub(_t(v.Point), origin), axis))
-        return (min(ts), max(ts)) if ts else (0.0, 0.0)
+            f = self.facts[i]
+            if f.kind == "plane" and core.parallel(f.normal, axis, 1e-9):
+                t = (f.h - core.dot(origin, f.normal)) * core.dot(f.normal, axis)
+                ts = (t,)
+            else:
+                pts = f.__dict__.get("_points")
+                if pts is None:
+                    pts = f._points = [_t(v.Point) for v in f.face.Vertexes]
+                ts = [core.dot(core.sub(p, origin), axis) for p in pts]
+            if ts:
+                lo = min(ts) if lo is None else min(lo, min(ts))
+                hi = max(ts) if hi is None else max(hi, max(ts))
+        return (lo, hi) if lo is not None else (0.0, 0.0)
 
     def _hole(self, idx, bigger):
         f0 = self.facts[idx[0]]
@@ -644,16 +657,13 @@ class _Reader:
         in_holes = set(i for h in holes for i in h["_faces"])
         blend = {}
         for f in self.facts:
-            if f.index in in_holes:
+            if f.index in in_holes or f.kind not in ("cylinder", "torus", "sphere"):
                 continue
-            tangent = self.topo.tangent_neighbours(f.index)
-            if f.kind == "cylinder" and f.span is not None and len(tangent) >= 2:
-                if f.span < math.pi - 1e-3:
-                    blend[f.index] = f.radius
-            elif f.kind == "torus" and len(tangent) >= 2:
-                blend[f.index] = f.minor
-            elif f.kind == "sphere" and len(tangent) >= 2:
-                blend[f.index] = f.radius
+            if f.kind == "cylinder" and (f.span is None or f.span >= math.pi - 1e-3):
+                continue
+            if len(self.topo.tangent_neighbours(f.index)) < 2:
+                continue
+            blend[f.index] = f.minor if f.kind == "torus" else f.radius
         # corner pieces (free-form or spherical) between blends take their neighbours' radius
         for f in self.facts:
             if f.index in blend or f.index in in_holes:
@@ -742,7 +752,7 @@ class _Reader:
                 width = _line_distance(ea, eb)
                 reach_a = _extent_across(self.facts[ja].face, da)
                 reach_b = _extent_across(self.facts[jb].face, db)
-                if width > 0.5 * reach_a or width > 0.5 * reach_b:
+                if width > reach_a or width > reach_b or min(ea.Length, eb.Length) < 1.5 * width:
                     continue  # too wide for a chamfer: a real slanted face of the part
                 item = {
                     "id": self.new_id(),
@@ -757,44 +767,44 @@ class _Reader:
         return None
 
     # -- defeaturing ----------------------------------------------------------------------------
-    def _defeature(self, groups):
-        """The solid without the faces of these feature groups, or None when OpenCASCADE
-        cannot take them off."""
-        faces = [self.facts[i].face for g in groups for i in g["_faces"]]
+    def _defeature(self, groups, shape=None):
+        """The solid (the original, or `shape`: one whose untouched faces are the original's)
+        without the faces of these feature groups (OpenCASCADE's defeaturing), or None when
+        it cannot take them off. Results are kept: the same set is asked for more than once."""
+        shape = self.shape if shape is None else shape
+        faces = [i for g in groups for i in g["_faces"]]
         if not faces:
-            return self.shape
+            return shape
+        key = (id(shape), tuple(sorted(set(faces))))
+        cache = self.__dict__.setdefault("_defeatured", {})
+        if key in cache:
+            return cache[key]
+        out = None
         try:
-            out = self.shape.defeaturing(faces)
+            got = shape.defeaturing([self.facts[i].face for i in key[1]])
+            if not got.isNull() and got.isValid() and len(got.Solids) == 1:
+                out = got.Solids[0]
+                try:
+                    refined = out.removeSplitter()
+                    if not refined.isNull() and refined.isValid() and len(refined.Solids) == 1:
+                        out = refined.Solids[0]
+                except Exception:
+                    pass
         except Exception:
-            return None
-        try:
-            if out.isNull() or not out.Solids or not out.isValid():
-                return None
-            if len(out.Solids) != 1:
-                return None
-            out = out.Solids[0]
-            try:
-                refined = out.removeSplitter()
-                if not refined.isNull() and refined.isValid() and refined.Solids:
-                    out = refined.Solids[0]
-            except Exception:
-                pass
-            return out
-        except Exception:
-            return None
+            out = None
+        cache[key] = out
+        return out
 
-    def defeature(self, holes, chamfers, blends):
-        """Take off every feature that can be taken off (all at once, else by halves); the ones
-        that cannot stay in the base and are listed as such. Returns {"base": shape, "ok":
-        {feature ids}, "accepted": [features]}."""
-        groups = holes + chamfers + blends
-        accepted = []
+    def _accept(self, groups, start=(), shape=None):
+        """(accepted, rejected): the groups OpenCASCADE can take off together with `start`
+        (all at once, else by halves)."""
+        accepted = list(start)
         rejected = []
 
         def attempt(candidates):
             if not candidates:
                 return
-            if self._defeature(accepted + candidates) is not None:
+            if self._defeature(accepted + candidates, shape) is not None:
                 accepted.extend(candidates)
                 return
             if len(candidates) == 1:
@@ -804,10 +814,108 @@ class _Reader:
             attempt(candidates[:half])
             attempt(candidates[half:])
 
-        attempt(groups)
-        base = self._defeature(accepted) if accepted else self.shape
-        if base is None:  # (cannot happen: it was tried) keep the solid as it is
-            base, accepted = self.shape, []
+        attempt(list(groups))
+        return accepted[len(start) :], rejected
+
+    def _drop_holes(self, holes):
+        """(solid, holes taken off, holes left): the original solid with the holes closed by
+        rebuilding the faces that carry their rims without those rims and leaving the holes'
+        own faces out (milliseconds, where defeaturing a few hundred holes takes minutes).
+        A hole whose rim is not a whole inner loop of a face (it cuts an edge of the part,
+        it meets another hole) is left for defeaturing."""
+        import Part
+
+        if not holes:
+            return self.shape, [], []
+        owner = {}  # edge key -> hole ids
+        for h in holes:
+            for i in h["_faces"]:
+                for key in self.topo.face_edges[i]:
+                    owner.setdefault(key, set()).add(h["id"])
+        in_hole = {i: h["id"] for h in holes for i in h["_faces"]}
+        bad = set()
+        rims = {}  # face index -> [(wire, hole id)]
+        for f in self.facts:
+            if f.index in in_hole:
+                continue
+            outer = f.face.OuterWire
+            for wire in f.face.Wires:
+                keys = [e.hashCode() for e in wire.Edges]
+                ids = set()
+                for key in keys:
+                    ids |= owner.get(key, set())
+                if not ids:
+                    continue
+                whole = all(owner.get(key) == ids for key in keys) and len(ids) == 1
+                if wire.isSame(outer) or not whole:
+                    bad |= ids
+                    continue
+                rims.setdefault(f.index, []).append((wire, next(iter(ids))))
+        # every edge a hole shares with the rest of the part must be in a dropped rim
+        dropped_keys = set()
+        for items in rims.values():
+            for wire, hid in items:
+                dropped_keys.update(e.hashCode() for e in wire.Edges)
+        for h in holes:
+            for i in h["_faces"]:
+                for key in self.topo.face_edges[i]:
+                    others = [j for j in self.topo.edge_faces.get(key, []) if j not in in_hole]
+                    if others and key not in dropped_keys:
+                        bad.add(h["id"])
+        good = [h for h in holes if h["id"] not in bad]
+        if not good:
+            return self.shape, [], list(holes)
+        good_ids = {h["id"] for h in good}
+        faces = []
+        try:
+            for f in self.facts:
+                if in_hole.get(f.index) in good_ids:
+                    continue
+                drop = [w for w, hid in rims.get(f.index, []) if hid in good_ids]
+                if not drop:
+                    faces.append(f.face)
+                    continue
+                gone = {d.hashCode() for d in drop} | {f.face.OuterWire.hashCode()}
+                keep = [w for w in f.face.Wires if w.hashCode() not in gone]
+                rebuilt = Part.Face(f.face.Surface, f.face.OuterWire)
+                if keep:
+                    rebuilt = rebuilt.cutHoles(keep)
+                p = rebuilt.CenterOfMass
+                n_new = rebuilt.normalAt(*rebuilt.Surface.parameter(p))
+                n_old = f.face.normalAt(*f.face.Surface.parameter(p))
+                if n_new.dot(n_old) < 0:
+                    rebuilt.reverse()
+                faces.append(rebuilt)
+            solid = Part.Solid(Part.Shell(faces))
+            if solid.isNull() or not solid.isValid():
+                raise ValueError("not a valid solid")
+            expected = self.shape.Volume + sum(_hole_void(self, h) for h in good)
+            if abs(solid.Volume - expected) > 1e-6 * max(1.0, expected):
+                raise ValueError("%.6g mm3, %.6g expected" % (solid.Volume, expected))
+        except Exception as exc:
+            warn("recognize: holes not closed by their rims (%s)" % exc)
+            return self.shape, [], list(holes)
+        return solid, good, [h for h in holes if h["id"] in bad]
+
+    def defeature(self, holes, chamfers, blends):
+        """Take off every feature that can be taken off: the holes first (their rims closed,
+        or with OpenCASCADE's defeaturing), then chamfers and fillets (defeaturing: all at
+        once, else by halves). The ones that cannot be taken off stay in the base and are
+        listed as such. Returns {"base": shape, "ok": {feature ids}, "accepted": [features]}."""
+        start, holes_ok, left = self._drop_holes(holes)
+        groups = left + chamfers + blends
+        ok, rejected = self._accept(groups, shape=start)
+        base = self._defeature(ok, start) if ok else start
+        if base is None:  # (cannot happen: it was tried)
+            base, ok = start, []
+        if base is not start or holes_ok:
+            try:
+                refined = base.removeSplitter()
+                if not refined.isNull() and refined.isValid() and len(refined.Solids) == 1:
+                    base = refined.Solids[0]
+            except Exception:
+                pass
+        accepted = holes_ok + ok
         for g in rejected:
             self.notes.append(
                 "%s %s could not be taken off the base shape (OpenCASCADE's defeaturing "
@@ -881,16 +989,16 @@ class _Reader:
         return chosen
 
     def _faces_in(self, solid):
-        """Indexes of the original's faces that lie on the faces of `solid`."""
+        """Indexes of the original's faces that lie on the surface of a face of `solid`."""
+        buckets = {}
+        for face in solid.Faces:
+            buckets.setdefault(_surface_key(face), []).append(face)
         out = []
         for f in self.facts:
-            try:
-                p = f.face.valueAt(*_inner_uv(f.face))
-                d = solid.Shells[0].distToShape(_vertex(_t(p)))[0]
-            except Exception:
-                continue
-            if d < 1e-5:
-                out.append(f.index)
+            for face in buckets.get(_surface_key(f.face), []):
+                if _same_surface(f.face, face, 1e-5):
+                    out.append(f.index)
+                    break
         return out
 
     # -- the plan -------------------------------------------------------------------------------
@@ -1052,10 +1160,10 @@ class _Reader:
             steps = [plan.step_of(sketch), plan.step_of(hole_id)]
             if pattern_step:
                 pid = self.new_id()
-                pargs = dict(pattern_step)
-                pargs["features"] = [hole_id]
+                tool, pargs = pattern_step
+                pargs = dict(features=[hole_id], **pargs)
                 plan.add(
-                    "pattern",
+                    tool,
                     pargs,
                     "Repeat the hole: %s." % _pattern_words(pattern),
                     [pid] + fids[1:],
@@ -1121,42 +1229,66 @@ class _Reader:
         return out
 
     def _pattern_args(self, pattern, plane):
-        """The pattern tool's arguments for a pattern found in the sketch plane, or None when
-        that tool cannot express it."""
+        """(tool, arguments) of Fusion's pattern dialog for a pattern found in the sketch plane
+        (the features argument is added by the caller), or None when no tool says it."""
         frame = core.PLANES[plane]
         if pattern["kind"] == "rectangular":
             first_axis = frame["x"] if pattern.get("axis", "x") == "x" else frame["y"]
             name1 = core.origin_axis(first_axis)
-            sign1 = 1 if core.dot(first_axis, core.AXES[name1]) > 0 else -1
             args = {
-                "kind": "rectangular",
                 "direction": name1,
-                "count": pattern["count"],
-                "spacing": core.snap(sign1 * pattern["spacing"]),
+                "quantity": pattern["count"],
+                "distance": core.snap(pattern["spacing"]),
+                "distribution": "spacing",
             }
             if pattern["count2"] > 1:
-                name2 = core.origin_axis(frame["y"])
-                sign2 = 1 if core.dot(frame["y"], core.AXES[name2]) > 0 else -1
                 args.update(
-                    direction2=name2,
-                    count2=pattern["count2"],
-                    spacing2=core.snap(sign2 * pattern["spacing2"]),
+                    direction2=core.origin_axis(frame["y"]),
+                    quantity2=pattern["count2"],
+                    distance2=core.snap(pattern["spacing2"]),
                 )
-            if args["count"] < 2:
+            if args["quantity"] < 2:
                 return None
-            return args
+            return "rectangular_pattern", args
         if pattern["kind"] == "circular":
             cx, cy = pattern["center"]
-            if abs(cx) > 1e-6 or abs(cy) > 1e-6:
-                return None  # about an axis away from the origin: not the pattern tool's
             axis = core.origin_axis(frame["n"])
-            args = {"kind": "circular", "axis": axis, "count": pattern["count"]}
+            if abs(cx) > 1e-6 or abs(cy) > 1e-6:
+                axis = self._axis_face(plane, (cx, cy))
+                if axis is None:
+                    return None  # about an axis no round face of the part shows
+            args = {"axis": axis, "quantity": pattern["count"]}
             if not pattern["full"]:
-                if core.dot(frame["n"], core.AXES[axis]) < 0:
+                if core.dot(frame["n"], core.AXES[core.origin_axis(frame["n"])]) < 0:
                     return None  # (turns the other way about the axis: one sketch instead)
+                args["type"] = "angle"
                 args["angle"] = core.snap(pattern["step"] * (pattern["count"] - 1), 1e-7)
-            return args
+            return "circular_pattern", args
         return None
+
+    def _axis_face(self, plane, centre):
+        """{"face": selector} of a round face of the base around the axis through this sketch
+        point (square to the plane), for a circular pattern about it; None when there is
+        none."""
+        from .ai import geometry_facts
+
+        shape = getattr(self, "base_shape", None)
+        if shape is None:
+            return None
+        frame = core.PLANES[plane]
+        point = core.from_plane(plane, centre[0], centre[1], 0.0)
+        wanted = []
+        for i, face in enumerate(shape.Faces, start=1):
+            facts = FaceFacts(i - 1, face)
+            if facts.kind != "cylinder" or not core.parallel(facts.axis, frame["n"], 1e-7):
+                continue
+            if core.norm(core.sub(facts.point, _axis_point(point, facts.axis))) < 1e-5:
+                wanted.append("Face%d" % i)
+        if not wanted:
+            return None
+        refs = geometry_facts.stable_refs(shape, "faces", wanted=set(wanted[:1]))
+        ref = refs.get(wanted[0])
+        return {"face": ref} if ref else None
 
     def _hole_words(self, h):
         size = "d %s" % core.fmt(h["diameter"])
@@ -1281,39 +1413,47 @@ class _Reader:
 
     def _sharp_edges(self, shape, group):
         """Names of the edges of `shape` (the part without these blends) where the blends
-        were: edges whose two faces lie on the surfaces the blend joined, close to it."""
-        names = []
-        around = []
+        were: for each blend face, the edge between the two faces it joined (the faces it is
+        tangent to; a chamfer's two faces), close to it."""
+        pairs = []  # (blend face index, [joined face indexes], reach)
         for g in group:
-            neighbours = set()
+            size = max(g.get("radius") or 0, g.get("distance") or 0, g.get("distance2") or 0)
+            reach = 2.5 * size + 1e-6
+            if g["kind"] == "chamfer":
+                pairs.append((g["_faces"][0], list(g["_between"]), reach))
+                continue
             for i in g["_faces"]:
-                for j in self.topo.neighbours(i):
-                    if j not in g["_faces"]:
-                        neighbours.add(j)
-            reach = 2.5 * max(g.get("radius") or 0, g.get("distance") or 0, g.get("distance2") or 0)
-            around.append((g, neighbours, reach + 1e-6))
+                joined = [j for j in self.topo.tangent_neighbours(i) if j not in g["_faces"]]
+                if len(joined) >= 2:
+                    pairs.append((i, joined, reach))
         edge_owner = {}
         for fi, face in enumerate(shape.Faces):
             for e in face.Edges:
                 owners = edge_owner.setdefault(e.hashCode(), [])
                 if fi not in owners:
                     owners.append(fi)
+        names = []
         for ei, edge in enumerate(shape.Edges, start=1):
             owners = edge_owner.get(edge.hashCode(), [])
             if len(owners) != 2:
                 continue
             fa, fb = shape.Faces[owners[0]], shape.Faces[owners[1]]
-            try:
-                mid = _vertex(_t(edge.valueAt(0.5 * (edge.FirstParameter + edge.LastParameter))))
-            except Exception:
-                continue
-            for g, neighbours, reach in around:
-                near = min(self.facts[i].face.distToShape(mid)[0] for i in g["_faces"])
-                if near > reach:
+            mid = None
+            for i, joined, reach in pairs:
+                sa = any(_same_surface(self.facts[j].face, fa) for j in joined)
+                if not sa:
                     continue
-                sa = any(_same_surface(self.facts[j].face, fa) for j in neighbours)
-                sb = any(_same_surface(self.facts[j].face, fb) for j in neighbours)
-                if sa and sb:
+                sb = any(_same_surface(self.facts[j].face, fb) for j in joined)
+                if not sb:
+                    continue
+                if mid is None:
+                    try:
+                        mid = _vertex(
+                            _t(edge.valueAt(0.5 * (edge.FirstParameter + edge.LastParameter)))
+                        )
+                    except Exception:
+                        break
+                if self.facts[i].face.distToShape(mid)[0] <= reach:
                     names.append("Edge%d" % ei)
                     break
         return names
@@ -1376,6 +1516,29 @@ class _Reader:
         return spec if picks(spec) else None
 
 
+def _hole_void(reader, h):
+    """The volume a hole takes out of the part (its cylinders and cones), worked out from
+    its faces."""
+    axis, origin = h["_axis"], h["_origin"]
+    total = 0.0
+    for i in h["_faces"]:
+        f = reader.facts[i]
+        if f.kind == "cylinder":
+            t0, t1 = reader._extent([i], axis, origin)
+            total += math.pi * f.radius**2 * (t1 - t0)
+        elif f.kind == "cone":
+            rings = {}
+            for v in f.face.Vertexes:
+                w = core.sub(_t(v.Point), origin)
+                t = core.dot(w, axis)
+                rings[round(t, 6)] = core.norm(core.sub(w, core.mul(axis, t)))
+            if len(rings) == 1:
+                rings[round(core.dot(core.sub(f.apex, origin), axis), 6)] = 0.0
+            (ta, ra), (tb, rb) = sorted(rings.items())[:2]
+            total += math.pi * (tb - ta) * (ra * ra + ra * rb + rb * rb) / 3.0
+    return total
+
+
 # -- shape helpers ------------------------------------------------------------------------------
 def _natural(name):
     digits = "".join(ch for ch in name if ch.isdigit())
@@ -1404,6 +1567,18 @@ def _inner_uv(face):
     except Exception:
         u0, u1, v0, v1 = face.ParameterRange
         return 0.5 * (u0 + u1), 0.5 * (v0 + v1)
+
+
+def _surface_key(face):
+    """A coarse key of a face's surface (kind and direction) to bucket faces by."""
+    kind = _face_kind(face)
+    try:
+        if kind in ("plane", "cylinder", "cone", "torus"):
+            d = core.canonical_direction(_t(face.Surface.Axis))
+            return (kind,) + tuple(round(c, 3) + 0.0 for c in d)
+    except Exception:
+        pass
+    return (kind,)
 
 
 def _line_key(f):
