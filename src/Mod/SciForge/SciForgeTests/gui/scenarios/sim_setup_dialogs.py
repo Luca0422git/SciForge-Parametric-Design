@@ -17,7 +17,8 @@ E  Settings: Mesh > Element Order Linear; Adaptive Mesh Refinement Low (its numb
    greyed), then Custom with 3 refinements; OK; Undo brings Parabolic and no refinement back.
 F  LOADS > Toggle Gravity On/Off: gravity on, a Gravity row under Loads; right-click Gravity >
    Edit Gravity: Flip Direction, OK: it points up; Undo: down again. Edit Gravity, Direction
-   Type Normal, a click on a side face: OK, gravity points into that face; Undo.
+   Type Normal, a click on a side face: OK, gravity points into that face; Undo. Normal from a
+   straight edge (the plate's front edge): gravity along it; Undo.
 G  Automatic Contacts on one body: Generate finds none; Contact Manager says no bodies
    touch.
 H  Load Case Attributes lists every item with its place and size.
@@ -358,6 +359,44 @@ def f_normal_check():
 def f_normal_undone():
     d = settings()["gravity"]["direction"]
     h.check("Undo: down again", abs(d[2] + 1.0) < 1e-9, d)
+    s.right_click_row("Gravity", "Edit Gravity")
+
+
+def f_edge():
+    from sciforge import simulation_panels
+
+    p = simulation_panels.GravityPanel.last
+    if not h.check("Edit Gravity opened (edge)", p is not None and not p._closed):
+        return
+    s.choose("SciForgeSim_gravity_direction", "Normal")
+    # the plate's top front edge, along X
+    h.check("an edge clicked", h.click_edge(App.Vector(37.0, 0.0, 6.0)), h.state.get("last_click"))
+
+
+def f_edge_ok():
+    from sciforge import simulation_panels
+
+    p = simulation_panels.GravityPanel.last
+    if p is not None and not p._closed:
+        QtTest.QTest.qWait(120)  # (a pick is handled a moment after the click)
+        pick = p.pick
+        h.check(
+            "the edge gives the direction",
+            pick is not None and str(pick[1]).startswith("Edge"),
+            pick,
+        )
+    s.ok()
+
+
+def f_edge_check():
+    d = settings()["gravity"]["direction"]
+    h.check("gravity along the edge (X)", abs(abs(d[0]) - 1.0) < 1e-6, d)
+    s.undo()
+
+
+def f_edge_undone():
+    d = settings()["gravity"]["direction"]
+    h.check("Undo: down again (edge)", abs(d[2] + 1.0) < 1e-9, d)
 
 
 # -- G ------------------------------------------------------------------------------------------
@@ -498,6 +537,10 @@ h.run(
         f_normal_ok,
         f_normal_check,
         f_normal_undone,
+        f_edge,
+        f_edge_ok,
+        f_edge_check,
+        f_edge_undone,
         g_contacts,
         g_generate,
         g_manager,

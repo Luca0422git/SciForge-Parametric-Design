@@ -117,7 +117,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 | Scenario | Checks | Result |
 |---|---|---|
 | `sim_setup_bracket` | 80 | PASS |
-| `sim_setup_dialogs` | 85 | PASS |
+| `sim_setup_dialogs` | 92 | PASS |
 | `sim_setup_browser` | 61 | PASS |
 | `sim_setup_documents` | 71 | PASS |
 | `sim_setup_kinds` | 72 | PASS |
