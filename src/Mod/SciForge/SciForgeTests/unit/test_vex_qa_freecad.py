@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """Beta 3 VEX QA checks in real FreeCAD without a window: runs
 SciForgeTests/headless/vex_qa_check.py (Duplicate With Joints and Rigid Groups, the parts
-list of occurrences whose original was deleted, occurrence names, the same STEP file again,
-hole centres on parts with real VEX files' traits) and expects every check to pass. Skipped
-when FreeCAD is not found (run_tests.sh gives its command in SCIFORGE_FC_CMD)."""
+list of occurrences whose original was deleted, an occurrence taking over from a deleted
+original, occurrence names, the same STEP file again, hole centres on parts with real VEX
+files' traits) and expects every check to pass. Skipped when FreeCAD is not found
+(run_tests.sh gives its command in SCIFORGE_FC_CMD)."""
 
 import os
 import re

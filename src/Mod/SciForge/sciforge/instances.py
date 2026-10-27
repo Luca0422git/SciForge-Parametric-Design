@@ -24,6 +24,11 @@ the browser, joints, export, measure, drawings, interference):
 - ``sync(doc)`` adds a copy body when the source gets a new body and removes copies whose
   source body is gone; the labels follow the source's name. It runs after recomputes (a
   watch installed by the workbench) and after every instance operation.
+- Deleting the original keeps the component in its other occurrences (Fusion: a component
+  lives while one occurrence remains): the first one that stays takes over as the original
+  (``hand_over``, called by components.remove). Its copy bodies become bodies whose first
+  step holds the solid they showed (the original's features go with the original), the
+  others repeat it, and it takes the original's name and file.
 
 Paste New copies the source component with every object in it (``doc.copyObject``): an
 independent component named "<source> (1)".
@@ -371,6 +376,99 @@ def _sync_one(part):
             _add_copy(part, body, source, pattern, index)
             changed = True
     return changed
+
+
+# -- the original deleted: an occurrence takes over ---------------------------------------------
+def hand_over(source, leaving=None):
+    """Fusion keeps a component while one of its occurrences remains. Before `source`, an
+    original with occurrences, is deleted (`leaving`: what the user deletes, `source` or a
+    component around it), its first occurrence that stays (outside `leaving`, not a
+    pattern's) takes over as the original: each of its copy bodies becomes a body of its own
+    whose first step holds the solid it showed (a frozen base, as direct.py keeps a body
+    without history: the original's features go with the original), the other occurrences
+    repeat it, and it takes the original's file (Insert STEP of the same file is another
+    occurrence of it). A pattern's copies stay as they are. The caller holds the undo step,
+    deletes `source`, then calls crown(). Returns (heir, the original's name) or None.
+    (Before, beta 3 VEX QA: the occurrences stayed frozen, could not be copied or duplicated
+    any more, and the file inserted again was a part of its own.)"""
+    if not components.is_component(source) or is_instance(source):
+        return None
+    leaving = source if leaving is None else leaving
+
+    def staying(part):
+        return part is not leaving and not components.is_inside(part, leaving)
+
+    others = [p for p in instances_of(source) if pattern_of(p) is None and staying(p)]
+    if not others:
+        return None
+    heir, rest = others[0], others[1:]
+    kept = {}  # a body the original repeats (its name) -> the heir's body holding it now
+    for feature, body in copy_features(heir):
+        src = _link(feature, "Source")
+        if body is None:
+            heir.Document.removeObject(feature.Name)  # a copy step without its body
+            continue
+        _freeze_copy(feature, body)
+        if src is not None:
+            kept[src.Name] = body
+    for part in rest:
+        setattr(part, INSTANCE_OF, heir)
+        for feature, _body in copy_features(part):
+            src = _link(feature, "Source")
+            if src is not None and src.Name in kept:
+                feature.Source = kept[src.Name]
+            feature.Root = heir
+    for prop in (INSTANCE_OF, PATTERN, INDEX):
+        if prop in heir.PropertiesList:
+            heir.removeProperty(prop)
+    if getattr(heir, "SciForgeTimeline", True) is False:
+        heir.SciForgeTimeline = True  # an ordinary component: a step of the timeline
+    _take_file(source, heir)
+    log("%s takes over from %s (deleted)" % (heir.Label, source.Label))
+    return heir, source.Label
+
+
+def _freeze_copy(feature, body):
+    """A copy body of the occurrence that takes over: its first step takes the solid from a
+    hidden plain solid in its component (direct.py's base shape); the copy step goes."""
+    from . import direct
+
+    doc = feature.Document
+    try:  # the solid as the original is now (a change not recomputed yet)
+        if feature.Shape.isNull() or "Touched" in feature.State:
+            feature.recompute()
+    except Exception:
+        pass
+    holder = direct._new_shape_holder(doc, body)
+    holder.Shape = feature.Shape
+    body.BaseFeature = holder
+    doc.removeObject(feature.Name)
+    return holder
+
+
+def _take_file(source, heir):
+    """The file an inserted original came from (step_import: the same file inserted again
+    is an occurrence of the part that has it)."""
+    from . import step_import
+
+    for prop in (step_import.FILE_PROP, step_import.STAMP_PROP):
+        value = getattr(source, prop, "") or ""
+        if value:
+            bodies.add_prop(heir, "App::PropertyString", prop, "Insert", "")
+            setattr(heir, prop, value)
+
+
+def crown(handed):
+    """After the original was deleted: the occurrence that took over takes its name (the
+    other occurrences keep theirs, "<name>:<n>")."""
+    if not handed:
+        return
+    heir, label = handed
+    try:
+        if components.alive(heir):
+            heir.Label = label
+    except Exception as exc:
+        warn("%s keeps its name: %s" % (heir.Label, exc))
 
 
 def paste_new(source, parent=components.KEEP):

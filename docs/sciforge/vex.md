@@ -16,7 +16,8 @@ Fusion. (The details and the sources: `docs/sciforge/parity/vex-assembly.md`.)
   "screw:3"...), linked to the first (a change to the part shows in every copy); the file
   is not read again, and a drawing's parts list counts them in one row (Qty). A copy of the
   same file (a teammate's parts folder, a fresh download) counts as the same file; a file
-  whose content changed comes in as a new part.
+  whose content changed comes in as a new part. Deleting the first one is fine: the next
+  copy takes over as the part (it takes the name "screw"), and the others stay linked to it.
 
 ## 2. Use inches
 

@@ -413,9 +413,9 @@ def _parts_list(doc):
 
 def check_parts_list_original_deleted():
     """The same screw file inserted three times ("screw", "screw:2", "screw:3"); the first one
-    deleted: the other two stay (frozen as they were), and a drawing's parts list still counts
-    them as one part (Fusion: the component lives on in its other occurrences, one row, Qty
-    2), also after a save and reopen."""
+    deleted: the other two stay (screw:2 takes over as the original), and a drawing's parts
+    list still counts them as one part (Fusion: the component lives on in its other
+    occurrences, one row, Qty 2), also after a save and reopen."""
     from sciforge import components
 
     path = _files(["screw_8_32_x_0_5"])["screw_8_32_x_0_5"]
@@ -449,10 +449,12 @@ def check_parts_list_original_deleted():
 
 
 def check_occurrence_names_after_delete():
-    """The screw file inserted three times, the first one deleted (screw:2 and screw:3 stay),
-    then the file inserted twice more: a part of its own named after the file, then an
-    occurrence of it numbered after the ones still there ("screw:4"), not a name FreeCAD
-    makes unique by itself ("screw:001", read as the first occurrence)."""
+    """A design from before an occurrence took over (beta 3 before its VEX QA): the screw file
+    inserted three times and the first one deleted left screw:2 and screw:3 frozen, their
+    original gone (made here the way SciForge's own clean-ups still delete). Then the file
+    inserted twice more: a part of its own named after the file, then an occurrence of it
+    numbered after the ones still there ("screw:4"), not a name FreeCAD makes unique by
+    itself ("screw:001", read as the first occurrence)."""
     from sciforge import components, instances
 
     path = _files(["screw_8_32_x_0_5"])["screw_8_32_x_0_5"]
@@ -460,7 +462,9 @@ def check_occurrence_names_after_delete():
     try:
         tops = [_insert(doc, path).top for _k in range(3)]
         base = tops[0].Label
-        components.remove(doc, tops[0])
+        doc.openTransaction("Delete")
+        components.remove(doc, tops[0], _top=False)  # no occurrence takes over
+        doc.commitTransaction()
         doc.recompute()
         fresh = _insert(doc, path).top
         again = _insert(doc, path).top
@@ -475,6 +479,269 @@ def check_occurrence_names_after_delete():
             and again.Label == base + ":4"
             and labels == want,
             "the part again %r, its occurrence %r, all %s" % (fresh.Label, again.Label, labels),
+        )
+    finally:
+        _close(doc)
+
+
+def _same(a, b):
+    return all(
+        abs(getattr(a, k) - getattr(b, k)) < 1e-6
+        for k in ("XMin", "XMax", "YMin", "YMax", "ZMin", "ZMax")
+    )
+
+
+def _broken(doc):
+    return [o.Label for o in doc.Objects if "Invalid" in o.State or "Error" in o.State]
+
+
+def check_occurrence_takes_over():
+    """Fusion keeps a component while one of its occurrences remains. The screw file inserted
+    three times, the first one deleted the way the browser does (components.remove): screw:2
+    takes over as the original (named "screw", no occurrence any more, its solid where it
+    was), screw:3 repeats it, it can be copied again and Insert STEP of the same file is
+    another occurrence of it. Ctrl+Z: the original back, both linked to it again; Ctrl+Y;
+    save and reopen. (Before: the two stayed frozen, a copy of them was refused and the file
+    came in as a part of its own.)"""
+    from sciforge import components, instances, step_import
+
+    path = _files(["screw_8_32_x_0_5"])["screw_8_32_x_0_5"]
+    doc = App.newDocument("VexQaTakeOver")
+    saved = os.path.join(_folder(), "takeover.FCStd")
+    try:
+        tops = [
+            _insert(doc, path, App.Placement(V(15 * k, 0, 0), App.Rotation())).top for k in range(3)
+        ]
+        names = [t.Name for t in tops]
+        base = tops[0].Label
+        boxes = [_gbox(doc, t) for t in tops]
+        components.remove(doc, tops[0])
+        doc.recompute()
+        heir, rest = doc.getObject(names[1]), doc.getObject(names[2])
+        took = (
+            doc.getObject(names[0]) is None
+            and heir.Label == base
+            and not instances.is_instance(heir)
+            and not instances.copy_features(heir)
+            and instances.source_of(rest) is heir
+            and rest.Label == base + ":3"
+            and _same(_gbox(doc, heir), boxes[1])
+            and _same(_gbox(doc, rest), boxes[2])
+            and getattr(heir, step_import.FILE_PROP, "") == path
+        )
+        detail = "took over %s (%s, %s)" % (took, heir.Label, rest.Label)
+        doc.openTransaction("Paste")
+        copy = instances.make_instance(heir, placement=App.Placement(V(45, 0, 0), App.Rotation()))
+        doc.commitTransaction()
+        doc.recompute()
+        again = _insert(doc, path)
+        copied = (
+            instances.source_of(copy) is heir
+            and again.occurrence
+            and instances.source_of(again.top) is heir
+        )
+        for _k in range(3):  # the insert, the copy, the delete
+            doc.undo()
+        doc.recompute()
+        first = doc.getObject(names[0])
+        undone = (
+            first is not None
+            and first.Label == base
+            and heir.Label == base + ":2"
+            and instances.source_of(heir) is first
+            and instances.source_of(rest) is first
+            and _same(_gbox(doc, heir), boxes[1])
+            and not _broken(doc)
+        )
+        doc.redo()
+        doc.recompute()
+        redone = (
+            doc.getObject(names[0]) is None
+            and heir.Label == base
+            and instances.source_of(rest) is heir
+            and not _broken(doc)
+        )
+        doc.saveAs(saved)
+        _close(doc)
+        doc = App.openDocument(saved)
+        doc.recompute()
+        heir, rest = doc.getObject(names[1]), doc.getObject(names[2])
+        reopened = (
+            heir.Label == base
+            and not instances.is_instance(heir)
+            and instances.source_of(rest) is heir
+            and _same(_gbox(doc, rest), boxes[2])
+            and not _broken(doc)
+        )
+        _out(
+            "occurrence_takes_over",
+            took and copied and undone and redone and reopened,
+            "%s, copied again %s, Ctrl+Z %s, Ctrl+Y %s, reopened %s"
+            % (detail, copied, undone, redone, reopened),
+        )
+    finally:
+        _close(doc)
+
+
+def _designed(doc, label, size, parent=None):
+    from sciforge import components
+
+    comp = components.new_component(doc, label, parent)
+    body = components.new_body_in(doc, comp, label=label)
+    box = body.newObject("PartDesign::AdditiveBox", "Box")
+    box.Length, box.Width, box.Height = size
+    return comp, body
+
+
+def _flat_face(body, z):
+    for i, face in enumerate(body.Shape.Faces):
+        box = face.BoundBox
+        if box.ZLength < 1e-9 and abs(box.ZMin - z) < 1e-9:
+            return "Face%d" % (i + 1)
+    return None
+
+
+def check_takes_over_jointed_and_edited():
+    """A bracket designed here, copied twice; its second occurrence jointed (rigid) onto a
+    grounded plate; then the original deleted: the occurrence that takes over keeps its
+    joint (the plate moved 10 mm, solved: it follows), and a feature added to it shows in
+    the other occurrence (Fusion edits the component, every occurrence)."""
+    from sciforge import components, instances, joints
+
+    doc = App.newDocument("VexQaTakeOverJoint")
+    try:
+        plate, plate_body = _designed(doc, "Plate", (100, 50, 5))
+        bracket, _body_ = _designed(doc, "Bracket", (20, 10, 10))
+        bracket.Placement = App.Placement(V(0, 100, 0), App.Rotation())
+        doc.recompute()
+        doc.openTransaction("Paste")
+        second = instances.make_instance(
+            bracket, placement=App.Placement(V(30, 100, 20), App.Rotation())
+        )
+        third = instances.make_instance(
+            bracket, placement=App.Placement(V(60, 100, 20), App.Rotation())
+        )
+        doc.commitTransaction()
+        doc.recompute()
+        copy = _body(doc, second)
+        p1 = joints.Pick(second, copy, _flat_face(copy, 0.0))
+        p2 = joints.Pick(plate, plate_body, _flat_face(plate_body, 5.0))
+        s1 = [c for c in joints.snap_candidates(p1) if c["kind"] == "centre"][0]
+        s2 = [c for c in joints.snap_candidates(p2) if c["kind"] == "centre"][0]
+        doc.openTransaction("Joint")
+        joints.ground(plate)
+        joint = joints.create_joint(doc, "rigid", p1, s1, p2, s2)
+        joints.align(joint, first=True)
+        doc.commitTransaction()
+        doc.recompute()
+        sat = _gbox(doc, second)
+        components.remove(doc, bracket)
+        doc.recompute()
+        took = (
+            second.Label == "Bracket"
+            and not instances.is_instance(second)
+            and instances.source_of(third) is second
+            and _same(_gbox(doc, second), sat)
+        )
+        plate.Placement = App.Placement(V(10, 0, 0), App.Rotation())
+        doc.recompute()
+        joints.solve(doc)
+        doc.recompute()
+        moved = _gbox(doc, second)
+        held = abs(moved.XMin - (sat.XMin + 10)) < 1e-6 and abs(moved.ZMin - 5) < 1e-6
+        extra = _body(doc, second).newObject("PartDesign::AdditiveBox", "Extra")
+        extra.Length, extra.Width, extra.Height = 5, 5, 30
+        doc.recompute()
+        instances.sync(doc)
+        doc.recompute()
+        mine, other = _body(doc, second).Shape.Volume, _body(doc, third).Shape.Volume
+        _out(
+            "takes_over_jointed_and_edited",
+            took
+            and held
+            and abs(mine - 2500) < 1e-6
+            and abs(other - mine) < 1e-6
+            and not _broken(doc),
+            "took over %s (%s), held by its joint %s (%s), volumes %.1f / %.1f, in error %s"
+            % (took, second.Label, held, moved, mine, other, _broken(doc)),
+        )
+    finally:
+        _close(doc)
+
+
+def check_takes_over_nested():
+    """A wheel designed inside a frame, with one occurrence beside it in the frame and one at
+    the top of the design; the frame deleted: the occurrence outside it takes over (named
+    "Wheel", where it was), the one inside goes with the frame; Ctrl+Z brings back all
+    four, linked as before."""
+    from sciforge import components, instances
+
+    doc = App.newDocument("VexQaTakeOverNested")
+    try:
+        frame = components.new_component(doc, "Frame", None)
+        wheel, _wheel_body = _designed(doc, "Wheel", (10, 10, 5), frame)
+        frame.Placement = App.Placement(V(5, 5, 5), App.Rotation())
+        doc.recompute()
+        doc.openTransaction("Paste")
+        outside = instances.make_instance(wheel, None, App.Placement(V(0, 50, 0), App.Rotation()))
+        inside = instances.make_instance(wheel)
+        doc.commitTransaction()
+        doc.recompute()
+        names = (wheel.Name, outside.Name, inside.Name)
+        box = _gbox(doc, outside)
+        components.remove(doc, frame)
+        doc.recompute()
+        heir = doc.getObject(names[1])
+        labels = [c.Label for c in components.list_components(doc)]
+        took = (
+            heir is not None
+            and heir.Label == "Wheel"
+            and not instances.is_instance(heir)
+            and _same(_gbox(doc, heir), box)
+            and labels == ["Wheel"]
+            and not _broken(doc)
+        )
+        doc.undo()
+        doc.recompute()
+        back = sorted(c.Label for c in components.list_components(doc))
+        first = doc.getObject(names[0])
+        linked = all(instances.source_of(doc.getObject(n)) is first for n in names[1:])
+        _out(
+            "takes_over_nested",
+            took and back == ["Frame", "Wheel", "Wheel:2", "Wheel:3"] and linked,
+            "after the delete %s, Ctrl+Z %s linked %s" % (labels, back, linked),
+        )
+    finally:
+        _close(doc)
+
+
+def check_takes_over_fresh_copy():
+    """A script (or the AI agent) copies a component and deletes the original at once, before
+    the design is recomputed: the copy takes over with its solid, where it was put (its copy
+    step had not worked out its solid yet: the part that took over was left empty)."""
+    from sciforge import components, instances
+
+    doc = App.newDocument("VexQaTakeOverFresh")
+    try:
+        bracket, _body_ = _designed(doc, "Bracket", (20, 10, 10))
+        doc.recompute()
+        doc.openTransaction("Paste")
+        copy = instances.make_instance(
+            bracket, placement=App.Placement(V(30, 0, 0), App.Rotation())
+        )
+        doc.commitTransaction()
+        components.remove(doc, bracket)  # no recompute in between
+        doc.recompute()
+        body = _body(doc, copy)
+        volume = body.Shape.Volume if body is not None and body.Shape.isValid() else 0.0
+        where = _gbox(doc, copy).XMin if volume > 0 else None
+        _out(
+            "takes_over_fresh_copy",
+            copy.Label == "Bracket"
+            and abs(volume - 2000) < 1e-6
+            and where is not None
+            and abs(where - 30) < 1e-6,
+            "%s, volume %.1f, at x %s" % (copy.Label, volume, where),
         )
     finally:
         _close(doc)
@@ -692,6 +959,10 @@ CHECKS = [
     check_parts_list_original_deleted,
     check_parts_list_assembly_twice,
     check_occurrence_names_after_delete,
+    check_occurrence_takes_over,
+    check_takes_over_jointed_and_edited,
+    check_takes_over_nested,
+    check_takes_over_fresh_copy,
     check_same_file_again,
     check_real_parts_snaps,
     check_big_channel_snaps,

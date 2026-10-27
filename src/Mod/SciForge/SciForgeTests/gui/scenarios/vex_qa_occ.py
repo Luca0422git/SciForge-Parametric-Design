@@ -11,10 +11,14 @@ own VEX-like parts (SciForgeTests/fixtures/vex), never VEX's files.
   O3  A file that changed on disk: the screw's file inserted, then rewritten with a longer
       screw and inserted again: a part of its own with the new length; the first unchanged.
   O4  The first occurrence deleted (the browser's right-click > Delete): its occurrence
-      stays, with its solid, where it was; the parts list still counts it as that part.
-      Ctrl+Z: the original back, the occurrence linked again; Ctrl+Y: deleted again.
-  O5  Save, close, reopen: the occurrence whose original was deleted is still there, with its
-      solid; the parts list the same.
+      takes over as the part (Fusion keeps a component while an occurrence remains): named
+      like the original, no occurrence any more, with its solid, where it was; the browser
+      lists it; the parts list still counts it as that part. Ctrl+Z: the original back, the
+      occurrence linked again; Ctrl+Y: deleted again, taken over again.
+  O5  Save, close, reopen: the part that took over is still there, with its solid; the parts
+      list the same.
+  O6  Insert STEP of the same file again: an occurrence of the part that took over ("...:2",
+      linked to it).
 """
 
 import os
@@ -254,6 +258,8 @@ o3_check.wait_ms = 800
 
 # -- O4 --------------------------------------------------------------------------------------------
 def o4_delete():
+    S["occ"] = comp(SCREW + ":2").Name
+    S["first"] = comp(SCREW).Name
     S["occ_box"] = vx.bbox(comp(SCREW + ":2"))
     S["before"] = parts_list()
     h.click_empty()
@@ -263,17 +269,39 @@ def o4_delete():
 o4_delete.wait_ms = 2000
 
 
+def took_over():
+    """The part named SCREW is the former SCREW:2, no occurrence any more."""
+    from sciforge import instances
+
+    heir = comp(SCREW)
+    return (
+        heir is not None
+        and heir.Name == S["occ"]
+        and not instances.is_instance(heir)
+        and comp(SCREW + ":2") is None
+        and App.ActiveDocument.getObject(S["first"]) is None
+    )
+
+
 def o4_deleted():
-    h.check("O4 the first occurrence deleted", comp(SCREW) is None, [c.Label for c in comps()])
-    occ = comp(SCREW + ":2")
-    if h.check("O4 its occurrence stays", occ is not None):
-        h.check("O4 ... with its solid", solid(occ))
-        box = vx.bbox(occ)
+    from sciforge import instances
+
+    h.check(
+        "O4 the first occurrence deleted: its occurrence takes over as the part",
+        took_over(),
+        [c.Label for c in comps()],
+    )
+    heir = comp(SCREW)
+    if heir is not None:
+        h.check("O4 ... with its solid", solid(heir))
+        box = vx.bbox(heir)
         h.check(
             "O4 ... where it was",
             abs(box.XMin - S["occ_box"].XMin) < 1e-6 and abs(box.ZMin - S["occ_box"].ZMin) < 1e-6,
             (box, S["occ_box"]),
         )
+        h.check("O4 ... it can be copied again", instances.definition(heir) is heir)
+        h.check("O4 ... the browser lists it", SCREW in t.labels(), t.labels())
     rows = parts_list()
     h.check(
         "O4 the parts list still counts it as the screw",
@@ -290,10 +318,14 @@ def o4_undone():
     from sciforge import instances
 
     first, occ = comp(SCREW), comp(SCREW + ":2")
-    h.check("O4 Ctrl+Z: the original back", first is not None and solid(first))
+    h.check(
+        "O4 Ctrl+Z: the original back",
+        first is not None and first.Name == S["first"] and solid(first),
+        first and first.Name,
+    )
     h.check(
         "O4 Ctrl+Z: the occurrence linked to it again",
-        occ is not None and instances.source_of(occ) is first,
+        occ is not None and occ.Name == S["occ"] and instances.source_of(occ) is first,
         occ and occ.Label,
     )
     h.check("O4 Ctrl+Z: the parts list as before", parts_list() == S["before"], parts_list())
@@ -304,7 +336,8 @@ o4_undone.wait_ms = 2000
 
 
 def o4_redone():
-    h.check("O4 Ctrl+Y: deleted again", comp(SCREW) is None and comp(SCREW + ":2") is not None)
+    h.check("O4 Ctrl+Y: deleted again, taken over again", took_over(), [c.Label for c in comps()])
+    h.check("O4 Ctrl+Y: with its solid", solid(comp(SCREW)))
 
 
 # -- O5 --------------------------------------------------------------------------------------------
@@ -326,15 +359,44 @@ o5_open.wait_ms = 3000
 
 
 def o5_reopened():
-    occ = comp(SCREW + ":2")
-    h.check("O5 the occurrence is back", occ is not None and solid(occ), [c.Label for c in comps()])
+    h.check(
+        "O5 the part that took over is back",
+        took_over() and solid(comp(SCREW)),
+        [c.Label for c in comps()],
+    )
     h.check("O5 the parts list the same", parts_list() == S["rows"], (parts_list(), S["rows"]))
     vx.no_popups("reopening")
+
+
+# -- O6 --------------------------------------------------------------------------------------------
+def o6_insert():
+    use_files([S["files"][SCREW]])
+    vx.menu("INSERT", "Insert STEP")
+
+
+o6_insert.wait_ms = 2000
+
+
+def o6_check():
+    from sciforge import instances
+
+    new = comp(SCREW + ":2")
+    h.check(
+        "O6 the same file again: an occurrence of the part that took over",
+        new is not None and instances.source_of(new) is comp(SCREW),
+        [c.Label for c in comps()],
+    )
+    h.check("O6 ... with its solid", new is not None and solid(new))
+    esc_move()
+    no_files()
     try:
         os.remove(S["path"])
         shutil.rmtree(S["work"], ignore_errors=True)
     except OSError:
         pass
+
+
+o6_check.wait_ms = 800
 
 
 h.run(
@@ -359,5 +421,7 @@ h.run(
         o5_save,
         o5_open,
         o5_reopened,
+        o6_insert,
+        o6_check,
     ],
 )
