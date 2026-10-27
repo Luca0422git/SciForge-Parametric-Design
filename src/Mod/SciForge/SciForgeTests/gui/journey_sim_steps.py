@@ -453,11 +453,13 @@ def material_steps():
         h.task_button("OK")
 
     def made():
-        from sciforge import bodies
+        from sciforge import material
 
         b = body()
         h.check("5 the body is PLA", b.ShapeMaterial.Name == "PLA-Generic", b.ShapeMaterial.Name)
-        grams = bodies.mass(b) * 1000.0
+        # (the mass the dialog shows: material.mass; bodies.mass reads the body's own material
+        # object, which marks the body as changed)
+        grams = material.mass(b) * 1000.0
         h.check(
             "5 its mass 18794.5 mm3 x 1.24 g/cm3 = 23.31 g",
             near(grams, V1 * PLA_DENSITY, 0.01),
