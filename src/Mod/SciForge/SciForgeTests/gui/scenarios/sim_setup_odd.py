@@ -309,6 +309,25 @@ def i_deleted():
 def i_back():
     labels = sorted(i.Label for i in s.items())
     h.check("Undo: both back", labels == ["Fixed 1", "Force 1"], labels)
+    s.click_row("Fixed 1")
+    tree, pos = s._row_pos("Force 1")
+    if pos is not None:
+        w.click(tree.viewport(), pos, QtCore.Qt.ControlModifier)
+    h.ribbon("Structural Loads")
+
+
+def i_fresh():
+    p = s.item_panel()
+    h.check(
+        "a new load does not start on the faces of the two rows picked",
+        p is not None and p.picks == [],
+        p.picks if p is not None else None,
+    )
+    s.esc()
+
+
+def i_suppress():
+    h.check("Esc closed it", s.item_panel() is None)
     s.right_click_row("Fixed 1", "Suppress")
 
 
@@ -424,6 +443,8 @@ h.run(
         i_select_two,
         i_deleted,
         i_back,
+        i_fresh,
+        i_suppress,
         i_red,
         i_repair,
         i_constraints,

@@ -233,14 +233,28 @@ def keep_selected(doc, nodes):
 
 
 def only_highlight(doc, picks):
-    """True when `picks` [(object, element, ...)] are just what a click on a constraint's or
-    load's row lit up, not something the person picked in the view."""
-    if not picks or doc is None or HIGHLIGHT["doc"] != doc.Name:
+    """True when `picks` [(object, element, ...)] are just what clicks on constraint or load
+    rows lit up (the rows selected in the browser, or the last row clicked), not something the
+    person picked in the view."""
+    if not picks or doc is None:
         return False
     try:
-        return frozenset((p[0].Name, p[1]) for p in picks) == HIGHLIGHT["picks"]
+        got = frozenset((p[0].Name, p[1]) for p in picks)
     except Exception:
         return False
+    lit = set(HIGHLIGHT["picks"]) if HIGHLIGHT["doc"] == doc.Name else set()
+    try:
+        from . import browser_ui
+
+        widget = browser_ui.widget()
+        for item in widget.selectedItems() if widget is not None else []:
+            node = item.data(1, browser_ui.ROLE_NODE)
+            if node and node.get("kind") == "sim_item":
+                for obj, subs in _references(doc, node):
+                    lit.update((obj.Name, sub) for sub in subs)
+    except Exception:
+        pass
+    return bool(lit) and got <= lit
 
 
 def _references(doc, node):
