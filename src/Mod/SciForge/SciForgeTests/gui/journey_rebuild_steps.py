@@ -31,13 +31,20 @@ The bracket (written to bracket.step by code, as a stranger would send it): a pl
 The clamp (clamp.step, the other part of the joint): a block 24 x 24 x 6 with a d 6 hole
 through its middle, at x 150..174, y 0..24 in its file. Joined (Rigid) by its hole's bottom
 to the top of the counterbored hole at (32, 45): it sits on the bracket's top, z 10..16,
-x 24..40, y 37..53; on the thicker bracket z 12..18.
+x 20..44, y 33..57; on the thicker bracket z 12..18.
 
 The meshed plate (plate.stl, triangles written by code from the exact plate): 80 x 48 x 8
 with two d 10 holes at (20, 24) and (60, 24): 30720 - 2 * pi * 25 * 8 = 29463.363 (every
 corner and centre on the sketch grid's 2 mm lines). Rebuilt by hand: a rectangle typed
 80 x 48, E 8 (30720); Compare says two round holes about 10 mm across at (20, 24) and
-(60, 24) are not cut yet; two circles on the top face, E -8 (a cut): 29463.363.
+(60, 24) are not cut yet; two circles typed d 10 on the top face, E with them picked, -8,
+Extent All (a cut through): 29463.363; made 10 thick: 38400 - 2 pi 25 10 = 36829.204.
+
+SIMULATION (sim_steps): Fixed on the four counterbores' floors, 1000 N straight down on the
+far end face. By hand, the bending stress at the weakest section, through the pocket (x = 55,
+45 mm from the far end: two walls 15 x 10 and the floor 30 x 5; area 450, centroid z 4.1667,
+I = 3437.5 mm4, c = 5.8333): 1000 * 45 * 5.8333 / 3437.5 = 76.36 MPa; 2 mm thicker (walls
+15 x 12, floor 30 x 7: I = 6006.5 mm4, c = 6.921): 51.85 MPa, 0.68 of it.
 """
 
 import json
