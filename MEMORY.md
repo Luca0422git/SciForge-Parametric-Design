@@ -1758,6 +1758,13 @@ More integration finds after the first push:
   neighbouring pixel, and waits until the menu has lit the entry (`_seen_on`) before
   clicking. Two wrong fixes on the way (do not repeat): re-moving to the same pixel while
   waiting (no move event: 6 of 6 failed), and stepping the pointer across without waiting.
+- CI #287 red only on `vex_duplicate` ("copy n: next to hole: loop lit ... None"), a flake
+  from before this work (1 of 4 runs here with the old helpers too). Same root cause in the
+  hover helper: each hole is centred, so every hover aims at the same pixel and comes from a
+  neighbouring one, but the two real-pointer moves were reported together, Qt folded them
+  into the last ("moved" to where it already was = no move) and the hover saw nothing.
+  `vex_steps.move_seen` waits until the 3D view has received each move (an event filter on
+  the view): 6 of 6. Any hover helper that moves twice quickly can do the same.
 
 ### Session log: Patch 0.1.0-beta.2.2 (`develop`, 2026-10-26)
 

@@ -135,6 +135,42 @@ def toward_viewer(centre, distance):
     return centre - flat * distance
 
 
+class _MoveSeen(QtCore.QObject):
+    """The last pointer position a widget was told about (a mouse move it received)."""
+
+    def __init__(self):
+        super().__init__()
+        self.last = None
+
+    def eventFilter(self, obj, event):
+        try:
+            if event.type() == QtCore.QEvent.MouseMove:
+                self.last = event.position().toPoint()
+        except Exception:
+            pass
+        return False
+
+
+_SEEN = {}
+
+
+def move_seen(pixel, timeout_ms=500):
+    """The pointer to `pixel` of the 3D view, then wait until the view has been told. QTest
+    moves the real pointer and the X server tells Qt a moment later; two moves told together
+    are folded into the last one, and a pointer "moved" to where Qt last saw it is no move:
+    the hover then saw nothing (CI #287, vex_duplicate: no hole lit, now and then)."""
+    widget = h.gl_widget()
+    seen = _SEEN.get(id(widget))
+    if seen is None:
+        seen = _SEEN[id(widget)] = (_MoveSeen(), widget)
+        widget.installEventFilter(seen[0])
+    h.move(pixel)
+    waited = 0
+    while seen[0].last != pixel and waited < timeout_ms:
+        QtTest.QTest.qWait(10)
+        waited += 10
+
+
 def hover(point, modifiers=QtCore.Qt.NoModifier):
     """The mouse to `point` with `modifiers` held (a move carries the keys held, as a real
     one does), then time for the hover to look."""
@@ -145,8 +181,8 @@ def hover(point, modifiers=QtCore.Qt.NoModifier):
     pixel = h.screen_point(point)
     # (a mouse already on that pixel sends no move: come from the next pixel, as a hand does)
     if modifiers == QtCore.Qt.NoModifier:
-        h.move(pixel + QtCore.QPoint(2, 1))
-        h.move(pixel)
+        move_seen(pixel + QtCore.QPoint(2, 1))
+        move_seen(pixel)
     else:
         for at in (pixel + QtCore.QPoint(2, 1), pixel):  # the keys stay held on the way
             event = QtGui.QMouseEvent(
@@ -165,8 +201,8 @@ def hover(point, modifiers=QtCore.Qt.NoModifier):
 
 
 def hover_pixel(pixel):
-    h.move(pixel + QtCore.QPoint(2, 1))
-    h.move(pixel)
+    move_seen(pixel + QtCore.QPoint(2, 1))
+    move_seen(pixel)
     for _ in range(6):
         QtTest.QTest.qWait(40)
         QtWidgets.QApplication.processEvents()
