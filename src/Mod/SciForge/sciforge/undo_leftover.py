@@ -127,7 +127,7 @@ def _close(step, keep, why):
 
     App.closeActiveTransaction(not keep, step[1])
     log(
-        "undo step %r left open by %s was closed%s"
+        "undo step %r closed: %s%s"
         % (step[0], why, " (kept by the designs that changed in it)" if keep else "")
     )
 
@@ -143,7 +143,7 @@ def design_closing(doc):
         dialog_open, dialog_doc = _dialog()
         action = decide(name, step, joined, _joined(skip=name), dialog_open, dialog_doc)
         if action in (CLOSE, CLOSE_KEEP):
-            _close(step, action == CLOSE_KEEP, "the dialog of %s (closed)" % doc.Label)
+            _close(step, action == CLOSE_KEEP, "%s closed under its dialog" % doc.Label)
         elif action == WAIT:
             _later(step[1], name, doc.Label)
     except Exception as exc:
@@ -175,7 +175,7 @@ def _look_again():
         )
         if action == CLOSE:
             _state["pending"] = None
-            _close(step, False, "the dialog of %s (closed)" % pending["label"])
+            _close(step, False, "%s closed under its dialog, now gone" % pending["label"])
         elif action == WAIT and time.time() - pending["since"] < GIVE_UP_S:
             QtCore.QTimer.singleShot(POLL_MS, _look_again)
         else:
