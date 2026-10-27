@@ -630,7 +630,10 @@ def snap_candidates(pick):
         snaps = [snaps[0]] + [snaps[i] for i in sorted(kept)]
     from . import hole_snaps_core
 
-    keep = hole_snaps_core.dedupe_points([_tuple(s["point"]) for s in snaps], 1e-7)
+    radii = [float((s.get("loop") or {}).get("r", 0.0)) for s in snaps]
+    keep, reach = hole_snaps_core.dedupe_with_reach(
+        [_tuple(s["point"]) for s in snaps], radii, 1e-7
+    )
     for i in keep:
         snap = snaps[i]
         plc = to_global * from_frame(_frame_from(snap["point"], snap["z"], snap["hint"]))
@@ -643,8 +646,10 @@ def snap_candidates(pick):
         }
         if snap.get("loop"):
             found["loop"] = snap["loop"]
-            # how far the hole reaches around its centre (the hover takes it from there)
-            found["radius"] = float(snap["loop"].get("r", 0.0))
+        if reach.get(i):
+            # how far the hole reaches around its centre (the hover takes it from there); a
+            # face's centre that is also a hole's centre (a gear's square bore) reaches as far
+            found["radius"] = reach[i]
         out.append(found)
     return out
 

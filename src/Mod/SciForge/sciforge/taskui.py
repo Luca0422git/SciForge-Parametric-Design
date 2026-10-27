@@ -167,10 +167,25 @@ def _unselect_whole(obj):
 _BARE_NUMBER = re.compile(r"^\s*[+-]?(\d+([.,]\d*)?|[.,]\d+)([eE][+-]?\d+)?\s*$")
 
 
+def plain_value(number, unit="mm"):
+    """A plain number typed for a value of `unit`, in that unit: a length is in the design's
+    units, like Fusion ("1.5" in a design in inches is 1.5 in: browser > Change Active
+    Units; it was 1.5 mm, beta 3 VEX QA), an angle in degrees."""
+    if unit != "mm":
+        return float(number)
+    try:
+        from . import browser_core
+
+        return browser_core.plain_length(number, App.ActiveDocument)
+    except Exception:
+        return float(number)
+
+
 class DistanceField:
-    """A plain number typed in the box is in the box's own unit (mm, or degrees), like
-    Fusion. FreeCAD's box reads it in the unit it *shows*: after a value below 0.1 mm it
-    showed "50.00 µm", and the next "4" typed became 4 µm (found by the fillet QA)."""
+    """A plain number typed in the box is in the design's units (mm, inches...; degrees for
+    an angle), like Fusion (plain_value). FreeCAD's box reads it in the unit it *shows*:
+    after a value below 0.1 mm it showed "50.00 µm", and the next "4" typed became 4 µm
+    (found by the fillet QA)."""
 
     def __init__(self, value=0.0, unit="mm", on_change=None):
         self.unit = unit
@@ -213,15 +228,16 @@ class DistanceField:
     def _bare(self):
         if self._typed is None or not _BARE_NUMBER.match(self._typed):
             return None
-        return float(self._typed.strip().replace(",", "."))
+        return plain_value(float(self._typed.strip().replace(",", ".")), self.unit)
 
     def _edited(self, text):
         self._typed = text
 
     def _settle(self):
-        """Editing finished: a plain number typed counts in the box's unit. Only a value
-        FreeCAD read in another unit is corrected; nothing is done while the dialog closes
-        (leaving the box then also "finishes" it, after the value was taken)."""
+        """Editing finished: a plain number typed counts in the design's units (an angle
+        in degrees). Only a value FreeCAD read in another unit is corrected; nothing is done
+        while the dialog closes (leaving the box then also "finishes" it, after the value
+        was taken)."""
         typed, self._typed = self._bare(), None
         if typed is None:
             return
@@ -246,18 +262,19 @@ class DistanceField:
 
     def parse(self, text):
         """The value of a plain number typed for this field somewhere else (the box next to
-        an arrow): "25", "2,5", "1 in", "30 deg". A bare number is in the field's own unit,
-        like a number typed in the field. ValueError says what to type instead."""
+        an arrow): "25", "2,5", "1 in", "30 deg". A bare number is in the design's units
+        (an angle in degrees), like a number typed in the field. ValueError says what to type
+        instead."""
         text = (text or "").strip()
         if _BARE_NUMBER.match(text):
-            return float(text.replace(",", "."))
+            return plain_value(float(text.replace(",", ".")), self.unit)
         try:
             quantity = App.Units.Quantity(text)
         except Exception:
             raise ValueError("'%s' is not a value." % text)
         angle = self.unit == "deg"
         if quantity.Unit == App.Units.Quantity(1.0).Unit:
-            return float(quantity.Value)
+            return plain_value(float(quantity.Value), self.unit)
         if quantity.Unit != App.Units.Quantity("1 " + self.unit).Unit:
             raise ValueError(
                 "Type %s, for example %s." % (("an angle", "30") if angle else ("a length", "25"))

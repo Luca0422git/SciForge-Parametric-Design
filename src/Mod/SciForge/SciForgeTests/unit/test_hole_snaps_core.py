@@ -164,6 +164,24 @@ class ManyDots(unittest.TestCase):
         self.assertEqual(len(kept), 3200)
         self.assertLess(time.perf_counter() - t0, 2.0)
 
+    def test_centred_hole_keeps_its_reach(self):
+        """A square bore at the centre of a gear's face: the face's centre of area (first) is
+        kept, the bore's centre (same point) dropped; the kept one reaches as far as the
+        bore, so the bore is lit from around it (beta 3 VEX QA: the bore's corner took it)."""
+        centre, corner, bore = (0, 0, 0), (1.651, -1.651, 0), (0, 0, 0)
+        kept, reach = core.dedupe_with_reach([centre, corner, bore], [0.0, 0.0, 2.33], 1e-7)
+        self.assertEqual(kept, [0, 1])
+        self.assertEqual(reach, {0: 2.33})
+        # a hole of its own keeps its own reach; plain dots none
+        kept, reach = core.dedupe_with_reach([(0, 0, 0), (5, 0, 0)], [0.0, 3.0])
+        self.assertEqual((kept, reach), ([0, 1], {1: 3.0}))
+        # the pointer 3 mm from the bore's centre, 0.66 mm (17 px) from its corner: the bore
+        pointer = (3.0 * 25.6 / 2**0.5, 3.0 * 25.6 / 2**0.5)
+        rows = [((0.0, 0.0), core.zone_pixels(2.33 * 25.6)), ((1.651 * 25.6, 1.651 * 25.6), None)]
+        self.assertEqual(core.choose_hot(rows, pointer), 0)
+        rows[0] = ((0.0, 0.0), None)  # without the reach: the corner, as before the fix
+        self.assertEqual(core.choose_hot(rows, pointer), 1)
+
     def test_nearest(self):
         pts = [(5, 0, 0), (1, 0, 0), (3, 0, 0)]
         self.assertEqual(core.nearest_indices(pts, (0, 0, 0), 2), [1, 2])

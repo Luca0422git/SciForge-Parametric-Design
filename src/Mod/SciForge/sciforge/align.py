@@ -176,7 +176,11 @@ def snap_points(obj, sub, near=None):
             if axis is not None:
                 axis = place.Rotation.multVec(axis)
         points.append((snap, point, axis))
-    keep = hole_snaps_core.dedupe_points([(p.x, p.y, p.z) for _s, p, _a in points], 1e-7)
+    radii = [float((s.get("loop") or {}).get("r", 0.0)) for s, _p, _a in points]
+    # (a face's centre that is also a hole's centre reaches as far as the hole: joints)
+    keep, reach = hole_snaps_core.dedupe_with_reach(
+        [(p.x, p.y, p.z) for _s, p, _a in points], radii, 1e-7
+    )
     found = []
     for i in keep:
         snap, point, axis = points[i]
@@ -185,7 +189,7 @@ def snap_points(obj, sub, near=None):
                 "kind": snap["kind"],
                 "point": point,
                 "axis": axis,
-                "radius": float((snap.get("loop") or {}).get("r", 0.0)),
+                "radius": reach.get(i, 0.0),
             }
         )
     return found
