@@ -938,8 +938,8 @@ class _Reader:
                     "point": core.add(origin, core.mul(axis, far["t_open"])),
                     "into": [core.snap(-c) for c in into],
                 }
-            else:
-                self.notes.append(
+            else:  # (said when the hole is planned: one left in the base makes both ends)
+                hole["_note"] = (
                     "Hole %s is countersunk at its other end too: the plan makes the first "
                     "end only; add the other countersink after it." % hole["id"]
                 )
@@ -1680,10 +1680,13 @@ class _Reader:
         side of a groove would fill the groove, far more."""
         shape = self.shape if shape is None else shape
         budget = 1e-3 + 1e-6 * shape.Volume
+        voids = 0.0  # the holes' bores
         for g in groups:
             area = sum(self.facts[i].area for i in g["_faces"])
             if g["kind"] in ("hole", "counterbore", "countersink"):
-                budget += 1.5 * _hole_void(self, g) + 1e-3
+                void = _hole_void(self, g)
+                voids += void
+                budget += 1.5 * void + 1e-3
             elif g["kind"] == "chamfer":
                 d1 = g["distance"]
                 d2 = g.get("distance2", d1)
@@ -1693,7 +1696,13 @@ class _Reader:
             else:
                 budget += area * 1.0
         try:
-            return abs(result.Volume - shape.Volume) <= budget
+            change = result.Volume - shape.Volume
+            if abs(change) > budget:
+                return False
+            # and the holes taken off are filled: OpenCASCADE answered a CAM part with its two
+            # countersunk bores still open (+110 mm3 for 9150), and the plan cut them twice
+            others = budget - 1.5 * voids
+            return voids <= 0.0 or change >= 0.5 * voids - others
         except Exception:
             return False
 
@@ -2283,6 +2292,7 @@ class _Reader:
         """One hole step per group of equal holes on one plane: a pattern step when they make
         a grid / circle / row the pattern tool can repeat, else one sketch with every centre.
         A hole that widens at both ends gets its other end as a short hole of its own."""
+        self.notes += [h["_note"] for h in holes if h.get("_note")]
         recesses = []
         for h in holes:
             far = h.get("far_recess")
