@@ -1712,6 +1712,10 @@ More integration finds after the first push:
   read (FreeCAD's FEM writer / reader on the main thread); one load case per study; bonded
   contacts only; Auto Timeline reads prismatic and turned parts, not free-form ones; VEX open
   speed and the Selectable switch need compiled changes (questions for Luca).
+- Lesson (CI #281 red): anything that changes what a tool answers (a new material in
+  `material.LIBRARY` changes list_materials) needs the docs examples recorded again:
+  `SCIFORGE_DOCS_RECORD=1` with `SciForgeTests/headless/docs_runner.py` (in FreeCAD), then
+  `tools/sciforge/make_ai_docs.py`. The unit tests do not catch it; `--only headless` does.
 
 ### Session log: Patch 0.1.0-beta.2.2 (`develop`, 2026-10-26)
 
