@@ -391,12 +391,43 @@ def describe_picks(refs):
     return out
 
 
+def round_axis(refs):
+    """The axis (x, y, z) of the first round (cylindrical) face of the picks, in design
+    coordinates, or None."""
+    for obj, sub in _picks(refs):
+        try:
+            face = bodies.global_shape(obj, copy=False).getElement(sub.split(".")[-1])
+            surface = face.Surface
+            if "Cylinder" in surface.TypeId or "Cone" in surface.TypeId:
+                return (surface.Axis.x, surface.Axis.y, surface.Axis.z)
+        except Exception:
+            continue
+    return None
+
+
+def _bearing_direction(kind, given, opts, refs):
+    """A Bearing Load presses across its hole: with no direction given the default is turned
+    across the picked hole's axis (core.across_axis); a direction along the axis is refused
+    (no side would take the load)."""
+    if kind != "bearing":
+        return opts
+    axis = round_axis(refs)
+    if axis is None:
+        return opts
+    if "vector" not in (given or {}):
+        opts["vector"] = core.across_axis(axis)
+    elif core.runs_along(opts.get("vector") or (0.0, 0.0, -1.0), axis):
+        raise SimulationError(core.BEARING_ALONG)
+    return opts
+
+
 def add_item(study, category, kind, refs, opts=None, label=None):
     """A new constraint (category "constraint") or load ("load") of `kind` on `refs`."""
     info = core.kind_info(category, kind)
     if not info.get("built"):
         raise SimulationError("%s is not in SciForge yet." % info["title"])
-    opts = core.options(category, kind, opts)
+    given = opts
+    opts = _bearing_direction(kind, given, core.options(category, kind, opts), refs)
     problems = core.check(category, kind, opts, describe_picks(refs))
     if problems:
         raise SimulationError(" ".join(problems))
@@ -419,6 +450,8 @@ def update_item(item, refs=None, opts=None, suppressed=None):
     category, kind = data["category"], data["kind"]
     new_opts = core.options(category, kind, dict(data["options"], **(opts or {})))
     new_refs = refs if refs is not None else item.References
+    if kind == "bearing" and (opts or {}).get("vector") is not None:
+        _bearing_direction(kind, opts, new_opts, new_refs)
     problems = core.check(category, kind, new_opts, describe_picks(new_refs))
     if problems:
         raise SimulationError(" ".join(problems))

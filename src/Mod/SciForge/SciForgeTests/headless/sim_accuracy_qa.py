@@ -2633,6 +2633,43 @@ def free_motions_public(doc, out):
     out.append(("fixed: nothing moves", left == [], str(_plain(left))))
 
 
+@engine_check("a bearing load's default direction")
+def bearing_default(doc, out):
+    """A Bearing Load on a hole drilled along Z with no direction given: the engine turns its
+    default (-Z, along the hole: no side would take the load) across the hole (-Y), and the
+    solve carries the load (reaction = 100 N); a direction along the axis is refused with a
+    sentence, through add_item and update_item."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    plate = Part.makeBox(60, 40, 10).cut(
+        Part.makeCylinder(5, 10, App.Vector(40, 20, 0), App.Vector(0, 0, 1))
+    )
+    body = sb.make_body(doc, plate, "Lug")
+    study = sim.create_study(doc, study_bodies=[body])
+    hole = sb.one_face(body, lambda f: f.Surface.TypeId == "Part::GeomCylinder")
+    end = sb.one_face(body, lambda f: sb.near(f.CenterOfMass.x, 0.0, 1e-9))
+    sim.add_item(study, "constraint", "fixed", [(body, end)])
+    item = sim.add_item(study, "load", "bearing", [(body, hole)], {"magnitude": 100.0})
+    vector = sim.item_data(item)["options"]["vector"]
+    out.append(("no direction given: across the hole (-Y)", sb.near(vector[1], -1.0, 1e-9), vector))
+    try:
+        sim.add_item(study, "load", "bearing", [(body, hole)], {"vector": [0, 0, -1]})
+        out.append(("along the hole: refused", False, "accepted"))
+    except sim.SimulationError as exc:
+        out.append(("along the hole: refused", "along the hole's axis" in str(exc), exc))
+    try:
+        sim.update_item(item, opts={"vector": [0, 0, 1]})
+        out.append(("changed to along the hole: refused", False, "accepted"))
+    except sim.SimulationError as exc:
+        out.append(("changed to along the hole: refused", "along the hole's axis" in str(exc), exc))
+    summary = sim.solve(study, timeout=600)
+    total = reaction(summary, "Fixed 1")
+    out.append(("the solve carries it: reaction 100 N", sb.near(total, 100.0, 1e-3), total))
+
+
 def main():
     import FreeCAD as App
 

@@ -886,19 +886,12 @@ class ItemPanel(pickpanel.PickPanel):
             along = abs(d[0] * axis.x + d[1] * axis.y + d[2] * axis.z)
             default = core.options("load", "bearing").get("vector")
             if along > 0.95 and not self.editing and list(current) == list(default):
-                for candidate in ((0.0, 0.0, -1.0), (0.0, -1.0, 0.0), (-1.0, 0.0, 0.0)):
-                    dot = candidate[0] * axis.x + candidate[1] * axis.y + candidate[2] * axis.z
-                    across = [candidate[i] - dot * (axis.x, axis.y, axis.z)[i] for i in range(3)]
-                    size = sum(c * c for c in across) ** 0.5
-                    if size > 0.5:
-                        for a, value in zip("xyz", across):
-                            _put(self.fields["v" + a], round(value / size, 9))
-                        return None
+                across = core.across_axis((axis.x, axis.y, axis.z))
+                for a, value in zip("xyz", across):
+                    _put(self.fields["v" + a], round(value, 9))
+                return None
             if along > 0.95:
-                return (
-                    "A Bearing Load presses across the hole: this direction runs along the "
-                    "hole's axis, so no side of it takes the load. Give a direction across it."
-                )
+                return core.BEARING_ALONG
         except Exception as exc:
             warn("%s: %s" % (self.title, exc))
         return None

@@ -896,6 +896,33 @@ def remote_moment(points, weights, force, point):
     return _cross(_sub(point, middle), force)
 
 
+BEARING_ALONG = (
+    "A Bearing Load presses across the hole: this direction runs along the hole's axis, so no "
+    "side of it takes the load. Give a direction across it."
+)
+
+
+def across_axis(axis):
+    """A Bearing Load's default direction for a hole or shaft along `axis`: down (-Z) made
+    square to the axis, else -Y, else -X (a hole drilled along Z gets -Y, never -Z, which
+    would run along it and press on no side)."""
+    a = unit_vector(axis)
+    for candidate in ((0.0, 0.0, -1.0), (0.0, -1.0, 0.0), (-1.0, 0.0, 0.0)):
+        dot = _dot(candidate, a)
+        across = [candidate[i] - dot * a[i] for i in range(3)]
+        if _norm(across) > 0.5:
+            return [round(c, 12) + 0.0 for c in unit_vector(across)]
+    return [0.0, 0.0, -1.0]
+
+
+def runs_along(direction, axis, limit=0.95):
+    """True when `direction` runs (nearly) along `axis` (|cos| > limit)."""
+    try:
+        return abs(_dot(unit_vector(direction), unit_vector(axis))) > limit
+    except Exception:
+        return False
+
+
 def bearing_forces(points, weights, inward, direction, magnitude):
     """A bearing load: `magnitude` N along `direction` pushed onto round faces the way a
     shaft or pin presses: only where the face looks against the load (inward[i], the unit
