@@ -478,6 +478,21 @@ class HeldEnough(unittest.TestCase):
         rows += [((10 + 3 * math.cos(0.3), 5, 5 + 3 * math.sin(0.3)), (0, 0, 1))]
         self.assertEqual(core.free_modes(rows, (50, 5, 5), 100), [])
 
+    def test_words_without_rounding_noise(self):
+        # (sim QA: the analysis finds axes and points with floating-point noise, which the
+        # pre-check and DOF View printed as "-1.1e-14" or "(0.707, 0.707, 1e-16)")
+        noisy = ("turn", (1e-17, -2.3e-16, 1.0), (50.0000003, -1.1e-14, 4.9999999))
+        words = core.describe_free_mode(noisy)
+        self.assertEqual(words, "turn about an axis along Z through (50, 0, 5)")
+        words = core.describe_free_mode(("slide", (0.70710678, 0.70710678, 1e-16), None))
+        self.assertEqual(words, "slide along (0.707, 0.707, 0)")
+        words = core.describe_free_mode(("turn", (-0.999999999, 1e-9, 0), (12.3456, 1e-7, -4e-5)))
+        self.assertEqual(words, "turn about an axis along X through (12.35, 0, 0)")
+        words = core.describe_free_mode(("turn", (0, 0, 1.0), (1234.567, -0.004, 0.001)), 3000)
+        self.assertEqual(words, "turn about an axis along Z through (1234.57, 0, 0)")
+        for mode in core.free_modes([(p, (1, 0, 0)) for p in self.CORNERS], (50, 5, 5), 100):
+            self.assertNotIn("e-", core.describe_free_mode(mode))
+
     def test_jacobi(self):
         values, vectors = core._jacobi([[2.0, 1.0], [1.0, 2.0]])
         self.assertEqual(sorted(round(v, 9) for v in values), [1.0, 3.0])

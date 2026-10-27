@@ -1465,12 +1465,9 @@ def free_motions(study):
 
 
 def describe_motion(mode, size=1.0):
-    """A free movement in words ("turn about an axis along X through (5, 0, 0)"), the point's
-    rounding noise taken away."""
-    kind, direction, through = mode
-    if through is not None:
-        through = [0.0 if abs(c) < 1e-6 * max(size, 1.0) else c for c in through]
-    return core.describe_free_mode((kind, direction, through))
+    """A free movement in words ("turn about an axis along X through (5, 0, 0)"), the
+    rounding noise taken away (simulation_core.describe_free_mode)."""
+    return core.describe_free_mode(mode, size)
 
 
 def dof_view(study):

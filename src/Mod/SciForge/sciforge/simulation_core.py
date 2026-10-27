@@ -1415,11 +1415,20 @@ def _jacobi(a, sweeps=50):
     return values, vectors
 
 
-def describe_free_mode(mode):
+def _clean_coords(values, tol):
+    """The numbers with rounding noise taken away: within tol of 0 is 0 (a point found as
+    -1.1e-14 is printed 0, never "-1.1e-14")."""
+    return [0.0 if abs(float(c)) <= tol else float(c) for c in values]
+
+
+def describe_free_mode(mode, size=None):
     """A free movement in words: "slide along X", "turn about an axis along Z through (50, 5,
-    5)"."""
+    5)". The rounding noise of the analysis is taken away: a direction's parts within 1e-6 of
+    0 are 0, a point's coordinates are shown to 0.01 mm and within 1e-6 of the model's size
+    (`size`, else the point's own) are 0."""
     kind, direction, through = mode
     names = ("X", "Y", "Z")
+    direction = _clean_coords(direction, 1e-6)
     axis = None
     for i in range(3):
         if abs(abs(direction[i]) - 1.0) <= 1e-6:
@@ -1427,9 +1436,12 @@ def describe_free_mode(mode):
     words = axis or "(%s)" % ", ".join(fmt(c, 3) for c in direction)
     if kind == "slide":
         return "slide along %s" % words
+    through = [float(c) for c in (through or (0.0, 0.0, 0.0))]
+    scale = max([abs(float(size or 0.0))] + [abs(c) for c in through] + [1.0])
+    through = [round(c, 2) for c in _clean_coords(through, 1e-6 * scale)]
     return "turn about an axis along %s through (%s)" % (
         words,
-        ", ".join(fmt(c, 4) for c in through),
+        ", ".join(fmt(c, 8) for c in through),
     )
 
 
