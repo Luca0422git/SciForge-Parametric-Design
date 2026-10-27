@@ -11,7 +11,11 @@ offers (groups[].fix / extra[].fix: a hole, a fillet of exactly those edges), co
 finish_rebuild. Required: match >= 0.999 with every face matched (done), the timeline holding
 real steps (sketches, extrudes, holes, fillets... not one imported shape), check_design ok,
 and an edit of one early value (the base extrude's distance, else the first hole's diameter)
-rebuilding cleanly. Where a plan step fails, the report shows what the AI read in the answer.
+rebuilding cleanly with nothing sealed inside (one shell). Where a plan step fails, the report
+shows what the AI read in the answer. Also (journey rebuild, beta 3): follow_checks (a hole on
+a boss's top and one in a pocket's floor follow their faces when the plate, the boss and the
+pocket are edited) and strip_checks (a rebuild that only lacks a chamfer is split exactly and
+the chamfer named with its call).
 
 Two ways to run it:
 
