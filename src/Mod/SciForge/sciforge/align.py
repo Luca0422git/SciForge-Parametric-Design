@@ -509,6 +509,22 @@ def read(step):
     return options
 
 
+def settle(steps):
+    """An Align kept (OK): the components it moved stand where it put them. In a design with
+    joints that is now their place (joints.accept_places): without it the next Joint asked
+    to Capture Position or Revert as if they had been dragged, and Revert took the Align's
+    movement back while its step stayed in the timeline (VEX journey, beta 3)."""
+    parts = []
+    for step in steps or ():
+        if bodies.alive(step) and is_component_step(step) and step.Component is not None:
+            parts.append(step.Component)
+    if not parts:
+        return False
+    from . import joints
+
+    return joints.accept_places(parts[0].Document, parts)
+
+
 def moved_thing(step):
     if is_component_step(step):
         return step.Component

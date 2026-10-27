@@ -1984,8 +1984,9 @@ def add_row_balloons(view, rows):
     made = []
     half_w, half_h = view_extent(view)
     centre = view_position(view)
+    middle = centre_of(view)  # (once: it measures every part the view shows)
     for i, row in enumerate(rows):
-        anchor = component_anchor(view, row.get("bodies", []))
+        anchor = component_anchor(view, row.get("bodies", []), middle)
         if anchor is None:
             continue
         spot = core.balloon_spot(centre, anchor, half_w, half_h, i)
@@ -1993,10 +1994,13 @@ def add_row_balloons(view, rows):
     return made
 
 
-def component_anchor(view, body_names):
+def component_anchor(view, body_names, middle=None):
     """A page point on the outline of the given bodies as the view shows them (the middle
     of the longest visible edge that is theirs: an edge where two components touch is the
-    nearer one's), for a balloon's arrow."""
+    nearer one's), for a balloon's arrow. `middle`: centre_of(view), when the caller has it
+    (it measures every part the view shows: once per parts list, not once per edge tried)."""
+    if middle is None:
+        middle = centre_of(view)
     doc = view.Document
     wanted = [doc.getObject(name) for name in body_names]
     wanted = [b for b in wanted if alive(b)]
@@ -2012,11 +2016,11 @@ def component_anchor(view, body_names):
     fallback = None
     for _length, (mx, my) in candidates:
         local = (mx / s, my / s)
-        if _sight_hit(view, wanted, local) is None:
+        if _sight_hit(view, wanted, local, middle=middle) is None:
             continue  # not on these bodies at all
         if fallback is None:
             fallback = (mx, my)
-        owner = component_at(view, local)
+        owner = component_at(view, local, middle=middle)
         if owner is not None and owner.Name in names:
             x, y = view_position(view)
             return x + mx, y + my
@@ -2033,13 +2037,15 @@ def _visible_edges_local(view):
         return []
 
 
-def _sight_line(view, local_point):
+def _sight_line(view, local_point, middle=None):
     """The line through a point of a view along the view's direction, and that direction
-    (towards the viewer)."""
+    (towards the viewer). `middle`: centre_of(view) if the caller has it."""
     import Part
 
     axes = axes_of(view)
-    p = core.to_model(axes, centre_of(view), local_point[0], local_point[1])
+    if middle is None:
+        middle = centre_of(view)
+    p = core.to_model(axes, middle, local_point[0], local_point[1])
     d = axes[2]
     far = 1e4
     line = Part.makeLine(
@@ -2048,14 +2054,34 @@ def _sight_line(view, local_point):
     return line, d
 
 
-def _sight_hit(view, bodies, local_point, tolerance=0.05):
+def _sight_hit(view, bodies, local_point, tolerance=0.05, middle=None):
     """(body, depth) of the body nearest to the viewer that the sight line through a view
-    point touches (depth: how far towards the viewer), or None."""
-    line, d = _sight_line(view, local_point)
+    point touches (depth: how far towards the viewer), or None.
+
+    The line is in design coordinates (as the view shows the parts); a body's Shape is where
+    it sits inside its component, so the line is taken into each body's component first (a
+    design of inserted parts has every component moved: the VEX journey's balloons found no
+    part and walked every edge of the view for minutes). A body whose box the line misses
+    is passed over without measuring."""
+    import Part
+
+    line, d = _sight_line(view, local_point, middle)
+    ends = [line.Vertexes[0].Point, line.Vertexes[-1].Point]
     best = None
     for body in bodies:
         try:
-            dist, pairs, _info = body.Shape.distToShape(line)
+            shape = body.Shape
+            place = _parent_placement(body)
+            a, b = ends
+            if place is not None:
+                back = place.inverse()
+                a, b = back.multVec(a), back.multVec(b)
+            box = shape.BoundBox
+            box.enlarge(tolerance)
+            if not _segment_meets_box(a, b, box):
+                continue
+            test = Part.makeLine(a, b)
+            dist, pairs, _info = shape.distToShape(test)
         except Exception:
             continue
         if dist > tolerance or not pairs:
@@ -2063,19 +2089,56 @@ def _sight_hit(view, bodies, local_point, tolerance=0.05):
         points = [p for p, _q in pairs]
         try:
             # (where the line runs along a face, distToShape gives any one point of it)
-            points += [v.Point for v in body.Shape.section(line).Vertexes]
+            points += [v.Point for v in shape.section(test).Vertexes]
         except Exception:
             pass
+        if place is not None:
+            points = [place.multVec(p) for p in points]
         depth = max(core.v_dot((p.x, p.y, p.z), d) for p in points)
         if best is None or depth > best[1] + 1e-6:
             best = (body, depth)
     return best
 
 
-def component_at(view, local_point, sources=None):
+def _parent_placement(obj):
+    """The design placement of the component a body sits in (None: at the design's root or
+    not moved)."""
+    try:
+        parent = obj.getParentGeoFeatureGroup()
+        place = parent.getGlobalPlacement() if parent is not None else None
+    except Exception:
+        return None
+    if place is None or place.isIdentity():
+        return None
+    return place
+
+
+def _segment_meets_box(a, b, box):
+    """Whether the segment a-b passes through the box (the slab test)."""
+    t0, t1 = 0.0, 1.0
+    for p, q, lo, hi in (
+        (a.x, b.x, box.XMin, box.XMax),
+        (a.y, b.y, box.YMin, box.YMax),
+        (a.z, b.z, box.ZMin, box.ZMax),
+    ):
+        step = q - p
+        if abs(step) < 1e-15:
+            if p < lo or p > hi:
+                return False
+            continue
+        u0, u1 = (lo - p) / step, (hi - p) / step
+        if u0 > u1:
+            u0, u1 = u1, u0
+        t0, t1 = max(t0, u0), min(t1, u1)
+        if t0 > t1:
+            return False
+    return True
+
+
+def component_at(view, local_point, sources=None, middle=None):
     """The component (or root body) a picked point of a view belongs to: the body nearest
     to the viewer along the sight line through it (where two touch, the one in front)."""
-    hit = _sight_hit(view, sources or _view_sources(view), local_point)
+    hit = _sight_hit(view, sources or _view_sources(view), local_point, middle=middle)
     return hit[0] if hit is not None else None
 
 

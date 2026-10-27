@@ -869,6 +869,21 @@ def _props_text(name, props, basis, units=None):
     return "\n".join(lines)
 
 
+def body_title(body):
+    """A body's name in Study Materials: inside a component, "<component> / <body>". A design
+    of inserted parts has a "Body1" in every component (VEX journey: 18 rows of "Body1", no
+    way to tell rail 1 from a screw); Fusion lists the bodies under their components."""
+    try:
+        from . import components
+
+        part = components.container_of(body)
+        if part is not None:
+            return "%s / %s" % (part.Label, body.Label)
+    except Exception as exc:
+        warn("study materials: %s" % exc)
+    return body.Label
+
+
 class MaterialsPanel(_SimPanel):
     """Fusion's Study Materials (research 3.3): one row per body, the study material
     "(Same as Model)" by default (the body's own physical material) or another one for this
@@ -899,7 +914,7 @@ class MaterialsPanel(_SimPanel):
         self.ticks = []
         data = sim.study_data(study)
         for row, body in enumerate(self.bodies):
-            item = QtWidgets.QTableWidgetItem(body.Label)
+            item = QtWidgets.QTableWidgetItem(body_title(body))
             item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
             self.table.setItem(row, 0, item)
             tick = QtWidgets.QCheckBox()
@@ -987,7 +1002,7 @@ class MaterialsPanel(_SimPanel):
                 sim.material_label(name), props, self.basis.currentData(), design_units(self.doc)
             )
             if not self.ticks[row].isChecked():
-                text = "%s is left out of this study.\n" % body.Label + text
+                text = "%s is left out of this study.\n" % body_title(body) + text
             self.props.setText(text)
         except Exception as exc:
             self.props.setText("")

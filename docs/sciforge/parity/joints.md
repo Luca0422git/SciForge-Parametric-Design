@@ -227,7 +227,10 @@ command opens) and Cancel (**SciForge**: Fusion's buttons are Capture Position /
 whose exact meaning forum users found unclear; the meaning is kept, the words are plain). Only
 in a design that keeps its history (Capture Design History on); a direct design never asks.
 **(SciForge)** the panel cannot appear and disappear in the ribbon yet: both entries live in
-the ASSEMBLE menu and are greyed while nothing was moved.
+the ASSEMBLE menu and are greyed while nothing was moved. An Align of components (MODIFY >
+Align, a timeline step) is not a pending move: on OK its components' places become the ones
+Capture Position / Revert keep, so the next Joint does not ask and Revert does not take the
+Align back (VEX journey, beta 3: G, as Fusion's Align is a timeline step).
 
 ### Dragging components (Component Drag; wave 4)
 

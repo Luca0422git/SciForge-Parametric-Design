@@ -147,6 +147,8 @@ def tree(doc):
     if active is not None:
         in_study = {b.Name for b in sim.study_bodies(active)}
     model = []
+    from .simulation_dialogs import body_title
+
     for body in bodies.solid_bodies(doc):
         try:
             visible = bool(body.ViewObject.Visibility) if body.ViewObject is not None else None
@@ -155,7 +157,10 @@ def tree(doc):
         model.append(
             {
                 "name": body.Name,
-                "label": body.Label,
+                # inside a component "<component> / <body>": a design of inserted parts has a
+                # "Body1" in every component (Fusion shows them under their components)
+                "label": body_title(body),
+                "object_label": body.Label,
                 "visible": visible,
                 "in_study": active is None or body.Name in in_study,
             }
