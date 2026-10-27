@@ -61,6 +61,12 @@ SciForge's tests; `expect` is what the answer must contain.
   part a person can change, which is the point.
 - **Fusion's order.** Base shape first, then cuts and bosses, holes, patterns, chamfers, and
   fillets last (a fillet made early breaks when a later cut changes its edges).
+- **Sketch on the face a feature starts on.** A pocket or a hole that starts on the part's
+  top face: give `create_sketch` that face too (`plane` and `offset` as before, and `face`: the
+  sketch lies on the face, in the plane's axes, so the numbers stay the same), as
+  describe_reference's plan does. A sketch on a plane at a fixed offset stays at that height:
+  when the part is made thicker later, the pocket or the hole stays where it was, closed
+  under the new top.
 - **Real features, not copied faces.** Never rebuild by copying the reference's faces or
   outlines as geometry: a hole is a `hole`, four equal holes are one hole and a
   `rectangular_pattern` (or one sketch with four circles), a rounded edge is a `fillet`.
@@ -151,14 +157,15 @@ The plan's base is a 60 x 40 rectangle extruded 10 mm. Built with named sizes:
 ## 4. What compare says: the holes, then the rounded edges
 
 The verdict lists the holes first (Fusion's order), at (10, 10), (50, 10), (10, 30), (50,
-30). One sketch with four circles on the top and one `hole` make them in one step; compare
-then has only the rounded edges left, with the fillet call ready in `groups[0].fix` (the
-same edges as below).
+30). One sketch with four circles on the top face and one `hole` make them in one step;
+compare then has only the rounded edges left, with the fillet call ready in
+`groups[0].fix` (the same edges as below).
 
 ```json sciforge-calls
 [
-  {"tool": "create_sketch", "args": {"plane": "XY", "offset": 10, "geometry": [
-    {"circle": [10, 10, 3]}, {"circle": [50, 10, 3]}, {"circle": [10, 30, 3]},
+  {"tool": "create_sketch", "args": {"plane": "XY", "offset": 10,
+    "face": {"normal": [0, 0, 1], "at": {"axis": "z", "value": 10}, "count": 1},
+    "geometry": [{"circle": [10, 10, 3]}, {"circle": [50, 10, 3]}, {"circle": [10, 30, 3]},
     {"circle": [50, 30, 3]}]}},
   {"tool": "hole", "args": {"sketch": "Sketch2", "diameter": 6, "through_all": true},
    "expect": {"contains": ["Its id is 'Hole1'"]}},
@@ -185,13 +192,14 @@ same edges as below).
    "expect": {"contains": ["\"kind\": \"extrude\"", "\"kind\": \"hole\"",
      "\"kind\": \"fillet\""], "not_contains": ["insert_step"]}},
   {"tool": "set_parameter", "args": {"name": "thickness", "value": 12},
-   "expect": {"contains": ["60 x 40 x 12 mm"]}},
+   "expect": {"contains": ["60 x 40 x 12 mm", "27350.1 mm3"]}},
   {"tool": "check_design", "args": {}, "expect": {"json": {"ok": true}}}
 ]
 ```
 
-The plate is now 12 mm thick, its holes still go through and its corners are still rounded:
-the rebuild is a part a person can change.
+The plate is now 12 mm thick (28800 - 4 x pi x 9 x 12 - 4 x (9 - 9 pi / 4) x 12 = 27350.1
+mm3), its holes still go through (their sketch lies on the top face, which moved up) and
+its corners are still rounded: the rebuild is a part a person can change.
 
 ## Variations
 
