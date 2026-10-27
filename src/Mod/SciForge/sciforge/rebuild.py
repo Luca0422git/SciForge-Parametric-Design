@@ -374,11 +374,11 @@ def _solid_of(kind, source):
         mesh = insert.kernel_copy(source)
         if mesh.CountFacets > MESH_TRIANGLES:
             raise RebuildError(
-                "%s is a mesh of %d triangles: turning that many into a solid takes many "
+                "%s is a mesh of %s triangles: turning that many into a solid takes many "
                 "minutes (the time grows much faster than the count), so it is not rebuilt. "
-                "Reduce it to under %d triangles first (MESH tab > Reduce), or export it again "
+                "Reduce it to under %s triangles first (MESH tab > Reduce), or export it again "
                 "from its CAD program with a coarser setting, then try again."
-                % (source.Label, mesh.CountFacets, MESH_TRIANGLES)
+                % (source.Label, "{:,}".format(mesh.CountFacets), "{:,}".format(MESH_TRIANGLES))
             )
         broken = _mesh_problem(mesh)
         if broken:
