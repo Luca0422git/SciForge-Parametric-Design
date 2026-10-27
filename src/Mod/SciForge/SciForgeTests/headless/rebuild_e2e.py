@@ -514,6 +514,19 @@ class Agent:
             report.get("ok") is True,
             text[:600],
         )
+        # what was cut from the top still opens on the top: a base made thicker kept a
+        # pocket sketched on an origin plane at the old height, sealed inside (journey
+        # rebuild, beta 3: the plan's sketches on the base's top face go on that face now)
+        sealed = [
+            b.get("label")
+            for b in report.get("bodies", [])
+            if b.get("solid") and b.get("shells", 1) != 1
+        ]
+        self.check(
+            "%s: after the edit nothing is sealed inside the part (one shell)" % pid,
+            not sealed,
+            sealed,
+        )
         self.call("undo", {})
 
 
