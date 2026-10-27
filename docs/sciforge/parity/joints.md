@@ -188,9 +188,25 @@ stay inside them); Rest is where the component is put when the dialog closes wit
 limits is refused with a message. A limit switched on starts at the joint's value now, so
 switching it on moves nothing; a joint standing outside new limits goes to the nearest one.
 Changing only limits never re-places the component (it stays where it was driven).
-Fusion also lets you drag flag handles for the limits in the canvas.
+Fusion also lets you set a limit by dragging in the canvas: the limit being edited takes
+the position the joint is dragged to, and flags show where the limits are (source 7, "Flags
+show on the canvas").
 **(SciForge)** Edit Joint Limits opens the joint's own dialog on its Motion tab (an
 as-built joint's one page) instead of Fusion's separate small dialog.
+
+**Dragging to set a limit** (0.1.0-beta.2.2, Luca: "I should be able to drag it where i want
+it to max and min. simple as that"). While a joint dialog shows its limits (the Joint
+dialog's Motion tab, Edit Joint Limits, As-Built Joint), a handle stands on the joint's
+motion: the angle disc round the joint's axis for Revolute and Cylindrical, a blue arrow along
+the slide for Slider. Dragging the handle, or the moving part itself, drives the joint live.
+Of the two ways the brief offered, SciForge takes the one closest to Fusion: **the row whose
+box is the current one follows the drag** (ticking Minimum, Maximum or Rest, or clicking into
+its value, makes it the current row); there is no "use position" button. With no current row
+the drag only moves the part and stops at the limits. A faint amber ghost of the moving part
+(and what hangs on it) stands at Minimum and at Maximum while they are on (SciForge's stand-in
+for Fusion's flags). It all happens in the dialog's own undo step: OK is one step, Cancel puts
+the part and the limits back. FreeCAD's selection also sees the press on the handle or the part
+as a click; the dialog ignores it (it is not a new pick).
 
 ### Drive Joints
 
@@ -293,6 +309,17 @@ group left with one member, and the joint origins inside it. Deleting a body tha
 inside a component removes the joints on that body only. Deleting a joint or a rigid group
 from the timeline or the browser takes its hidden helpers with it.
 
+A joint keeps its faces when a later step renumbers them (0.1.0-beta.2.2, from Luca's "the
+joint gets deleted, the body stays, but cant be edited (tested with fillet)"): a fillet on a
+jointed body made FreeCAD number its faces anew, the joint's "Face6" was lost ("?Face6"), the
+joint went red and its part could jump. Fusion's joints follow the geometry. SciForge keeps a
+small record of each picked face, edge or point (its kind of surface or curve, a point on it,
+its normal or axis) next to the snap, and after each recompute (no dialog open) a lost or
+changed reference is found again by that record on the same body and renamed
+(`joints.repair_references`, logged). Deleting the joint itself never touched the bodies: the
+browser (right-click and the Delete key), the timeline and Del in the 3D view all leave both
+bodies with their solids, places and Tips (`joints_delete`).
+
 ### When the joints fight each other
 
 FreeCAD's solver can report success on an arrangement that breaks a joint (its equations
@@ -386,7 +413,8 @@ Merge notes for the Components work (both branches touch `browser_core.py`,
 | Between Two Faces with faces of two bodies of one component | the two faces (and the snap) must be on one body |
 | A drag through several joints at once (Fusion's solver drags the whole mechanism toward the pointer) | the first joint with a motion on the way to the ground moves; the rest of a closed loop follows the solver |
 | Contact in Animate Joint and in a motion study | contact stops drags and Drive Joints only |
-| Limit flags dragged in the canvas | values typed in the dialog only |
+| Limit flags (Fusion's own flag look) | a faint ghost of the part at Minimum and Maximum; the Rest has no ghost |
+| Cylindrical: drag its slide limits | the handle and the part drag set the angle; the slide limits are typed |
 | Pin-Slot and Ball limits; Planar (no limits in Fusion either) | FreeCAD limits exist for Revolute, Slider and Cylindrical only |
 | Ball: Pitch / Yaw axis choices, Pin-Slot custom axes | a Ball turns about its origin whatever the axes; Pin-Slot takes Slide X or Y of the joint origin |
 | The POSITION toolbar panel that appears after a move | Capture Position / Revert are menu entries, greyed while nothing moved |
@@ -415,4 +443,6 @@ Merge notes for the Components work (both branches touch `browser_core.py`,
 | `joints2_modes` | Joint Origin Between Two Faces (a rounded face refused, top and bottom faces, the hover's snaps on the halfway plane, origin at z = 5); J with component 2 on Two Edge Intersection (the corner a fillet took away); edit from the timeline (mode and edges shown, Offset Z, undo / redo); parallel edges refused; save / reopen (70) |
 | `joints2_motion` | a pinion (Revolute) and its rack (Slider) tied by a Motion Link (360 deg : 2 pi r); one turn slides the rack 2 pi r and reads 360; a canvas drag carries the rack; Reverse; the Slider drives the pinion back; Motion Study (point at step 100, playhead, Play Once to one turn, Motion Studies folder); save / reopen (99) |
 | `joints2_nested` | a component nested in another (New Component, Parent): jointed, it moves on its own (its parent stays), turns when dragged, comes along when its parent is dragged; Drive Joints (55) |
+| `joints_delete` | a filleted block, Revolute at 90; the joint deleted from the browser row: both bodies keep solid, volume, place and Tip, nothing in error; the fillet still edits (r 3, undo); Ctrl+Z / Ctrl+Y; the same from the timeline; a fillet after the joint (the joint finds its face again, the block stays); Delete key on the row, Del in the 3D view (143) |
+| `joints_limits_drag` | Edit Joint Limits: the angle handle on the axis; tick Maximum, drag the disc to 90 (the block turns, Maximum follows, a ghost); tick Minimum, drag to -45 (two ghosts); OK keeps both, no ghost left, Ctrl+Z; again: drag the block itself to 60 (Maximum and the handle follow, not a new pick), Cancel puts it all back (48) |
 

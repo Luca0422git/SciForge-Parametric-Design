@@ -5,6 +5,33 @@ its own section of this file (the release notes are made from it), so every rele
 section here whose heading is exactly its version number, like `## 0.1.0-beta` below. Known
 problems are in [docs/sciforge/known-issues.md](docs/sciforge/known-issues.md).
 
+## 0.1.0-beta.2.2
+
+### Fixed
+
+- **A joint lost its face when a later step changed the body.** A fillet (or another step)
+  added after a joint renumbered the body's faces: the joint went red ("?Face6") and its part
+  could jump. The joint now finds its face, edge or point again by its shape and place and
+  keeps working. This is the likely cause of "deleting a joint breaks the body": deleting a
+  joint itself (browser right-click, the Delete key, the timeline, Del in the 3D view) was
+  tested every way and leaves both bodies exactly as they were, with their fillets still
+  editable. If it still happens to you, please send the design.
+
+### Improved
+
+- **Drag a joint to set its limits.** In Edit Joint Limits (or the Joint dialog's Motion tab)
+  a handle stands on the joint: a disc round its axis for a turn, an arrow for a slide. Drag
+  it, or drag the moving part itself, and the joint moves with you. Tick Minimum, Maximum or
+  Rest (or click into its box) and that value follows the drag. A faint amber ghost of the
+  part shows where Minimum and Maximum are. OK keeps it as one undo step; Cancel puts
+  everything back.
+- **Hover a hidden body in the browser** and a faint see-through ghost of it shows in the 3D
+  view (also hidden components and mesh bodies). Nothing about the body changes.
+- **Fillet and Chamfer arrows are diagonal**, like Fusion's: the arrow stands on the middle of
+  the round or bevel and points out of the part halfway between the two faces (Equal Distance
+  chamfers, variable-radius points and Chord Length too). Two Distances keeps one arrow on
+  each face.
+
 ## 0.1.0-beta.2.1
 
 **A patch of 0.1.0-beta.2.** Only SciForge's own files changed: **Help > Check for Updates >

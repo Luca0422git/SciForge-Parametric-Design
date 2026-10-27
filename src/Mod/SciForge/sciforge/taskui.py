@@ -1181,12 +1181,16 @@ class ArrowDragger(BoxCarrier):
         on_drag=None,
         on_release=None,
         value_box=None,
+        keep_pointing=False,
     ):
         from pivy import coin
 
         from . import handle_look
 
         self.coin = coin
+        # True: the arrow always points along `direction` (a fillet's diagonal arrow stands
+        # on the round, inside where the edge was, and points out of the material)
+        self.keep_pointing = keep_pointing
         self.view = Gui.ActiveDocument.ActiveView
         self.origin = App.Vector(origin)
         self.direction = App.Vector(direction)
@@ -1284,6 +1288,8 @@ class ArrowDragger(BoxCarrier):
 
     def pointing(self):
         """The way the arrow points: `direction`, turned round for a minus distance."""
+        if self.keep_pointing:
+            return App.Vector(self.direction)
         return self.direction * (-1.0 if self.distance() < 0 else 1.0)
 
     def tip(self):
@@ -1319,7 +1325,7 @@ class ArrowDragger(BoxCarrier):
         if self._drawn is not None and abs(distance - self._drawn) < 1e-12:
             return
         self._drawn = distance
-        self.flip.angle.setValue(math.pi if distance < 0 else 0.0)
+        self.flip.angle.setValue(math.pi if distance < 0 and not self.keep_pointing else 0.0)
         self.guide.set_points([(0.0, 0.0, 0.0), (distance, 0.0, 0.0)])
 
     def _poll(self):

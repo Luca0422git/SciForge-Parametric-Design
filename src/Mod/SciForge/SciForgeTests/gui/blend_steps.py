@@ -259,10 +259,13 @@ def blends():
 
 
 def arrow_screen(panel, index=0, along=3.0):
-    """Widget pixels of the middle of a drag arrow and of a point `along` mm further on."""
-    dragger, _spot, origin, direction = panel.arrows[index]
+    """Widget pixels of the middle of a drag arrow and of a point `along` mm further on, the
+    way the size grows (a fillet's diagonal arrow grows the round when pushed into the part:
+    its per_unit is a minus there, blend.fillet_per_unit)."""
+    dragger, spot, origin, direction = panel.arrows[index]
     center = origin + direction * dragger.distance()
-    return h.screen_point(center), h.screen_point(center + direction * along)
+    grow = direction * (-1.0 if spot.get("per_unit", 1.0) < 0 else 1.0)
+    return h.screen_point(center), h.screen_point(center + grow * along)
 
 
 def report_has_kernel_errors():

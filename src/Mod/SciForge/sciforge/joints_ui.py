@@ -556,6 +556,11 @@ class _JointsPanel(BodyPanel):
                 self._syncing = False
             if time.time() < self._busy_until:
                 return
+            drag = getattr(self, "limit_drag", None)
+            if drag is not None and drag.busy():
+                # FreeCAD also takes the press on the limits' drag handle as a click on the
+                # part behind it: not a new pick (it made the joint anew, back at 0)
+                return
             for root, sub, point in entries:
                 self.picked_raw(root, sub, point)
         except Exception as exc:
@@ -687,8 +692,26 @@ class _JointsPanel(BodyPanel):
         self.stop_animation()
         return super().reject()
 
+    # -- dragging the joint to set its limits (joints_limit_drag) ------------------------------------
+    def _start_limit_drag(self):
+        try:
+            from . import joints_limit_drag
+
+            self.limit_drag = joints_limit_drag.LimitDrag(self)
+        except Exception as exc:
+            warn("%s: limit drag unavailable: %s" % (self.title, exc))
+            self.limit_drag = None
+
+    def _update_limit_drag(self):
+        drag = getattr(self, "limit_drag", None)
+        if drag is not None:
+            drag.update()
+
     # -- closing -----------------------------------------------------------------------------------
     def remove_handles(self):
+        drag, self.limit_drag = getattr(self, "limit_drag", None), None
+        if drag is not None:
+            drag.close()
         self.stop_animation()
         self.clear_markers()
         if self.hover is not None:
@@ -977,6 +1000,8 @@ class JointPanel(_JointsPanel):
         else:
             self.activate("comp1")
             Gui.Selection.clearSelection()  # Fusion's Joint starts with its own picks
+        self._start_limit_drag()
+        self.tabs.currentChanged.connect(lambda *_: self._guarded(self._update_limit_drag))
         self.dirty = True
         self._timer.stop()
         self._recompute()
@@ -1227,6 +1252,7 @@ class JointPanel(_JointsPanel):
 
     def _limits_changed(self):
         self.changed()
+        self._update_limit_drag()
 
     def _animate_toggled(self, on):
         if not on:
@@ -1365,6 +1391,7 @@ class JointPanel(_JointsPanel):
         if self._pending_animation:
             self._pending_animation = False
             QtCore.QTimer.singleShot(0, lambda: self._start_animation(loop=False))
+        self._update_limit_drag()
 
     def preview_steps(self):
         return [self.joint] if self.joint is not None else []
@@ -1416,9 +1443,14 @@ class AsBuiltPanel(_JointsPanel):
         else:
             self.activate("components")
             self.start_from_selection()
+        self._start_limit_drag()
         self.dirty = True
         self._timer.stop()
         self._recompute()
+
+    def after_recompute(self):
+        super().after_recompute()
+        self._update_limit_drag()
 
     def build_form(self):
         self.form_box(self.layout, "components", "Components", "Select")
@@ -2382,15 +2414,19 @@ class Watch:
                 if joints.joint_origin_owner(origin) is None:
                     continue
                 joints.place_joint_origin(origin)
-            # a geometry change moved a joint origin (an edited face, a moved body): the
-            # parts follow their joints, as in Fusion (FreeCAD's own solve on recompute is
-            # off: see theme.VIEWER_SETTINGS)
-            if (
+            calm = (
                 joints.assembly(doc) is not None
                 and not getattr(doc, "Transacting", False)
                 and joints_drag.active() is None
-                and joints.needs_solve(doc)
-            ):
+            )
+            # a later step on a jointed body numbered its faces anew (a fillet): the joints
+            # find their faces again before anything is solved (joints.repair_references)
+            if calm and not Gui.Control.activeDialog() and joints.repair_references(doc):
+                preview.recompute(doc)
+            # a geometry change moved a joint origin (an edited face, a moved body): the
+            # parts follow their joints, as in Fusion (FreeCAD's own solve on recompute is
+            # off: see theme.VIEWER_SETTINGS)
+            if calm and joints.needs_solve(doc):
                 joints.solve(doc)
         except Exception as exc:
             warn("joints watch: %s" % exc)

@@ -1664,9 +1664,14 @@ class _ViewFilter(QtCore.QObject):
         return True
 
     def _component_drag(self, gl, view, press):
-        if press.in_dialog or press.mode == "paint" or press.modifiers & (SHIFT | CTRL):
+        if press.mode == "paint" or press.modifiers & (SHIFT | CTRL):
             return None
         try:
+            if press.in_dialog:
+                # a joint dialog showing its limits: the moving part drags the joint
+                from . import joints_limit_drag
+
+                return joints_limit_drag.part_drag(gl, view, press.pos)
             from . import joints_drag
 
             return joints_drag.start(gl, view, press.pos)

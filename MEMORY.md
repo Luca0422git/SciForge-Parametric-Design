@@ -11,8 +11,11 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   shows nothing or whose fillet cannot be edited), drag a joint to set its Minimum / Maximum,
   a ghost of a hidden body when its browser row is hovered, diagonal drag arrows on Fillet and
   Chamfer. Everything that session needs: `docs/sciforge/dev/briefs/patch-beta2.2.md`. Status:
-  [ ] joint delete bug  [ ] drag to set limits  [ ] hover ghost  [ ] diagonal arrows
-  [ ] released.
+  [x] joint delete bug (the delete itself not reproduced; the related "joint loses its face
+  after a later fillet" fixed)  [x] drag to set limits  [x] hover ghost  [x] diagonal arrows
+  [x] released: **PUBLISHED 2026-10-26 21:37 UTC**, tag `sciforge-v0.1.0-beta.2.2` on `fac2005e`
+  (CI #274 green; patch release run 40402286290, 25 min; Release moved 1a511933..fac2005e by
+  the workflow). Newest session log "Patch 0.1.0-beta.2.2".
 - **Beta 3 (`0.1.0-beta.3`, this line of sessions): Auto Timeline and Simulation.** Auto
   Timeline = tools and instructions so a connected AI turns a model with no timeline (an
   imported STEP body; simple meshes) into a real parametric one. Simulation = Fusion's Static
@@ -1625,6 +1628,61 @@ Nothing built yet. Starting points from the 2026-10-26 reading (no code changed)
   default; Ruled's default type. Each guess is marked G in the parity docs.
 
 ## Session log
+
+### Session log: Patch 0.1.0-beta.2.2 (`develop`, 2026-10-26)
+
+Brief `docs/sciforge/dev/briefs/patch-beta2.2.md` (four items, SciForge files only).
+
+- **1. Joint delete.** Not reproduced as described: deleting a Revolute joint (bodies at the
+  root, one filleted, at 0 and 90) from the browser right-click, the Delete key on the row, the
+  timeline and Del in the 3D view all keep both bodies (solid, volume, Placement, Tip), the
+  fillet edits, Ctrl+Z / Ctrl+Y work (`joints_delete`, 143 checks). Found and fixed the likely
+  cause: a fillet added *after* a joint renumbers the body's faces, the joint's reference
+  becomes "?Face6" (FreeCAD's TNP), the joint goes Invalid and the part can jump. New in
+  `joints.py` ("references that follow the geometry"): `element_signature` (surface / curve
+  kind, a point, normal / axis / radius) stored per side in the snap record (`sigs`) the first
+  time it is seen; `repair_side` / `repair_references` find a lost or changed element again on
+  the same body (`find_element`) and rename it in the record and Reference; run from
+  `joints_ui.Watch._run` after a recompute when no dialog is open, nothing is transacting and no
+  Component Drag is under way (logs "joint X: Face6 found again on Body2 (Face5)"). The joint
+  origin moves a few hundredths of a mm with a trimmed face (expected). CHANGELOG says honestly
+  that the reported delete was not reproduced and asks for the design if it happens again.
+- **2. Drag to set limits** (`joints_limit_drag.py`): `LimitDrag` per joint dialog (JointPanel,
+  AsBuiltPanel): an AngleHandle (revolve_ui) round the joint's axis for Revolute / Cylindrical,
+  an ArrowDragger along the slide for Slider, while the limits are shown (Motion tab or no
+  tabs). **Chosen: the current row follows the drag** (ticked or clicked into last; Min, Max
+  or Rest), no "use position" button. Amber ghosts (hover_ghost.build) at Min / Max. Dragging
+  the moving part itself also drives it: `selection_ui._component_drag` hands a drag inside a
+  dialog to `joints_limit_drag.part_drag` (a `PartDrag` with follow / finish / cancel, like
+  joints_drag's session but through the dialog's undo step). Two bugs found on the way: (a)
+  `caption.isVisible()` is False while the dialog is not on screen yet (use `isHidden()`); (b)
+  FreeCAD selects the part under the handle when the drag ends: the Joint dialog took it as a
+  new pick, made the joint anew (`_rejoin`), aligned it back to 0 and played the animation.
+  `_JointsPanel._selection_changed` now ignores picks while `limit_drag.busy()`. Scenario
+  `joints_limits_drag` (48). Gaps in parity/joints.md: Cylindrical's slide limits are typed;
+  ghosts stand in for Fusion's flags.
+- **3. Hover ghost** (`hover_ghost.py`, `browser_ui` hooks): a temporary unpickable Coin node
+  of a hidden body / component / mesh body / loose solid while its row is hovered; no
+  property touched (nothing in Undo); nothing for rolled-back bodies; tessellation cached per
+  object (shape hash + placement), 40 kept. Scenario `browser_ghost` (33).
+- **4. Diagonal arrows** (`blend.diagonal`, `fillet_per_unit` (1/sin(γ/2) − 1, minus on an
+  outside edge: the round's middle moves into the part as it grows), `chamfer_per_unit`,
+  `diagonal_spot`; `fillet_sets.variable_spots` and `chord_per_unit`; `ArrowDragger
+  keep_pointing`). Fillet (all radius types, rule fillet) and Equal Distance chamfer:
+  diagonal; Two Distances: one arrow per face; Distance and Angle: its face arrow (sources in
+  parity/fillet.md). Tests updated: `fillet` (arrow distance = r × per_unit), `chamfer_arrow`
+  (diagonal direction; screen size allows the view's foreshortening), `blend_steps.arrow_screen`
+  drags the growing way.
+- **Published 2026-10-26 21:37 UTC** (Luca: "publish the patch"): CI #274 green on fac2005e;
+  patch release run 40402286290 started with the GitHub tools (ref Release, publish true):
+  prepare 1 min, Linux AppImage + tests 15 min, Windows portable + installer + golden 22 min,
+  publish 2 min. Base = 0.1.0-beta.2.1 (same core fd4a01850d). Assets: installer 494 MB, .7z
+  421 MB, AppImage 826 MB, quick update 7 MB, sciforge-release.json, SHA256SUMS. The notes say
+  "A patch release" once now.
+- Release: VERSION / `_FALLBACK_VERSION` 0.1.0-beta.2.2, CHANGELOG (### Fixed + ### Improved;
+  no intro line: the brief asked for one, but patch-release.md says the generated notes already
+  say "A patch release" and beta.2.1's notes said it twice), README, known-issues title,
+  docs/ai regenerated.
 
 ### Session log: Beta 3 list (`develop`, 2026-10-26)
 
