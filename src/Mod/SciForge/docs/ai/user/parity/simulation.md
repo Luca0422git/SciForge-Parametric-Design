@@ -190,7 +190,8 @@ G = guess (the SciForge choice when the sources are silent).
   `simulation_solve_dialog.loose_result`), the result summary keyed bodies by label (two
   components' "Body1" shared one entry), the result fingerprint was taken when the solve ended,
   and "Keep the results in the design file" made results look out of date. Still open: the
-  Bearing Load's default direction along a hole drilled along Z (the UI turns it across).
+  Bearing Load's default direction along a hole drilled along Z (the UI turns it across), and
+  a body deleted while its study solves (the engine fails on it; the UI stops the job first).
 
 ## Results
 
