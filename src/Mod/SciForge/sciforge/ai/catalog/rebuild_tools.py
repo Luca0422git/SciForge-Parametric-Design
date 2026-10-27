@@ -46,18 +46,22 @@ define(
     RIBBON,
     "Start rebuilding a part that has no timeline as real, editable timeline steps (Auto "
     "Timeline): an imported STEP body, any solid body, or a mesh body (made into a solid "
-    "first; an open or broken mesh is refused). SciForge freezes the part as the reference "
+    "first; an open or broken mesh, or one of more than 10,000 triangles, is refused). "
+    "SciForge freezes the part as the reference "
     "(drawn faint and see-through; never a body or a step, so it stays the target whatever "
     "you build), hides the original and makes a new empty body '<name> (rebuilt)' at its "
     "place, active: build the rebuild there with the normal tools. Then: describe_reference "
     "(the part's features and a plan of tool calls), build the plan step by step, "
     "compare_to_reference after every feature and fix what its verdict says, finish_rebuild "
     "when it says done. The recipe: docs_read recipes/reverse-engineer.md. One undo step. "
-    "body: the id of the body (or of a step in it, or of the mesh body); label: the "
-    "reference's name (default '<name> (reference)').",
+    "body: the id of the body (or of a step in it, of the mesh body, or of the component "
+    "holding one body: what import_file answers); label: the reference's name (default "
+    "'<name> (reference)').",
     schema(
         {
-            "body": step_id("the body to rebuild: its id (get_design lists them)"),
+            "body": step_id(
+                "the body to rebuild: its id (get_design lists them), or its component's"
+            ),
             "label": string("a name for the reference (default '<name> (reference)')"),
         },
         ["body"],
@@ -153,12 +157,16 @@ define(
     "Finish rebuild",
     "rebuild",
     "Rebuild > Finish Rebuild (beyond Fusion)",
-    "Finish a rebuild: the rebuilt body takes the original's name, component and place, "
+    "Finish a rebuild: the rebuilt body takes the original's name (unless it was given one "
+    "of its own meanwhile), component and place, "
     "with its timeline; the original (the featureless body or the mesh body) is deleted, or "
     "kept hidden as '<name> (original)' with keep_original: true; the reference is removed "
-    "(keep_reference: true keeps it, hidden). It first compares and refuses a rebuild that "
-    "is not done yet (the answer says what is left); even_if_different: true finishes it as "
-    "it is (a person happy with a close rebuild of a mesh). One undo step.",
+    "(keep_reference: true keeps it, hidden). Whatever used the original (joints, grounds, a "
+    "pattern of it, sketches on its faces...) moves onto the rebuild, face for face; what "
+    "cannot move keeps the original (kept hidden; the answer says so). It first compares and "
+    "refuses a rebuild that is not done yet (the answer says what is left); "
+    "even_if_different: true finishes it as it is (a person happy with a close rebuild of a "
+    "mesh). One undo step.",
     schema(
         {
             "reference": REFERENCE_ARG,

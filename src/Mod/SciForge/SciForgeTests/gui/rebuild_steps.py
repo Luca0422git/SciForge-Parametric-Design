@@ -221,6 +221,7 @@ def close_dialogs():
         "SciForgeRebuildCompare",
         "SciForgeRebuildFinish",
         "SciForgeRebuildRefused",
+        "SciForgeRebuildStop",
     ):
         found = dialog(name)
         if found is not None:

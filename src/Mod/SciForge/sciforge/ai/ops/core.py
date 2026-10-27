@@ -397,6 +397,14 @@ class Builder:
             warn("hole %s: direction not checked: %s" % (feature.Name, exc))
 
     def op_hole(self, step):
+        from sciforge import bodies
+
+        if not bodies.has_solid(self.body):  # (beta 3 QA: FreeCAD said "No base set, sketch
+            # support is not Part::Feature", e.g. on a rebuild whose base was not read)
+            raise BuildError(
+                "hole %r: there is no solid in %s to drill into: build its base shape first "
+                "(an extrude or a revolve)" % (step["id"], self.body.Label)
+            )
         feature = self._add(step, "PartDesign::Hole")
         feature.Profile = self.objects[step["sketch"]]
         feature.Diameter = step["diameter"]
