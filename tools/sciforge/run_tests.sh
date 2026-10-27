@@ -12,7 +12,7 @@
 #                           own cases, SciForgeTests/headless/sim_accuracy_qa.py)
 #
 #   tools/sciforge/run_tests.sh [--freecad DIR] [--out DIR]
-#                               [--only unit|golden|headless|sim|gui|scenarios|base]
+#                               [--only unit|golden|headless|sim|recognize|gui|scenarios|base]
 #                               [--scenario NAME[,NAME...]]   (files of SciForgeTests/gui/
 #                                                   scenarios; several share one profile)
 #                               [--shard K/N]       (every N-th scenario, from the K-th)
@@ -173,6 +173,27 @@ EOF3
         "${MODULE}/SciForgeTests/headless/agent_e2e.py" --out "${OUT}" \
         > "${OUT}/agent-e2e.log" 2>&1 || FAILED+=("agent e2e")
     grep -aoE "\[SciForge\] agent (FAIL|summary).*" "${OUT}/agent-e2e.log"
+    run_recognize  # (at-recognize, beta 3: part of --only headless and base)
+}
+
+# Auto Timeline (beta 3, at-recognize): parts built, sent through STEP / STL and back,
+# described by sciforge/recognize.py, rebuilt from the plan by the headless AI executor and
+# compared (SciForgeTests/headless/recognize_bench.py). Also --only recognize on its own.
+run_recognize() {
+    echo "== [SciForge] Auto Timeline recognition (headless)"
+    need_freecad recognize || return
+    SCIFORGE_RECOGNIZE_OUT="${OUT}" timeout 1200 "${FC_CMD[@]}" -c \
+        "from SciForgeTests.headless import recognize_bench; recognize_bench.main()" \
+        > "${OUT}/recognize.log" 2>&1
+    grep -aoE "\[SciForge\] recognize (FAIL|summary).*" "${OUT}/recognize.log"
+    python3 - "${OUT}/recognize-report.json" <<'EOF4' || FAILED+=("recognize")
+import json, sys
+try:
+    report = json.load(open(sys.argv[1]))
+except Exception as exc:
+    print("no recognize report: %s" % exc); sys.exit(1)
+sys.exit(0 if report.get("passed") else 1)
+EOF4
 }
 
 # The Static Stress engine against hand calculations (beta 3, sim-core): every case at the
@@ -344,11 +365,12 @@ case "${ONLY}" in
     golden) run_golden ;;
     headless) run_headless ;;
     sim) run_sim ;;
+    recognize) run_recognize ;;
     gui) run_gui ;;
     scenarios) run_scenarios ;;
     base) run_unit; run_golden; run_headless; run_sim; run_gui_base ;;
     "") run_unit; run_golden; run_headless; run_sim; run_gui ;;
-    *) echo "--only must be unit, golden, headless, sim, gui, scenarios or base" >&2; exit 2 ;;
+    *) echo "--only must be unit, golden, headless, sim, recognize, gui, scenarios or base" >&2; exit 2 ;;
 esac
 
 echo "== [SciForge] reports in ${OUT}"
