@@ -988,9 +988,27 @@ class _PiecePoints:
     def point(self, i):
         if i not in self.found:
             face = self.faces[i]
-            got = _face_points(face, 1) or _face_points(face, 3)
+            got = _face_points(face, 1)
+            if not got or _on_boundary(face, got[0][0]):
+                # the middle of the parameters can fall on the face's edge (a triangle's
+                # long side): such a point also lies on the next face of the other solid,
+                # which then decides wrongly (journey rebuild, beta 3: a missing chamfer's
+                # strip read as common, the volumes only sampled)
+                inner = [x for x in _face_points(face, 3) if not _on_boundary(face, x[0])]
+                got = inner or got or _face_points(face, 3)
             self.found[i] = got[0] if got else None
         return self.found[i]
+
+
+def _on_boundary(face, point):
+    """The point lies on (within a hair of) one of the face's edges."""
+    import Part
+
+    try:
+        tol = 1e-6 * max(1.0, face.BoundBox.DiagonalLength)
+        return Part.Compound(face.Edges).distToShape(Part.Vertex(point))[0] <= tol
+    except Exception:
+        return False
 
 
 def _is_flat(face):

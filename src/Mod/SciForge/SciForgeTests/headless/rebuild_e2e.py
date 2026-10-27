@@ -641,6 +641,7 @@ def main():
         fallback_checks(agent)
     if not wanted or wanted == "follow":
         follow_checks(agent)
+        strip_checks(agent)
     if not wanted or wanted == "qa":  # (beta 3 QA: jointed parts, reopen, ... rebuild_qa.py)
         from . import rebuild_qa
 
@@ -771,6 +772,48 @@ def follow_checks(agent):
             (text[:200], volume, total, shells),
         )
     _close_all()
+
+
+def strip_checks(agent):
+    """A rebuild that only lacks a chamfer along one edge (an AI that left the plan's chamfer
+    out): compare splits the two parts exactly and names the chamfer with its call ready. The
+    strip's end triangle had its sample point on its long side, which also lies on the
+    original's end face: the strip was read as common, the pieces did not add up and the
+    volumes were only sampled (no region, no call; journey rebuild, beta 3)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import bodies, rebuild
+
+    block = Part.makeBox(100, 60, 10)
+    top_end = [
+        e
+        for e in block.Edges
+        if all(abs(v.Point.x) < 1e-9 and abs(v.Point.z - 10) < 1e-9 for v in e.Vertexes)
+    ]
+    original = block.makeChamfer(2, top_end)
+    doc = App.newDocument("RebuildStrip")
+    try:
+        body = bodies.new_body(doc, "Block")
+        base = doc.addObject("Part::Feature", "Imported")
+        base.Shape = original
+        body.BaseFeature = base
+        doc.recompute()
+        ref = rebuild.start(doc, body)
+        doc.recompute()
+        result = rebuild.compare(ref, block, {"show": False})
+        groups = result.get("groups") or []
+        fix = (groups[0].get("fix") or {}) if groups else {}
+        agent.check(
+            "strip: a missing chamfer is split exactly and named, its call ready",
+            result["method"] in ("exact", "fuzzy")
+            and abs(result["volume"]["extra"] - 120.0) < 1e-6
+            and "chamfered edge" in result["verdict"]
+            and fix.get("tool") == "chamfer",
+            (result["method"], result["volume"], result["verdict"]),
+        )
+    finally:
+        App.closeDocument(doc.Name)
 
 
 # -- compare's fallback when OpenCASCADE cannot split the parts -----------------------------------
