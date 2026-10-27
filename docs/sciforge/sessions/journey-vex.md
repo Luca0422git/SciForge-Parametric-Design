@@ -68,6 +68,12 @@ other (a gearbox block), 5 in apart between the webs' inside faces.
    design's tab closed; the application bar's Open: the file dialog, the file typed: every
    one of the 22 components where it was, every joint back, still inches; Drive Joints 30
    drives the shaft and the wheel only.
+   After the reopen: the revolute's row > Edit Joint, Offset Z -5.75: the shaft 0.25 in lower
+   and the wheel with it, nothing else; Undo. The screw's file inserted again: still an
+   occurrence of the first screw (`screw_8_32_x_0_5:8`), the parts list counts 8.
+   File > New Drawing (Full Assembly, ASME B in inches), a Front base view at 1:4 by a click,
+   TABLES > Table by a click: the drawing's parts list has 8 screws in one row, 4 nuts, 2
+   standoffs, 2 bearings and one of each other part, with its balloons.
 8. **SIMULATION on rail 1** (part 2). Workspace > Simulation: New Study opens by itself,
    Create Study (Static Stress). Study Materials: every row but rail 1's unticked (17 clicks),
    rail 1's study material Aluminium. Structural Constraints, Fixed: the four walls of each
@@ -125,6 +131,23 @@ A real screw spreads that load; the peak is not the rail yielding.
   bodies keep their own name and the browser still finds a row by the body's label. Test:
   `journey_vex_sim`'s "a row per body, each named with its component" and "the browser's
   Simulation Model names rail 1's body with its component" (both fail on the old code).
+- **TABLES > Table froze for minutes on the VEX piece; balloons found no part**
+  (`drawing.py` `_sight_hit`): a parts list's balloons look for each part along sight lines
+  through the view, in design coordinates, but tested each body where it sits inside its
+  component. Every component of an inserted assembly is moved, so no line ever hit: each row
+  walked every visible edge of the view (over ten minutes, the window frozen, until the test
+  timed out; a stack dump showed `add_parts_list > add_row_balloons > component_anchor >
+  _sight_hit`), and a click on a part with Balloon found nothing. The line is now taken into
+  each body's component before measuring, and a body whose box it misses is skipped. Test:
+  `journey_vex_check.check_balloons_on_moved_components` (4 of its 5 checks fail on the old
+  code) and the journey's drawing steps.
+- **... and then still 140 s** (`drawing.py`): with the parts found, the Table still froze
+  the window for over two minutes (six stack dumps 25 s apart, all in `_sight_line >
+  centre_of`): every edge tried for an arrow measured every part of the view again (the
+  view's centre copies all 19 bodies). The centre is now measured once per parts list:
+  140.4 s -> 8.2 s headless on the saved VEX piece. Test:
+  `journey_vex_check.check_balloons_quick_on_a_big_part` counts the measurements (31 on the
+  old code, at most 2 now).
 
 ## Not bugs (worked around in the journey)
 
@@ -159,12 +182,41 @@ A real screw spreads that load; the peak is not the rail yielding.
 | What | The VEX report (298-part robot) | This journey (22 components) |
 |---|---|---|
 | Insert STEP, many files at once | 20 files 21.8 s (1.1 s a file) | 8 files 6.8 - 7.3 s (0.9 s a file) |
-| Open | 36 s (0.12 s a part) | 3.1 s (0.14 s a part) |
-| Save | 3.8 s | 0.45 s |
+| Open | 36 s (0.12 s a part) | 2.9 - 3.1 s for 22 components (0.13 s a part) |
+| Save | 3.8 s | 0.45 - 0.54 s |
 | Drive Joints, one step of the dialog | 0.70 s | 0.04 - 0.14 s |
-| Hover: a hole's dot lit (from the mouse arriving to the dot lit, 25 hovers) | first 0.05 - 0.15 s, then 0.014 s (the computation) | median 0.054 s, slowest 0.135 s (the first hover on a rail's face: its index made) |
+| Hover: a hole's dot lit (from the mouse arriving to the dot lit, 25 hovers a run) | first 0.05 - 0.15 s, then 0.014 s (the computation) | median 0.052 - 0.054 s, slowest 0.135 - 0.181 s (the first hover on a rail's face: its index made) |
 | Static Stress solve of rail 1 | | 6.5 s default mesh, 32 s at 0.08 in (91k nodes) |
+| Drawing: a Front base view of the piece | | 4.3 s headless |
+| Drawing: TABLES > Table with its 8 balloons | | over 10 min before the fixes, 140 s after the first, 8.2 s now (headless) |
+
+The per-part costs agree with the VEX report's robot (open about 0.13 s a part, insert about
+1 s a file); hovering is well inside the 0.1 s target except the first hover on a big face.
 
 ## Tests (real FreeCAD 1.1.4 under xvfb, OMP_NUM_THREADS=1)
 
-RESULTS
+- `journey_vex` 321 checks (about 4.5 min), `journey_vex_sim` 224 checks (about 5 min): PASS.
+- `--only unit` includes `test_journey_vex_freecad` (headless `journey_vex_check.py`, 4
+  checks: the Align not a pending move, the same with a captured Position, balloons on
+  moved components, balloons measured once).
+- After the Align and simulation fixes: `components2_move` 345, `direct_components` 220,
+  `joints2_drag` 80, `joints2_motion` 101, `joints_asbuilt_group` 135, `joints_drive` 108,
+  `modify_align` 232, `modify_align_points` 224, `vex_align` 145, `vex_qa_align` 99,
+  `surface4_misc` 28, `sim_setup_browser` 67, `sim_setup_components` 42,
+  `sim_setup_documents` 71, `sim_setup_two` 52: PASS.
+- After the drawing fixes: `drawing_assembly` 62, `drawing_pdf_layers` 55,
+  `flatpattern_drawing` 42, `vex_qa_occ` 43: PASS.
+- `--only base` (unit 2717, golden 614 + 2 xfail, headless 339 calls, docs 157, agent 81,
+  rebuild 68 + 14, recognize 71 parts, sim 138, simqa 205, smoke, journey, restart): all
+  passed, and again after the drawing fixes (the same counts; the 2 xfails are the
+  known `plate_hole_grid` and `sf_loft_merge_slot_volume`).
+
+## For the next session
+
+- The journey's step files: `SciForgeTests/gui/journey_vex_steps.py` (hand numbers in the
+  section comments), scenarios `journey_vex.py`, `journey_vex_sim.py`; helpers worth reusing:
+  `answer_file_dialog` (drives Qt's own file dialog with keys: several files at once in
+  quotes), `keys_to_window` (xvfb), `timed_hover`, `click_wall` (turns the view until a small
+  face can be clicked).
+- Open questions for Luca: a note on the screen when the lowest safety factor sits on a
+  singularity; a 5052-H32 aluminium in the material library for VEX teams.
