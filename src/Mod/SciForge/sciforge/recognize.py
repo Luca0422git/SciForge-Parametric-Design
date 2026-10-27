@@ -170,75 +170,97 @@ def describe(shape, options=None):
 
 
 def _on_top_face(shape, out):
-    """The sketches of the cuts, bosses and holes that start on the far end face of the base
-    extrude (a plate's top) are made on that face (create_sketch's face with plane: in the
-    plane's axes, so the numbers stay those of the plan), as a person sketches a pocket on
-    the top face: when the base is made thicker later they stay on top. On an origin plane
-    at the face's height they stayed where they were, under a closed skin (journey rebuild,
-    beta 3: a bracket made 2 mm thicker had its pocket and counterbores sealed inside). Only
-    when the part has exactly one flat face there, facing out (the selector then finds that
-    face on the rebuild too); a step the catalogue would refuse is left as it was."""
+    """The sketches of the cuts, bosses and holes that start on the end face of an earlier
+    extrude (a plate's top, a boss's top, a pocket's floor) are made on that face
+    (create_sketch's face with plane: in the plane's axes, so the numbers stay those of the
+    plan), as a person sketches a pocket on the top face: when that extrude changes later
+    (the plate made thicker, the boss taller, the pocket deeper) they stay on its face. On an
+    origin plane at the face's height they stayed where they were, under a closed skin
+    (journey rebuild, beta 3: a bracket made 2 mm thicker had its pocket and counterbores
+    sealed inside). Only when the part has exactly one flat face there, facing that way (the
+    selector then finds that face on the rebuild too); a step the catalogue would refuse is
+    left as it was."""
     from .ai import catalog
     from .ai.ops import selectors
 
     plan = out.get("plan") or []
-    base = next((st for st in plan if st.get("tool") == "extrude"), None)
-    if base is None:
-        return
-    args = base.get("args") or {}
-    plain = ("flip", "direction", "through_all", "to", "start", "face", "taper", "symmetric")
-    if any(args.get(key) for key in plain) or args.get("operation", "join") != "join":
-        return
-    if not isinstance(args.get("distance"), (int, float)):
-        return
-    profile = next(
-        (st for st in plan if st.get("id") == args.get("profile") and st is not base), None
+    plain = (
+        "direction",
+        "through_all",
+        "to",
+        "start",
+        "face",
+        "taper",
+        "symmetric",
+        "more_profiles",
+        "extent2",
+        "thin",
     )
-    first = (profile or {}).get("args") or {}
-    plane = first.get("plane")
-    if profile is None or profile.get("tool") != "create_sketch" or plane not in core.PLANES:
+    ends = []  # (plan index, plane, height along the plane's normal) of faces facing along it
+    for i, st in enumerate(plan):
+        args = st.get("args") or {}
+        if st.get("tool") != "extrude" or any(args.get(key) for key in plain):
+            continue
+        if not isinstance(args.get("distance"), (int, float)):
+            continue
+        profile = next((p for p in plan[:i] if p.get("id") == args.get("profile")), None)
+        first = (profile or {}).get("args") or {}
+        plane = first.get("plane")
+        if profile is None or profile.get("tool") != "create_sketch" or plane not in core.PLANES:
+            continue
+        if "on" in first:
+            continue
+        offset = float(first.get("offset") or 0.0)
+        operation = args.get("operation", "join")
+        if operation == "join" and not args.get("flip"):
+            ends.append((i, plane, offset + float(args["distance"])))  # a top
+        elif operation == "cut" and args.get("flip"):
+            ends.append((i, plane, offset - float(args["distance"])))  # a floor
+    if not ends:
         return
-    if "face" in first or "on" in first:
-        return
-    top = float(first.get("offset") or 0.0) + float(args["distance"])
-    n = core.PLANES[plane]["n"]
-    found = 0
-    for face in shape.Faces:
-        if _face_kind(face) != "plane":
-            continue
-        normal = selectors.face_normal(face)
-        if core.dot(normal, n) < 1.0 - 1e-9:
-            continue
-        if abs(core.dot(_t(face.Vertexes[0].Point), n) - top) > 1e-6:
-            continue
-        found += 1
-    if found != 1:
-        return
-    axis = next(name for name, a in core.AXES.items() if abs(core.dot(a, n)) > 0.5)
-    selector = {
-        "normal": [float(c) for c in n],
-        "at": {"axis": axis.lower(), "value": core.snap(top * core.dot(core.AXES[axis], n))},
-        "count": 1,
-    }
-    after = False
-    for st in plan:
-        if st is base:
-            after = True
-            continue
-        if not after or st.get("tool") != "create_sketch":
+    counted = {}
+
+    def single_face(plane, height):
+        key = (plane, round(height, 9))
+        if key not in counted:
+            n = core.PLANES[plane]["n"]
+            found = 0
+            for face in shape.Faces:
+                if _face_kind(face) != "plane":
+                    continue
+                if core.dot(selectors.face_normal(face), n) < 1.0 - 1e-9:
+                    continue
+                if abs(core.dot(_t(face.Vertexes[0].Point), n) - height) <= 1e-6:
+                    found += 1
+            counted[key] = found == 1
+        return counted[key]
+
+    for j, st in enumerate(plan):
+        if st.get("tool") != "create_sketch":
             continue
         a = st.get("args") or {}
-        if a.get("plane") != plane or "face" in a or "on" in a:
+        plane = a.get("plane")
+        if plane not in core.PLANES or "face" in a or "on" in a:
             continue
-        if abs(float(a.get("offset") or 0.0) - top) > 1e-9:
+        height = float(a.get("offset") or 0.0)
+        if not any(
+            i < j and p == plane and abs(h - height) <= 1e-9 for i, p, h in ends
+        ) or not single_face(plane, height):
             continue
-        moved = dict(a, face=dict(selector, at=dict(selector["at"])))
+        n = core.PLANES[plane]["n"]
+        axis = next(name for name, v in core.AXES.items() if abs(core.dot(v, n)) > 0.5)
+        selector = {
+            "normal": [float(c) for c in n],
+            "at": {"axis": axis.lower(), "value": core.snap(height * core.dot(core.AXES[axis], n))},
+            "count": 1,
+        }
+        moved = dict(a, face=selector)
         if catalog.validate("create_sketch", moved):
             continue
         st["args"] = moved
         why = st.get("why")
         if why:
-            st["why"] = why.rstrip(".") + ", on its top face (it follows the face)."
+            st["why"] = why.rstrip(".") + ", on that face (it follows the face)."
 
 
 def turned_frame(shape):
