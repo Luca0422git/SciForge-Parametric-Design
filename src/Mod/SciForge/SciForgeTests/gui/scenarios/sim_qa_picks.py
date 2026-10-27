@@ -7,9 +7,9 @@ A  Structural Constraints, Fixed: two edges of the end face at x = 0 (its top ed
 B  Structural Loads, Force, Vector Fz -100 N: the free end's top front corner clicked: one
    corner picked, OK: "Force 1" on a corner.
 C  Pre-check green (two edges that meet hold every way); Solve: done; the reaction at Fixed 1 is
-   the 100 N the corner takes (statics: exact); the largest movement at that corner, more than
+   the 100 N the corner takes (statics: exact); the largest movement at the free end, more than
    the beam's F L^3 / 3 E I (0.2 mm: a corner load twists it and the edges hold less than a
-   face).
+   face): 0.29 mm, at the free end's front edge (the twist moves its two front corners alike).
 """
 
 import FreeCAD as App
@@ -89,6 +89,17 @@ def b_ok():
     p = s.item_panel()
     picks = [sub for _b, sub in p.picks] if p is not None else []
     h.check("B one corner picked", len(picks) == 1 and picks[0].startswith("Vertex"), picks)
+    if picks and picks[0].startswith("Vertex"):
+        point = s.body("Beam").Shape.getElement(picks[0]).Point
+        h.check(
+            "B the corner clicked: (100, 0, 10)",
+            (point - V(100.0, 0.0, 10.0)).Length < 1e-6,
+            (
+                point,
+                h.state.get("last_click"),
+                [x.SubElementNames for x in Gui.Selection.getSelectionEx()],
+            ),
+        )
     s.ok()
 
 
@@ -122,7 +133,7 @@ def c_check():
     disp = summary.get("stats", {}).get("displacement", {})
     where = disp.get("max_at") or [0, 0, 0]
     h.check(
-        "C the corner moves most (%.3f mm at %s)" % (disp.get("max", 0), where),
+        "C the free end moves most (%.3f mm at %s)" % (disp.get("max", 0), where),
         abs(where[0] - 100.0) < 1e-6 and disp.get("max", 0) > 0.2,
         disp,
     )
