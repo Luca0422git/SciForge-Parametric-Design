@@ -1755,9 +1755,13 @@ More integration finds after the first push:
   made the menu close without running anything. Timing-dependent, hence about half the runs;
   why this change made it likelier was not found. `sketch_input.menu_item` now moves onto the
   group's name and waits 0.1 s before opening the menu, reaches the entry from a
-  neighbouring pixel, and waits until the menu has lit the entry (`_seen_on`) before
-  clicking. Two wrong fixes on the way (do not repeat): re-moving to the same pixel while
-  waiting (no move event: 6 of 6 failed), and stepping the pointer across without waiting.
+  neighbouring pixel with each move SEEN by the menu before the next (`_move_seen`: an event
+  filter), and clicks once the menu has lit the entry (`_seen_on`), else tries another
+  neighbouring pixel. Wrong fixes on the way (do not repeat): re-moving to the same pixel
+  while waiting (no move event: 6 of 6 failed), stepping the pointer across without waiting,
+  and waiting 1.5 s for the light without re-moving (the full build's `sim_setup_during`
+  then lost its race: its solve ended before SOLVE > Generate Mesh; its mesh is 2 % now, a
+  longer solve). A test that must act DURING a solve needs a solve with seconds to spare.
 - CI #287 red only on `vex_duplicate` ("copy n: next to hole: loop lit ... None"), a flake
   from before this work (1 of 4 runs here with the old helpers too). Same root cause in the
   hover helper: each hole is centred, so every hover aims at the same pixel and comes from a

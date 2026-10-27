@@ -40,12 +40,48 @@ def _find(menu, label):
     return []
 
 
-def _seen_on(menu, action, timeout_ms=1500):
+class _MoveSeen(QtCore.QObject):
+    """The last pointer position a widget was told about (a mouse move it received)."""
+
+    def __init__(self):
+        super().__init__()
+        self.last = None
+
+    def eventFilter(self, obj, event):
+        try:
+            if event.type() == QtCore.QEvent.MouseMove:
+                self.last = event.position().toPoint()
+        except Exception:
+            pass
+        return False
+
+
+_SEEN = {}
+
+
+def _move_seen(widget, pos, timeout_ms=150):
+    """The pointer to `pos` of `widget`, then wait until the widget has been told. QTest
+    moves the real pointer and the X server tells Qt a moment later; two moves told together
+    are folded into the last one, and a pointer "moved" to where Qt last saw it is no move."""
+    seen = _SEEN.get(id(widget))
+    if seen is None or seen[1] is not widget:
+        seen = _SEEN[id(widget)] = (_MoveSeen(), widget)
+        widget.installEventFilter(seen[0])
+    seen[0].last = None
+    QtTest.QTest.mouseMove(widget, pos)
+    waited = 0
+    while seen[0].last != pos and waited < timeout_ms:
+        QtTest.QTest.qWait(10)
+        waited += 10
+
+
+def _seen_on(menu, action, timeout_ms=300):
     """Wait until the open menu has lit `action` under the pointer (at most timeout_ms)."""
     waited = 0
     while menu.isVisible() and menu.activeAction() is not action and waited < timeout_ms:
-        QtTest.QTest.qWait(25)
-        waited += 25
+        QtTest.QTest.qWait(20)
+        waited += 20
+    return menu.activeAction() is action
 
 
 def menu_item(group_title, label):
@@ -75,17 +111,20 @@ def menu_item(group_title, label):
                     QtCore.QTimer.singleShot(150, lambda: click(step, tries + 1))
                 return
             rect = menu.actionGeometry(action)
-            # from a neighbouring pixel: a pointer already on the spot sends no move
-            QtTest.QTest.mouseMove(menu, rect.center() + QtCore.QPoint(0, -3))
-            QtTest.QTest.mouseMove(menu, rect.center())
+            # From a neighbouring pixel (a pointer already on the spot sends no move), each move
+            # seen by the menu before the next; the menu takes the click only on an entry it
+            # has lit (a "moved" that came late, or two folded into one, dropped the click:
+            # CI #285 - #287, a second CREATE > Offset, INSERT > Insert Derive, SOLVE >
+            # Generate Mesh did nothing). Another neighbouring pixel if it is still not lit.
+            for near in ((0, -3), (2, 3), (-3, 2)):
+                _move_seen(menu, rect.center() + QtCore.QPoint(*near))
+                _move_seen(menu, rect.center())
+                if action.menu() is not None or _seen_on(menu, action):
+                    break
             if action.menu() is not None:
                 # hovering opens a submenu (a click on it could close it again)
                 QtCore.QTimer.singleShot(400, lambda: click(step + 1))
                 return
-            # QTest moves the real pointer, and the X server tells Qt a moment later: the
-            # menu takes the click only once it has seen the pointer arrive on the entry (a
-            # late "moved" in between the press and the release dropped it: CI #285, #286)
-            _seen_on(menu, action)
             QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center())
             done["clicked"] = True
         except Exception as exc:

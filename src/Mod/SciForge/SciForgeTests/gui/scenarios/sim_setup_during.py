@@ -29,7 +29,9 @@ def setup():
     body = s.body()
     sim.add_item(study, "constraint", "fixed", [(body, s.hole_faces(body))])
     sim.add_item(study, "load", "force", [(body, s.arm_top(body))], {"magnitude": 100.0})
-    sim.set_settings(study, {"mesh": {"size_pct": 3.0}})  # (a few seconds of solving)
+    # (several seconds of solving: path A clicks Undo, Edit Load and Generate Mesh while it
+    # runs, about 2 s of real input; at 3 % a fast runner's solve ended before the last one)
+    sim.set_settings(study, {"mesh": {"size_pct": 2.0}})
     doc.recompute()
 
 
