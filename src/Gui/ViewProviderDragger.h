@@ -139,6 +139,11 @@ protected:
 
     CoinPtr<SoSwitch> pcPlacement;
 
+    // SCIFORGE: shows or hides the placement indicator under pcPlacement, making it the first
+    // time it is shown instead of in attach(): one for every part and datum cost about 8 s
+    // when opening a 300-part assembly (docs/sciforge/core-patches.md #18).
+    void showPlacementIndicator(bool show);
+
 private:
     static void dragStartCallback(void* data, SoDragger* d);
     static void dragFinishCallback(void* data, SoDragger* d);

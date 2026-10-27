@@ -71,6 +71,10 @@ Hold **Shift** to click without the dots (a face's centre).
   then **ASSEMBLE > Rigid Group** instead of a rigid joint for each pair (Fusion's advice too).
 - Hide parts you are not working on (the eye in the browser), or isolate a component
   (right-click > Isolate).
+- Clicking keeps landing on the frame instead of the screw you want? Right-click the frame's
+  component (or body) in the browser > **Selectable/Unselectable**: it stays visible but
+  cannot be picked in the 3D view (a small red mark on its icon); the same entry turns it
+  back. (From SciForge 0.1.0-beta.3.1.)
 - Big robots are slower in SciForge than in Fusion today: see the speed numbers at the end of
   `parity/vex-assembly.md`.
 

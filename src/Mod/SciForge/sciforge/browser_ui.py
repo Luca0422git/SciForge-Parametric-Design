@@ -15,7 +15,8 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 from . import _remember, browser_core as core
-from . import commands, components, doc_epoch, hover_ghost, theme, timeline_ops as ops
+from . import commands, components, doc_epoch, hover_ghost, selectable, theme
+from . import timeline_ops as ops
 from . import ui_icon, warn
 from .compat import QtCore, QtGui, QtWidgets
 from .inline_edit import InlineEditor
@@ -27,6 +28,8 @@ META_VIEW = "SciForge.NamedView."
 # Rows that can be dragged onto a component (or the design's row) to move them there, and
 # the rows they can be dropped on.
 DRAGGABLE = ("body", "component")
+# the rows that carry a Selectable/Unselectable switch (selectable.py)
+SELECTABLE_TYPES = core.BODY_TYPES | core.MESH_TYPES | core.COMPONENT_TYPES
 DROP_TARGETS = ("component", "document")
 # The SIMULATION workspace's rows (simulation_browser.py, beta 3) that can be renamed.
 SIM_RENAMABLE = ("sim_study", "sim_item", "sim_document")
@@ -283,6 +286,8 @@ def _objects(doc):
                 "component": container.Name if container is not None else None,
                 "grounded": obj.Name in grounded,
             }
+            if obj.TypeId in SELECTABLE_TYPES:  # Selectable/Unselectable (selectable.py)
+                row["selectable"] = selectable.get(obj)
             _joint_row(row, obj)
             if row["sciforge_type"] == "FlatPattern":  # sheet metal: the flat's size
                 try:
@@ -797,6 +802,8 @@ class _RowDelegate(QtWidgets.QStyledItemDelegate):
         super().paint(painter, shifted, index)
         if node.get("locked"):
             self._padlock(painter, shifted, index)
+        if node.get("unselectable"):
+            self._no_pick(painter, shifted, index)
         if radio or node["key"] == self.tree._drop_key:
             painter.save()
             try:
@@ -838,6 +845,38 @@ class _RowDelegate(QtWidgets.QStyledItemDelegate):
                 painter,
                 QtCore.QRect(icon.right() - size + 3, icon.bottom() - size + 3, size, size),
             )
+        except Exception:
+            pass
+
+    def _no_pick(self, painter, option, index):
+        """Selectable/Unselectable: a small red no-entry mark over the bottom corner of an
+        unselectable body's or component's icon (drawn here, like Fusion's browser shows one)."""
+        try:
+            opt = QtWidgets.QStyleOptionViewItem(option)
+            self.initStyleOption(opt, index)
+            style = self.tree.style()
+            icon = style.subElementRect(QtWidgets.QStyle.SE_ItemViewItemDecoration, opt, self.tree)
+            if icon.width() <= 0:
+                return
+            size = max(8, icon.width() * 5 // 8)
+            box = QtCore.QRectF(
+                icon.right() - size + 3.5, icon.bottom() - size + 3.5, size - 1, size - 1
+            )
+            painter.save()
+            try:
+                painter.setRenderHint(QtGui.QPainter.Antialiasing, True)
+                painter.setBrush(QtGui.QColor("#1e2430"))
+                pen = QtGui.QPen(QtGui.QColor("#ff5a52"))
+                pen.setWidthF(max(1.4, size / 7.0))
+                painter.setPen(pen)
+                painter.drawEllipse(box)
+                inset = box.width() * 0.22
+                painter.drawLine(
+                    QtCore.QPointF(box.left() + inset, box.bottom() - inset),
+                    QtCore.QPointF(box.right() - inset, box.top() + inset),
+                )
+            finally:
+                painter.restore()
         except Exception:
             pass
 
@@ -1088,6 +1127,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
         tips = [node["tip"]] if node["tip"] else []
         if node.get("locked"):
             tips.append("Fully constrained: nothing in it can move")
+        if node.get("unselectable"):
+            tips.append("Unselectable: it cannot be picked in the canvas (right-click to change)")
         if node["visible"] is not None:
             tips.append("Click the eye to show or hide")
         if node["kind"] in ("component", "document") and not node["active"]:
@@ -1781,6 +1822,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
         )
         handlers = {
             "Show/Hide": lambda: self._set_visible(node, not node["visible"]),
+            "Selectable/Unselectable": lambda: self._toggle_selectable(obj, selected_nodes),
             "Rename": lambda key=node["key"]: self._rename_key(key),
             "Delete": lambda: self.delete([node]),
             "Edit Sketch": lambda: _edit_object(obj),
@@ -1946,6 +1988,32 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             action = sub.addAction(label)
             self._handlers[action] = lambda t=target, m=list(moving): self._move_objects(m, t)
         return True
+
+    def _toggle_selectable(self, obj, selected_nodes):
+        """Fusion's Selectable/Unselectable: the row's object, or every selected body / mesh
+        body / component when the row is one of them, turned the other way."""
+        if obj is None or not commands.finish_open_dialog():
+            return
+        kinds = ("body", "mesh_body", "component")
+        targets = [self._object(n) for n in selected_nodes if n["kind"] in kinds]
+        targets = [t for t in targets if t is not None]
+        if obj not in targets:
+            targets = [obj]
+        try:
+            changed = selectable.toggle([obj] + [t for t in targets if t is not obj])
+            if changed:
+                on = selectable.get(changed[0])
+                commands.tell(
+                    "%s %s."
+                    % (
+                        ", ".join(o.Label for o in changed),
+                        "can be picked again" if on else "cannot be picked in the canvas now",
+                    )
+                )
+        except Exception as exc:
+            warn("selectable: %s" % exc)
+            commands.tell("Selectable could not be changed: %s" % exc)
+        self.refresh(force=True)
 
     def _opacity_menu(self, menu, node, obj, selected_nodes):
         """Fusion's Opacity Control: the row's object, or every selected body / mesh body /

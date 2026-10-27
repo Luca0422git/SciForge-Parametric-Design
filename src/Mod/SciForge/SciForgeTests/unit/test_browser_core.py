@@ -309,6 +309,32 @@ class HoverTests(unittest.TestCase):
         self.assertIn("Opacity Control", core.menu_for(core.find(tree, "component:Part")))
         self.assertNotIn("Opacity Control", core.menu_for(core.find(tree, "sketch:Sketch")))
 
+    def test_selectable_unselectable_on_bodies_and_components(self):
+        tree = self.tree()
+        for key in ("body:Body", "component:Part"):
+            menu = core.menu_for(core.find(tree, key))
+            self.assertIn("Selectable/Unselectable", menu)
+            self.assertEqual(menu.index("Selectable/Unselectable"), menu.index("Show/Hide") + 1)
+        self.assertNotIn("Selectable/Unselectable", core.menu_for(core.find(tree, "sketch:Sketch")))
+
+    def test_an_unselectable_row_carries_its_mark(self):
+        objects = [
+            obj("Part", "App::Part", label="Frame", selectable=False),
+            obj("Body", "PartDesign::Body", component="Part", selectable=True),
+            obj("Body001", "PartDesign::Body", selectable=False),
+            obj("Body002", "PartDesign::Body"),
+        ]
+        tree = core.build("Design", objects, active_body="Body002")
+        self.assertTrue(core.find(tree, "component:Part")["unselectable"])
+        # the mark is on what was switched: a body in it keeps its own (Fusion)
+        self.assertFalse(core.find(tree, "body:Body")["unselectable"])
+        self.assertTrue(core.find(tree, "body:Body001")["unselectable"])
+        self.assertFalse(core.find(tree, "body:Body002")["unselectable"])
+        changed = [dict(o) for o in objects]
+        changed[2]["selectable"] = True
+        after = core.build("Design", changed, active_body="Body002")
+        self.assertNotEqual(core.signature(tree), core.signature(after))  # the row is redrawn
+
 
 if __name__ == "__main__":
     unittest.main()

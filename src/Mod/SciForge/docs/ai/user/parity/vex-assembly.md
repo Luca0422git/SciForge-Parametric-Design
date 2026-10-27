@@ -112,6 +112,14 @@ What the time goes on, and what was done:
   without the window), a body read from the file is not copied again, the import notes no
   longer build a compound of every face; the rest is FreeCAD meshing the twenty parts.
 
+## 4b. Selectable / Unselectable and the placement indicator (0.1.0-beta.3.1)
+
+| Fusion | Source | SciForge |
+|---|---|---|
+| Right-click a body or a component in the browser > **Selectable/Unselectable**: it can no longer be picked in the canvas (CAM users make stock and fixtures unselectable); a small red no-entry mark on its icon; the same entry makes it selectable again | Autodesk blog "Easier Selections with... Unselectable?"; Forum "Entities cannot be selected on model body" | Same entry, right after Show/Hide, on bodies, mesh bodies and components (`sciforge/selectable.py`, browser_ui `_toggle_selectable`); several selected rows switch together. An unselectable component makes every body in it (at any depth) unpickable; the mark is on the row that was switched (SciForge's own drawing). The browser still selects it; a hover lights nothing. One undo step; saved with the design (`SciForgeSelectable` on the object). A step added later to an unselectable body is unpickable at once. Scenario `vex_selectable` (36 checks) |
+| (inside) | | FreeCAD's own Selectable switch on a body's view is not enough inside a component: FreeCAD draws the body through its steps and each step's pick style undoes the body's, so SciForge switches the body's view and every step's view (checked on FreeCAD 1.1.4 with real clicks). No compiled change was needed |
+| Opening a big assembly | | **(SciForge, compiled: core patch #18)** a part's placement indicator (FreeCAD's axis cross for Show Placement) is made the first time it is shown, not for each of a robot's ~5400 views when it opens (about 8 s of the 300-part robot's opening, section 4). Needs a full build (SciForge program 0.1.0-beta.3.1 or later); scenario `vex_placement_indicator` |
+
 ## 5. The test parts (VEX's published numbers; never VEX's files)
 
 | Part | Numbers | Source |
@@ -140,8 +148,7 @@ published numbers (G).
 | Duplicate With Joints into every matching hole at once | Fusion has none either (Forum [48]) |
 | A STEP insert that stays linked to its file (out of date when the file changes) | the insert is a one-off (insert-export.md); the occurrence check uses the file's path, size and a digest of its bytes |
 | A second occurrence of an assembly shows its nested components flat | instances flatten nested components (components.md known gap); the nested copies' solids are all there |
-| Selectable / Unselectable on a component (right-click) | not built: FreeCAD's Selectable switch of a body is not asked when the body sits in a component (the component passes the click on to it), so it needs a change in FreeCAD's C++ or a selection filter that would clash with the commands' own |
-| Opening a 300-part robot in under 30 s | 36 s at best here (see section 4; 27.9 - 29.5 s in the QA's two runs on a lighter load): most of it is FreeCAD's window side (a placement indicator made for each of 5400 origin planes and bodies; a mesh per occurrence) |
+| Opening a 300-part robot in under 30 s | 36 s at best here (see section 4; 27.9 - 29.5 s in the QA's two runs on a lighter load): most of it is FreeCAD's window side (a mesh per occurrence; the placement indicator made for each of 5400 origin planes and bodies is gone from the SciForge program 0.1.0-beta.3.1 on, about 8 s, section 4b) |
 | Occurrences that share one mesh (Fusion's are light) | an occurrence is a copy with its own solid and mesh (instances.py); FreeCAD's links would share the mesh but every SciForge tool works on copies |
 | Rows rebuilt in the browser in under 0.3 s on a 300-part robot | 0.42 s at best here (3300 rows made again; QA: 0.37 s); reading the design after a change: 0.30 s (QA: 0.21 s) |
 | A live Drive Joints dialog on a 300-part robot | 0.70 s a step at best here (software OpenGL; the timeline, looks and display tools read the whole design after each step) |

@@ -443,9 +443,8 @@ void ViewProviderPartExt::onChanged(const App::Property* prop)
         }
     }
     else if (prop == &ShowPlacement) {
-        pcPlacement->whichChild = (ShowPlacement.getValue() && Visibility.getValue())
-            ? SO_SWITCH_ALL
-            : SO_SWITCH_NONE;
+        // SCIFORGE: the indicator is made the first time it is shown (core-patches.md #18)
+        showPlacementIndicator(ShowPlacement.getValue() && Visibility.getValue());
     }
     else {
         // if the object was invisible and has been changed, recreate the visual

@@ -472,12 +472,22 @@ void ViewProviderDragger::attach(App::DocumentObject* pcObject)
 
     getAnnotation()->addChild(pcPlacement);
 
-    auto* pcAxisCrossKit = new Gui::SoFCPlacementIndicatorKit();
+    // SCIFORGE: the indicator itself is made when it is first shown (showPlacementIndicator,
+    // docs/sciforge/core-patches.md #18)
+}
 
-    auto* pcAnnotation = new So3DAnnotation();
-    pcAnnotation->addChild(pcAxisCrossKit);
+void ViewProviderDragger::showPlacementIndicator(bool show)
+{
+    // SCIFORGE: made on first use (docs/sciforge/core-patches.md #18)
+    if (show && pcPlacement->getNumChildren() == 0) {
+        auto* pcAxisCrossKit = new Gui::SoFCPlacementIndicatorKit();
 
-    pcPlacement->addChild(pcAnnotation);
+        auto* pcAnnotation = new So3DAnnotation();
+        pcAnnotation->addChild(pcAxisCrossKit);
+
+        pcPlacement->addChild(pcAnnotation);
+    }
+    pcPlacement->whichChild = show ? SO_SWITCH_ALL : SO_SWITCH_NONE;
 }
 
 void ViewProviderDragger::updateDraggerPosition()

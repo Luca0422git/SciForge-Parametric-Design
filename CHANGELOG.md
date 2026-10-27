@@ -5,6 +5,23 @@ its own section of this file (the release notes are made from it), so every rele
 section here whose heading is exactly its version number, like `## 0.1.0-beta` below. Known
 problems are in [docs/sciforge/known-issues.md](docs/sciforge/known-issues.md).
 
+## 0.1.0-beta.3.1
+
+**A full build after beta 3, for VEX robots.** The program itself was built again with one
+change to FreeCAD's own code, so it comes as a new installer: SciForge's **Update now**
+downloads and runs it (the AppImage: download the new one).
+
+### Improved
+
+- **Selectable/Unselectable** (right-click a body, mesh body or component in the browser, like
+  Fusion): it stays visible but can no longer be clicked in the 3D view, so the screws and
+  parts around a big frame are easy to pick. A small red mark on its icon shows it; the same
+  entry turns it back. An unselectable component covers every body in it. Saved with the
+  design, one Undo step; the browser still selects it.
+- **Big assemblies open faster**: FreeCAD made a placement indicator (the axis cross of Show
+  Placement) for every part and origin plane when a design opened, about 8 seconds of a
+  300-part robot; it is now made only when someone turns Show Placement on.
+
 ## 0.1.0-beta.3
 
 **The third beta.** Three new things: **stress simulation** (Fusion's Simulation workspace with

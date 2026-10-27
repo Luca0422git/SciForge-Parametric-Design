@@ -18,20 +18,26 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   the workflow). Newest session log "Patch 0.1.0-beta.2.2".
 - **Beta 3 (`0.1.0-beta.3`, this line of sessions): Auto Timeline, Static Stress simulation
   and VEX assemblies** (Luca 2026-10-26: "put the vex stuff in beta 3 ... one shot for beta 3").
-  **BUILT AND ON `develop` (2026-10-27 ~05:00 UTC), VERSION 0.1.0-beta.3; NOT RELEASED: waiting
-  for Luca's test and his go.** Everything is merged and pushed: the six builders (plan
-  `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`), the four QA
-  passes (engine, Auto Timeline, VEX, simulation workflow), the two journeys (VEX robot piece,
-  Auto Timeline bracket), the undo-step fix; session logs `docs/sciforge/sessions/beta3-*.md`,
-  `journey-*.md`. CHANGELOG, README, known issues, `docs/sciforge/vex.md` are written. CI
-  (#278, #279 green; later pushes in MEMORY's session log) also runs the Static Stress hand
-  calculations on FreeCAD for Windows (`tools/sciforge/windows_sim.sh`) and the GUI scenarios
-  in nine parts. **Release:** nothing compiled changed since 0.1.0-beta.2 (core id the same),
-  so Luca can publish with Actions > SciForge patch release (about half an hour; notes start
-  "Built on 0.1.0-beta.2's program"; Update now installs it) once the newest `develop` commit
-  is green; or a full build with the tag `sciforge-v0.1.0-beta.3` (his to push). Status:
-  [x] Static Stress engine + QA [x] SETUP tab [x] RESULTS tab [x] simulation QA [x] Auto
-  Timeline + QA [x] VEX + QA [x] journeys [x] docs / version [ ] released.
+  **PUBLISHED 2026-10-27 14:29 UTC** (pre-release), tag `sciforge-v0.1.0-beta.3` on `38d817f9`,
+  by the quick route: Luca, asked "quick route or full build?", answered "Do both the quick
+  route and the complex one". Patch release run 40517682799 (#5; its no-publish trial #4 was
+  green first), on CI #284 (all 14 jobs green). Release moved fac2005e..38d817f9 by the
+  workflow. Files: installer 495 MB, portable 422 MB, AppImage 827 MB, quick update 8 MB; the
+  notes start "Built on 0.1.0-beta.2.2's program" (the newest release with the same core).
+  What it holds: plan `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`,
+  session logs `docs/sciforge/sessions/beta3-*.md`, `journey-*.md`, CHANGELOG, `vex.md`.
+- **"The complex one" = `0.1.0-beta.3.1`, a FULL BUILD (2026-10-27, in progress):** the two VEX
+  items held for a compiled change. (1) Core patch #18: the placement indicator made when first
+  shown, not for each of a robot's ~5400 views (~8 s of opening; scenario
+  `vex_placement_indicator`, which expects it only on a SciForge program >= 0.1.0-beta.3.1).
+  (2) Selectable/Unselectable turned out NOT to need C++: inside a component a body's own
+  Selectable switch is undone by its steps' pick styles; switching the body's view and every
+  step's view works (`sciforge/selectable.py`, browser right-click, scenario `vex_selectable`,
+  36 checks). VERSION 0.1.0-beta.3.1 + CHANGELOG section. Route: develop green, then a full
+  build dry run (Actions > SciForge build on develop, publish off, ~4 h), then **Luca pushes the
+  tag `sciforge-v0.1.0-beta.3.1` from a Codespace** (a cloud session cannot push tags) and the
+  tag's build publishes. Status: [x] code [x] local tests [ ] CI green [ ] full build dry run
+  [ ] tag (Luca) [ ] published.
 - **VEX robotics: in beta 3** (above): STEP parts in large numbers, linked occurrences,
   Duplicate With Joints, and Align / Joint snapping to the centre of a square hole.
 - Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
@@ -1614,13 +1620,9 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
 
 (See outline section 12. Also:)
 
-- **Beta 3 release route:** Actions > SciForge patch release publishes 0.1.0-beta.3 in about
-  half an hour on beta.2's program (nothing compiled changed); a full build (tag
-  `sciforge-v0.1.0-beta.3`, ~4 h) is the other way. Which one?
-- **VEX speed, compiled part:** opening a 300-part robot could lose ~8 s more if FreeCAD built
-  each body's placement indicator only when it is shown (`ViewProviderDragger.cpp`), and the
-  Fusion "Selectable" switch for a body inside a component needs C++ too. Both need a full
-  build (and a core-patches entry); do you want them in a later release?
+- (Answered 2026-10-27: "Do both the quick route and the complex one": beta 3 went out by the
+  quick route; the compiled VEX speed change and Selectable come as the full build
+  0.1.0-beta.3.1, whose tag Luca pushes.)
 
 - Merge `sf/home-cloud-ai` (Home, places, AI connector, chat panel: M0-M4) into `develop`?
   The brief says to ask after M3; not merged without your OK.
@@ -1726,6 +1728,23 @@ More integration finds after the first push:
   away with the crash marker after a scenario that did not end cleanly. Lesson: when many
   scenarios fail in one CI part, look for the first one that was killed or crashed; the rest
   are usually its leftovers.
+- CI #284 green (all 14 jobs; GUI parts 44-58 min of 90: nine parts kept, the 66 min of #283
+  was the hang). On Windows the SPOOLES retry fired twice (CalculiX exit 0xC0000005, an access
+  violation in ccx 2.22's default solver); every check passed. If it gets frequent, solve with
+  SPOOLES first on Windows (Linux uses it anyway).
+- Published 0.1.0-beta.3 by the patch release workflow (trial #4 green first; it also checked
+  that SciForge's own Windows bundle ships ccx.exe and gmsh.exe: `create_bundle.sh` copies them
+  under `set -e`, and the Linux trial ran the 371 simulation checks on SciForge's AppImage).
+  The notes' first line says "if you have 0.1.0-beta.2.2 or a later patch": beta.2 / 2.1 users
+  get Update now too (same core); `make_release_files.patch_note` could name the oldest
+  release with that core (not done: it would have cost another test run).
+- Selectable/Unselectable, the "needs C++" note from the VEX builder was wrong. A body's own
+  Selectable off: a script in plain FreeCAD 1.1.4 could no longer pick a body in an App::Part,
+  but inside SciForge (real clicks) the body in a component stayed pickable while a root body
+  did not (why the two differ was not found). The body's steps carry their own SoPickStyle
+  (SHAPE) below the body's; switching every PartDesign::Feature's view too works in both
+  (experiments not kept). Pick resolution: `getViewProviderByPathFromHead`,
+  so `isSelectable()` is asked of the component (App::Part has no Selectable property).
 
 ### Session log: Patch 0.1.0-beta.2.2 (`develop`, 2026-10-26)
 

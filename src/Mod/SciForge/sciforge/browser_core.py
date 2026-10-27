@@ -257,6 +257,7 @@ def _folders(objects, active_body, component):
                 "body",
                 active=obj["name"] == active_body,
                 grounded=grounded,
+                unselectable=obj.get("selectable") is False,
             )
             if node["active"]:
                 node["tip"] = node["tip"] or "Active body: new features go here"
@@ -270,7 +271,15 @@ def _folders(objects, active_body, component):
                 ) + "Grounded: it cannot move"
             bodies.append(node)
         elif type_id in MESH_TYPES:
-            bodies.append(_item("mesh:", obj, "insert_mesh", "mesh_body"))
+            bodies.append(
+                _item(
+                    "mesh:",
+                    obj,
+                    "insert_mesh",
+                    "mesh_body",
+                    unselectable=obj.get("selectable") is False,
+                )
+            )
         elif type_id in CANVAS_TYPES:
             canvases.append(_item("canvas:", obj, "canvas", "canvas"))
         elif sciforge_type == "Decal":  # a picture on a face (decal.py), under its component
@@ -392,6 +401,7 @@ def _component_nodes(by_component, parent, active_body, active_component, seen):
             active=name == active_component,
             children=children,
             grounded=bool(obj.get("grounded")),  # the menu then offers Unground
+            unselectable=obj.get("selectable") is False,
         )
         if node["active"]:
             node["tip"] = node["tip"] or "Active component: new sketches and bodies go here"
@@ -460,6 +470,7 @@ def signature(tree):
         tree["tip"],
         tree.get("icon"),
         tree.get("locked", False),
+        tree.get("unselectable", False),
         tuple(signature(c) for c in tree["children"]),
     )
 
@@ -568,6 +579,7 @@ MENUS = {
         "Paste New",
         "-",
         "Show/Hide",
+        "Selectable/Unselectable",
         "Opacity Control",
         "Isolate",
         "Find in Window",
@@ -592,6 +604,7 @@ MENUS = {
         "Paste",
         "-",
         "Show/Hide",
+        "Selectable/Unselectable",
         "Opacity Control",
         "Isolate",
         "Find in Window",
@@ -689,6 +702,7 @@ MENUS = {
         "Edit Feature",
         "-",
         "Show/Hide",
+        "Selectable/Unselectable",
         "Opacity Control",
         "Find in Window",
         "Find in Timeline",
