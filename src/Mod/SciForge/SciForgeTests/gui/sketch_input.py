@@ -67,6 +67,8 @@ def menu_item(group_title, label):
                     QtCore.QTimer.singleShot(150, lambda: click(step, tries + 1))
                 return
             rect = menu.actionGeometry(action)
+            # from a neighbouring pixel: a pointer already on the spot sends no move
+            QtTest.QTest.mouseMove(menu, rect.center() + QtCore.QPoint(0, -3))
             QtTest.QTest.mouseMove(menu, rect.center())
             if action.menu() is not None:
                 # hovering opens a submenu (a click on it could close it again)
@@ -89,6 +91,11 @@ def menu_item(group_title, label):
     guard.setSingleShot(True)
     guard.timeout.connect(safety)
     guard.start(4000)
+    # A person's pointer is on the group's name when the menu opens. Qt drops a click on an
+    # entry when the pointer has not moved since the menu opened, and the pointer could still
+    # be on that entry from the last time the menu was used (CI #285: CREATE > Offset again,
+    # the menu closed and nothing ran).
+    QtTest.QTest.mouseMove(group.label, group.label.rect().center())
     group.label.click()  # the menu runs its own loop until it closes
     guard.stop()  # (a late guard would close the next menu)
     QtWidgets.QApplication.processEvents()

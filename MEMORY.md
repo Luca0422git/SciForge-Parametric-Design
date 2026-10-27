@@ -1745,6 +1745,15 @@ More integration finds after the first push:
   (SHAPE) below the body's; switching every PartDesign::Feature's view too works in both
   (experiments not kept). Pick resolution: `getViewProviderByPathFromHead`,
   so `isSelectable()` is asked of the component (App::Part has no Selectable property).
+- CI #285 red: `surface3_offset_patch` (CREATE > Offset used twice) failed about half the time
+  with this change, never before (9 of 9 old runs passed). Root cause in the test robot: Qt's
+  QMenu ignores a click on an entry when the pointer has not moved since the menu opened
+  (`hasMouseMoved`), and Qt's pointer was still on Offset from the first use (a QTest move to
+  the same pixel sends no event), so the menu closed and nothing ran; why this change made it
+  likelier was not found (timing). `sketch_input.menu_item` now points at the group's name
+  before opening the menu (as a person does) and reaches the entry from a neighbouring pixel:
+  5 of 5. A version that waited on the entry for the menu to light it failed 6 of 6 (it never
+  does without a move event): do not do that.
 
 ### Session log: Patch 0.1.0-beta.2.2 (`develop`, 2026-10-26)
 
