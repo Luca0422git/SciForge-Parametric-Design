@@ -68,6 +68,7 @@ NEED_WORDS = {
     "solid": "a solid body",
     "gui": "the SciForge window",
     "drawing": "a drawing",
+    "reference": "a rebuild going on (start_rebuild)",
 }
 # Tools that change the open designs rather than a design's history: no undo step.
 NOT_UNDO_STEPS = ("new_design", "close_design", "undo", "redo")

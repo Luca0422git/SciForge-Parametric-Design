@@ -2050,6 +2050,10 @@ def main():
         run = Run(folder)
         run_session(run, SESSION + FIX_SESSION, os.environ.get("SCIFORGE_HEADLESS_FILTER", ""))
         run_session(run, VERIFY_SESSION, os.environ.get("SCIFORGE_HEADLESS_FILTER", ""))
+        # --- at-tools --- (beta 3: Auto Timeline, every rebuild tool; rebuild_e2e.py)
+        from SciForgeTests.headless import rebuild_e2e
+
+        run_session(run, rebuild_e2e.RUNNER_SESSION, os.environ.get("SCIFORGE_HEADLESS_FILTER", ""))
         report["results"] = run.results
         report["missing"] = [] if os.environ.get("SCIFORGE_HEADLESS_FILTER") else missing_tools(run)
         report["tools_called"] = len(run.called)

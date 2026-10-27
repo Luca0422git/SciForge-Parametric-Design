@@ -66,6 +66,14 @@ COMPONENTS = EMPTY + [
 ]
 DRAWING = PLATE_HOLE + [call("create_drawing", base_view="Front", projected=["Top", "Right"])]
 SAVED = PLATE + [call("save_as", path="{tmp}/plate.FCStd")]
+# Auto Timeline (beta 3, at-tools): the plate with its hole exported to STEP and brought into a
+# new design as a body without a timeline (Body001), then made the reference of a rebuild
+REBUILD_IMPORTED = PLATE_HOLE + [
+    call("export", format="step", path="{tmp}/plate.step"),
+    call("new_design", name="Rebuild"),
+    call("import_file", path="{tmp}/plate.step"),
+]
+REBUILDING = REBUILD_IMPORTED + [call("start_rebuild", body="Body001")]
 
 # --- sim-core (beta 3): a Static Stress study of the plate, held at one end, pushed at the other
 SIM_STUDY = PLATE + [call("create_study")]
@@ -185,6 +193,16 @@ SETUPS = {
     "sim_held": SIM_HELD,
     "sim_ready": SIM_READY,
     "sim_solved": SIM_SOLVED,
+    # -- Auto Timeline (beta 3, at-tools): the plate with its hole as an imported STEP body --
+    "rebuild_imported": REBUILD_IMPORTED,
+    "rebuilding": REBUILDING,
+    "rebuilt": REBUILDING
+    + [
+        call("create_sketch", plane="XY", geometry=[{"rect": [0, 0, 60, 40]}]),
+        call("extrude", profile="Sketch1", distance=10),
+        call("create_sketch", plane="XY", offset=10, geometry=[{"circle": [30, 20, 4]}]),
+        call("hole", sketch="Sketch2", diameter=8, through_all=True),
+    ],
 }
 
 EXAMPLES = [
@@ -1004,5 +1022,35 @@ EXAMPLES = [
         "setup": "sim_study",
         "args": {"study": "Study 1 - Static Stress"},
         "note": "delete the study",
+    },
+    # -- Auto Timeline (beta 3, at-tools) -------------------------------------------------------
+    {
+        "tool": "start_rebuild",
+        "setup": "rebuild_imported",
+        "args": {"body": "Body001"},
+        "note": "the imported plate becomes the reference; Body002 is made for the rebuild",
+    },
+    {
+        "tool": "describe_reference",
+        "setup": "rebuilding",
+        "volatile": True,
+        "args": {},
+        "note": "the plate's features and a plan of tool calls",
+    },
+    {
+        "tool": "compare_to_reference",
+        "setup": "rebuilding",
+        "setup_extra": [
+            call("create_sketch", plane="XY", geometry=[{"rect": [0, 0, 60, 40]}]),
+            call("extrude", profile="Sketch1", distance=10),
+        ],
+        "args": {},
+        "note": "after the base plate: the hole is not cut yet (with the hole call to make it)",
+    },
+    {
+        "tool": "finish_rebuild",
+        "setup": "rebuilt",
+        "args": {},
+        "note": "the rebuild matches: it takes the original's name and place",
     },
 ]

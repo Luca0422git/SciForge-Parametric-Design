@@ -61,4 +61,5 @@ Done: Extrude1 Distance = 12.0. Bodies now: Body1: 28800 mm3, 60 x 40 x 12 mm.
 ## See also
 
 - Recipe: [parametric mounting plate](sciforge://docs/recipes/parametric-plate.md)
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

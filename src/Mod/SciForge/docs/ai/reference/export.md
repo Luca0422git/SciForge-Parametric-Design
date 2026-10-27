@@ -101,4 +101,5 @@ Not kept in this file:
 ## See also
 
 - Recipe: [enclosure with a lid](sciforge://docs/recipes/enclosure-with-lid.md)
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

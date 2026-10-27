@@ -193,6 +193,7 @@ def _doc_name(label):
 def state(host):
     doc = App.ActiveDocument
     out = {"gui": bool(host.gui), "design": doc is not None, "solid": False, "drawing": False}
+    out["reference"] = False  # (beta 3, at-tools: a rebuild going on: rebuild_tools)
     if doc is None:
         return out
     try:
@@ -205,6 +206,9 @@ def state(host):
             for o in doc.Objects
         )
     out["drawing"] = any(o.TypeId == "TechDraw::DrawPage" for o in doc.Objects)
+    out["reference"] = any(
+        getattr(o, "SciForgeType", "") == "RebuildReference" for o in doc.Objects
+    )
     return out
 
 

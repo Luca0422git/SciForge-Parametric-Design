@@ -352,6 +352,35 @@ patterns, primitives, gears and other tools with `expressions` (`{"distance": "w
 margin"}`). A formula uses parameter names, + - * / ( ) and units (mm, deg). See
 [the parametric plate](sciforge://docs/recipes/parametric-plate.md).
 
+## Rebuilding a part that has no timeline (Auto Timeline)
+
+A part that came in without a timeline (an imported STEP body shows one "Insert STEP" step; a
+mesh body has none) can be rebuilt as real timeline steps, so it becomes a part a person can
+change. Beyond Fusion (its Mesh to BRep gives a body without features). Four tools do it, in
+the category "Rebuild with a timeline":
+
+- `start_rebuild` (`body`): the part becomes the **reference**: its solid frozen in a hidden
+  object (drawn faint and see-through, never a body or a step, so it stays the target), the
+  original hidden, and a new empty body `<name> (rebuilt)` made at its place, active. A mesh
+  must be watertight; it is turned into a solid of flat facets first.
+- `describe_reference`: the part read as numbers: base shape, features (holes, pockets,
+  bosses, patterns, fillets, chamfers), a **plan** of tool calls in Fusion's order whose
+  arguments pass the tools' own checks, what could not be read, a confidence.
+- `compare_to_reference` (after every feature; changes nothing): `match` (common volume /
+  union; 1 is identical), the regions of **missing** material (in the original, not in the
+  rebuild) and **extra** material (in the rebuild, not in the original: a hole not cut yet
+  is extra material shaped like a cylinder) with what each looks like and, when certain,
+  `fix`: the call that makes it; the faces not matched yet with selectors; `deviation`;
+  `done`; and a `verdict` that says what to do next. In the window the differences show in
+  the 3D view: missing red, extra green.
+- `finish_rebuild`: when done, the rebuild takes the original's name, component and place;
+  the original is deleted or kept hidden (`keep_original`); one undo step. It refuses a
+  rebuild that is not done unless `even_if_different` is given.
+
+The whole loop with real calls: [rebuilding a part](sciforge://docs/recipes/reverse-engineer.md).
+A person starts it from a body's right-click, **Rebuild with Timeline (AI)...**: SciForge
+starts the rebuild and hands you a message naming the body; carry on from describe_reference.
+
 ## A good way to work
 
 1. Look first: `inspect_design` (or `list_designs`, `new_design`, `open_design`). It answers

@@ -118,5 +118,6 @@ The answer:
 ## See also
 
 - Recipe: [a pair of meshing spur gears](sciforge://docs/recipes/gear-pair.md)
+- Recipe: [rebuild a part that has no timeline (reverse engineering)](sciforge://docs/recipes/reverse-engineer.md)
 - Recipe: [stepped shaft with a keyway](sciforge://docs/recipes/shaft-with-keyway.md)
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

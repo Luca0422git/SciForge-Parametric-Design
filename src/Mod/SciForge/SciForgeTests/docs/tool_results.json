@@ -7403,5 +7403,431 @@
    "text": "Done: Study 1 - Static Stress deleted with its constraints, loads and results.",
    "is_error": false
   }
+ },
+ "start_rebuild#1": {
+  "setup": "rebuild_imported",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "offset": 10,
+     "geometry": [
+      {
+       "circle": [
+        30,
+        20,
+        4
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "tool": "hole",
+    "args": {
+     "sketch": "Sketch2",
+     "diameter": 8,
+     "through_all": true
+    }
+   },
+   {
+    "tool": "export",
+    "args": {
+     "format": "step",
+     "path": "{tmp}/plate.step"
+    }
+   },
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Rebuild"
+    }
+   },
+   {
+    "tool": "import_file",
+    "args": {
+     "path": "{tmp}/plate.step"
+    }
+   }
+  ],
+  "args": {
+   "body": "Body001"
+  },
+  "note": "the imported plate becomes the reference; Body002 is made for the rebuild",
+  "answer": {
+   "text": "Done: AI: Start rebuild of Body001. Body001 is the reference now (id 'RebuildReference': frozen, drawn faint; 7 faces, 23497.35 mm3, 60 x 40 x 10 mm). The new empty body 'Body001 (rebuilt)' is active: build the rebuild there. Its id is 'Body002'. Next: describe_reference (the part's features and a plan of tool calls), build the plan step by step, compare_to_reference after every feature, finish_rebuild when it says done. Bodies now: Body001: 23497.3 mm3, 60 x 40 x 10 mm.",
+   "is_error": false
+  }
+ },
+ "describe_reference#1": {
+  "setup": "rebuilding",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "offset": 10,
+     "geometry": [
+      {
+       "circle": [
+        30,
+        20,
+        4
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "tool": "hole",
+    "args": {
+     "sketch": "Sketch2",
+     "diameter": 8,
+     "through_all": true
+    }
+   },
+   {
+    "tool": "export",
+    "args": {
+     "format": "step",
+     "path": "{tmp}/plate.step"
+    }
+   },
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Rebuild"
+    }
+   },
+   {
+    "tool": "import_file",
+    "args": {
+     "path": "{tmp}/plate.step"
+    }
+   },
+   {
+    "tool": "start_rebuild",
+    "args": {
+     "body": "Body001"
+    }
+   }
+  ],
+  "args": {},
+  "note": "the plate's features and a plan of tool calls",
+  "answer": {
+   "text": "Body001, read from its 7 faces: 1 feature, a plan of 4 steps. Build the plan in the active body 'Body001 (rebuilt)', compare_to_reference after each feature.\n{\n \"reference\": \"RebuildReference\",\n \"original\": \"Body001\",\n \"original_kind\": \"body\",\n \"rebuilt\": \"Body002\",\n \"coordinates\": \"design\",\n \"summary\": {\n  \"volume\": 23497.345175,\n  \"area\": 6950.796447,\n  \"bbox\": [0.0, 0.0, 0.0, 60.0, 40.0, 10.0],\n  \"size\": [60.0, 40.0, 10.0],\n  \"solids\": 1,\n  \"faces\": 7,\n  \"edges\": 15,\n  \"surfaces\": {\"plane\": 6, \"cylinder\": 1}\n },\n \"base\": {\n  \"kind\": \"extrude\",\n  \"plane\": \"XY\",\n  \"direction\": \"Z\",\n  \"offset\": 0.0,\n  \"distance\": 10.0,\n  \"from\": 0.0,\n  \"to\": 10.0,\n  \"profile\": [\n   [\n    {\"line\": [0.0, 40.0, 0.0, 0.0]},\n    {\"line\": [0.0, 0.0, 60.0, 0.0]},\n    {\"line\": [60.0, 0.0, 60.0, 40.0]},\n    {\"line\": [60.0, 40.0, 0.0, 40.0]}\n   ]\n  ],\n  \"profile_words\": \"rectangle 60 x 40\",\n  \"levels\": [0.0, 10.0],\n  \"steps\": [1, 2]\n },\n \"features\": [\n  {\n   \"id\": \"F1\",\n   \"kind\": \"hole\",\n   \"diameter\": 8.0,\n   \"through\": true,\n   \"axis\": [0.0, 0.0, -1.0],\n   \"start\": [30.0, 20.0, 10.0],\n   \"steps\": [3, 4],\n   \"face_count\": 1\n  }\n ],\n \"plan\": [\n  {\n   \"step\": 1,\n   \"tool\": \"create_sketch\",\n   \"args\": {\"plane\": \"XY\", \"geometry\": [{\"rect\": [0.0, 0.0, 60.0, 40.0]}]},\n   \"why\": \"The base profile (rectangle 60 x 40) on the XY plane.\",\n   \"features\": [],\n   \"id\": \"Sketch1\"\n  },\n  {\n   \"step\": 2,\n   \"tool\": \"extrude\",\n   \"args\": {\"profile\": \"Sketch1\", \"distance\": 10.0},\n   \"why\": \"Extrude it 10 mm: the base shape.\",\n   \"features\": [],\n   \"id\": \"Extrude1\",\n   \"uses\": {\"profile\": 1}\n  },\n  {\n   \"step\": 3,\n   \"tool\": \"create_sketch\",\n   \"args\": {\"plane\": \"XY\", \"offset\": 10.0, \"geometry\": [{\"circle\": [30.0, 20.0, 4.0]}]},\n   \"why\": \"The centre of the hole d 8 on the XY plane at 10 mm, where the hole starts.\",\n   \"features\": [],\n   \"id\": \"Sketch2\"\n  },\n  {\n   \"step\": 4,\n   \"tool\": \"hole\",\n   \"args\": {\"sketch\": \"Sketch2\", \"diameter\": 8.0, \"through_all\": true},\n   \"why\": \"Drill the hole d 8 through the part.\",\n   \"features\": [\"F1\"],\n   \"id\": \"Hole1\",\n   \"uses\": {\"sketch\": 3}\n  }\n ],\n \"unrecognized\": [],\n \"confidence\": 1.0,\n \"notes\": []\n}",
+   "is_error": false
+  }
+ },
+ "compare_to_reference#1": {
+  "setup": "rebuilding",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "offset": 10,
+     "geometry": [
+      {
+       "circle": [
+        30,
+        20,
+        4
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "tool": "hole",
+    "args": {
+     "sketch": "Sketch2",
+     "diameter": 8,
+     "through_all": true
+    }
+   },
+   {
+    "tool": "export",
+    "args": {
+     "format": "step",
+     "path": "{tmp}/plate.step"
+    }
+   },
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Rebuild"
+    }
+   },
+   {
+    "tool": "import_file",
+    "args": {
+     "path": "{tmp}/plate.step"
+    }
+   },
+   {
+    "tool": "start_rebuild",
+    "args": {
+     "body": "Body001"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   }
+  ],
+  "args": {},
+  "note": "after the base plate: the hole is not cut yet (with the hole call to make it)",
+  "answer": {
+   "text": "Match 0.9791 (1 is identical); 6 of 7 faces of the original matched. Next: A round hole about 8 mm across, 10 deep (along Z) is not cut yet, at (30, 20) (the hole call is ready in groups[0].fix). Fix that, then compare_to_reference again.\n{\n \"reference\": \"RebuildReference\",\n \"rebuilt\": \"Body002\",\n \"frame\": \"design\",\n \"tolerance\": 0.001,\n \"match\": 0.979056,\n \"volume\": {\n  \"reference\": 23497.345175,\n  \"rebuilt\": 24000.0,\n  \"common\": 23497.345175,\n  \"missing\": 0,\n  \"extra\": 502.654825\n },\n \"missing\": [],\n \"extra\": [\n  {\n   \"volume\": 502.654825,\n   \"center\": [30.0, 20.0, 5.0],\n   \"bbox\": [26.0, 16.0, 0.0, 34.0, 24.0, 10.0],\n   \"looks_like\": \"a round hole about 8 mm across, 10 deep\",\n   \"kind\": \"cylinder\",\n   \"diameter\": 8.0,\n   \"depth\": 10.0,\n   \"axis\": [0.0, 0.0, -1.0],\n   \"at\": [30.0, 20.0, 5.0],\n   \"ends\": [[30.0, 20.0, 10.0], [30.0, 20.0, 0.0]],\n   \"fix\": {\n    \"tool\": \"hole\",\n    \"args\": {\n     \"face\": {\"type\": \"plane\", \"normal\": [0.0, 0.0, 1.0], \"count\": 1},\n     \"at\": [30.0, 20.0, 10.0],\n     \"diameter\": 8.0,\n     \"through_all\": true\n    }\n   }\n  }\n ],\n \"regions\": {\"missing\": 0, \"extra\": 1},\n \"faces\": {\n  \"reference\": 7,\n  \"matched\": 6,\n  \"rebuilt\": 6,\n  \"rebuilt_matched\": 4,\n  \"unmatched_reference\": [\n   {\n    \"kind\": \"cylinder\",\n    \"describe\": \"a round hole face 8 mm across along Z at (30, 20) (251.3 mm2)\",\n    \"selector\": {\"type\": \"cylinder\", \"radius\": 4.0, \"count\": 1},\n    \"area\": 251.327412\n   }\n  ],\n  \"unmatched_rebuilt\": [\n   {\n    \"kind\": \"plane\",\n    \"describe\": \"a flat face 60 x 40 facing -Z at z = 0 (2400 mm2)\",\n    \"selector\": {\"type\": \"plane\", \"normal\": [0.0, 0.0, -1.0], \"count\": 1},\n    \"area\": 2400.0\n   },\n   {\n    \"kind\": \"plane\",\n    \"describe\": \"a flat face 60 x 40 facing +Z at z = 10 (2400 mm2)\",\n    \"selector\": {\"type\": \"plane\", \"normal\": [0.0, 0.0, 1.0], \"count\": 1},\n    \"area\": 2400.0\n   }\n  ]\n },\n \"deviation\": {\"max\": 5.0, \"mean\": 0.05077},\n \"done\": false,\n \"method\": \"exact\",\n \"size_notes\": [],\n \"groups\": [\n  {\n   \"side\": \"extra\",\n   \"kind\": \"cylinder\",\n   \"count\": 1,\n   \"volume\": 502.654825,\n   \"says\": \"a round hole about 8 mm across, 10 deep (along Z) is not cut yet, at (30, 20)\",\n   \"fix\": {\n    \"tool\": \"hole\",\n    \"args\": {\n     \"face\": {\"type\": \"plane\", \"normal\": [0.0, 0.0, 1.0], \"count\": 1},\n     \"at\": [30.0, 20.0, 10.0],\n     \"diameter\": 8.0,\n     \"through_all\": true\n    }\n   }\n  }\n ],\n \"verdict\": \"Match 0.9791 (1 is identical); 6 of 7 faces of the original matched. Next: A round hole about 8 mm across, 10 deep (along Z) is not cut yet, at (30, 20) (the hole call is ready in groups[0].fix). Fix that, then compare_to_reference again.\"\n}",
+   "is_error": false
+  }
+ },
+ "finish_rebuild#1": {
+  "setup": "rebuilt",
+  "setup_calls": [
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Example"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ],
+       "name": "base"
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "offset": 10,
+     "geometry": [
+      {
+       "circle": [
+        30,
+        20,
+        4
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "tool": "hole",
+    "args": {
+     "sketch": "Sketch2",
+     "diameter": 8,
+     "through_all": true
+    }
+   },
+   {
+    "tool": "export",
+    "args": {
+     "format": "step",
+     "path": "{tmp}/plate.step"
+    }
+   },
+   {
+    "tool": "new_design",
+    "args": {
+     "name": "Rebuild"
+    }
+   },
+   {
+    "tool": "import_file",
+    "args": {
+     "path": "{tmp}/plate.step"
+    }
+   },
+   {
+    "tool": "start_rebuild",
+    "args": {
+     "body": "Body001"
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "geometry": [
+      {
+       "rect": [
+        0,
+        0,
+        60,
+        40
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "tool": "extrude",
+    "args": {
+     "profile": "Sketch1",
+     "distance": 10
+    }
+   },
+   {
+    "tool": "create_sketch",
+    "args": {
+     "plane": "XY",
+     "offset": 10,
+     "geometry": [
+      {
+       "circle": [
+        30,
+        20,
+        4
+       ]
+      }
+     ]
+    }
+   },
+   {
+    "tool": "hole",
+    "args": {
+     "sketch": "Sketch2",
+     "diameter": 8,
+     "through_all": true
+    }
+   }
+  ],
+  "args": {},
+  "note": "the rebuild matches: it takes the original's name and place",
+  "answer": {
+   "text": "Done: AI: Finish rebuild. Body001 is now the rebuilt part (id 'Body002') with 4 timeline steps; the original was deleted, the reference removed. Bodies now: Body001: 23497.3 mm3, 60 x 40 x 10 mm.",
+   "is_error": false
+  }
  }
 }

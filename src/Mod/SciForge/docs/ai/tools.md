@@ -2,7 +2,7 @@
 
 <!-- Generated from the tool catalogue (src/Mod/SciForge/sciforge/ai/catalog) by tools/sciforge/make_ai_docs.py: do not edit by hand. The unit test test_ai_docs_contract.py fails when this file and the catalogue differ. -->
 
-SciForge offers 127 tools to AI apps (through MCP, the built-in chat panel and the command line), listed here in the order tools/list gives them. All lengths are in millimetres (mm) and all angles in degrees. Every tool that changes the design is one undo step named "AI: ..."; errors come back as plain sentences. Each tool has a reference page (reference/<tool>.md: every argument, the answer, the errors and a complete example with its real answer); the resource sciforge://tools has every schema as JSON.
+SciForge offers 131 tools to AI apps (through MCP, the built-in chat panel and the command line), listed here in the order tools/list gives them. All lengths are in millimetres (mm) and all angles in degrees. Every tool that changes the design is one undo step named "AI: ..."; errors come back as plain sentences. Each tool has a reference page (reference/<tool>.md: every argument, the answer, the errors and a complete example with its real answer); the resource sciforge://tools has every schema as JSON.
 
 ## All tools
 
@@ -135,6 +135,10 @@ SciForge offers 127 tools to AI apps (through MCP, the built-in chat panel and t
 | [`solve_study`](sciforge://docs/reference/solve_study.md) | Solve study | Simulation | SIMULATION > SETUP > SOLVE > Solve | changes the design (one undo step) | an open design |
 | [`study_results`](sciforge://docs/reference/study_results.md) | Study results | Simulation | SIMULATION > RESULTS (legend, Show Min / Max, Reaction Force, Results Details) | read-only | an open design |
 | [`delete_study`](sciforge://docs/reference/delete_study.md) | Delete study | Simulation | SIMULATION > browser > study > Delete | changes the design (one undo step), destructive | an open design |
+| [`start_rebuild`](sciforge://docs/reference/start_rebuild.md) | Start rebuild | Rebuild with a timeline | Browser: right-click a body > Rebuild with Timeline (AI)... (beyond Fusion) | changes the design (one undo step) | an open design |
+| [`describe_reference`](sciforge://docs/reference/describe_reference.md) | Describe reference | Rebuild with a timeline | Browser: right-click a body > Rebuild with Timeline (AI)... (beyond Fusion) | read-only | an open design, a rebuild going on (start_rebuild) |
+| [`compare_to_reference`](sciforge://docs/reference/compare_to_reference.md) | Compare to reference | Rebuild with a timeline | Rebuild > Compare with Reference (beyond Fusion) | read-only | an open design, a rebuild going on (start_rebuild) |
+| [`finish_rebuild`](sciforge://docs/reference/finish_rebuild.md) | Finish rebuild | Rebuild with a timeline | Rebuild > Finish Rebuild (beyond Fusion) | changes the design (one undo step), destructive | an open design, a rebuild going on (start_rebuild) |
 
 ## Help
 
@@ -307,6 +311,13 @@ SciForge offers 127 tools to AI apps (through MCP, the built-in chat panel and t
 - [`solve_study`](sciforge://docs/reference/solve_study.md): Solve a study on this computer (Gmsh meshes it, CalculiX solves it; Fusion solves in Autodesk's cloud): seconds for a simple part, minutes for a fine mesh; SciForge waits until it is done (timeout, seconds: then it gives up).
 - [`study_results`](sciforge://docs/reference/study_results.md): The results of a study's last solve as numbers: the minimum and maximum of every result (safety factor, von Mises, 1st / 3rd principal and the stress components in MPa, displacement in mm, strain) with where they are [x, y, z] mm, per body (material, largest stress and displacement, lowest safety factor), the reaction force at every constraint (N), the mesh, and the verdict in a sentence (lowest safety factor against target: "lowest safety factor 1.4 at (x, y, z) on Body1: below 2"; below 1 the part would bend for good).
 - [`delete_study`](sciforge://docs/reference/delete_study.md): Delete a study with its constraints, loads, mesh controls and results (one undo step).
+
+## Rebuild with a timeline
+
+- [`start_rebuild`](sciforge://docs/reference/start_rebuild.md): Start rebuilding a part that has no timeline as real, editable timeline steps (Auto Timeline): an imported STEP body, any solid body, or a mesh body (made into a solid first; an open or broken mesh is refused).
+- [`describe_reference`](sciforge://docs/reference/describe_reference.md): What the reference of a rebuild is made of, read by SciForge from its faces: summary (volume, area, size, counts, the kinds of faces), base (the base shape: an extrude with its plane, profile and distance, a revolve, a box...), features (holes, counterbores, pockets, bosses, slots, fillets, chamfers, patterns, each with its numbers and the faces it explains), plan (tool calls in Fusion's order: base shape, cuts and bosses, holes, patterns, chamfers, fillets last; each step's args pass the tool's own check, so send them as they are, adjusting ids the answers give), unrecognized (faces it could not read, with selectors and why), confidence (0..1) and notes.
+- [`compare_to_reference`](sciforge://docs/reference/compare_to_reference.md): How far the rebuilt body is from the reference, to call after every feature: match (common volume / union volume; 1 is identical), volume (reference, rebuilt, common, missing, extra in mm3), missing (material of the original the rebuild lacks) and extra (material the rebuild has and the original does not: a hole not cut yet is extra material shaped like a cylinder), each region with its volume, centre, box, kind, what it looks like ('a round hole about 6 mm across, 10 deep', 'a rounded edge, radius about 2', 'a block 10 x 5 x 3') and, when SciForge is sure, fix: the tool call that makes it (a Single Hole, a fillet of exactly those edges); groups (equal regions together, with one fix for all of them); faces (how many of the original's faces the rebuild matches by geometry, and the unmatched ones of each side with a description and a selector); deviation (how far the surfaces are apart, max and mean, mm); size_notes; done (match >= 0.999, every face of the original matched and none of the rebuild left over); and verdict: what to do next, in words.
+- [`finish_rebuild`](sciforge://docs/reference/finish_rebuild.md): Finish a rebuild: the rebuilt body takes the original's name, component and place, with its timeline; the original (the featureless body or the mesh body) is deleted, or kept hidden as '<name> (original)' with keep_original: true; the reference is removed (keep_reference: true keeps it, hidden).
 
 ## Shared rules
 

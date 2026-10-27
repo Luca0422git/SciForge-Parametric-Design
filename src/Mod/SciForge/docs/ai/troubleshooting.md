@@ -270,3 +270,52 @@ Trust the numbers. `render` and `screenshot` are pictures at one size and angle;
 bounding boxes and `query_geometry` facts are exact. A body that looks right can be several
 pieces (`check_design` says so) or have a sliver; a body that looks wrong can be a camera
 angle. [checking.md](sciforge://docs/checking.md) has the routine.
+
+## Rebuilding a part (Auto Timeline)
+
+The rebuild tools say plainly what is missing. Before `start_rebuild` there is nothing to
+describe, compare or finish; a body without a solid (the new design's empty `Body`) cannot be
+rebuilt; a body already being rebuilt is not started twice (carry on in its rebuilt body).
+
+```json sciforge-calls
+[
+  {"tool": "new_design", "args": {"name": "RebuildTrouble"}},
+  {"tool": "describe_reference", "args": {},
+   "expect": {"error": true, "contains": ["No rebuild is going on", "start_rebuild"]}},
+  {"tool": "start_rebuild", "args": {"body": "Body"},
+   "expect": {"error": true, "contains": ["has no solid to rebuild"]}},
+  {"tool": "create_sketch", "args": {"plane": "XY", "geometry": [{"rect": [0, 0, 30, 20]}]}},
+  {"tool": "extrude", "args": {"profile": "Sketch1", "distance": 5}},
+  {"tool": "start_rebuild", "args": {"body": "Body"},
+   "expect": {"contains": ["is the reference now", "Its id is 'Body001'"]}},
+  {"tool": "start_rebuild", "args": {"body": "Body"},
+   "expect": {"error": true, "contains": ["is already being rebuilt"]}},
+  {"tool": "finish_rebuild", "args": {},
+   "expect": {"error": true, "contains": ["Not finished", "still empty",
+     "even_if_different"]}}
+]
+```
+
+- **finish_rebuild says "Not finished"**: it compared first and the rebuild is not done; its
+  answer is compare's verdict. Fix what it lists, or give `even_if_different: true` when the
+  person accepts the rebuild as it is (a close rebuild of a mesh).
+- **The verdict keeps naming a few faces** while no material differs ("No material differs by
+  more than a sliver, but 2 faces ... are not matched"): a size or place is slightly off
+  (6.02 instead of 6), or the rebuild splits a face differently (two coplanar faces left
+  unmerged). Compare the face's description with your step's numbers; `query_geometry` on
+  the rebuild shows its faces.
+- **A plan step fails**: read the sentence as for any tool (the sections above); the plan's
+  ids are the ones SciForge will give, so a step that failed or got another id changes the
+  ids of the later steps that name it (`uses` lists them). compare_to_reference afterwards
+  says what that step should have made.
+- **A mesh is refused** ("not watertight"): the mesh has holes or loose triangles; the person
+  repairs it first (MESH tab > Repair), then starts again.
+- **The match stays just under 1 on a mesh**: a mesh is flat facets, so a round hole of the
+  mesh is a polygon; the faces are matched within the mesh's tolerance and `done` comes when
+  every face is within it. Build round holes anyway (the person wants a real part).
+- **The verdict starts "(Volumes sampled, ...)"**: OpenCASCADE could not split the two parts
+  by each other (a flaw in the imported solid, or faces that almost but not quite lie on each
+  other), so compare measured the volumes along rays (about 1 % exact) and lists no regions.
+  The faces not matched yet still say where the parts differ; `check_design` on the rebuild
+  finds a step that left a sliver. Once the rebuild is right, its faces match the original's
+  and compare needs no split at all.
