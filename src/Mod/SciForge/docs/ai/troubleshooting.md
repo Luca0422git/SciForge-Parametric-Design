@@ -324,6 +324,24 @@ rebuilt; a body already being rebuilt is not started twice (carry on in its rebu
 - **The person wants to stop the rebuild** (the wrong body, or not now): `delete_step` the
   reference (its id is in start_rebuild's answer): the original is shown again, as it was.
   The rebuilt body stays; `delete_bodies` it if the person does not want it.
+- **The base is not read** (`base` is `none`: free-form faces, or no axis fits): the plan has
+  only the features, and their steps need the base (a hole there answers "there is no solid
+  ... to drill into"). Build the base yourself first (the notes name the axis most of the
+  part fits and list the faces that do not), then the plan, then compare.
+- **A fillet or chamfer of the plan is "too big here"** (the largest that fits is much
+  smaller) and compare then shows small pieces of material along those edges: the original
+  rounded the edges before a later cut trimmed the round (the plan rounds last). Do not take
+  the smaller value: make it with the plan's value before that cut (`roll_timeline` with
+  `before` the cut, the fillet, `roll_timeline` to `end`), then compare again; if it still does
+  not fit, finish with `even_if_different` and say why.
+- **A plan step's selector picks more edges than it expects** ("picked 5 edges, expected 1"):
+  the rebuild differs a little from the original there (an earlier step came out slightly
+  different: compare says where). `query_geometry` with the selector lists what it picks:
+  take the `ref` of the edge at the plan's place, or leave the step and let compare's fixes
+  (with refs on the rebuild) take over.
+- **describe_reference takes half a minute or more** on a big part (400 faces and more):
+  OpenCASCADE's defeaturing cannot be interrupted; wait for the answer (do not call it again
+  meanwhile). Its notes say when the time budget ran out and what was skipped.
 - **finish_rebuild kept the original** ("kept (hidden) instead of deleted: ... still use it"):
   joints, patterns and sketches that used the original moved onto the rebuild; the ones
   named could not (they use something of the original the rebuild has not). Point them at

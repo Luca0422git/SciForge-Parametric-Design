@@ -634,9 +634,13 @@ def verdict(result, limit=3):
     matched = faces.get("matched", 0)
     left_over = len(faces.get("unmatched_rebuilt", []))
     if result.get("empty"):
+        # (beta 3 QA: "its step 1 is the base" also when describe_reference could not read the
+        # base: that plan starts with a hole, which fails on the empty body)
         return (
-            "The rebuilt body is still empty: build the base shape first (describe_reference "
-            "gives the plan; its step 1 is the base), then compare_to_reference again."
+            "The rebuilt body is still empty: build the base shape first (the plan of "
+            "describe_reference starts with it; when it could not read the base, its notes say "
+            "to build it yourself, and the plan's steps need it), then compare_to_reference "
+            "again."
         )
     if result.get("done"):
         return (
@@ -824,6 +828,12 @@ def keys_between(count, low, high):
 
 # -- the same words for a person (the dialogs) -------------------------------------------------
 _PERSON_WORDS = (
+    (
+        " (the plan of describe_reference starts with it; when it could not read the base, its "
+        "notes say to build it yourself, and the plan's steps need it), then "
+        "compare_to_reference again.",
+        ", then Compare Again.",
+    ),
     (
         " (describe_reference gives the plan; its step 1 is the base), then "
         "compare_to_reference again.",

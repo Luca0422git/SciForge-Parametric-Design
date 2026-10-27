@@ -53,6 +53,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
   still empty ("build the base shape first"): an AI would build the plan a second time.
 * two designs: a rebuild going on in another open design: the tools said "no rebuild going
   on: call start_rebuild" (a second rebuild in the wrong design); now they name it.
+* free form: a forged lever (base not read): its plan's holes failed with FreeCAD's "No base
+  set, sketch support is not Part::Feature" and compare said "its step 1 is the base" (a hole).
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -1317,6 +1319,42 @@ def two_designs(agent, folder):
     agent.check("two designs: after switch_design it compares", not error, text[:200])
 
 
+# -- a free-form part (its base cannot be read): what the AI reads ------------------------------
+def free_form(agent, folder):
+    here = os.path.dirname(os.path.realpath(__file__))  # (the module may be linked in)
+    lever = os.path.normpath(
+        os.path.join(here, "..", "..", "..", "..", "..", "data", "examples", "Schenkel.stp")
+    )
+    if not os.path.isfile(lever):  # (an installed copy of the module: no repository)
+        return
+    agent.call("new_design", {"name": "QaLever"})
+    agent.call("import_file", {"path": lever})
+    agent.call("start_rebuild", {"body": "Body001"})
+    text, error = agent.call("describe_reference", {})
+    data = _json(text) or {}
+    plan = data.get("plan") or []
+    notes = " ".join(data.get("notes") or [])
+    first = next((st for st in plan if st["tool"] == "hole"), None)
+    hole_text = ""
+    if first is not None:
+        for step in plan[: plan.index(first) + 1]:
+            hole_text, _error = agent.call(step["tool"], step["args"])
+    compare, _error = agent.call("compare_to_reference", {})
+    agent.check(
+        "free form: the forged lever's base is said not read, a hole of its plan says the "
+        'body has no solid yet (it said "No base set, sketch support is not Part::Feature") '
+        'and compare says to build the base yourself (it said "its step 1 is the base": a '
+        "hole)",
+        (data.get("base") or {}).get("kind") == "none"
+        and "build it yourself" in notes
+        and "no solid" in hole_text
+        and "No base set" not in hole_text
+        and "build it yourself" in compare
+        and "step 1" not in compare,
+        (notes[:200], hole_text[:200], compare[:300]),
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -1341,6 +1379,7 @@ CHECKS = (
     linked_source,
     rolled_back,
     two_designs,
+    free_form,
 )
 
 

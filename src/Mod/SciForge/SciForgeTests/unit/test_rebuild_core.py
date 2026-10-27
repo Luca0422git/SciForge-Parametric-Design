@@ -287,6 +287,14 @@ class Groups(unittest.TestCase):
         empty = core.verdict({"empty": True, "faces": {}})
         self.assertIn("still empty", empty)
         self.assertIn("describe_reference", empty)
+        # (beta 3 QA) no "step 1 is the base": a plan whose base was not read starts with a
+        # hole; the window says it without the tools' names
+        self.assertNotIn("step 1", empty)
+        self.assertIn("build it yourself", empty)
+        self.assertEqual(
+            core.person_words(empty),
+            "The rebuilt body is still empty: build the base shape first, then Compare Again.",
+        )
 
     def test_only_faces_left(self):
         result = {

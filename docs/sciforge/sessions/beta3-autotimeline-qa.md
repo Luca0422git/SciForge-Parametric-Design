@@ -121,6 +121,21 @@ Commits on `sf/autotimeline-qa` (oldest first):
 31. A rebuild going on in another open design is named when the active one has none (the
     tools said "call start_rebuild": a second rebuild in the wrong design). Check
     `two_designs`.
+32. at-recognize's known gaps, said as clear sentences: a part whose base is not read (the
+    forged lever): its plan's holes failed with FreeCAD's "No base set, sketch support is
+    not Part::Feature" (now "there is no solid in ... to drill into: build its base shape
+    first") and compare said "its step 1 is the base" (a hole; now: build it yourself); the
+    fillet made before a cut, the selector that picks 5 edges and the slow describe have
+    troubleshooting entries. Check `free_form`, unit test.
+
+## at-recognize's known gaps, as an AI and a person meet them (final merge abda39eb)
+
+| Gap | The AI reads | The person reads (window) |
+|---|---|---|
+| Free-form faces (the forged lever, 409 faces) | describe 1.9 s: base none, the note "build it yourself (look at render and query_geometry), then follow the rest of the plan", the faces in unrecognized; a hole of the plan: "there is no solid in ... to drill into: build its base shape first" | Compare: "The rebuilt body is still empty: build the base shape first, then Compare Again." |
+| A fillet made before a cut that trims it (the Y rod mount) | the fillet step: "Radius 3.99712 mm is too big here ... Largest radius found that fits here: 0.20 mm ... SciForge did not build a smaller value"; compare: four small pieces of material, no fix; troubleshooting says what to do (the fillet before the cut) | Compare lists the four pieces of material |
+| A fillet selector that finds 5 edges (the excavator bucket) | "selector {...} picked 5 edges, expected 1: Edge36, Edge81, ..."; the note that two fillets' edges were not found; compare: 0.948 mm shallower along Y and a thin piece of extra material; troubleshooting entry | Compare says the same in words |
+| A large connector (434 faces) | describe 31 s (no progress meanwhile): base none, "Along Z, 96 % of the part's area ... fits an extrude ... start from an extrude along Z", "the time budget was spent"; troubleshooting: wait | the AI's call runs half a minute |
 
 `SciForgeTests/headless/rebuild_qa.py` is run by `rebuild_e2e.main()` (so by
 `run_tests.sh --only headless / base`); `SCIFORGE_REBUILD_FILTER=qa` runs only it. On the code
