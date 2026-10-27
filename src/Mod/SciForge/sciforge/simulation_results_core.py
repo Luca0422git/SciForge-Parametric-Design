@@ -201,6 +201,17 @@ def fmt(value, digits=4):
     return sim.fmt(value, digits)
 
 
+def clean_reactions(found, tol=1e-6):
+    """{label: (fx, fy, fz)} with the solver's rounding noise taken away: a part within
+    `tol` of the largest part of them all is 0 (a 50 N reaction showed "Y 1.3e-7, Z -5e-6")."""
+    largest = max([abs(c) for v in found.values() for c in v] + [0.0])
+    limit = tol * largest
+    return {
+        label: tuple(0.0 if abs(c) <= limit else float(c) for c in vector)
+        for label, vector in found.items()
+    }
+
+
 def fmt_plain(value, digits=4):
     """Like fmt() but never with an exponent for everyday sizes (200000, not 2e5): material
     tables."""

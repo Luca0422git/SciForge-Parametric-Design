@@ -724,6 +724,16 @@ class ConvergenceTests(unittest.TestCase):
 
 
 class ReportTests(unittest.TestCase):
+    def test_reactions_without_rounding_noise(self):
+        # (sim QA: the bracket journey's report read "Fixed 1 | 50 | 1.3e-7 | -5e-6 | 50")
+        found = core.clean_reactions({"Fixed 1": (50.0, 1.3e-7, -5e-6)})
+        self.assertEqual(found, {"Fixed 1": (50.0, 0.0, 0.0)})
+        self.assertEqual([core.fmt(c) for c in found["Fixed 1"]], ["50", "0", "0"])
+        # a real small reaction next to a big one stays
+        found = core.clean_reactions({"A": (1000.0, 0.0, 2e-12), "B": (0.5, -0.25, 0.0)})
+        self.assertEqual(found, {"A": (1000.0, 0.0, 0.0), "B": (0.5, -0.25, 0.0)})
+        self.assertEqual(core.clean_reactions({}), {})
+
     def test_report_has_the_numbers(self):
         text = core.report_html(
             {

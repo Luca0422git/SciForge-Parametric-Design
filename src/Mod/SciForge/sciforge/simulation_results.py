@@ -404,7 +404,7 @@ def reactions(study):
     except Exception as exc:
         warn("results: reaction forces unreadable: %s" % exc)
         return None
-    return out or None
+    return core.clean_reactions(out) if out else None
 
 
 def reaction_places(study):
