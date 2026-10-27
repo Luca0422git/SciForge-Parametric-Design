@@ -139,4 +139,23 @@ constraint and load, not out of date, RESULTS with the same numbers from the sam
 
 ## Suites
 
-(filled in at the end)
+- Every simulation scenario, the journeys and my QA scenarios, plus `ribbon_sweep` and
+  `marking_menu_command` (ribbon_config and the marking menu are shared), one run
+  (`.sciforge-cache/full_gui`): journey_sim_bracket 93, journey_sim_bracket_edit 108,
+  marking_menu_command 31, ribbon_sweep 222, sim_core_job 29, sim_qa_beginner 37, sim_qa_close
+  17, sim_qa_engine 15, sim_qa_menus 34, sim_qa_picks 15, sim_qa_speed 31, sim_setup_bracket 80,
+  sim_setup_browser 67, sim_setup_canvas 29, sim_setup_components 42, sim_setup_documents 71,
+  sim_setup_glyphs 20, sim_setup_kinds 72, sim_setup_lost 60, sim_setup_mesh 42, sim_setup_more
+  63, sim_setup_odd 82, sim_setup_two 52, sim_setup_units 39, sim_setup_workspace 70,
+  simres_adaptive 37, simres_cantilever 80, simres_compare 76, simres_deformation 70,
+  simres_inspect 94, simres_linear 31, simres_out_of_date 32, simres_probes_slice 84,
+  simres_reopen 21, simres_report 61, simres_workspace 65: PASS. Two failed and were fixed:
+  `sim_setup_dialogs` expected FreeCAD's "Aluminum" in Study Materials (now SciForge's
+  "Aluminium": the scenario updated, 0f04e5bc) and `sim_setup_during` (the Solve dialog cancels
+  a job whose body was deleted, then my engine check also failed it and logged "simulation
+  failed": the engine now leaves a job someone cancelled alone, 552f4e75); both re-run below.
+- Hole scenarios (`hole_common` is shared): hole 99, hole_edges 36, hole_qa 494, hole_qa_more
+  363, hole_qa_part 257, hole_qa_thread 379, hole_sketch 49, hole_tapped 67, hole_thread 57,
+  hole_thread_inside 36, and inspect_qa 557 (Measure uses `abandon`): PASS.
+- Unit (`--only unit`): 2726 tests, 2 failed: the AI docs mirror of the simulation parity doc
+  was out of date (regenerated, c1afc04b); `test_ai_docs_contract` and `test_parity` OK since.
