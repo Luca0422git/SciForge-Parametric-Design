@@ -20,15 +20,17 @@ SciForge's own part.
 - **Workspace > Simulation** opens Fusion's SIMULATION workspace with its **SETUP** and
   **RESULTS** tabs; your studies are saved in the design, and **Design** takes you back.
 - **New Simulation Study**: Static Stress. Fusion's other study types are listed greyed (they
-  are not in SciForge yet).
+  are not in SciForge yet). A study can be cloned (right-click > Clone Study) for another load
+  case.
 - **Study Materials** (try another material in the study only; yield or ultimate strength for
   the safety factor), **Study Settings** (mesh size, element type, adaptive mesh refinement,
   keep the results in the file or not), **Structural Constraints** (Fixed, Pin, Frictionless,
   Prescribed Displacement), **Structural Loads** (Force along the face, at an angle or along a
-  direction; Pressure; Moment; Bearing Load; Remote Force; gravity), automatic **bonded
-  contacts** between bodies that touch, **Local Mesh Control**, **Generate Mesh**, **DOF View**
-  (arrows for every way a part could still move), and **Pre-check** with a traffic light and a
-  **Repair** button that opens what to fix.
+  direction; Pressure; Moment; Bearing Load; Remote Force; gravity, with Edit Gravity),
+  **Automatic Contacts** (bodies that touch are bonded), **Local Mesh Control**, **Generate
+  Mesh**, **DOF View** (arrows for every way a part could still move), **Load Case
+  Attributes**, and **Pre-check** with a traffic light and a **Repair** button that opens what
+  to fix. Every setup change is one Undo step; the values follow the design's units (mm, in...).
 - **Solve runs on your own computer** (Fusion uses Autodesk's cloud), in the background: you can
   keep working, and **Cancel** stops it at any moment. **Job Status** lists your solves.
 - **RESULTS**: the part coloured by **Safety Factor** (red is weak), von Mises and principal
@@ -38,10 +40,13 @@ SciForge's own part.
   ("meets the safety factor target", with the weakest body named), **Compare** up to four studies
   side by side, **Convergence Plot**, and a **Report** (a web page with the setup, the numbers and
   pictures).
-- **Out of date**: change the design or the setup after solving and the results say so.
-- **Checked against hand calculations**: beams, plates, tubes in torsion, gravity, two glued
-  materials, inch parts, very small and very large parts: within a few percent at the default
-  mesh (thin walls get a note asking for a finer mesh, which then lands within 1 %).
+- **Out of date**: change the design or the setup after solving (a hole moved, a part turned)
+  and the results say so; **Solve Again** brings them up to date.
+- **Checked against hand calculations** (over 300 checks, on Linux and on Windows): beams,
+  plates, tubes in torsion, gravity, two glued materials, pins and bearings, inch parts, very
+  small and very large parts: within a few percent at the default mesh, and the reaction
+  forces add up to the loads exactly. Thin walls get a note asking for a finer mesh, which
+  then lands within about 1 %.
 - **The AI can run studies too**: "hold the holes, push 1000 N on the top, solve and tell me
   the safety factor".
 
@@ -57,26 +62,35 @@ SciForge's own part.
   timeline step, and checks itself after each one.
 - **Compare with Reference** (UTILITIES > AI) shows how close the rebuild is: missing material in
   red, extra in green, and what to do next in words. **Finish Rebuild** gives the new part the
-  original's name and place; **Stop Rebuild** gives a rebuild up.
-- Simple meshes (STL, OBJ, 3MF; closed) work too. What SciForge cannot read (free-form surfaces,
-  threads, text) is named, never guessed.
+  original's name, place, material and spot in the timeline; joints, grounds and patterns that
+  used the original move onto the rebuild (a VEX part keeps its joints). **Stop Rebuild...**
+  gives a rebuild up. A design saved half way carries on when you open it again.
+- Simple meshes (STL, OBJ, 3MF; closed, up to 10,000 triangles) work too. What SciForge cannot
+  read (free-form surfaces, threads, raised or engraved text) is named, never guessed.
 
 ### VEX robotics and big assemblies
 
 - **Square-hole centres**: in Joint, Joint Origin, As-built Joint, Align and Duplicate With
-  Joints, a blue dot shows at the centre of any hole (square, hex, slot) under or near the mouse,
-  and along a hole's walls. Fusion does not have this; VEX teams add points by hand there.
+  Joints, a blue dot shows at the centre of any hole (square, hex, slot, the motor's square
+  socket) under or near the mouse, and along a hole's walls. Fusion does not have this; VEX
+  teams add points by hand there.
 - **Ctrl** keeps the face you are on while you reach for its edge; **Shift** turns Align's dots
   off.
 - **Insert STEP takes many files at once** (each becomes a part, laid out in a row, one Undo for
   all), the **Data Panel** uploads several files and drags STEP parts into the design, and
   **inserting the same file again** makes another copy of the same part ("screw:2"); a drawing's
-  parts list counts them.
+  parts list counts the copies. Delete the first copy and the next one simply becomes the part.
 - **Duplicate With Joints** (ASSEMBLE): click hole after hole to put more screws (with their nuts)
   in, each jointed like the first.
-- **Big assemblies are much faster**: a 300-part robot opens in about a third of the time,
-  hovering a rail with 245 holes is instant, and driving a joint is live.
+- **Big assemblies are much faster**: a 300-part robot opens in about 28 seconds (it took over
+  two minutes), hovering a rail with 245 holes is instant, and driving a joint is live.
 - A page for teams: [docs/sciforge/vex.md](docs/sciforge/vex.md).
+
+### Fixed
+
+- **Designs in inches:** a plain number typed into a dialog (Offset 1.5) or into a sketch's
+  dimension or value box (a circle 1 across) was taken as millimetres. It is now in the
+  design's units everywhere; type "20 mm" to give millimetres.
 
 ### Known problems
 
