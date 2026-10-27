@@ -140,14 +140,15 @@
 ## Tests
 
 - `tools/sciforge/run_tests.sh --freecad /home/user/fc/freecad --only base` on my branch, the
-  final run (23:29-23:36 UTC, the code of 6408c0c4, after the container restart): **all
-  passed**. Unit tests 2524 (9 skipped), golden models 614 pass + 2 xfail (expected), headless AI
-  tools 284 calls 0 failed (117 tools), documentation examples 141 items 0 failed, AI agent end
-  to end (MCP) 81 checks 0 failed, **recognition benchmark 67 parts 0 failed**, GUI smoke 79
-  checks, journey 25, restarts 8 + 9. (A run started just before was killed by the restart.)
-- After the last changes (turned parts about an offset axis line, turned bosses and cuts, a
-  hole taken off must fill its bore; 260f24bf): the recognition benchmark again, 71 parts, 0
-  failed (a torus, a dome, a domed block and a torus groove added), and the sweeps below.
+  final run (00:20-00:27 UTC on 2026-10-27, the code of 5f0ab834): **all passed**. Unit tests
+  2524 (9 skipped), golden models 614 pass + 2 xfail (expected), headless AI tools 284 calls 0
+  failed (117 tools), documentation examples 141 items 0 failed, AI agent end to end (MCP) 81
+  checks 0 failed, **recognition benchmark 71 parts 0 failed**, GUI smoke 79 checks, journey
+  25, restarts 8 + 9. The run before (23:29-23:36, code of 6408c0c4) passed the same way with
+  67 bench parts; one started just before it was killed by the container restart.
+- The QA builder merged 5f0ab834 into `sf/autotimeline-qa` (clean) and ran its rebuild end to
+  end checks there: 137 checks, 0 failed (threaded hole, text plate, bossed plate, VEX plate and
+  channel, a big mesh...), and my bench on the merge: 71 parts, 0 failed.
 - Earlier, `--only base` at 21:59-22:11 UTC (the code of e59e4f28): the same stages all passed
   but the unit stage, whose two AI-docs contract tests failed on a stale generated copy of the
   parity doc (`docs/ai/user/parity/auto-timeline.md`): after every edit of the parity doc,
