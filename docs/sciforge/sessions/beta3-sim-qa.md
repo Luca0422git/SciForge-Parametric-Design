@@ -189,6 +189,18 @@ run after each doc change.
 - `--only sim`: the builder's benchmarks 138 checks and the QA's hand calculations and engine
   checks 230 (205 before + my 25: free motions, bearing default, a body deleted mid-solve, the
   material read, a mesh-only design), 0 failed.
+- Re-runs after the late fixes (the fixed / changed ones and what they touch):
+  journey_sim_bracket 113, journey_sim_bracket_edit 112, sim_qa_beginner 46, sim_qa_speed 32, sim_setup_dialogs 92, sim_setup_during 30, sim_qa_results_close 26,
+  sim_setup_odd 82, simres_adaptive 37, simres_cantilever 80, simres_compare 76,
+  simres_deformation 70, simres_inspect 94, simres_linear 31, simres_out_of_date 32,
+  simres_probes_slice 84, simres_reopen 21, simres_report 61, simres_workspace 65; for
+  `bodies.py`: bodies_look 58, bodies_qa 317, inspect_qa4 330, misc_materials 51: PASS.
+- Unit (`--only unit`) again at the end: 2726 tests OK (9 skipped).
+- A test-harness trap my own scenarios fell into: `harness.task_button("Close")` clicks the
+  first visible "Close" in the main window, which is the solve's progress window (Job Status)
+  while it shows, not the Surface Probes dialog. The journey's new checks ("Surface Probes
+  closed") caught it; the journey and my scenarios now close the progress window (Esc) after
+  each solve, as a person does.
 
 ## Not fixed (with the evidence)
 

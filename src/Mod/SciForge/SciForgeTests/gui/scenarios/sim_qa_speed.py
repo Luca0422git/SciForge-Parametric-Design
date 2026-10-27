@@ -188,6 +188,7 @@ def c_done():
     state["nodes"] = info.get("nodes")
     h.check("C the mesh: %s nodes, %s elements" % (info.get("nodes"), info.get("elements")), True)
     h.check("C the window answered all along (longest pause %.2f s)" % worst, worst < 10.0, worst)
+    s.close_popup("SciForgeSimJobStatus")  # (the progress window, Esc)
 
 
 # -- D ------------------------------------------------------------------------------------------
@@ -209,6 +210,7 @@ def d_probe_click():
     )
     h.check("D a probe click: %.2f s" % took, len(rs.tags("probe")) == 1, rs.tags("probe"))
     h.task_button("Close")
+    h.check("D Surface Probes closed", not Gui.Control.activeDialog())
 
 
 def d_mesh():

@@ -73,6 +73,7 @@ def a_results():
 
     results = simulation_solve_dialog.last_results()
     h.check("A solved", any(r[0] == "done" for r in results.values()), results)
+    s.close_popup("SciForgeSimJobStatus")  # (the progress window, Esc)
     stats = rs.summary().get("stats", {})
     h.check("A nothing moves", stats.get("displacement", {}).get("max", 1) < 1e-9, stats)
     h.check("A no stress", stats.get("von_mises", {}).get("max", 1) < 1e-9, stats)
@@ -136,6 +137,10 @@ def a_probe_read():
     h.task_button("Close")
 
 
+def a_probes_closed():
+    h.check("A Surface Probes closed", not Gui.Control.activeDialog())
+
+
 # -- B ------------------------------------------------------------------------------------------
 def b_finish():
     rs.big("Finish Results")
@@ -183,6 +188,7 @@ def b_check():
     hand = 100.0 * 100.0**3 / (3 * E_STEEL * I_BEAM)
     h.check("B the end moves %.4f mm, F L^3 / 3EI = %.4f" % (d, hand), abs(d / hand - 1) < 0.05)
     state["study1"] = s.active_study().Name
+    s.close_popup("SciForgeSimJobStatus")
 
 
 # -- C ------------------------------------------------------------------------------------------
@@ -314,6 +320,7 @@ h.run(
         a_stop,
         a_probe,
         a_probe_read,
+        a_probes_closed,
         b_finish,
         b_loads,
         b_pick,

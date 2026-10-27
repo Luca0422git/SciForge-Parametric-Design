@@ -606,6 +606,7 @@ def study_steps():
             doc().UndoNames,
         )
         S["solve_seconds"] = __import__("time").time() - S.get("solve_started", 0)
+        ss.close_popup("SciForgeSimJobStatus")  # (the progress window, Esc)
 
     return [
         step(enter, "sim_enter"),
@@ -684,12 +685,17 @@ def probe_steps(tag, z=15.0):
     def close():
         h.task_button("Close")
 
+    def closed():
+        h.check("%s Surface Probes closed" % tag, not Gui.Control.activeDialog())
+        h.check("%s no value left following the mouse" % tag, not rs.tags("hover"), rs.tags())
+
     return [
         step(stress, "%s_stress" % tag),
         step(open_probes, "%s_probes" % tag),
         step(click, "%s_probe_click" % tag),
         step(read, "%s_probe_read" % tag),
         step(close, "%s_probe_close" % tag),
+        step(closed, "%s_probe_closed" % tag),
     ]
 
 
@@ -966,6 +972,7 @@ def edit_steps():
             "20 the arm moves less (%.3f mm, was %.3f)" % (S["disp2"], S["disp1"]),
             S["disp2"] < S["disp1"],
         )
+        ss.close_popup("SciForgeSimJobStatus")  # (the progress window, Esc)
         h.check(
             "20 the edit is one undo step, the solve none",
             not any("olve" in n for n in doc().UndoNames),
@@ -1169,6 +1176,7 @@ def down_steps():
         total = [r for r in reactions.values()]
         up = sum(r.get("z", 0.0) for r in total)
         h.check("24 the holes push back 50 N straight up", near(up, 50.0, 1e-3), reactions)
+        ss.close_popup("SciForgeSimJobStatus")  # (the progress window, Esc)
         vm = done.get("stats", {}).get("von_mises", {}).get("max", 0.0)
         S["vm_down"] = vm
         ratio = vm / S["vm_across"] if S.get("vm_across") else 0
