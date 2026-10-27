@@ -2789,24 +2789,35 @@ class Job:
         self._previous_run = None  # adaptive refinement: the last pass's run, until the next
         self._pos = None  # adaptive refinement: the element sizes Gmsh meshes to next
         self._frd_data = None  # the solver's results, read in the background
+        # the study's bodies as the job starts: one deleted while it runs stops it with a
+        # sentence (before a turn touches the gone body), whoever calls poll()
+        try:
+            self._bodies = [(b, b.Label) for b in study_bodies(study)]
+        except Exception:
+            self._bodies = []
+        self._gone_text = None
 
     # -- public
     def poll(self):
         """Advance as far as possible without waiting. Returns the state."""
         if self.state != "running":
             return self.state
+        if self._gone_text is None:
+            self._gone_text = self._gone()
+            if self._gone_text:
+                self.cancel()
         try:
             if self._thread is not None:
                 if self._thread.is_alive():
                     return self.state
                 self._thread = None
                 if self._cancel:
-                    return self._stop("cancelled", "Cancelled.")
+                    return self._stop(*self._stopped())
                 _close_open_transaction(self.doc)  # (what a turn changes is no undo step)
                 self._after_background()
                 return self.state
             if self._cancel:
-                return self._stop("cancelled", "Cancelled.")
+                return self._stop(*self._stopped())
             _close_open_transaction(self.doc)
             getattr(self, "_stage_" + self.stage)()
         except SimulationError as exc:
@@ -2834,6 +2845,32 @@ class Job:
             if self._thread is not None:
                 self._thread.join(0.05)
         return self.state
+
+    def _gone(self):
+        """A sentence when the study or one of its bodies was deleted (or its design closed)
+        since the job started, else None."""
+        try:
+            if not bodies.alive(self.study):
+                return (
+                    "The study was deleted (or its design closed) while it solved: the solve "
+                    "stopped."
+                )
+            names = [label for body, label in self._bodies if not bodies.alive(body)]
+        except Exception:
+            return None
+        if not names:
+            return None
+        return (
+            "%s %s deleted while it solved: the solve stopped. Solve again for the design as it "
+            "is now." % (", ".join(names), "was" if len(names) == 1 else "were")
+        )
+
+    def _stopped(self):
+        """(state, message) of a job stopped on the way: a deleted body's sentence, or a
+        cancel."""
+        if self._gone_text:
+            return "failed", self._gone_text
+        return "cancelled", "Cancelled."
 
     def cancel(self):
         self._cancel = True

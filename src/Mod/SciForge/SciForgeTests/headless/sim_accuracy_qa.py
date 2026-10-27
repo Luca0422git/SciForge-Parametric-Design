@@ -2670,6 +2670,35 @@ def bearing_default(doc, out):
     out.append(("the solve carries it: reaction 100 N", sb.near(total, 100.0, 1e-3), total))
 
 
+@engine_check("a body deleted while it solves")
+def deleted_mid_solve(doc, out):
+    """The engine itself stops a solve whose body was deleted on the way (sim-ui stopped it in
+    its dialog; a script or the AI polling the Job got "Cannot access attribute 'Label' of
+    deleted object"): failed with a sentence naming the body, nothing left behind."""
+    from sciforge import simulation as sim
+
+    body, study = _cantilever_study(doc, label="Beam")
+    job = sim.Job(study)
+    tries = 0
+    while job.state == "running" and job.stage in ("model",) and tries < 20000:
+        tries += 1
+        job.poll()
+    out.append(("got past the model stage", job.state == "running", (job.state, job.stage)))
+    doc.removeObject(body.Name)
+    job.wait(120)
+    out.append(("stopped: failed", job.state == "failed", (job.state, job.message)))
+    out.append(
+        (
+            "its sentence names the body",
+            "Beam was deleted while it solved" in job.message,
+            job.message,
+        )
+    )
+    out.append(("no FreeCAD error text", "Cannot access" not in job.message, job.message))
+    out.append(("nothing left behind", not sim._orphans(doc), [o.Name for o in sim._orphans(doc)]))
+    out.append(("no temporary folder", not os.path.isdir(job.work), job.work))
+
+
 def main():
     import FreeCAD as App
 
