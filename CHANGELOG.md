@@ -91,6 +91,9 @@ SciForge's own part.
 - **Designs in inches:** a plain number typed into a dialog (Offset 1.5) or into a sketch's
   dimension or value box (a circle 1 across) was taken as millimetres. It is now in the
   design's units everywhere; type "20 mm" to give millimetres.
+- **Closing a design while a tool waited for a click** (Extrude, Hole, Fillet, Offset...) left
+  that tool's Undo step open: the next design's first edit went into it, and Undo then took
+  back two edits at once under the other design's tool name. Fixed for every tool.
 
 ### Known problems
 
