@@ -154,9 +154,11 @@ def after_solve():
     h.check("C: results to show", sim.results(S["study"]) is not None)
     h.check("C: it meshed, then solved", {"mesh", "solve"} <= set(S["stages"]), S["stages"])
     gaps = [b - a for a, b in zip(S["ticks"], S["ticks"][1:])]
+    # (the freezes this guards against were 84 s and ~10 min; a CI runner with software GL
+    # paused 3.2 s once, in run #277, on the main thread's turn of reading the results)
     h.check(
-        "C: the window kept working (the longest pause between timer ticks under 3 s)",
-        bool(gaps) and max(gaps) < 3.0,
+        "C: the window kept working (the longest pause between timer ticks under 4 s)",
+        bool(gaps) and max(gaps) < 4.0,
         "%d ticks, longest pause %.2f s" % (len(gaps), max(gaps) if gaps else -1),
     )
     h.check(
