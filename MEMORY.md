@@ -18,20 +18,20 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   the workflow). Newest session log "Patch 0.1.0-beta.2.2".
 - **Beta 3 (`0.1.0-beta.3`, this line of sessions): Auto Timeline, Static Stress simulation
   and VEX assemblies** (Luca 2026-10-26: "put the vex stuff in beta 3 ... one shot for beta 3").
-  **IN PROGRESS (2026-10-27 01:55 UTC): integration on `develop` (22b20f3b).** The six
-  builders' work (plan `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`,
-  session logs `docs/sciforge/sessions/beta3-*.md`), the engine QA, the Auto Timeline QA and the
-  VEX QA are merged with patch 0.1.0-beta.2.2 and pushed; README and known issues say beta 3;
-  CI now also runs the Static Stress hand calculations on FreeCAD for Windows
-  (`tools/sciforge/windows_sim.sh`) and the GUI scenarios in nine parts. Still running: the
-  simulation QA (`sf/sim-qa`), the VEX and Auto Timeline journeys (`sf/journey-vex`,
-  `sf/journey-rebuild`), and a check of "a design closed with a dialog open leaves its undo
-  step open" (`sf/undo-leftover`). Then: CHANGELOG final, VERSION 0.1.0-beta.3, CI green.
-  **Not released.** Nothing compiled changed since 0.1.0-beta.2 (core id the same), so it can
-  go out with Actions > SciForge patch release (its notes then say "Built on 0.1.0-beta.2's
-  program") once Luca says go. Status: [x] Static Stress engine + QA [x] SETUP tab [x] RESULTS
-  tab [x] Auto Timeline + QA [x] VEX + QA [~] simulation QA [~] journeys [~] docs / version
-  [ ] released.
+  **BUILT AND ON `develop` (2026-10-27 ~05:00 UTC), VERSION 0.1.0-beta.3; NOT RELEASED: waiting
+  for Luca's test and his go.** Everything is merged and pushed: the six builders (plan
+  `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`), the four QA
+  passes (engine, Auto Timeline, VEX, simulation workflow), the two journeys (VEX robot piece,
+  Auto Timeline bracket), the undo-step fix; session logs `docs/sciforge/sessions/beta3-*.md`,
+  `journey-*.md`. CHANGELOG, README, known issues, `docs/sciforge/vex.md` are written. CI
+  (#278, #279 green; later pushes in MEMORY's session log) also runs the Static Stress hand
+  calculations on FreeCAD for Windows (`tools/sciforge/windows_sim.sh`) and the GUI scenarios
+  in nine parts. **Release:** nothing compiled changed since 0.1.0-beta.2 (core id the same),
+  so Luca can publish with Actions > SciForge patch release (about half an hour; notes start
+  "Built on 0.1.0-beta.2's program"; Update now installs it) once the newest `develop` commit
+  is green; or a full build with the tag `sciforge-v0.1.0-beta.3` (his to push). Status:
+  [x] Static Stress engine + QA [x] SETUP tab [x] RESULTS tab [x] simulation QA [x] Auto
+  Timeline + QA [x] VEX + QA [x] journeys [x] docs / version [ ] released.
 - **VEX robotics: in beta 3** (above): STEP parts in large numbers, linked occurrences,
   Duplicate With Joints, and Align / Joint snapping to the centre of a square hole.
 - Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
@@ -1696,7 +1696,22 @@ More integration finds after the first push:
   80 while a rebuild goes on (`chat_core.step_limit`).
 - CI #277: every GUI scenario passed but `sim_core_job`'s "longest pause under 3 s" (3.21 s on
   a runner with software GL): the limit is 4 s (the freezes it guards against were 84 s and
-  minutes).
+  minutes). CI #278 and #279: everything green, Windows simulation included.
+- The VEX journey (`sf/journey-vex`: a robot piece in inches from 8 STEP files, joints,
+  Duplicate With Joints, drive, save/reopen, a drawing, a stress test of a rail) fixed: an
+  Align in a jointed design counted as a pending move; every simulation row named "Body1";
+  a drawing's parts table froze for over 10 minutes (8 s now). Its stress test needed a real
+  VEX aluminium: "Aluminium AlMg3 (5754)" (FreeCAD's AlMg3F24, yield 180 MPa; VEX's 5052-H32
+  is 193) is in the materials now, and `vex.md` says to pick it.
+- The simulation QA (`sf/sim-qa`: an L-bracket journey, every number against hand
+  calculations within ~5 %) fixed 14 bugs, among them a crash when a design was closed with
+  Surface or Point Probes open (every open design lost), a design looking unsaved after Save
+  once SIMULATION was used, no right-click menu on RESULTS, FreeCAD names ("PLA-Generic",
+  "Face10") in Study Materials and the report.
+- Left for later (in the parity docs): the window pauses ~3 s while a big study is written and
+  read (FreeCAD's FEM writer / reader on the main thread); one load case per study; bonded
+  contacts only; Auto Timeline reads prismatic and turned parts, not free-form ones; VEX open
+  speed and the Selectable switch need compiled changes (questions for Luca).
 
 ### Session log: Patch 0.1.0-beta.2.2 (`develop`, 2026-10-26)
 
