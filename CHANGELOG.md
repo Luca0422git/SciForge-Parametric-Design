@@ -5,6 +5,18 @@ its own section of this file (the release notes are made from it), so every rele
 section here whose heading is exactly its version number, like `## 0.1.0-beta` below. Known
 problems are in [docs/sciforge/known-issues.md](docs/sciforge/known-issues.md).
 
+## 0.1.0-beta.3.1.1
+
+### Fixed
+
+- **Sketch Text: the TEXT panel was see-through.** In the floating panel on the right, a click
+  on the Text box went through to the sketch behind it, so typing stopped working. The panel
+  (and Measure's box in a sketch) now has its own background and takes the click.
+- **Sketch Text: words stay inside the box you drew.** A word that runs past the frame's right
+  edge goes on the next line (a word longer than the whole frame is broken). If the lines need
+  more height than the frame has, the dialog says so. Texts in designs made before this keep
+  their single line until you edit them.
+
 ## 0.1.0-beta.3.1
 
 **A full build after beta 3, for VEX robots.** The program itself was built again with one
@@ -21,16 +33,6 @@ downloads and runs it (the AppImage: download the new one).
 - **Big assemblies open faster**: FreeCAD made a placement indicator (the axis cross of Show
   Placement) for every part and origin plane when a design opened, about 8 seconds of a
   300-part robot; it is now made only when someone turns Show Placement on.
-
-### Fixed
-
-- **Sketch Text: the TEXT panel was see-through.** In the floating panel on the right, a click
-  on the Text box went through to the sketch behind it, so typing stopped working. The panel
-  (and Measure's box in a sketch) now has its own background and takes the click.
-- **Sketch Text: words stay inside the box you drew.** A word that runs past the frame's right
-  edge goes on the next line (a word longer than the whole frame is broken). If the lines need
-  more height than the frame has, the dialog says so. Texts in designs made before this keep
-  their single line until you edit them.
 
 ## 0.1.0-beta.3
 

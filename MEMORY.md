@@ -46,11 +46,12 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   a Codespace, on `2aa32dfe`) [ ] published.
   **Update (patch session, later on 2026-10-27):** the sketch Text fixes Luca reported (the TEXT
   panel see-through and click-through; words running past the frame) went onto develop after
-  `2aa32dfe`, with their CHANGELOG lines in 0.1.0-beta.3.1's "### Fixed": tag the newest
-  develop commit once "SciForge tests" is green on it, so 3.1 includes them (module files
-  only: the core id and the dry run's compiled part are unchanged). Tagging `2aa32dfe` instead
-  still works but leaves them out (then move those CHANGELOG lines to a patch after 3.1).
-  Session log "Sketch Text panel and wrapping".
+  `2aa32dfe` (session log "Sketch Text panel and wrapping"). **Luca tagged `2aa32dfe`
+  (22:33 UTC, `sciforge-v0.1.0-beta.3.1`, Release moved there too; build run #14), so 3.1
+  does NOT hold them:** they are the patch **0.1.0-beta.3.1.1** (VERSION, `_FALLBACK_VERSION`,
+  their own CHANGELOG section; Luca: "you do it"), released with Actions > SciForge patch
+  release once 3.1 is published and "SciForge tests" is green on develop (module files only:
+  the same core id as 3.1). Status: [x] prepared [ ] 3.1 published [ ] 3.1.1 published.
 - **VEX robotics: in beta 3** (above): STEP parts in large numbers, linked occurrences,
   Duplicate With Joints, and Align / Joint snapping to the centre of a square hole.
 - Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
