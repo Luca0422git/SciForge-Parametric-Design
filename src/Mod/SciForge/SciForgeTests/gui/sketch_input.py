@@ -40,6 +40,14 @@ def _find(menu, label):
     return []
 
 
+def _seen_on(menu, action, timeout_ms=1500):
+    """Wait until the open menu has lit `action` under the pointer (at most timeout_ms)."""
+    waited = 0
+    while menu.isVisible() and menu.activeAction() is not action and waited < timeout_ms:
+        QtTest.QTest.qWait(25)
+        waited += 25
+
+
 def menu_item(group_title, label):
     """Click the group's name in the ribbon (opens its menu), then click `label` in
     the menu with the mouse, opening submenus on the way. True if it was clicked."""
@@ -74,6 +82,10 @@ def menu_item(group_title, label):
                 # hovering opens a submenu (a click on it could close it again)
                 QtCore.QTimer.singleShot(400, lambda: click(step + 1))
                 return
+            # QTest moves the real pointer, and the X server tells Qt a moment later: the
+            # menu takes the click only once it has seen the pointer arrive on the entry (a
+            # late "moved" in between the press and the release dropped it: CI #285, #286)
+            _seen_on(menu, action)
             QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center())
             done["clicked"] = True
         except Exception as exc:
@@ -91,11 +103,11 @@ def menu_item(group_title, label):
     guard.setSingleShot(True)
     guard.timeout.connect(safety)
     guard.start(4000)
-    # A person's pointer is on the group's name when the menu opens. Qt drops a click on an
-    # entry when the pointer has not moved since the menu opened, and the pointer could still
-    # be on that entry from the last time the menu was used (CI #285: CREATE > Offset again,
-    # the menu closed and nothing ran).
+    # A person's pointer is on the group's name when the menu opens (it could still be on an
+    # entry from the last time the menu was used, and Qt drops a click on an entry the pointer
+    # has not moved to since the menu opened).
     QtTest.QTest.mouseMove(group.label, group.label.rect().center())
+    QtTest.QTest.qWait(100)  # (the real pointer's move reaches Qt a moment later)
     group.label.click()  # the menu runs its own loop until it closes
     guard.stop()  # (a late guard would close the next menu)
     QtWidgets.QApplication.processEvents()

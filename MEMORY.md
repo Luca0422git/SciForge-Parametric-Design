@@ -1745,15 +1745,19 @@ More integration finds after the first push:
   (SHAPE) below the body's; switching every PartDesign::Feature's view too works in both
   (experiments not kept). Pick resolution: `getViewProviderByPathFromHead`,
   so `isSelectable()` is asked of the component (App::Part has no Selectable property).
-- CI #285 red: `surface3_offset_patch` (CREATE > Offset used twice) failed about half the time
-  with this change, never before (9 of 9 old runs passed). Root cause in the test robot: Qt's
-  QMenu ignores a click on an entry when the pointer has not moved since the menu opened
-  (`hasMouseMoved`), and Qt's pointer was still on Offset from the first use (a QTest move to
-  the same pixel sends no event), so the menu closed and nothing ran; why this change made it
-  likelier was not found (timing). `sketch_input.menu_item` now points at the group's name
-  before opening the menu (as a person does) and reaches the entry from a neighbouring pixel:
-  5 of 5. A version that waited on the entry for the menu to light it failed 6 of 6 (it never
-  does without a move event): do not do that.
+- CI #285 / #286 red: a ribbon menu entry clicked a second time in a row did nothing
+  (`surface3_offset_patch` CREATE > Offset, `misc_derive` INSERT > Insert Derive,
+  `inspect_analysis_components` INSPECT > Display Component Colors). Root cause in the test
+  robot: QTest's mouse move on a widget moves the REAL X pointer (QCursor::setPos) and the X
+  server tells Qt "moved" a moment later, while QTest's click is delivered at once; a late
+  move landing between the press and the release (or a pointer still on the entry from the
+  last use: Qt drops a click on an entry the pointer has not moved to since the menu opened)
+  made the menu close without running anything. Timing-dependent, hence about half the runs;
+  why this change made it likelier was not found. `sketch_input.menu_item` now moves onto the
+  group's name and waits 0.1 s before opening the menu, reaches the entry from a
+  neighbouring pixel, and waits until the menu has lit the entry (`_seen_on`) before
+  clicking. Two wrong fixes on the way (do not repeat): re-moving to the same pixel while
+  waiting (no move event: 6 of 6 failed), and stepping the pointer across without waiting.
 
 ### Session log: Patch 0.1.0-beta.2.2 (`develop`, 2026-10-26)
 
