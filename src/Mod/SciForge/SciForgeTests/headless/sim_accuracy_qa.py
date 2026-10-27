@@ -748,7 +748,16 @@ def gravity_sideways(doc):
     )
     rho = sb.material(study, bracket)["density"] * 1e-12
     weight = 9806.65 * rho * bracket.Shape.Volume
+    from sciforge import material as materials
+
+    kg = materials.mass(bracket)  # (what Inspect shows: a body on FreeCAD's Default is Steel)
     checks = [
+        (
+            "the weight = Inspect's mass %.6g kg x 9.80665 m/s2 (N)" % kg,
+            kg * 9.80665,
+            lambda s, m: reaction(m, "Fixed 1", "y"),
+            0.2,
+        ),
         (
             "the wall holds the weight along +Y (N)",
             weight,
