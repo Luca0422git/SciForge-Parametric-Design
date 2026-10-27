@@ -136,7 +136,10 @@ def describe(shape, options=None):
             return _describe_turned(shape, options, frame, started)
     try:
         _Reader(shape, options).read(out)
-        _on_top_face(shape, out)
+        try:
+            _on_top_face(shape, out)
+        except Exception as exc:  # (the plan stays as read: on origin planes)
+            warn("recognize: the plan's sketches stay on origin planes (%s)" % exc)
     except RecognizeError as exc:  # (a shape with no solid: said, not a crash)
         log("recognize: %s" % exc)
         out["notes"].append("%s Nothing to rebuild: describe a solid." % exc)
