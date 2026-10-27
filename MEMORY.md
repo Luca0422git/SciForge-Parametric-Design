@@ -1671,7 +1671,8 @@ What integration found (beyond the builders' own tests):
 - VEX's rule "the same STEP file again is another occurrence" met the rebuild scenarios'
   helper (it inserted one file three times expecting three bodies): the helper passes
   `reuse=False`.
-- 560+ GUI scenarios ran past 80 min in six CI parts: nine parts now (tests and build).
+- 560+ GUI scenarios ran past 80 min in six CI parts: nine parts now (tests and build); in
+  CI #283 they took 42-57 min (two more only because of the hang below), of 90 allowed.
 - New CI job "tests (Windows simulation)" (`tools/sciforge/windows_sim.sh`): the hand
   calculations on the official FreeCAD for Windows. Its first run: 337 of 339 passed; two
   small cantilevers stopped in CalculiX without a reason. The engine now solves such a stop
@@ -1716,6 +1717,15 @@ More integration finds after the first push:
   `material.LIBRARY` changes list_materials) needs the docs examples recorded again:
   `SCIFORGE_DOCS_RECORD=1` with `SciForgeTests/headless/docs_runner.py` (in FreeCAD), then
   `tools/sciforge/make_ai_docs.py`. The unit tests do not catch it; `--only headless` does.
+- CI #283 red, about 40 scenarios in two parts: `journey_vex` and `journey_vex_sim` hung in
+  the Insert STEP file dialog (the test typed the parts folder into the name box and the box's
+  completer took the Enter on a busy runner; a "file not found" box then waited) until the
+  900 s kill, and the killed FreeCAD's recovery copy stayed in the shared test profile: every
+  later scenario's SciForge offered it back. The test now sets the dialog's folder and closes a dialog still
+  open after 20 s (the step fails instead of hanging); `run_tests.sh` moves recovery copies
+  away with the crash marker after a scenario that did not end cleanly. Lesson: when many
+  scenarios fail in one CI part, look for the first one that was killed or crashed; the rest
+  are usually its leftovers.
 
 ### Session log: Patch 0.1.0-beta.2.2 (`develop`, 2026-10-26)
 

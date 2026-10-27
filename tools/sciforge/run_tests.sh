@@ -373,6 +373,13 @@ EOF
             mv "${marker}" "${left}/"
             marker="$(basename "${marker}" .json)"
             mv "${PROFILE}/SciForge/crash/session-${marker#running-}.log" "${left}/" 2>/dev/null || true
+            # and SciForge's recovery copies of the designs it had open: the next scenario's
+            # SciForge offered them back, and with one in the way 20 scenarios after a
+            # killed journey_vex failed (CI #283)
+            if compgen -G "${PROFILE}/SciForge/recovery/*" > /dev/null; then
+                mkdir -p "${left}/recovery"
+                mv "${PROFILE}"/SciForge/recovery/* "${left}/recovery/" 2>/dev/null || true
+            fi
             echo "  FAIL ${name}: FreeCAD did not end cleanly (SciForge's crash marker was left; see ${left})"
             FAILED+=("scenario ${name} (exit)")
         done

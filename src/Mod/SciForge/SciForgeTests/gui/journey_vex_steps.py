@@ -177,9 +177,13 @@ def errors_free(where):
 
 # -- the file dialog ---------------------------------------------------------------------------
 def answer_file_dialog(paths, report):
-    """When the file dialog opens (Qt's own dialog, as under xvfb): type the folder into its
-    file name box and Enter (it goes there), then the file names in quotes (several files at
-    once, as Ctrl-clicking them does) and Enter."""
+    """When the file dialog opens (Qt's own dialog, as under xvfb): go to the parts folder,
+    then type the file names in quotes (several files at once, as Ctrl-clicking them does)
+    and Enter. The folder is set on the dialog, not typed: typing its path let the name box's
+    completer take the Enter on a busy machine (CI #283: the dialog stayed in the home
+    folder, a "file not found" box waited, and the scenario hung until it was killed). A
+    file dialog still open 20 s later is closed (with a message box on it), so a problem
+    fails the step instead of hanging FreeCAD."""
     folder = os.path.dirname(paths[0])
     names = " ".join('"%s"' % os.path.basename(p) for p in paths)
 
@@ -198,10 +202,9 @@ def answer_file_dialog(paths, report):
             report["error"] = "no file name box"
             dlg.reject()
             return
-        edit.setFocus()
-        QtTest.QTest.keyClicks(edit, folder)
-        QtTest.QTest.keyClick(edit, QtCore.Qt.Key_Return)
+        dlg.setDirectory(folder)
         QtCore.QTimer.singleShot(600, lambda: type_names(dlg, edit))
+        QtCore.QTimer.singleShot(20000, lambda: watchdog(dlg))
 
     def type_names(dlg, edit):
         try:
@@ -216,6 +219,20 @@ def answer_file_dialog(paths, report):
         except Exception as exc:  # never leave the dialog open
             report["error"] = str(exc)
             dlg.reject()
+
+    def watchdog(dlg):
+        try:
+            if not dlg.isVisible():  # it closed as it should (a later step's boxes are theirs)
+                return
+            box = QtWidgets.QApplication.activeModalWidget()
+            if isinstance(box, QtWidgets.QMessageBox):
+                report["error"] = "a message box stayed open: %s" % box.text()
+                box.reject()
+            report["error"] = report.get("error") or "the file dialog stayed open"
+            report["done"] = False
+            dlg.reject()
+        except Exception:  # (the dialog is gone: it closed as it should)
+            pass
 
     QtCore.QTimer.singleShot(300, look)
 
