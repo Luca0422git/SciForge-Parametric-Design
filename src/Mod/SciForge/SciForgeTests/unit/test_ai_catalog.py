@@ -464,6 +464,36 @@ class Steps(unittest.TestCase):
             }
         )
 
+    def test_sketch_on_a_face_in_a_planes_axes(self):
+        """create_sketch with plane, offset and face (rebuild plans: a pocket sketched on a
+        plate's top face follows it when the plate gets thicker; journey rebuild, beta 3):
+        accepted, and the step keeps all three; on with face is still refused."""
+        top = {"normal": [0, 0, 1], "at": {"axis": "z", "value": 10}, "count": 1}
+        args = {"plane": "XY", "offset": 10, "face": top, "geometry": [{"circle": [5, 5, 1]}]}
+        self.assertEqual(catalog.validate("create_sketch", args), [])
+        steps = catalog.to_steps("create_sketch", args, "s")
+        self.assertEqual((steps[0]["plane"], steps[0]["offset"], steps[0]["face"]), ("XY", 10, top))
+        golden.validate(
+            {
+                "id": "x",
+                "title": "x",
+                "steps": [
+                    {
+                        "op": "sketch",
+                        "id": "p",
+                        "plane": "XY",
+                        "geometry": [{"rect": [0, 0, 9, 9]}],
+                    },
+                    {"op": "extrude", "id": "e", "profile": "p", "distance": 10},
+                    dict(steps[0], id="s2"),
+                ],
+                "expect": {"volume": 1, "source": "analytic"},
+            }
+        )
+        refused = dict(args, on="Plane")
+        del refused["plane"]
+        self.assertTrue(catalog.validate("create_sketch", refused))
+
     def test_extended_extrude_keeps_the_old_steps(self):
         old = catalog.to_steps("extrude", {"profile": "s1", "distance": 10}, "e1")
         self.assertEqual(

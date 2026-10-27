@@ -1467,6 +1467,12 @@ class Panel:
         self._timer.setSingleShot(True)
         self._timer.setInterval(self.PREVIEW_MS)
         self._timer.timeout.connect(self._tick)
+        try:  # (installed at start-up; here too, before the dialog's own document watches)
+            from . import undo_leftover
+
+            undo_leftover.install()
+        except Exception as exc:
+            warn("undo step watch: %s" % exc)
         doc.openTransaction(transaction)
         self._closed = False
         set_current(self)

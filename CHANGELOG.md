@@ -59,7 +59,8 @@ SciForge's own part.
 - SciForge reads the part for the AI: its base shape and profile, holes (counterbores,
   countersinks, patterns), pockets, bosses, fillets, chamfers, revolved parts, and gives a step-by-
   step plan in Fusion's order. The AI builds it with the normal tools, so every step is a real
-  timeline step, and checks itself after each one.
+  timeline step, and checks itself after each one. The result really is parametric: make the
+  rebuilt plate thicker and its pockets and holes move with its top face.
 - **Compare with Reference** (UTILITIES > AI) shows how close the rebuild is: missing material in
   red, extra in green, and what to do next in words. **Finish Rebuild** gives the new part the
   original's name, place, material and spot in the timeline; joints, grounds and patterns that
@@ -91,6 +92,9 @@ SciForge's own part.
 - **Designs in inches:** a plain number typed into a dialog (Offset 1.5) or into a sketch's
   dimension or value box (a circle 1 across) was taken as millimetres. It is now in the
   design's units everywhere; type "20 mm" to give millimetres.
+- **Closing a design while a tool waited for a click** (Extrude, Hole, Fillet, Offset...) left
+  that tool's Undo step open: the next design's first edit went into it, and Undo then took
+  back two edits at once under the other design's tool name. Fixed for every tool.
 
 ### Known problems
 

@@ -33,6 +33,17 @@ def key_name(provider):
     return "ai.%s" % provider
 
 
+def _rebuilding():
+    """True when a part of the open design is being rebuilt with a timeline (Auto Timeline):
+    the chat may then make more requests per Send (chat_core.step_limit)."""
+    try:
+        from .. import rebuild
+
+        return bool(rebuild.active_references(App.ActiveDocument))
+    except Exception:
+        return False
+
+
 def _console(line):
     """chat_core's own log lines (already "[SciForge] ..."): into FreeCAD's log, not the
     Report view (a provider's error words are not SciForge errors)."""
@@ -201,6 +212,7 @@ class ChatPanel(QtWidgets.QWidget):
             and self.chat.base_url == base_url
         ):
             self.chat._key = key or None
+            self.chat.max_steps = chat_core.step_limit(_rebuilding())
             return self.chat
         history = self.chat.history if self.chat is not None else None
         self.chat = chat_core.Chat(
@@ -211,6 +223,7 @@ class ChatPanel(QtWidgets.QWidget):
             call_tool=self._call_tool,
             log=_console,
             history=history,
+            max_steps=chat_core.step_limit(_rebuilding()),
         )
         return self.chat
 

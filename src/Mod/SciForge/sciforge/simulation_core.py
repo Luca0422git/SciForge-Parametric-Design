@@ -1544,6 +1544,28 @@ def solver_failure(output):
     return ("CalculiX could not solve the study. %s" % " ".join(lines[-4:])).strip()
 
 
+def solver_unexplained(output):
+    """True when CalculiX stopped without one of the reasons solver_failure knows (no result
+    and no complaint: on Windows its build stopped in its default equation solver on some
+    small models)."""
+    return solver_failure(output).startswith("CalculiX could not solve the study.")
+
+
+def with_spooles(text):
+    """(CalculiX input, changed): the input with SPOOLES as its equation solver (the first
+    *STATIC line without a SOLVER= gets one), the solver every SciForge accuracy test runs
+    with; changed False when there is no such line."""
+    out, changed = [], False
+    for line in text.splitlines(True):
+        head = line.strip().upper()
+        if not changed and head.startswith("*STATIC") and "SOLVER" not in head:
+            body = line.rstrip("\r\n")
+            line = body + ", SOLVER=SPOOLES" + line[len(body) :]
+            changed = True
+        out.append(line)
+    return "".join(out), changed
+
+
 def gmsh_errors(output):
     """(Gmsh's error lines, the surface numbers they name): Gmsh numbers the model's faces
     in order, so surface 12 is the model's Face12."""

@@ -640,6 +640,26 @@ class ProgramText(unittest.TestCase):
         self.assertIn("something odd", other)
         self.assertNotIn("a b", other)  # the last four lines only
 
+    def test_a_stop_without_a_reason_is_tried_again_with_spooles(self):
+        # (Windows' CalculiX stopped after reading the input of two small cantilevers)
+        silent = " data points in all amplitudes: 2\n print requests: 2\n property cards: 0\n"
+        self.assertTrue(core.solver_unexplained(silent))
+        self.assertTrue(core.solver_unexplained(""))
+        self.assertFalse(core.solver_unexplained(" *ERROR: zero pivot in node 12"))
+        self.assertFalse(core.solver_unexplained("nonpositive jacobian determinant"))
+        inp = "*STEP\r\n*STATIC\r\n1.0,1.0,1e-05,1.0\r\n*END STEP\r\n"
+        text, changed = core.with_spooles(inp)
+        self.assertTrue(changed)
+        self.assertEqual(
+            text, "*STEP\r\n*STATIC, SOLVER=SPOOLES\r\n1.0,1.0,1e-05,1.0\r\n*END STEP\r\n"
+        )
+        text, changed = core.with_spooles("*Static, DIRECT\n1,1\n")
+        self.assertEqual((text, changed), ("*Static, DIRECT, SOLVER=SPOOLES\n1,1\n", True))
+        # a solver already named, or no static step: left as it is
+        named = "*STATIC, SOLVER=PASTIX\n"
+        self.assertEqual(core.with_spooles(named), (named, False))
+        self.assertEqual(core.with_spooles("*FREQUENCY\n10\n"), ("*FREQUENCY\n10\n", False))
+
     def test_mesh_quality_note(self):
         fine = {"worst_aspect": 15.2, "over_limit": 6, "elements": 73561}
         self.assertIsNone(core.mesh_quality_note(fine, 10))

@@ -257,8 +257,11 @@ class Validation(unittest.TestCase):
         self.assertEqual(problems, ["geometry[1].circle must have exactly 3 items"])
 
     def test_sketch_rules(self):
-        both = {"plane": "XY", "face": TOP_FACE, "geometry": [{"circle": [0, 0, 1]}]}
+        both = {"plane": "XY", "on": "Plane1", "geometry": [{"circle": [0, 0, 1]}]}
         self.assertTrue(any("not both" in p for p in self.problems("create_sketch", both)))
+        # plane with face: on the face, in the plane's axes (journey rebuild, beta 3)
+        on_face = {"plane": "XY", "face": TOP_FACE, "geometry": [{"circle": [0, 0, 1]}]}
+        self.assertFalse(any("not both" in p for p in self.problems("create_sketch", on_face)))
         two = {"plane": "XY", "geometry": [{"circle": [0, 0, 1], "rect": [0, 0, 1, 1]}]}
         self.assertTrue(any("exactly one of" in p for p in self.problems("create_sketch", two)))
         flat = {"plane": "XY", "geometry": [{"rect": [0, 0, 0, 5]}]}

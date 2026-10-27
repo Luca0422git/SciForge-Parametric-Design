@@ -285,7 +285,7 @@ panel's system prompt lists the recipe by itself (`docs_core.prompt_index`).
 | Start | one undo step "Rebuild with Timeline"; a refusal (a broken mesh, a body without a solid) is said in a small window with the reason and what to do. |
 | The AI | when SciForge's own chat has an AI set up (a key kept, or a local model's address), the AI panel opens on its Chat tab with the message in the box, not sent: the person reads it, may change it, and presses Send. Otherwise a window says how to ask an AI app (Claude Desktop, Gemini CLI, Claude Code...: add it, turn AI control on, paste the message), with the message in an editable box, already on the clipboard, Copy Message, Add an AI... and Close. The message names the body, the rebuilt body, the recipe and the four tools. |
 | Compare with Reference | a window with the match, the volumes (missing red, extra green), the faces matched, the largest gap, the verdict (the AI's, said with the buttons' names instead of the tools') and one row per difference; the 3D view shows the missing material red and the extra green, see-through, until the window closes (Close or Esc), the next compare, or Finish. Compare Again; Finish Rebuild... opens Finish. |
-| Finish Rebuild | a window: whether the rebuild matches (match, faces), Delete the original body (default) or Keep the original, hidden; Keep the reference (hidden); Finish / Cancel (Esc). One undo step "Finish Rebuild". |
+| Finish Rebuild | a window: whether the rebuild matches (match, faces), Delete the original body (the default when it matches) or Keep the original, hidden (the default when it does not match yet: journey, beta 3); Keep the reference (hidden); Finish / Cancel (Esc). One undo step "Finish Rebuild". |
 | Stop Rebuild... | (beta 3 QA) UTILITIES > AI and the rebuilt body's right-click in the 3D view: a window: Delete the rebuilt body and its steps (default) or Keep it as a body of its own; Stop Rebuild / Cancel. The original is shown again as it was (and is the active body), the reference goes. One undo step "Stop Rebuild". The AI gives a rebuild up with `delete_step` on the reference. |
 
 ## Tests
@@ -431,3 +431,57 @@ Known gaps found by the QA pass (not fixed):
   original, not the rebuild.
 - UTILITIES > AI > Compare / Finish / Stop take the active body's rebuild when several go on
   (the right-clicks take the one clicked).
+
+## Journey (beta 3)
+
+(the journey tester, branch `sf/journey-rebuild`; session log
+`docs/sciforge/sessions/journey-rebuild.md`; scenarios `SciForgeTests/gui/scenarios/
+journey_rebuild*.py`, their steps and the numbers worked out by hand in
+`SciForgeTests/gui/journey_rebuild_steps.py`)
+
+Auto Timeline used the way Luca would, with real clicks and keys only: a mounting bracket a
+stranger sent as a STEP file (four counterbored holes on a 2 x 2 grid, a pocket, a chamfer, two
+fillets) and a meshed STL plate, rebuilt as parametric parts, then used in the rest of
+SciForge. The AI is a fake local model in SciForge's own chat that reads only SciForge's answers
+(as scenario `rebuild_chat`): describe_reference's plan, compare_to_reference after every
+feature, the fixes the verdict offers, finish_rebuild when the person says so.
+
+| Scenario | What a person does | Checks |
+|---|---|---|
+| `journey_rebuild` | Insert STEP (bracket and a clamp), a joint (J, two clicks), right-click > Rebuild with Timeline (AI)..., Send; Compare with Reference 100 %; "finish" in the chat; one Ctrl+Z / Ctrl+Y; the base extrude double-clicked 10 -> 12, the hole 6 -> 6.5 | 86 |
+| `journey_rebuild_sim` | the same rebuild, then SIMULATION: Fixed on the counterbores' floors, 1000 N down on the far end, Solve; DESIGN: 2 mm thicker; out of date; Solve again | 76 |
+| `journey_rebuild_mesh` | Insert Mesh, rebuilt by hand (no AI set up): typed rectangle, E 8, Compare, an early Finish (Cancel), saved and opened again half way, two circles on the top face, E -8 All, Compare done, Finish; saved, opened again, made 10 thick | 65 |
+| `journey_rebuild_reopen` | the AI's rebuild saved half way, closed, opened again, finished by hand; saved, opened again; the edits | 88 |
+
+What the journey found and fixed (each with a test that fails on the code before):
+
+| Found | Fixed |
+|---|---|
+| A rebuilt part made 2 mm thicker (its base extrude double-clicked, 10 -> 12) kept its pocket and its counterbores at the old height, sealed under a 2 mm skin: two shells, 65115 mm3 instead of 64889 by hand, and check_design said OK. The plan sketched every feature that starts on the top face on an origin plane at a fixed offset | those sketches go on the top face itself, in the plane's axes (`create_sketch` takes `face` with `plane` and `offset` now: attached to the face, turned and moved on it so the plan's numbers stay the plane's; the plane at its offset when the face is not found); describe_reference adds the face when the part has exactly one flat face there. Tests: `test_ai_catalog`, `rebuild_e2e` (one shell after the early edit), `journey_rebuild` |
+| The recipe's own example said "its holes still go through" at 12 mm: its hole sketch was at offset 10, so the top 2 mm stayed closed (27576.3 mm3 instead of 27350.1); the docs runner only checked the size | the recipe sketches the holes on the top face, a good habit says why, and the last call expects 27350.1 mm3 (docs runner) |
+| Compare said a meshed plate's holes were at (60.003, 24) and offered the Single Hole there: a 63-facet polygon's box is off its axis | the faceted region is placed by its centroid: (60, 24) (`test_rebuild_core`) |
+| Finish Rebuild in the window deleted the original by default even when the rebuild did not match yet (a meshed plate at 92 %, its holes not cut) | a rebuild that does not match keeps the original, hidden, by default; Delete stays the default for one that matches (`journey_rebuild_mesh`) |
+| The same for a hole drilled in a boss's top or in a pocket's floor: the boss made taller or the pocket deeper left the hole behind, sealed inside (three shells) | the plan puts a sketch on the end face of any earlier extrude it lies on (a join's top, a cut's floor) when the part has exactly one flat face there (`rebuild_e2e` follow_checks) |
+| An AI that left the plan's chamfer out got "the differences could not be listed (OpenCASCADE could not split the two parts, so the volumes were sampled)" and no ready call: the strip's end triangle was read at the middle of its parameters, on its long side, where it also lies on the original's end face, so the strip counted as common | a piece's face is read at a point off its edges: "a chamfered edge, about 2 (60 mm long)", its call ready (`rebuild_e2e` strip_checks; `journey_rebuild`, whose AI forgets the chamfer) |
+
+Tried and found right: the chat's ready message, the AI's steps as one undo step each, the
+timeline in Fusion's order (sketch, extrude, sketch, cut, sketch, hole, pattern, chamfer,
+fillet), Compare 100 %, Finish (the original's name, component and place; one undo step), the
+joint made before the rebuild moved onto the rebuild at Finish and back at Ctrl+Z, the clamp
+riding up 2 mm with the thicker top, the pattern following the hole's new diameter, the
+study out of date after the edit and the stress dropping (120 -> 87 MPa; by hand 0.68 at the
+pocket), Save / close / open again half way (the ghost, the active rebuilt body, the joint
+still on the original) and after Finish, both for the AI's rebuild and the one by hand.
+
+Known gaps found by the journey (not fixed):
+
+- A face is followed only when it is the end face of an extrude of the plan on the same
+  plane and the part has exactly one flat face there; a feature that starts on a face made
+  otherwise (a revolve, a side face along another axis, two faces at one height) is still
+  sketched at a fixed offset.
+- SciForge's own chat stops after 25 requests per Send (`chat_core.MAX_STEPS`): a model that
+  makes one call per request and follows the recipe's loop (describe, every plan step, a
+  compare after every feature) reaches it on a part of more than about 14 plan steps (the
+  bracket took 17), and the person then says "continue" (counted, not run).
+- A sketch made by hand on a face holds the face's projected outline (Fusion's auto project),
+  so pressing E from it picks no profile: the person clicks the circles (as in Fusion).

@@ -1646,6 +1646,58 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
 
 ## Session log
 
+### Session log: Beta 3, Static Stress + Auto Timeline + VEX (`develop`, 2026-10-26/27)
+
+Luca (2026-10-26): Auto Timeline and Static Stress simulation are beta 3 ("stress-only sim is
+fine"), the joint fixes / ghost / diagonal arrows went to patch 0.1.0-beta.2.2 (another
+session, released), then "put the vex stuff in beta 3 ... one shot for beta 3". VEX: "as long
+as the step files work and we are able to import large amounts of items into an assembly";
+"when i say align, i mean align ... center points on squares and such".
+
+How it was built (plan `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`):
+the spine and scaffold first on a local `beta3` branch (ribbon tabs, workspace switch, module
+contracts, icons), then six builders in git worktrees (`/home/user/wt/<name>`, branches
+`sf/<name>`): sim-core, sim-ui, sim-results, at-recognize, at-tools, vex; then independent QA
+passes (sim-engine-qa, autotimeline-qa, vex-qa, sim-qa), two user journeys (journey-vex,
+journey-rebuild) and one check of a beta-2 leftover (undo-leftover). Each wrote a session log
+`docs/sciforge/sessions/beta3-<name>.md`. Integration: merge into `beta3`, regenerate
+(`make_ai_docs.py`, `parity.py`, `make_icons.py`), unit + key scenarios, then
+`git push origin beta3:develop` (always a fast-forward).
+
+What integration found (beyond the builders' own tests):
+- CI's plain python3 has no numpy: `simulation_core._least_squares` (reactions shared between
+  constraints) failed the unit tests there; it is a plain-Python Jacobi SVD now, and the CI
+  installs python3-numpy so the results tab's numpy tests run too.
+- VEX's rule "the same STEP file again is another occurrence" met the rebuild scenarios'
+  helper (it inserted one file three times expecting three bodies): the helper passes
+  `reuse=False`.
+- 560+ GUI scenarios ran past 80 min in six CI parts: nine parts now (tests and build).
+- New CI job "tests (Windows simulation)" (`tools/sciforge/windows_sim.sh`): the hand
+  calculations on the official FreeCAD for Windows. Its first run: 337 of 339 passed; two
+  small cantilevers stopped in CalculiX without a reason. The engine now solves such a stop
+  again with SOLVER=SPOOLES (the solver of every Linux accuracy run) and logs CalculiX's exit
+  code and last lines.
+- The container restarted four times (about 23:26, 00:31, 01:15 UTC and earlier): disk and git
+  survive, processes and background agents stop; agents were resumed with SendMessage and
+  re-ran lost test runs. Keep reports in the scratchpad and /home/user/fc.
+
+Release: nothing compiled changed since 0.1.0-beta.2 (core_id unchanged), so beta 3 can go out
+with Actions > SciForge patch release (notes start "Built on 0.1.0-beta.2's program", a new
+wording for a non-patch number) or with a full build (tag). Luca decides.
+
+More integration finds after the first push:
+- A closed design's waiting dialog (Extrude, Hole, Fillet, Offset waiting for a pick) left
+  FreeCAD's application-wide undo step open: the next design's edits went into it
+  (`sciforge/undo_leftover.py`, one watch for every dialog; scenario
+  `dialog_closed_design_undo`, 241 checks; branch `sf/undo-leftover`).
+- The rebuild journey (`sf/journey-rebuild`, four journey scenarios) found that a rebuilt part
+  was not really parametric (a thicker plate buried its pocket and holes): sketches of the
+  plan now sit on the face they start from; and the chat stopped the AI after 25 requests:
+  80 while a rebuild goes on (`chat_core.step_limit`).
+- CI #277: every GUI scenario passed but `sim_core_job`'s "longest pause under 3 s" (3.21 s on
+  a runner with software GL): the limit is 4 s (the freezes it guards against were 84 s and
+  minutes).
+
 ### Session log: Patch 0.1.0-beta.2.2 (`develop`, 2026-10-26)
 
 Brief `docs/sciforge/dev/briefs/patch-beta2.2.md` (four items, SciForge files only).

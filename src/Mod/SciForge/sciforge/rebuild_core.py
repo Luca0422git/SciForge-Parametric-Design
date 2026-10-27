@@ -265,6 +265,11 @@ def _faceted_cylinder(region, volume, dims, side):
             continue
         box = region.get("bbox") or [0, 0, 0, 0, 0, 0]
         centre = [(box[i] + box[i + 3]) / 2.0 for i in range(3)]
+        # across the axis, the polygon's centroid (its box is off the axis when it has an
+        # odd number of corners: a mesh's 63-facet hole at x 60 was said at 60.003)
+        middle = region.get("center")
+        if middle and len(middle) == 3:
+            centre = [centre[i] if i == k else float(middle[i]) for i in range(3)]
         low, high = list(centre), list(centre)
         low[k], high[k] = box[k], box[k + 3]
         diameter = _mesh_size(2 * radius)
