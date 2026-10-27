@@ -275,10 +275,64 @@ def check_balloons_on_moved_components():
         _close(doc)
 
 
+def check_balloons_quick_on_a_big_part():
+    """Before: every edge tried for a balloon measured every part of the view again (the
+    view's centre), so the parts list of the VEX piece took 140 s headless (more in the
+    window, frozen): now the centre is measured once per parts list (8 s)."""
+    import time
+
+    from sciforge import drawing
+
+    files = _files(["c_channel_1x2x1x25", "keps_nut", "standoff_1in", "screw_8_32_x_0_5"])
+    doc = App.newDocument("JourneyVexBalloonsBig")
+    try:
+        found = []
+        for k, (name, at) in enumerate(
+            (
+                ("c_channel_1x2x1x25", V(10, 20, 0)),
+                ("keps_nut", V(60, -20, 0)),
+                ("standoff_1in", V(120, -20, 0)),
+                ("screw_8_32_x_0_5", V(180, -20, 0)),
+            )
+        ):
+            found.append(_body(doc, _insert(doc, files[name], App.Placement(at, App.Rotation()))))
+        page = drawing.create_drawing(doc, found)
+        view = drawing.add_base_view(page, found, 200.0, 150.0, "Top", scale=0.5)
+        doc.recompute()
+        calls = {"n": 0}
+        measure = drawing.centre_of
+
+        def counted(*args, **kwargs):
+            calls["n"] += 1
+            return measure(*args, **kwargs)
+
+        drawing.centre_of = counted
+        try:
+            t0 = time.time()
+            _table, made = drawing.add_parts_list(page, view, (300.0, 250.0))
+            seconds = time.time() - t0
+        finally:
+            drawing.centre_of = measure
+        _out("balloons big: a balloon per part", len(made) == 4, len(made))
+        _out(
+            "balloons big: the parts (the view's centre) measured once, not once per edge tried",
+            calls["n"] <= 2,
+            calls["n"],
+        )
+        _out(
+            "balloons big: the parts list of a 1x2x1x25 channel and three parts in under 10 s",
+            seconds < 10.0,
+            "%.1f s" % seconds,
+        )
+    finally:
+        _close(doc)
+
+
 CHECKS = [
     check_align_is_not_a_pending_move,
     check_align_after_a_captured_position,
     check_balloons_on_moved_components,
+    check_balloons_quick_on_a_big_part,
 ]
 
 
