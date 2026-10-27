@@ -58,17 +58,25 @@ the RESULTS legend), then 86.7 MPa (0.72) and 2.39.
 
 | Bug | Fix | Test (fails on the old code) | Commit |
 |---|---|---|---|
-| A rebuilt part made 2 mm thicker kept its pocket and counterbores at the old height, sealed under a 2 mm skin (two shells, 65115 mm3 instead of 64889; check_design OK): the plan sketched what starts on the top face on an origin plane at a fixed offset | the plan's sketches at the base's top go on that face, in the plane's axes (`create_sketch` takes `face` with `plane` and `offset`: `ai/ops/core.py` `_sketch_on_face_as_plane`; `recognize._on_top_face`; catalogue and golden schema accept the pair) | `test_ai_catalog.test_sketch_on_a_face_in_a_planes_axes`; `rebuild_e2e` "nothing is sealed inside the part (one shell)" (pocket_boss failed); `journey_rebuild` | 447231f0 |
+| A rebuilt part made 2 mm thicker kept its pocket and counterbores at the old height, sealed under a 2 mm skin (two shells, 65115 mm3 instead of 64889; check_design OK): the plan sketched what starts on the top face on an origin plane at a fixed offset | the plan's sketches at the base's top go on that face, in the plane's axes (`create_sketch` takes `face` with `plane` and `offset`: `ai/ops/core.py` `_sketch_on_face_as_plane`; `recognize._on_top_face`; catalogue and golden schema accept the pair) | `test_ai_catalog.test_sketch_on_a_face_in_a_planes_axes`; `rebuild_e2e` "nothing is sealed inside the part (one shell)" (pocket_boss failed); `journey_rebuild` | 447231f0, aa858365 |
 | Compare said a meshed plate's holes were at (60.003, 24) and gave the Single Hole there (a 63-facet polygon's box is off its axis) | the faceted region is placed by its centroid across the axis | `test_rebuild_core.test_a_mesh_hole_with_an_odd_number_of_facets_is_at_its_axis` (old: 60.0128) | 35b9beb9 |
 | The recipe's example said its holes still go through at 12 mm; they did not (27576.3 mm3 instead of 27350.1) | the recipe sketches them on the top face, a good habit says why, the last call expects 27350.1 mm3 | the docs runner on the recipe | e034cd3a |
 | Finish Rebuild in the window deleted the original by default even when the rebuild did not match yet (the meshed plate at 92 %, holes not cut) | a rebuild that does not match keeps the original, hidden, by default | `journey_rebuild_mesh` "keeps the original by default" | 2075b5f6 |
 | A hole in a boss's top or in a pocket's floor stayed behind when the boss got taller or the pocket deeper (sealed inside: three shells) | the plan sketches on the end face of any earlier extrude (a join's top, a cut's floor) | `rebuild_e2e` follow_checks (the first version: three shells) | 015b698f |
-| An AI that forgot the plan's chamfer got "the differences could not be listed ... sampled" and no call (the strip's end triangle was read on its long side, which also lies on the original's end face: the strip counted as common) | a piece's face is read at a point off its edges | `rebuild_e2e` strip_checks (old: sampled); `journey_rebuild` (the AI forgets the chamfer, the verdict's call brings it back) | 640fcd62 |
+| An AI that forgot the plan's chamfer got "the differences could not be listed ... sampled" and no call (the strip's end triangle was read on its long side, which also lies on the original's end face: the strip counted as common) | a piece's face is read at a point off its edges | `rebuild_e2e` strip_checks (old: sampled); `journey_rebuild` (the AI forgets the chamfer, the verdict's call brings it back) | 640fcd62, c935d616 (only flat faces checked: as fast as before) |
 | (unit test) `test_ai_tools_core.test_sketch_rules` expected plane with face to be refused | it is accepted now (on the face, in the plane's axes); plane with on is still refused | the test itself | 55140b89 |
 
-## Test runs (OMP_NUM_THREADS=1, FreeCAD 1.1.4)
+## Test runs (OMP_NUM_THREADS=1, FreeCAD 1.1.4, on the branch after the beta3 merge)
 
-See the end of this file for the final runs.
+- `run_tests.sh --only base`: all passed: unit 2724, golden 614 + 2 xfail, headless AI tools
+  339 calls (131 tools), documentation examples 157 items / 1087 calls, MCP agent 81, Auto
+  Timeline end to end 6 parts / 153 checks (with the one-shell, follow and strip checks) and
+  through MCP 15, recognition 71 parts, simulation 138 and the QA's 205, smoke 79, journey 25,
+  restarts.
+- Compare speed with the strip fix (a 198-face plate with 96 chamfered holes, load about 3):
+  the same solid 0.10 to 0.27 s, the base only 0.67 to 0.87 s (before: 0.72 to 0.81), 10 holes
+  left 1.63 s (1.65 to 1.82), the chamfers left 1.44 to 1.47 s (1.46 to 1.58).
+- GUI scenarios: see "Final scenario run" at the end.
 
 ## Gaps (not fixed)
 
@@ -113,9 +121,13 @@ parametric where it matters most. Making the plate 2 mm thicker left the pocket 
 counterbores at the old height, sealed inside the part, and nothing said so. A part a
 person draws in Fusion would have its pocket on the top face, and so would follow. That is
 fixed: the rebuild now sketches those features on the top face, so a thicker plate keeps them
-on top; the AI's instructions were wrong in the same way and are fixed too. Smaller fixes: the
-holes of a meshed part are placed at round numbers, and Finish no longer deletes the original
-by default when the rebuild does not match yet.
+on top, and the same for a hole on a boss or in a pocket's floor; the AI's instructions were
+wrong in the same way and are fixed too. When the AI (on purpose, in the test) forgot a
+chamfer, Compare could not say what was missing ("the volumes were sampled"): a small
+mistake in how Compare looks at the pieces, fixed, so it now says "a chamfered edge, about 2"
+with the call ready, and the AI put it back by itself. Smaller fixes: the holes of a meshed
+part are placed at round numbers, and Finish no longer deletes the original by default when
+the rebuild does not match yet.
 
 Simulation on the rebuilt part works the way you would expect: holding the counterbores and
 pushing the far end gave a safety factor of 1.7; after making the plate thicker the study
