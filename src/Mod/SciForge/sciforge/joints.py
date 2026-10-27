@@ -2888,6 +2888,32 @@ def remember_places(doc, moving):
         _set_json(asm, PROPS["baseline"], base)
 
 
+def accept_places(doc, parts):
+    """`parts` stand where a step of the timeline put them (an Align of components): that is
+    where they belong now, as after a captured move, so Capture Position / Revert keep them
+    there and the next joint command does not ask about them (Fusion: Align is a timeline
+    step, not a pending move). Only these parts: one dragged elsewhere stays pending.
+    Returns True when the design has joints (a baseline to update)."""
+    asm = assembly(doc)
+    parts = [p for p in parts or () if p is not None]
+    if asm is None or not parts:
+        return False
+    base = baseline(doc)
+    for part in parts:
+        base[part.Name] = _plc_list(part.Placement)
+    bodies.add_prop(asm, "App::PropertyString", PROPS["baseline"], "SciForge")
+    _set_json(asm, PROPS["baseline"], base)
+    found = positions(doc)
+    if found:  # the newest captured position says where the parts it knows belong
+        stored = _json(found[-1], PROPS["placements"]) or {}
+        known = [part for part in parts if part.Name in stored]
+        for part in known:
+            stored[part.Name] = _plc_list(part.Placement)
+        if known:
+            _set_json(found[-1], PROPS["placements"], stored)
+    return True
+
+
 def positions_dirty(doc, tol=1e-6):
     """True when a part stands elsewhere than the last capture / the joints put it."""
     stored = last_positions(doc)
