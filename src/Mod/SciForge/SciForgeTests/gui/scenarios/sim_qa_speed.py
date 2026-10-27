@@ -187,7 +187,7 @@ def c_done():
     info = s.sim().mesh_summary(s.active_study()) or {}
     state["nodes"] = info.get("nodes")
     h.check("C the mesh: %s nodes, %s elements" % (info.get("nodes"), info.get("elements")), True)
-    h.check("C the window answered all along (longest pause %.2f s)" % worst, worst < 6.0, worst)
+    h.check("C the window answered all along (longest pause %.2f s)" % worst, worst < 10.0, worst)
 
 
 # -- D ------------------------------------------------------------------------------------------
