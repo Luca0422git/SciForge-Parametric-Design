@@ -132,3 +132,18 @@ the rebuild does not match yet.
 Simulation on the rebuilt part works the way you would expect: holding the counterbores and
 pushing the far end gave a safety factor of 1.7; after making the plate thicker the study
 said it was out of date and the new solve gave 2.4.
+
+## Final scenario run
+
+On the branch with beta3 merged a second time (02:45, the undo-leftover fix), one FreeCAD at a
+time, `OMP_NUM_THREADS=1`: `journey_rebuild` 87, `journey_rebuild_mesh` 65,
+`journey_rebuild_reopen` 88, `journey_rebuild_sim` 76, `rebuild_chat` 20,
+`rebuild_compare_finish` 66, `rebuild_mesh_reopen` 39, `rebuild_qa_joints` 81, `rebuild_start`
+70: all PASS. Before that merge, the same nine plus the AI scenarios that build with the tools
+(`ai_agent_e2e` 87, `ai_bridge` 44, `ai_chat` 20, `ai_docs_gui` 18, `ai_panel` 27,
+`ai_tools_gui` 38, `ai_undo_steps` 17): all PASS.
+
+Also tried by hand (headless) and found right: the rebuilt bracket's sketch dimensions changed
+through set_model_parameter (base.width 100 -> 120: + 12000 mm3; pocket.width 30 -> 20:
++ 1500; one shell, check_design OK), and the bracket's component moved and turned (200, 50,
+30, 30 degrees) before the rebuild: match 1, then 2 mm thicker: 64888.956 mm3, one shell.
