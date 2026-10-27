@@ -463,6 +463,8 @@ What the journey found and fixed (each with a test that fails on the code before
 | The recipe's own example said "its holes still go through" at 12 mm: its hole sketch was at offset 10, so the top 2 mm stayed closed (27576.3 mm3 instead of 27350.1); the docs runner only checked the size | the recipe sketches the holes on the top face, a good habit says why, and the last call expects 27350.1 mm3 (docs runner) |
 | Compare said a meshed plate's holes were at (60.003, 24) and offered the Single Hole there: a 63-facet polygon's box is off its axis | the faceted region is placed by its centroid: (60, 24) (`test_rebuild_core`) |
 | Finish Rebuild in the window deleted the original by default even when the rebuild did not match yet (a meshed plate at 92 %, its holes not cut) | a rebuild that does not match keeps the original, hidden, by default; Delete stays the default for one that matches (`journey_rebuild_mesh`) |
+| The same for a hole drilled in a boss's top or in a pocket's floor: the boss made taller or the pocket deeper left the hole behind, sealed inside (three shells) | the plan puts a sketch on the end face of any earlier extrude it lies on (a join's top, a cut's floor) when the part has exactly one flat face there (`rebuild_e2e` follow_checks) |
+| An AI that left the plan's chamfer out got "the differences could not be listed (OpenCASCADE could not split the two parts, so the volumes were sampled)" and no ready call: the strip's end triangle was read at the middle of its parameters, on its long side, where it also lies on the original's end face, so the strip counted as common | a piece's face is read at a point off its edges: "a chamfered edge, about 2 (60 mm long)", its call ready (`rebuild_e2e` strip_checks; `journey_rebuild`, whose AI forgets the chamfer) |
 
 Tried and found right: the chat's ready message, the AI's steps as one undo step each, the
 timeline in Fusion's order (sketch, extrude, sketch, cut, sketch, hole, pattern, chamfer,
@@ -475,9 +477,10 @@ still on the original) and after Finish, both for the AI's rebuild and the one b
 
 Known gaps found by the journey (not fixed):
 
-- Only the base's top face is followed: a feature that starts on another face (a hole on top
-  of a boss, a cut in a pocket's floor) is still sketched at a fixed offset, so making that
-  boss taller leaves the hole where it was.
+- A face is followed only when it is the end face of an extrude of the plan on the same
+  plane and the part has exactly one flat face there; a feature that starts on a face made
+  otherwise (a revolve, a side face along another axis, two faces at one height) is still
+  sketched at a fixed offset.
 - SciForge's own chat stops after 25 requests per Send (`chat_core.MAX_STEPS`): a model that
   makes one call per request and follows the recipe's loop (describe, every plan step, a
   compare after every feature) reaches it on a part of more than about 14 plan steps (the

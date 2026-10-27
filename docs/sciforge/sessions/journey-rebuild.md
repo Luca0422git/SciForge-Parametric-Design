@@ -62,6 +62,9 @@ the RESULTS legend), then 86.7 MPa (0.72) and 2.39.
 | Compare said a meshed plate's holes were at (60.003, 24) and gave the Single Hole there (a 63-facet polygon's box is off its axis) | the faceted region is placed by its centroid across the axis | `test_rebuild_core.test_a_mesh_hole_with_an_odd_number_of_facets_is_at_its_axis` (old: 60.0128) | 35b9beb9 |
 | The recipe's example said its holes still go through at 12 mm; they did not (27576.3 mm3 instead of 27350.1) | the recipe sketches them on the top face, a good habit says why, the last call expects 27350.1 mm3 | the docs runner on the recipe | e034cd3a |
 | Finish Rebuild in the window deleted the original by default even when the rebuild did not match yet (the meshed plate at 92 %, holes not cut) | a rebuild that does not match keeps the original, hidden, by default | `journey_rebuild_mesh` "keeps the original by default" | 2075b5f6 |
+| A hole in a boss's top or in a pocket's floor stayed behind when the boss got taller or the pocket deeper (sealed inside: three shells) | the plan sketches on the end face of any earlier extrude (a join's top, a cut's floor) | `rebuild_e2e` follow_checks (the first version: three shells) | 015b698f |
+| An AI that forgot the plan's chamfer got "the differences could not be listed ... sampled" and no call (the strip's end triangle was read on its long side, which also lies on the original's end face: the strip counted as common) | a piece's face is read at a point off its edges | `rebuild_e2e` strip_checks (old: sampled); `journey_rebuild` (the AI forgets the chamfer, the verdict's call brings it back) | 640fcd62 |
+| (unit test) `test_ai_tools_core.test_sketch_rules` expected plane with face to be refused | it is accepted now (on the face, in the plane's axes); plane with on is still refused | the test itself | 55140b89 |
 
 ## Test runs (OMP_NUM_THREADS=1, FreeCAD 1.1.4)
 
@@ -69,8 +72,9 @@ See the end of this file for the final runs.
 
 ## Gaps (not fixed)
 
-- Only the base's top face is followed: a hole on top of a boss, or a cut in a pocket's floor,
-  is still sketched at a fixed offset (making the boss taller leaves the hole where it was).
+- A face is followed only when it is the end face of an extrude of the plan on the same plane
+  and the part has exactly one flat face there (a face of a revolve, or two faces at one
+  height, still get a sketch at a fixed offset).
 - SciForge's own chat stops after 25 requests per Send (`chat_core.MAX_STEPS`); a model that
   makes one call per request reaches it on a part of more than about 14 plan steps (the
   bracket took 17): the person says "continue".
