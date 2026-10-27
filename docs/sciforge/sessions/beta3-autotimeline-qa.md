@@ -150,8 +150,48 @@ conflicted with mine in `_best_prismatic`: theirs kept), a5682d67 (db65af29), 71
 (28b49f4d: its round-floor rule broke threads: fixed in dd8022eb; parity doc conflicts
 resolved by hand, the AI docs copy regenerated), d0592799 (dd0b0fe2: its tangled-hole rule
 broke threads: fixed in 325d48f4; at-recognize took QA's lines verbatim each time), 2d7806ac
-(25ce07ba). After each: recognition bench and rebuild e2e passed (see the report for the
-numbers).
+(25ce07ba), f4f17ac9 (260f24bf), and the last one, 192b8875: `sf/at-recognize` final at
+abda39eb (the builder had finished). After each: recognition bench and rebuild e2e passed.
+
+## Results on the final branch (after the last merge)
+
+- `run_tests.sh --only headless`: AI tools 317 calls / 121 tools, 0 failed; docs 146 items, 0
+  failed; agent through MCP 81 checks, 0 failed; rebuild e2e 6 parts, 140 checks (with the
+  QA checks), 0 failed; rebuild e2e through MCP 14 checks, 0 failed; recognition bench 71
+  parts, 0 failed.
+- `--only base` on the final code (7.9 min): unit 2551 tests OK (9 skipped); golden models
+  614 pass, 2 expected failures (plate_hole_grid, sf_loft_merge_slot_volume, as before);
+  headless as above; smoke, journey and the two restarts all passed.
+- GUI scenarios (25, all passed): rebuild_start 70, rebuild_compare_finish 66,
+  rebuild_mesh_reopen 39, rebuild_chat 20, rebuild_qa_joints 81; and the scenarios of the
+  shared files QA changed: ai_agent_e2e 87, ai_bridge 44, ai_chat 20, ai_docs_gui 18,
+  ai_panel 27, ai_tools_gui 38, ai_undo_steps 17, browser_opacity_hover 46,
+  components_basic 252, data_panel_fusion 60, exchange2_link 42, hole 99,
+  inspect_com_interference 79, joints_basic 86, joints_components 47,
+  marking_menu_command 31, modeling2_holes 84, ribbon_customize 57, timeline_browser 92,
+  versions_link 25 (earlier on the branch also timeline_browser_2 134, timeline_browser_qa
+  222, polish2_data_panel 38).
+- Lint: black -l 100 and flake8 (E203, E741 ignored) on every file QA changed (one long line
+  in `ai/executor.py`'s NOTHING_CHANGED text is older than beta 3 and was left).
+- `make_ai_docs.py --check` and `parity.py --check`: up to date.
+
+## Known gaps left (not fixed)
+
+- A VEX C-channel still takes about 25 s in describe_reference (at-recognize's sections and
+  booleans); a 434-face connector about 31 to 45 s (one OpenCASCADE defeaturing call that
+  cannot be interrupted); the AI's call waits that long, the window shows nothing meanwhile.
+- A free-form face that is not a text or a logo on a flat face (a loft, letters on a round
+  face) leaves the base unread: the AI builds the base by hand (said clearly now).
+- A rebuilt thread's bore face is not matched face for face (its seam differs): finish with
+  even_if_different.
+- Stop Rebuild and an undone start show the original again even if it was hidden before the
+  rebuild started.
+- With keep_original, a design that links the part keeps following the hidden original, not
+  the rebuild.
+- The window's Compare / Finish in UTILITIES > AI still take the active body's rebuild (the
+  right-clicks take the one clicked).
+- Insert STEP names a body without a product name "Body1" (the design's first body has the
+  same label): not Auto Timeline's.
 
 ## FreeCAD facts learned
 

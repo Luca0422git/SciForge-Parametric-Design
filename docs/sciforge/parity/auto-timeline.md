@@ -425,3 +425,9 @@ Known gaps found by the QA pass (not fixed):
   Rebuild... in UTILITIES > AI: the rebuilt body's right-click is gone with it).
 - A thread rebuilt with SciForge's thread tool on the planned hole matches every face but the
   bore's (its seam differs): finish with even_if_different.
+- Stop Rebuild (and an undone start) shows the original again even if it was hidden before
+  the rebuild started.
+- Finish with keep_original: a design that links the part keeps following the hidden
+  original, not the rebuild.
+- UTILITIES > AI > Compare / Finish / Stop take the active body's rebuild when several go on
+  (the right-clicks take the one clicked).
