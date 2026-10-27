@@ -86,22 +86,23 @@ plain `freecadcmd` in those two minutes would have been written in inches.
 
 ## Speed (re-measured; the machine shared with the other agents, load about 2 to 5)
 
-The 298-part robot (`vex_robot`, 5960 objects), my run against the builder's best:
+The 298-part robot (`vex_robot`, 5960 objects), two QA runs (best, the spread of every try
+in brackets) against the builder's best:
 
-| What | Target | Builder's best | QA run 1 |
+| What | Target | Builder's best | QA (2 runs) |
 |---|---|---|---|
-| Open the robot | < 30 s | 36 s | 29.5 s |
-| Browser rows rebuilt (forced) | < 0.3 s | 0.42 s | 0.37 s (0.37 - 0.50) |
-| Browser: the design read again | | 0.30 s | 0.21 s (0.21 - 0.24) |
-| Timeline refresh | | 0.12 s | 0.08 s (0.08 - 0.13) |
-| Hover a rail's web: first time / next times | < 0.1 s | 0.05 - 0.15 / 0.014 s | 0.04 / 0.011 s (median 0.027) |
-| Drive the joint by script: one step | live | 0.05 s (median 0.45 - 0.68) | 0.04 s (median 0.28) |
-| Drive Joints dialog: one slider step | | 0.70 s (median 0.96) | 0.45 s (median 0.55) |
-| Orbit: one frame | | 0.35 s | 0.25 s (median 0.33) |
-| Insert twenty STEP files | < 20 s | 21.8 s | 17.7 s |
-| Save | < 10 s | 3.8 s | 3.7 s |
-| Recompute after the screw's part changed (130 occurrences) | | 14.1 s | 8.5 s (8.5 - 9.7) |
-| Build the robot by script | | 83 s | 65 s |
+| Open the robot | < 30 s | 36 s | 27.9 s (27.9 - 29.5) |
+| Browser rows rebuilt (forced) | < 0.3 s | 0.42 s | 0.37 s (0.37 - 0.62) |
+| Browser: the design read again | | 0.30 s | 0.21 s (0.21 - 0.25) |
+| Timeline refresh | | 0.12 s | 0.08 s (0.08 - 0.15) |
+| Hover a rail's web: first time / next times | < 0.1 s | 0.05 - 0.15 / 0.014 s | 0.04 / 0.010 s (0.010 - 0.34) |
+| Drive the joint by script: one step | live | 0.05 s | 0.04 s (0.04 - 0.59; medians 0.26 - 0.28) |
+| Drive Joints dialog: one slider step | | 0.70 s (median 0.96) | 0.45 s (0.45 - 1.01; medians 0.55 - 0.74) |
+| Orbit: one frame | | 0.35 s | 0.25 s (0.25 - 0.78) |
+| Insert twenty STEP files | < 20 s | 21.8 s | 15.0 s (15.0 - 17.7) |
+| Save | < 10 s | 3.8 s | 3.0 s (3.0 - 3.7) |
+| Recompute after the screw's part changed (130 occurrences) | | 14.1 s | 7.9 s (7.9 - 9.7) |
+| Build the robot by script | | 83 s | 62 s (62 - 65) |
 
 Lower numbers than the builder's mostly because the machine was less loaded; no step got
 slower. Only the forced browser rebuild still misses its target.
