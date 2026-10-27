@@ -115,31 +115,37 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 
 ## Scenarios (last runs)
 
+Final batch on the merged engine (`sf/sim-engine-qa` merged), 00:40-01:01 UTC, with
+`OMP_NUM_THREADS=1`, one FreeCAD at a time:
+
 | Scenario | Checks | Result |
 |---|---|---|
 | `sim_setup_bracket` | 80 | PASS |
-| `sim_setup_dialogs` | 92 | PASS |
 | `sim_setup_browser` | 67 | PASS |
-| `sim_setup_documents` | 71 | PASS |
-| `sim_setup_kinds` | 72 | PASS |
-| `sim_setup_workspace` | 70 | PASS |
-| `sim_setup_components` | 42 | PASS |
-| `sim_setup_glyphs` | 20 | PASS |
-| `sim_setup_units` | 39 | PASS |
 | `sim_setup_canvas` | 29 | PASS |
-| `sim_setup_more` | 63 | PASS |
-| `sim_setup_lost` | 60 | PASS |
-| `sim_setup_two` | 52 | PASS |
-| `sim_setup_mesh` | 42 | PASS |
-| `sim_setup_odd` | 82 | PASS |
+| `sim_setup_components` | 42 | PASS |
+| `sim_setup_dialogs` | 92 | PASS |
+| `sim_setup_documents` | 71 | PASS |
 | `sim_setup_during` | 30 | PASS |
+| `sim_setup_glyphs` | 20 | PASS |
+| `sim_setup_kinds` | 72 | PASS |
+| `sim_setup_lost` | 60 | PASS |
+| `sim_setup_mesh` | 42 | PASS |
+| `sim_setup_more` | 63 | PASS |
+| `sim_setup_odd` | 82 | PASS |
+| `sim_setup_two` | 52 | PASS |
+| `sim_setup_units` | 39 | PASS |
+| `sim_setup_workspace` | 70 | PASS |
 
-All sixteen in one batch (23:54-00:15 UTC, with sim-core's `sim_core_job` (29) and the five
-below): every one passes (`sim_setup_odd` was 80 then, 82 since). Shared files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser` (92),
+The engine's own `sim_core_job` (29) and `sim_qa_engine` (15) pass on this branch too. Shared
+files touched (`browser_ui.py`, `ribbon_config.py`, `marking_menu.py`): `timeline_browser` (92),
 `drawing_new` (63), `browser_opacity_hover` (46), `ribbon_sweep` (221) and `hole_qa_more` (363,
-the marking menu) pass. `--only base` (23:05): unit tests 2541 OK, golden models 614 + 2 xfail,
-headless AI 306 calls 0 failed, docs examples, agent end to end, simulation benchmarks (138),
-GUI smoke / journey / restart: all passed.
+the marking menu) pass. `--only base` (01:01-01:10): unit tests 2550 OK (9 skipped), golden
+models 614 + 2 xfail, headless AI 306 calls 0 failed, docs examples 152 items 0 failed, agent
+end to end 81 checks, simulation benchmarks 138 checks, the engine QA's accuracy cases 205
+checks, GUI smoke / journey / restart: all passed. `sim_setup_browser` part J was also run
+with the dialog's old fingerprint copy put back for a moment: it fails there ("up to date at
+once"), so it guards the fix.
 
 ## Contract with sim-results (agreed by reading its branch)
 
