@@ -49,6 +49,55 @@ def _alive(widget):
         return False
 
 
+def _of_design(doc, dialog):
+    """Remember the design a window belongs to (it closes with it)."""
+    try:
+        dialog.design = doc.Name
+    except Exception:
+        pass
+    return dialog
+
+
+def _design_open(name):
+    try:
+        return bool(name) and name in App.listDocuments()
+    except Exception:
+        return False
+
+
+def _design_of(dialog):
+    """The name of the design a SIMULATION window works on, or None."""
+    name = getattr(dialog, "design", None)
+    if name:
+        return name
+    for attr in ("doc", "study"):
+        obj = getattr(dialog, attr, None)
+        if obj is None:
+            continue
+        try:
+            return obj.Name if attr == "doc" else obj.Document.Name
+        except Exception:
+            return ""  # (deleted with its design)
+    return None
+
+
+def close_for_closed_designs():
+    """A design closed: the SIMULATION windows of it (New Study, Pre-check, Load Case
+    Attributes, Contact Manager...) close too: a click in them would work on nothing."""
+    from . import simulation_solve_dialog
+
+    windows = list(OPEN["dialogs"]) + [OPEN["new_study"]] + list(simulation_solve_dialog._KEPT)
+    for dialog in windows:
+        if dialog is None or not _alive(dialog) or not dialog.isVisible():
+            continue
+        name = _design_of(dialog)
+        if name is not None and not _design_open(name):
+            try:
+                dialog.reject()
+            except Exception:
+                pass
+
+
 def _transaction(doc, name, change):
     """Run `change()` as one undo step `name`; False (nothing kept) when it raises."""
     doc.openTransaction(name)
@@ -288,6 +337,12 @@ class NewStudyDialog(FocusBack, QtWidgets.QDialog):
                 self.message.setText(core.NOT_AVAILABLE)
                 return
             doc = self.doc
+            if not _design_open(_design_of(self)):
+                from . import commands
+
+                self.reject()
+                commands.tell("The design was closed: open New Study in the design in front.")
+                return
             made = {}
 
             def change():
@@ -322,8 +377,10 @@ def open_new_study():
         return None
     current = OPEN["new_study"]
     if current is not None and _alive(current) and current.isVisible():
-        current.raise_()
-        return current
+        if current.doc is doc:
+            current.raise_()
+            return current
+        current.reject()  # (another design's: this one gets its own)
     dialog = NewStudyDialog(doc)
     OPEN["new_study"] = dialog
     dialog.show()
@@ -868,6 +925,7 @@ class MaterialsPanel(_SimPanel):
             self.table.setCellWidget(row, 3, combo)
             self.combos.append(combo)
         self.table.resizeColumnsToContents()
+        self.table.horizontalHeader().setStretchLastSection(True)  # (no blank header end)
         self.table.setMinimumHeight(60 + 28 * min(len(self.bodies), 6))
         self.table.currentCellChanged.connect(lambda r, *_a: self._show_props(r))
         self.table.cellDoubleClicked.connect(lambda r, *_a: self._show_props(r))
@@ -1133,14 +1191,17 @@ def open_contact_manager(study):
         (a.Label, b.Label, "Bonded (automatic)", score.format_quantity(gap, "length", 3, length))
         for a, b, gap in contact_pairs(study)
     ]
-    return _table_dialog(
-        "SciForgeSimContactManager",
-        "Contact Manager",
-        ["Body 1", "Body 2", "Type", "Gap"],
-        rows,
-        "Bodies that touch are bonded when the study solves. Separation, sliding and the "
-        "other contact types are not in SciForge yet."
-        + ("" if rows else " No bodies of this study touch."),
+    return _of_design(
+        study.Document,
+        _table_dialog(
+            "SciForgeSimContactManager",
+            "Contact Manager",
+            ["Body 1", "Body 2", "Type", "Gap"],
+            rows,
+            "Bodies that touch are bonded when the study solves. Separation, sliding and the "
+            "other contact types are not in SciForge yet."
+            + ("" if rows else " No bodies of this study touch."),
+        ),
     )
 
 
@@ -1240,11 +1301,14 @@ def attribute_rows(study):
 def open_attributes(study):
     """Fusion's Load Case Attributes (research 3.11): every load and constraint with where
     it is, its size, its direction and whether it is placed correctly."""
-    return _table_dialog(
-        "SciForgeSimAttributes",
-        "Load Case Attributes: %s" % study.Label,
-        ["Name", "Type", "Location", "Magnitude", "Direction", "Status"],
-        attribute_rows(study),
+    return _of_design(
+        study.Document,
+        _table_dialog(
+            "SciForgeSimAttributes",
+            "Load Case Attributes: %s" % study.Label,
+            ["Name", "Type", "Location", "Magnitude", "Direction", "Status"],
+            attribute_rows(study),
+        ),
     )
 
 
@@ -1422,6 +1486,10 @@ def dof_view(study):
     if not on:
         ui.refresh()
         commands.tell("DOF View off.")
+        return []
+    if not _sim().study_bodies(study):
+        ui.refresh()
+        commands.tell("DOF View: %s has no solid body to show." % study.Label)
         return []
     motions = free_motions(study)
     free = [body for piece, _centre, _modes in motions for body in piece]

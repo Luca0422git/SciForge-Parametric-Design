@@ -449,6 +449,9 @@ def h_check():
         status is not None and "Cancelled" in status.title.text(),
         status.title.text() if status else None,
     )
+    stages = [state_ for _text, state_ in sd.stage_states()]
+    h.check("no stage still running", "running" not in stages, stages)
+    h.check("the stage it stopped at says cancelled", "cancelled" in stages, stages)
     s.close_popup("SciForgeSimJobStatus")
 
 

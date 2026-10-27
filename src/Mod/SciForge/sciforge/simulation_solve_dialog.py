@@ -32,7 +32,6 @@ RUN = {
     "study": None,
     "kind": None,  # "solve" | "mesh"
     "started": None,
-    "signature": None,  # the study's fingerprint when its solve started
     "timer": None,
     "status": None,  # the progress window
     "results": {},  # study name -> "done" / "failed" / "cancelled" / message, this run
@@ -207,6 +206,7 @@ def repair_info(study):
         "bodies": len(found),
         "lost": [i.Label for i in sim.lost_items(study)],
         "held": len([i for i in sim.items(study, "constraint") if not i.Suppressed]),
+        "suppressed": [i.Label for i in sim.items(study, "constraint") if i.Suppressed],
         "remove_rigid": bool(settings.get("remove_rigid")),
         "loose": [],
         "materials": [],
@@ -335,6 +335,7 @@ def start(studies, kind="solve"):
     RUN["kind"] = kind
     RUN["results"] = {}
     RUN["where"] = {}
+    RUN["stage_at"] = {}  # study name (or label) -> the stage its job ended at
     RUN["last_done"] = None
     show_status()
     if RUN["timer"] is None:
@@ -362,11 +363,11 @@ def _next():
             continue
         RUN["study"] = study
         RUN["label"] = study.Label  # (said when the study goes while it solves)
-        RUN["started"] = time.time()
         try:
-            RUN["signature"] = sim.signature(study)
+            RUN["bodies"] = [(b, b.Label) for b in sim.study_bodies(study)]
         except Exception:
-            RUN["signature"] = None
+            RUN["bodies"] = []
+        RUN["started"] = time.time()
         try:
             RUN["job"] = _make_job(study, RUN["kind"])
         except Exception as exc:
@@ -383,13 +384,31 @@ def _next():
     return None
 
 
+# An undo step open with no dialog for longer than this is a leftover (a dialog of a design
+# closed while it was open left its step's name active in FreeCAD): the solve goes on and the
+# engine's next turn closes the step, instead of waiting for it forever.
+LEFTOVER_STEP_S = 2.0
+
+
 def _dialog_open(doc):
     """A command's dialog of the design is open (its undo step must not take the solve's
     objects): the job waits for it."""
     try:
         if Gui.Control.activeDialog():
+            RUN["pending_since"] = None
             return True
-        return bool(getattr(doc, "HasPendingTransaction", False))
+        if not getattr(doc, "HasPendingTransaction", False):
+            RUN["pending_since"] = None
+            return False
+        since = RUN.get("pending_since")
+        if since is None:
+            RUN["pending_since"] = time.time()
+            return True
+        if time.time() - since < LEFTOVER_STEP_S:
+            return True
+        log("an undo step open with no command (%s): the solve goes on" % doc.Label)
+        RUN["pending_since"] = None
+        return False
     except Exception:
         return False
 
@@ -425,7 +444,23 @@ def _poll():
             RUN.setdefault("draining", []).append(job)
             RUN["job"] = None
             _gone(RUN.get("label") or "The study")
+            RUN.setdefault("stage_at", {})[RUN.get("label") or "The study"] = job.stage
             _after(None, "cancelled", "The study is gone.")
+            return
+        gone = [label for body, label in RUN.get("bodies") or [] if not bodies.alive(body)]
+        if gone:
+            # a body of the study deleted while it solves (the design changed under it): the
+            # solve stops with a sentence, before the solver's turns touch the gone body
+            job.cancel()
+            RUN.setdefault("draining", []).append(job)
+            RUN["job"] = None
+            RUN.setdefault("stage_at", {})[study.Name] = job.stage
+            _after(
+                study,
+                "cancelled",
+                "%s %s deleted while it solved: the solve stopped. Solve again for the design "
+                "as it is now." % (", ".join(gone), "was" if len(gone) == 1 else "were"),
+            )
             return
         thread = job._thread
         running_alone = thread is not None and thread.is_alive()
@@ -449,6 +484,7 @@ def _poll():
                     )
             if notes:
                 message = (message + " " if message else "") + " ".join(notes)
+            RUN.setdefault("stage_at", {})[study.Name] = job.stage
             _after(study, state, message)
     except Exception as exc:
         warn("solve: %s" % exc)
@@ -467,7 +503,6 @@ def _after(study, state, message):
             if RUN["kind"] == "mesh":
                 show_mesh(study)
             else:
-                _keep_out_of_date(study)
                 loose = loose_result(study)
                 if loose:
                     state, message = "suspect", loose
@@ -580,20 +615,6 @@ def loose_result(study):
         return None
 
 
-def _keep_out_of_date(study):
-    """The design or the study changed while it solved: the results are of the setup the solve
-    started from, so they show as out of date."""
-    sim = _sim()
-    try:
-        started = RUN["signature"]
-        data = sim.summary(study)
-        if started and data and data.get("signature") != started:
-            data["signature"] = started
-            bodies.save_meta(study, sim.RESULT_PROP, data)
-    except Exception as exc:
-        warn("solve: %s" % exc)
-
-
 def _finish_all():
     timer = RUN["timer"]
     if timer is not None and not RUN.get("draining"):
@@ -702,6 +723,16 @@ def _update_status(final=False):
     try:
         job = RUN["job"]
         study = RUN["study"]
+        ran = bool(RUN.get("run"))
+        if getattr(dialog, "ran", None) is not ran:
+            # nothing run yet this session: only the sentence, in a window as small as it
+            dialog.ran = ran
+            for widget in (dialog.stages, dialog.bar, dialog.elapsed, dialog.studies):
+                widget.setVisible(ran)
+            if ran:
+                dialog.resize(460, max(dialog.height(), 380))
+            else:
+                dialog.resize(460, 150)
         stages = [k for k, _w in score.STAGE_WORDS]
         if RUN["kind"] == "mesh":
             stages = ["model", "mesh"]
@@ -742,6 +773,12 @@ def _update_status(final=False):
                 name, (state, message) = failed[-1]
                 _study, label = _result_study(name)
                 dialog.title.setText("%s: %s" % (label, score.STATE_WORDS.get(state, state)))
+                at = RUN.get("stage_at", {}).get(name)
+                if state == "suspect":  # (solved, but the model moved too far)
+                    _fill_stages(dialog, score.stage_rows("results", "done", stages))
+                elif at:  # the stage it stopped at, not "running" any more
+                    ended = state if state in ("failed", "cancelled") else "failed"
+                    _fill_stages(dialog, score.stage_rows(at, ended, stages))
                 dialog.message.setStyleSheet(
                     "color: #ff8a80;" if state in ("failed", "suspect") else ""
                 )
@@ -865,9 +902,17 @@ def last_results():
 def generate_mesh(study):
     """SETUP > SOLVE > Generate Mesh (and the browser's Mesh row): the mesh made now (the
     engine's mesh-only job: no constraints or loads needed) and shown on the model."""
-    from . import commands, simulation_dialogs
+    from . import commands
 
-    if study is None or simulation_dialogs._busy(study):
+    if study is None:
+        return False
+    if solving():
+        commands.tell(
+            "A solve is running: Generate Mesh waits for it to end (or cancel it in Job Status)."
+        )
+        return False
+    if not _sim().study_bodies(study):
+        commands.tell("%s has no solid body to mesh." % study.Label)
         return False
     if not commands.finish_open_dialog():
         return False
@@ -922,8 +967,21 @@ def hide_mesh():
 
 
 def mesh_shown():
-    """True while Generate Mesh's mesh is shown on the model (the menu's tick)."""
-    return MESH["shown"] is not None
+    """True while Generate Mesh's mesh is shown on the model (the menu's tick); False once its
+    study or mesh is gone (deleted by a script, the AI, a closed design)."""
+    shown = MESH["shown"]
+    if shown is None:
+        return False
+    try:
+        doc = App.getDocument(shown[0]) if shown[0] in App.listDocuments() else None
+        study = doc.getObject(shown[1]) if doc is not None else None
+        mesh = mesh_object(study) if study is not None and bodies.alive(study) else None
+        if mesh is not None and mesh.ViewObject is not None and mesh.ViewObject.Visibility:
+            return True
+    except Exception:
+        pass
+    MESH["shown"] = None
+    return False
 
 
 def toggle_mesh():

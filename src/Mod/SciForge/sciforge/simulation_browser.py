@@ -191,9 +191,74 @@ def _study_of(doc, node):
     return obj if obj is not None and _sim().is_study(obj) else None
 
 
+# What a click on a constraint's or load's row selected in the 3D view (the faces it is on,
+# lit up as Fusion does): a new Structural Constraints / Loads dialog does not take them as its
+# picks (they are the old item's, not something the person picked for the new one).
+HIGHLIGHT = {"doc": None, "picks": frozenset()}
+
+
 def selection(doc, node):
     """[(object, [element names])] a click on a row selects in the 3D view: a body, or the
     faces / edges / corners a constraint or load is on (Fusion lights them up)."""
+    found = _references(doc, node)
+    if node.get("kind") == "sim_item" and doc is not None:
+        HIGHLIGHT["doc"] = doc.Name
+        HIGHLIGHT["picks"] = frozenset((obj.Name, sub) for obj, subs in found for sub in subs)
+    return found
+
+
+def keep_selected(doc, nodes):
+    """The keys of the selected constraint / load rows that stay selected when the 3D view's
+    selection changes: all of them while the view's selection is just what they lit up, none
+    once something else is picked or the selection is cleared."""
+    if doc is None or not nodes:
+        return set()
+    picked = set()
+    for sel in Gui.Selection.getSelectionEx():
+        try:
+            if sel.Object.Document.Name != doc.Name:
+                continue
+        except Exception:
+            continue
+        for sub in sel.SubElementNames or [""]:
+            picked.add((sel.ObjectName, sub.split(".")[-1]))
+    if not picked:
+        return set()
+    lit = set()
+    for node in nodes:
+        for obj, subs in _references(doc, node):
+            for sub in subs or [""]:
+                lit.add((obj.Name, sub))
+    return {node["key"] for node in nodes} if picked <= lit else set()
+
+
+def only_highlight(doc, picks):
+    """True when `picks` [(object, element, ...)] are just what clicks on constraint or load
+    rows lit up (the rows selected in the browser, or the last row clicked), not something the
+    person picked in the view."""
+    if not picks or doc is None:
+        return False
+    try:
+        got = frozenset((p[0].Name, p[1]) for p in picks)
+    except Exception:
+        return False
+    lit = set(HIGHLIGHT["picks"]) if HIGHLIGHT["doc"] == doc.Name else set()
+    try:
+        from . import browser_ui
+
+        widget = browser_ui.widget()
+        for item in widget.selectedItems() if widget is not None else []:
+            node = item.data(1, browser_ui.ROLE_NODE)
+            if node and node.get("kind") == "sim_item":
+                for obj, subs in _references(doc, node):
+                    lit.update((obj.Name, sub) for sub in subs)
+    except Exception:
+        pass
+    return bool(lit) and got <= lit
+
+
+def _references(doc, node):
+    """[(object, [element names])] of a row: a body, or what a constraint or load is on."""
     if node.get("kind") == "sim_body":
         obj = _object(doc, node)
         return [(obj, [])] if obj is not None else []
@@ -218,7 +283,7 @@ def selection(doc, node):
 def hover(doc, node):
     """(object, element) a hover on a row lights up in the 3D view: a constraint's or load's
     first face (Fusion lights up what it is on), a body; None for the other rows."""
-    for obj, subs in selection(doc, node):
+    for obj, subs in _references(doc, node):
         if not bodies.alive(obj):
             continue
         try:
@@ -290,6 +355,11 @@ def delete(widget, nodes):
             return
     names = ", ".join(obj.Label for _k, obj in targets)
     Gui.Selection.clearSelection()
+    from . import simulation_solve_dialog
+
+    shown = simulation_solve_dialog.MESH["shown"]
+    if shown and any(k == "study" and obj.Name == shown[1] for k, obj in targets):
+        simulation_solve_dialog.hide_mesh()  # (first: Undo brings the study back unshown)
 
     def change():
         for kind, obj in targets:

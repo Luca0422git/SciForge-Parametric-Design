@@ -80,6 +80,9 @@ class Stages(unittest.TestCase):
         self.assertEqual((what, name), ("edit", "Force 1"))
         self.assertIn("pick it again", text)
         self.assertEqual(s.repair_step(dict(base, held=0))[0], "constraints")
+        # the only constraint suppressed: said, with how to bring it back
+        text = s.repair_step(dict(base, held=0, suppressed=["Fixed 1"]))[2]
+        self.assertIn("Fixed 1 is suppressed", text)
         # nothing holds it, but its loads balance: not a constraint to add
         self.assertEqual(s.repair_step(dict(base, held=0, remove_rigid=True))[0], "precheck")
         what, name, text = s.repair_step(dict(base, loose=["Top"]))

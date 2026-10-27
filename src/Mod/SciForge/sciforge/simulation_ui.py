@@ -19,6 +19,8 @@ Attributes, Pre-check, gravity), simulation_panels.py (Structural Constraints / 
 the model), simulation_solve_dialog.py (Solve and its progress, Generate Mesh).
 """
 
+import time
+
 import FreeCAD as App
 import FreeCADGui as Gui
 
@@ -391,6 +393,18 @@ def sync():
     try:
         want = in_workspace()
         _finish_sim_dialog()
+        closed = STATE.get("closed_doc")
+        if closed:
+            try:
+                from . import simulation_dialogs
+
+                simulation_dialogs.close_for_closed_designs()
+            except Exception as exc:
+                warn("simulation windows: %s" % exc)
+            if time.time() - closed > 5.0 or _close_leftover_step():
+                STATE["closed_doc"] = None
+            else:
+                QtCore.QTimer.singleShot(200, sync)  # (the closed design's dialog still ends)
         if want != STATE["on"]:
             _apply(want)
         elif want:
@@ -400,16 +414,45 @@ def sync():
 
 
 def _finish_sim_dialog():
-    """A SETUP dialog of another design ends when its design is no longer in front."""
+    """A SETUP dialog of another design ends when its design is no longer in front (let go of
+    without touching the design when it was closed)."""
     try:
         from . import taskui
 
         current = taskui.current()
         if current is not None and getattr(current, "simulation_dialog", False):
-            if current.doc is not _doc():
+            if not _doc_open(current.doc):
+                from . import hole_common
+
+                hole_common.abandon(current)
+                log("%s ended: its design was closed" % current.title)
+            elif current.doc is not _doc():
                 current.finish()
     except Exception as exc:
         warn("simulation dialog: %s" % exc)
+
+
+def _doc_open(doc):
+    try:
+        return doc is not None and doc.Name in App.listDocuments()
+    except Exception:
+        return False
+
+
+def _close_leftover_step():
+    """A design closed while a dialog of it was open leaves the dialog's undo step open in
+    FreeCAD (the step's name is application-wide): the next design's changes went into a step
+    of that name, and a solve waited for it forever. Once no dialog is open it is closed
+    (keeping what is in it). False while a dialog is still open (it is tried again)."""
+    try:
+        if Gui.Control.activeDialog():
+            return False
+        if App.getActiveTransaction():
+            App.closeActiveTransaction(False)
+            log("an undo step left open by a closed design's dialog was closed")
+    except Exception as exc:
+        log("undo step: %s" % exc)
+    return True
 
 
 def refresh():
@@ -437,6 +480,7 @@ class _Watch:
             name = doc.Name
             STATE["docs"].pop(name, None)
             STATE["active"].pop(name, None)
+            STATE["closed_doc"] = time.time()  # (sync closes an undo step its dialog left open)
             QtCore.QTimer.singleShot(50, sync)
         except Exception as exc:
             warn("simulation workspace: %s" % exc)

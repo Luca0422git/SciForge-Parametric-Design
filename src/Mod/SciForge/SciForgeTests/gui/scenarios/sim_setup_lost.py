@@ -15,6 +15,9 @@ D  Fixed 1 deleted (Delete on its row): red. Solve > Repair: Structural Constrai
 E  Workspace > Design; the bracket deleted (by script); Workspace > Simulation: the study is
    still there, red (no solid body); Solve > Repair: the Pre-check list says so (no Repair in
    it: nothing can be picked).
+F  SOLVE > Job Status with nothing solved this session: it says so (no empty lists). DOF View
+   and Generate Mesh on the study without a body: each says there is no solid body (no mesh
+   job starts).
 """
 
 import FreeCAD as App
@@ -212,6 +215,37 @@ def e_list():
     h.check("no Repair in it (nothing can be picked)", dialog.repair is None)
     h.check("told why", "no solid body" in s.told(), s.told())
     s.close_popup("SciForgeSimPrecheck")
+    s.menu_item("SOLVE", "Job Status")
+
+
+# -- F ------------------------------------------------------------------------------------------
+def f_status():
+    status = s.status_dialog()
+    if not h.check("Job Status opened", status is not None and status.isVisible()):
+        return
+    title = status.title.text()
+    h.check("nothing solved yet", title == "Nothing solved yet in this session", title)
+    h.check("no empty lists", not status.stages.isVisible() and not status.studies.isVisible())
+    h.check("only Close", not status.cancel_button.isVisible() and status.close_button.isVisible())
+    s.click_widget(status.close_button)
+
+
+def f_closed():
+    h.check("closed", not s.status_dialog().isVisible())
+    s.menu_item("DISPLAY", "DOF View")
+
+
+def f_dof():
+    h.check("DOF View: no solid body", "no solid body" in s.told(), s.told())
+    s.menu_item("DISPLAY", "DOF View")
+    s.menu_item("SOLVE", "Generate Mesh")
+
+
+def f_mesh():
+    h.check("Generate Mesh: no solid body to mesh", "no solid body to mesh" in s.told(), s.told())
+    from sciforge import simulation_solve_dialog as sd
+
+    h.check("no mesh job started", not s.solving() and not sd.RUN.get("run"), sd.RUN.get("run"))
 
 
 h.run(
@@ -236,5 +270,9 @@ h.run(
         e_check,
         e_repair,
         e_list,
+        f_status,
+        f_closed,
+        f_dof,
+        f_mesh,
     ],
 )
