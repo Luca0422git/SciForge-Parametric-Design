@@ -2276,6 +2276,21 @@ def _solver_cards(study, model, femmesh, subs, groups=None):
     }
 
 
+def _use_spooles(path):
+    """The CalculiX input at `path` with SPOOLES as its equation solver
+    (simulation_core.with_spooles). False when it was not changed."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            text, changed = core.with_spooles(handle.read())
+        if changed:
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(text)
+        return changed
+    except OSError as exc:
+        warn("simulation: the solver input could not be changed: %s" % exc)
+        return False
+
+
 def _inject(path, cards):
     """Put SciForge's cards into FreeCAD's CalculiX input: the node sets and equations before
     the step, the boundaries, loads and outputs at the end of the step."""
@@ -2719,6 +2734,8 @@ class Job:
         self._netgen_out = None
         self._gmsh_problem = None
         self._straight = False  # mesh again with straight-sided elements (bad curved ones)
+        self._spooles = False  # CalculiX's SPOOLES solver asked for (after a stop without reason)
+        self._solve_env = None  # the environment CalculiX ran in (a second try uses it again)
         self._curved = None  # (made straight, still bad, error) of the check before a solve
         self._curved_text = None  # its note
         self._fingerprints = None  # (signature, mesh signature) when the solve started
@@ -2926,6 +2943,28 @@ class Job:
             self._start_read()
         elif self.stage == "results":
             self._stage_results()
+
+    def _solve_again_with_spooles(self):
+        """CalculiX stopped without a result and without saying why (on Windows its default
+        equation solver stopped like that on some small models): the same input once more
+        with SPOOLES, the solver SciForge's accuracy tests run with. False when the input
+        could not be changed (the failure then stands)."""
+        self._spooles = True
+        if not _use_spooles(os.path.join(self.work, self._input + ".inp")):
+            return False
+        lines = [line.strip() for line in (self._output or "").splitlines() if line.strip()]
+        log(
+            "simulation: CalculiX stopped without a reason (exit code %s; it last said: %s); "
+            "solving again with its SPOOLES solver" % (self._returncode, " | ".join(lines[-12:]))
+        )
+        for ext in (".frd", ".dat", ".sta", ".cvg"):
+            try:
+                os.remove(os.path.join(self.work, self._input + ext))
+            except OSError:
+                pass
+        self.stage, self.message = "solve", "Solving again with CalculiX's SPOOLES solver"
+        self._background([_binary("ccx"), "-i", self._input], "solve", env=self._solve_env)
+        return True
 
     def _start_read(self):
         """The solver's result file read (parsed) in the background: the slow part of
@@ -3150,6 +3189,8 @@ class Job:
             raise SimulationError("The solver input could not be written.")
         cards = _solver_cards(self.study, self._model_shape, self._mesh.FemMesh, self._subs, groups)
         _inject(path, cards)
+        if self._spooles:  # (adaptive refinement's later passes: as the pass that needed it)
+            _use_spooles(path)
         self._reactions = cards["reactions"]
         self._held = cards.get("held", {})
         self.notes += cards["notes"]
@@ -3166,6 +3207,7 @@ class Job:
         env = dict(os.environ)
         if not env.get("OMP_NUM_THREADS"):
             env["OMP_NUM_THREADS"] = str(max(1, (os.cpu_count() or 2) - 1))
+        self._solve_env = env
         opts = settings(self.study)["mesh"]
         self._curved = None
         check = opts["order"] == "parabolic" and opts["curved"] and not self._straight
@@ -3209,6 +3251,9 @@ class Job:
                 self._analysis = None
                 self.stage, self.message = "model", "Meshing again with straight-sided elements"
                 return
+            if not self._spooles and core.solver_unexplained(self._output):
+                if self._solve_again_with_spooles():
+                    return
             raise SimulationError(_solver_failure(self._output))
         from feminout import importCcxFrdResults
 

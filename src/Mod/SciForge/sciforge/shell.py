@@ -98,6 +98,8 @@ def startup():
         import FreeCADGui as Gui
 
         _connect()
+        # a design closed under one of its dialogs leaves no undo step open (undo_leftover)
+        _safely(lambda: __import__("sciforge.undo_leftover").undo_leftover.install())
         workbench = Gui.activeWorkbench()
         name = workbench.name() if workbench is not None else ""
         if _state["on"] and config.USE_RIBBON:

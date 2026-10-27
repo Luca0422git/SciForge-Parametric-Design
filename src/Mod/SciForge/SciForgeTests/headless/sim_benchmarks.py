@@ -26,6 +26,8 @@ import json
 import math
 import os
 import platform
+import shutil
+import tempfile
 import time
 import traceback
 
@@ -1378,6 +1380,62 @@ def check_netgen(doc, out):
     tip = (job.summary or {}).get("stats", {}).get("displacement", {}).get("max")
     out.append(
         ("Netgen's mesh bends the same (3 %)", tip is not None and abs(tip - 0.2) < 0.006, tip)
+    )
+
+
+@engine_check("CalculiX stops without a reason: solved again with SPOOLES")
+def check_spooles_again(doc, out):
+    """Windows' CalculiX stopped right after reading the input of two small cantilevers (CI,
+    2026-10-27), with no result and no complaint: the job solves once more with SPOOLES. A
+    stand-in ccx stops the same way while the input names no solver."""
+    from sciforge import simulation as sim
+
+    if os.name == "nt":
+        out.append(("(skipped on Windows)", True, ""))
+        return
+    body, study = _cantilever(doc)
+    real = sim._binary
+    folder = tempfile.mkdtemp(prefix="sciforge_ccx_")
+    script = os.path.join(folder, "ccx")
+    with open(script, "w", encoding="utf-8") as handle:
+        handle.write(
+            "#!/bin/sh\n"
+            'if grep -qi "SOLVER=SPOOLES" "$2.inp"; then exec "%s" "$@"; fi\n'
+            "echo ' data points in all amplitudes:            2'\n"
+            "echo ' property cards:            0'\n"
+            "exit 3\n" % real("ccx")
+        )
+    os.chmod(script, 0o755)
+    sim._binary = lambda name: script if name == "ccx" else real(name)
+    try:
+        job = sim.Job(study)
+        job.wait(600)
+    finally:
+        sim._binary = real
+        shutil.rmtree(folder, ignore_errors=True)
+    out.append(("solved on the second try", job.state == "done", job.message))
+    tip = (job.summary or {}).get("stats", {}).get("displacement", {}).get("max")
+    same = tip is not None and abs(tip - 0.2) < 0.006
+    out.append(("it bends as with CalculiX's own choice (3 %)", same, tip))
+    # a stop that keeps happening still fails, with CalculiX's words
+    folder = tempfile.mkdtemp(prefix="sciforge_ccx_")
+    script = os.path.join(folder, "ccx")
+    with open(script, "w", encoding="utf-8") as handle:
+        handle.write("#!/bin/sh\necho ' property cards:            0'\nexit 3\n")
+    os.chmod(script, 0o755)
+    sim._binary = lambda name: script if name == "ccx" else real(name)
+    try:
+        job = sim.Job(study)
+        job.wait(600)
+    finally:
+        sim._binary = real
+        shutil.rmtree(folder, ignore_errors=True)
+    out.append(
+        (
+            "a second stop fails with CalculiX's words",
+            job.state == "failed" and "property cards" in (job.message or ""),
+            job.message,
+        )
     )
 
 
