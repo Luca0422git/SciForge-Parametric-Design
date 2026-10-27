@@ -108,6 +108,7 @@ sometimes works differently or lacks an option; **Low** = rare, cosmetic or a co
 | 74 | G-69 | sweep-loft-rib | Loft Tangent Edges Merge is off by default (OpenCASCADE's volume of a merged side is 5.6 % off) | Low | K |
 | 75 | G-70 | sweep-loft-rib | Turning rail lofts are about 1 % off | Low | K |
 | 76 | G-71 | ui-shell | No lit environments (Soft Light, Sharp Highlights), Ground Reflections or Ambient Occlusion (FreeCAD's viewer: background only) | Low | K |
+| 77 | G-93 | simulation | SIMULATION SETUP: Simplify, Linear Global Load, Angular Global Load, Point Mass (Auto), Point Mass (Manual), Bolt Connector and Rigid Body Connector are greyed (research 9.1 "Later"); RESULTS > DISPLAY has no Wireframe (Undeformed Model draws a see-through ghost instead). parity/simulation.md | Low | M |
 
 ## Needs FreeCAD C++ or the kernel (K)
 

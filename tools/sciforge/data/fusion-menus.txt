@@ -511,6 +511,72 @@ DRAWING [in=tab:drawing]
     Rename Sheet
     Delete Sheet
 
+# SIMULATION workspace, Static Stress study (beta 3; docs/sciforge/dev/research/fusion-simulation.md
+# 3.1, 5.13, 9.2 and 9.3). INSPECT and SELECT are as in DESIGN (listed once, under SOLID); the
+# RESULTS tab's MANAGE repeats SETUP's.
+SIMULATION SETUP [in=tab:sim_setup]
+  STUDY
+    New Simulation Study
+  SIMPLIFY
+    Simplify
+  MATERIALS
+    Study Materials
+    Manage Physical Materials?
+  CONSTRAINTS
+    Structural Constraints
+  LOADS
+    Structural Loads
+    Linear Global Load
+    Angular Global Load
+    Toggle Gravity On/Off
+    Point Mass (Auto)
+    Point Mass (Manual)?
+  CONTACTS
+    Automatic Contacts
+    Manual Contacts [out=outline 7.18 and 8: contact types other than bonded need nonlinear analysis; touching bodies are bonded automatically]
+    Contact Manager
+    Bolt Connector?
+    Rigid Body Connector?
+  DISPLAY
+    DOF View
+  SOLVE
+    Pre-check
+    Solve
+    Generate Mesh
+    Job Status?
+  MANAGE
+    Settings
+    Local Mesh Control
+    Load Case Attributes
+
+SIMULATION RESULTS [in=tab:sim_results]
+  RESULT TOOLS
+    Animate
+    Results Details
+    Compare
+    Report
+    Convergence Plot?
+  DEFORMATION
+    Undeformed?
+    Actual?
+    Adjusted x 0.5?
+    Adjusted?
+    Adjusted x 2?
+    Adjusted x 5?
+  DISPLAY
+    Show Mesh?
+    Wireframe?
+  INSPECT
+    Surface Probes
+    Point Probes
+    Reaction Force
+    Slice Plane
+    Iso-surface
+    Solver Data
+    Show Min/Max
+  FINISH RESULTS
+    Finish Results
+
 MARKING MENU [in=marking]
   Ring
     Repeat
