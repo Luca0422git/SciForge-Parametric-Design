@@ -519,6 +519,22 @@ Through the AI tools (study_results' answers only):
 | bodies that touch only along an edge or at a corner | touching along an edge: warned; touching at a corner: warned; a cube on a cube's face: no such warning; a pin in its hole: no such warning | 4 | PASS |
 | results kept in and dropped from the file | kept: reopened with its results and the same numbers, in date; dropped: reopened with the numbers only, in date, says solve again; reopened, then the part changed: out of date | 3 | PASS |
 
+### The bracket journey (sim QA, real clicks: `journey_sim_bracket*.py`)
+
+An L-bracket drawn, extruded, drilled, filleted and made PLA in DESIGN, then studied in
+SIMULATION with the mouse and keyboard only: base 60 x 40 x 5, upright arm 5 thick and 40
+high, two 6 mm bolt holes fixed, 50 N across the top of the arm (hand numbers and why each
+band in `SciForgeTests/gui/journey_sim_steps.py`):
+
+| What | SciForge | By hand | Band |
+|---|---|---|---|
+| Largest movement (the arm's top) | 2.091 mm | 0.47 (arm) + 1.62 (base plate turning) = 2.09 mm | 1.0 .. 3.2 |
+| Highest von Mises (a bolt hole's edge) | 18.08 MPa | 16.1 MPa across the bolt line, raised by the hole | 12 .. 60 |
+| Safety factor (PLA yield 35.9 MPa) | 1.986 | 35.9 / 18.08 | exact |
+| Surface Probe on the arm, z 14.2 | 7.38 MPa | 6 M / (b t^2) = 7.74 MPa | 0.80 .. 1.10 (a wide arm: plane strain) |
+| The arm 5 -> 7 mm from the timeline: the probe | 3.86 MPa, ratio 0.523 | (5/7)^2 = 0.510; 3.95 MPa | 0.45 .. 0.58 |
+| Reaction at the holes | 50, 0, 0 N | 50 N | exact |
+
 ### Big parts
 
 A 300 x 200 x 10 mm plate with 120 counterbored holes (366 faces), pressure on its top face,
