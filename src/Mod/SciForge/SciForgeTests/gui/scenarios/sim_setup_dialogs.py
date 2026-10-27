@@ -207,7 +207,9 @@ def d_change():
 
 def d_ok():
     h.check(
-        "Aluminium's properties shown", "Aluminum" in state.get("props", ""), state.get("props")
+        "Aluminium's properties shown (SciForge's name, not FreeCAD's Aluminum-Generic)",
+        "Material: Aluminium\n" in state.get("props", ""),
+        state.get("props"),
     )
     s.ok()
 
