@@ -1,0 +1,374 @@
+# SPDX-License-Identifier: LGPL-2.1-or-later
+"""Unit tests for simulation_setup_core: the SETUP side's rules without FreeCAD (builder sim-ui)."""
+
+import math
+import os
+import sys
+import unittest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, ROOT)
+
+from sciforge import simulation_core as core  # noqa: E402
+from sciforge import simulation_setup_core as s  # noqa: E402
+
+
+class StudyRows(unittest.TestCase):
+    def test_every_type_in_fusions_order(self):
+        rows = s.study_rows()
+        self.assertEqual([r[0] for r in rows], [k for k, _t, _a in core.STUDY_TYPES])
+        self.assertTrue(all(r[3] for r in rows), "every type has a description")
+
+    def test_only_static_stress_available(self):
+        available = [r[0] for r in s.study_rows() if r[2]]
+        self.assertEqual(available, ["static_stress"])
+
+    def test_greyed_types_say_so(self):
+        for key, _title, available, text in s.study_rows():
+            if not available:
+                self.assertIn("Not in SciForge yet", text, key)
+
+    def test_limits_sentence(self):
+        for word in ("linear", "3D-printed", "guide"):
+            self.assertIn(word, s.LIMITS)
+
+
+class Light(unittest.TestCase):
+    def test_traffic_light(self):
+        self.assertEqual(s.light([]), "green")
+        self.assertEqual(s.light([("warning", "a")]), "yellow")
+        self.assertEqual(s.light([("warning", "a"), ("error", "b")]), "red")
+
+    def test_icons_and_texts(self):
+        for state in ("green", "yellow", "red", None):
+            self.assertTrue(s.light_icon(state).startswith("sim_precheck"))
+            self.assertTrue(s.light_text(state))
+
+    def test_errors_first(self):
+        checks = [("warning", "w1"), ("error", "e1"), ("warning", "w2"), ("error", "e2")]
+        self.assertEqual([t for _l, t in s.ordered_checks(checks)], ["e1", "e2", "w1", "w2"])
+
+
+class Stages(unittest.TestCase):
+    def test_rows_while_running(self):
+        rows = s.stage_rows("solve", "running")
+        self.assertEqual([r[2] for r in rows], ["done", "done", "done", "running", "waiting"])
+
+    def test_rows_done_and_failed(self):
+        self.assertEqual({r[2] for r in s.stage_rows("results", "done")}, {"done"})
+        rows = s.stage_rows("mesh", "failed")
+        self.assertEqual([r[2] for r in rows], ["done", "failed", "waiting", "waiting", "waiting"])
+
+    def test_mesh_only_stages(self):
+        rows = s.stage_rows("mesh", "running", ["model", "mesh"])
+        self.assertEqual([r[0] for r in rows], ["model", "mesh"])
+
+    def test_elapsed(self):
+        self.assertEqual(s.elapsed_text(7), "0:07")
+        self.assertEqual(s.elapsed_text(754), "12:34")
+        self.assertEqual(s.elapsed_text(3723), "1:02:03")
+        self.assertEqual(s.elapsed_text(None), "0:00")
+
+    def test_button_names_the_count(self):
+        self.assertEqual(s.solve_button_text(1), "Solve 1 Study")
+        self.assertEqual(s.solve_button_text(3), "Solve 3 Studies")
+        self.assertEqual(s.solve_button_text(0), "Solve")
+
+    def test_repair_goes_to_the_first_thing_to_fix(self):
+        base = {"held": 1, "remove_rigid": False}
+        what, name, text = s.repair_step(dict(base, lost=["Force 1"], held=0))
+        self.assertEqual((what, name), ("edit", "Force 1"))
+        self.assertIn("pick it again", text)
+        self.assertEqual(s.repair_step(dict(base, held=0))[0], "constraints")
+        # nothing holds it, but its loads balance: not a constraint to add
+        self.assertEqual(s.repair_step(dict(base, held=0, remove_rigid=True))[0], "precheck")
+        what, name, text = s.repair_step(dict(base, loose=["Top"]))
+        self.assertEqual((what, name), ("dof", "Top"))
+        self.assertIn("Top is not held", text)
+        self.assertIn("are not held", s.repair_step(dict(base, loose=["A", "B"]))[2])
+        self.assertEqual(s.repair_step(dict(base, materials=["Plate"]))[:2], ("materials", "Plate"))
+        what, name, text = s.repair_step(dict(base, outside=[("Force 1", "Top")]))
+        self.assertEqual((what, name), ("materials", "Top"))
+        self.assertIn("tick Top In Study", text)
+        self.assertEqual(s.repair_step(base)[0], "precheck")
+        # no body left: nothing can be picked, so not an item's dialog
+        self.assertEqual(s.repair_step(dict(base, bodies=0, lost=["Fixed 1"]))[0], "precheck")
+
+
+class Forces(unittest.TestCase):
+    def test_components_round_trip(self):
+        size, unit = s.force_from_components(0, 30, -40)
+        self.assertAlmostEqual(size, 50.0)
+        self.assertAlmostEqual(unit[1], 0.6)
+        back = s.components_of(size, unit)
+        self.assertAlmostEqual(back[2], -40.0)
+
+    def test_zero_force_refused(self):
+        with self.assertRaises(core.SimulationError):
+            s.force_from_components(0, 0, 0)
+
+    def test_angle_direction_turns_about_x_then_y_then_z(self):
+        # no turn: the face's normal itself
+        self.assertEqual(s.turned([0, 0, -1], [0, 0, 0]), [0.0, 0.0, -1.0])
+        # 90 degrees about X takes -Z to +Y (right hand)
+        v = s.turned([0, 0, -1], [90, 0, 0])
+        self.assertEqual([round(c, 9) for c in v], [0.0, 1.0, 0.0])
+        # 90 degrees about Y takes -Z to -X
+        v = s.turned([0, 0, -1], [0, 90, 0])
+        self.assertEqual([round(c, 9) for c in v], [-1.0, 0.0, 0.0])
+        # 30 degrees about X, then 90 about Z: X first, Z last
+        v = s.turned([0, 0, -1], [30, 0, 90])
+        self.assertAlmostEqual(v[0], -0.5)
+        self.assertAlmostEqual(v[1], 0.0)
+        self.assertAlmostEqual(v[2], -math.sqrt(3) / 2)
+        # a unit vector stays one
+        v = s.turned([0.6, 0.0, -0.8], [17, -42, 123])
+        self.assertAlmostEqual(math.sqrt(sum(c * c for c in v)), 1.0)
+        # rounding noise is 0
+        self.assertEqual(s.turned([0, 0, -1], [180, 0, 0])[1], 0.0)
+
+
+class Quantities(unittest.TestCase):
+    def test_plain_number_in_the_engines_unit(self):
+        self.assertEqual(s.parse_quantity("100", "force"), 100.0)
+        self.assertEqual(s.parse_quantity("2,5", "pressure"), 2.5)
+
+    def test_unit_override(self):
+        self.assertAlmostEqual(s.parse_quantity("0.5 kN", "force"), 500.0)
+        self.assertAlmostEqual(s.parse_quantity("10 lbf", "force"), 44.482216, 5)
+        self.assertAlmostEqual(s.parse_quantity("1 bar", "pressure"), 0.1)
+        self.assertAlmostEqual(s.parse_quantity("2 N m", "moment"), 2000.0)
+        self.assertAlmostEqual(s.parse_quantity("1 in", "length"), 25.4)
+        self.assertAlmostEqual(s.parse_quantity("9.80665 m/s^2", "acceleration"), 9806.65)
+        self.assertAlmostEqual(s.parse_quantity("1e3 Pa", "pressure"), 0.001)
+
+    def test_bad_values_say_why(self):
+        for text, family in (("", "force"), ("abc", "force"), ("10 furlongs", "length")):
+            with self.assertRaises(core.SimulationError):
+                s.parse_quantity(text, family)
+
+    def test_format(self):
+        self.assertEqual(s.format_quantity(250.0, "force"), "250 N")
+        self.assertEqual(s.format_quantity(0.1, "pressure"), "0.1 MPa")
+        self.assertEqual(s.format_quantity(3.0, "number"), "3")
+
+
+class DesignUnits(unittest.TestCase):
+    """Fusion's Simulation follows the document's units (research 6); the engine keeps N, MPa,
+    N mm and mm."""
+
+    def test_unit_sets(self):
+        self.assertEqual(s.unit_set("mm")["force"], "N")
+        self.assertEqual(s.unit_set("m")["moment"], "N m")
+        inch = s.unit_set("in")
+        self.assertEqual(
+            (inch["force"], inch["pressure"], inch["moment"], inch["length"]),
+            ("lbf", "psi", "lbf in", "in"),
+        )
+        self.assertEqual(s.unit_set("ft")["length"], "ft")
+        self.assertEqual(s.unit_set(None), s.unit_set("mm"))
+        self.assertEqual(s.unit_set("furlong"), s.unit_set("mm"))
+
+    def test_shown_in_the_designs_units(self):
+        self.assertEqual(s.format_quantity(4.4482216152605, "force", shown="lbf"), "1 lbf")
+        self.assertEqual(s.format_quantity(25.4, "length", shown="in"), "1 in")
+        self.assertEqual(s.format_quantity(2000.0, "moment", shown="N m"), "2 N m")
+        self.assertEqual(s.format_quantity(9806.65, "acceleration", shown="m/s^2"), "9.80665 m/s^2")
+        self.assertEqual(s.format_quantity(0.689475729, "pressure", shown="psi"), "100 psi")
+
+    def test_a_bare_number_is_in_the_unit_shown(self):
+        self.assertAlmostEqual(s.parse_quantity("50", "force", shown="lbf"), 222.41108, 4)
+        self.assertAlmostEqual(s.parse_quantity("2", "length", shown="in"), 50.8)
+        self.assertAlmostEqual(s.parse_quantity("9.81", "acceleration", shown="m/s^2"), 9810.0)
+        # a typed unit wins over the one shown
+        self.assertAlmostEqual(s.parse_quantity("100 N", "force", shown="lbf"), 100.0)
+        self.assertAlmostEqual(s.parse_quantity("3 mm", "length", shown="in"), 3.0)
+
+    def test_round_trip(self):
+        for family, unit, value in (
+            ("force", "lbf", 123.4),
+            ("pressure", "psi", 0.25),
+            ("moment", "lbf in", 5000.0),
+            ("length", "ft", 1234.5),
+            ("acceleration", "in/s^2", 9806.65),
+        ):
+            text = s.format_quantity(value, family, 12, unit)
+            self.assertAlmostEqual(s.parse_quantity(text, family, shown=unit), value, 6)
+
+    def test_describe_in_the_designs_units(self):
+        inch = s.unit_set("in")
+        self.assertEqual(
+            s.describe("load", "force", {"magnitude": 4.4482216152605 * 50}, inch),
+            "Force 50 lbf",
+        )
+        self.assertEqual(
+            s.describe("load", "pressure", {"magnitude": 0.689475729}, inch), "Pressure 100 psi"
+        )
+        self.assertEqual(
+            s.describe("mesh", "local", {"size": 2.54}, inch), "Local Mesh Control 0.1 in"
+        )
+        self.assertEqual(
+            s.describe("constraint", "displacement", {"x": 25.4}, inch),
+            "Prescribed Displacement (X 1 in)",
+        )
+        self.assertEqual(s.describe("load", "force", {"magnitude": 100.0}), "Force 100 N")
+        self.assertEqual(
+            s.describe("constraint", "fixed", {}), core.describe("constraint", "fixed", {})
+        )
+
+
+def _study(name="SimStudy", constraints=(), loads=(), **extra):
+    data = {
+        "name": name,
+        "label": "Study 1 - Static Stress",
+        "constraints": list(constraints),
+        "loads": list(loads),
+    }
+    data.update(extra)
+    return data
+
+
+def _item(name, category="constraint", kind="fixed", **extra):
+    data = {"name": name, "label": name, "category": category, "kind": kind}
+    data.update(extra)
+    return data
+
+
+def _walk(node):
+    yield node
+    for child in node["children"]:
+        yield from _walk(child)
+
+
+class Tree(unittest.TestCase):
+    def test_fusions_study_tree(self):
+        tree = s.tree(
+            "Bracket",
+            "mm",
+            [
+                _study(
+                    constraints=[_item("Fixed1")],
+                    loads=[_item("Force1", "load", "force")],
+                    gravity=True,
+                )
+            ],
+            "SimStudy",
+            [{"name": "Body", "label": "Body1", "visible": True, "in_study": True}],
+        )
+        labels = [n["label"] for n in _walk(tree)]
+        for want in (
+            "Document Settings",
+            "Named Views",
+            "Simulation Model",
+            "Bodies",
+            "Body1",
+            "Study 1 - Static Stress",
+            "Study Materials",
+            "Load Case 1",
+            "Constraints",
+            "Loads",
+            "Gravity",
+            "Contacts",
+            "Mesh",
+            "Fixed1",
+            "Force1",
+        ):
+            self.assertIn(want, labels)
+        self.assertNotIn("Results", labels, "no Results row before a solve")
+        study = next(n for n in _walk(tree) if n["kind"] == "sim_study")
+        self.assertTrue(study["active"])
+        keys = [n["key"] for n in _walk(tree)]
+        self.assertEqual(len(keys), len(set(keys)), "keys are unique")
+
+    def test_item_status(self):
+        tree = s.tree(
+            "D",
+            "mm",
+            [
+                _study(
+                    constraints=[
+                        _item("A", suppressed=True),
+                        _item("B", lost=True),
+                        _item("C", unbuilt=True),
+                    ]
+                )
+            ],
+            None,
+            [],
+        )
+        nodes = {n["object"]: n for n in _walk(tree) if n["kind"] == "sim_item"}
+        self.assertEqual(nodes["A"]["status"], "suppressed")
+        self.assertEqual(nodes["B"]["status"], "error")
+        self.assertEqual(nodes["C"]["status"], "warning")
+
+    def test_results_out_of_date(self):
+        tree = s.tree("D", "mm", [_study(solved=True, out_of_date=True)], "SimStudy", [])
+        results = next(n for n in _walk(tree) if n["kind"] == "sim_results")
+        self.assertEqual(results["status"], "warning")
+        self.assertIn("out of date", results["label"])
+
+    def test_body_left_out(self):
+        tree = s.tree(
+            "D", "mm", [], None, [{"name": "B", "label": "B", "visible": True, "in_study": False}]
+        )
+        body = next(n for n in _walk(tree) if n["kind"] == "sim_body")
+        self.assertEqual(body["status"], "suppressed")
+        self.assertIn("Include in Study", s.menu_for(body))
+
+    def test_icons(self):
+        for category, kind in s.ITEM_ICONS:
+            self.assertTrue(s.item_icon(category, kind).startswith("sim_"))
+        self.assertEqual(s.item_icon("constraint", "new_kind"), "sim_constraints")
+
+
+class Menus(unittest.TestCase):
+    def test_study_menu(self):
+        self.assertIn("Activate", s.menu_for({"kind": "sim_study", "active": False}))
+        entries = s.menu_for({"kind": "sim_study", "active": True})
+        self.assertNotIn("Activate", entries)
+        for want in ("Settings", "Clone Study", "Rename", "Delete"):
+            self.assertIn(want, entries)
+
+    def test_item_menu(self):
+        load = s.menu_for({"kind": "sim_item", "category": "load"})
+        self.assertEqual(load[0], "Edit Load")
+        self.assertIn("Suppress", load)
+        held = s.menu_for({"kind": "sim_item", "category": "constraint", "status": "suppressed"})
+        self.assertEqual(held[0], "Edit Constraint")
+        self.assertIn("Unsuppress", held)
+
+    def test_every_menu_known(self):
+        for kind in s.MENUS:
+            self.assertIsInstance(s.menu_for({"kind": kind}), list)
+
+
+class Glyphs(unittest.TestCase):
+    def test_size_follows_the_zoom(self):
+        self.assertAlmostEqual(s.glyph_size(0.1), 0.1 * s.GLYPH_PIXELS)
+        self.assertEqual(s.glyph_size(0.0), s.GLYPH_MIN_MM)
+
+    def test_perpendicular(self):
+        for v in ((0, 0, 1), (1, 0, 0), (0.3, 0.4, 0.5)):
+            p = s.perpendicular(v)
+            n = s.norm(v)
+            self.assertAlmostEqual(sum(a * b for a, b in zip(p, n)), 0.0)
+            self.assertAlmostEqual(math.sqrt(sum(c * c for c in p)), 1.0)
+
+    def test_arc_turns_about_the_axis(self):
+        pts = s.arc_points((0, 0, 0), (0, 0, 1), 2.0, 90.0, 4, start=(1, 0, 0))
+        self.assertAlmostEqual(pts[0][0], 2.0)
+        self.assertAlmostEqual(pts[-1][1], 2.0)  # right-hand turn about +Z: x then y
+        for p in pts:
+            self.assertAlmostEqual(math.hypot(p[0], p[1]), 2.0)
+        tangent = s.arc_tangent((0, 0, 1), pts[0], (0, 0, 0))
+        self.assertAlmostEqual(tangent[1], 1.0)
+
+    def test_sampling(self):
+        self.assertEqual(s.grid_fractions(2), [0.25, 0.75])
+        self.assertEqual(s.samples_per_side(10.0, 5.0), 2)
+        self.assertEqual(s.samples_per_side(1000.0, 1.0, most=4), 4)
+        self.assertEqual(s.samples_per_side(1.0, 5.0), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -315,7 +315,8 @@ not cover, or a name the alias file should map. Greyed entries are left out.
 - `tab:sketch`: Isoparametric Curve, Environmental Map Analysis, Insert Component, Insert STEP, Toggle Construction
 - `tab:drawing`: Bend Note, Bend Table
 - `tab:flat_pattern`: Environmental Map Analysis
-- `tab:sim_setup`: Manage Physical Materials, Environmental Map Analysis
+- `tab:sim_setup`: New Simulation Study, Study Materials, Manage Physical Materials, Structural Constraints, Structural Loads, Toggle Gravity On/Off, Automatic Contacts, Contact Manager, DOF View, Show Mesh, Settings, Local Mesh Control, Load Case Attributes, Pre-check, Solve, Generate Mesh, Job Status, Environmental Map Analysis
+- `tab:sim_results`: Animate, Results Details, Convergence Plot, Legend Min/Max, Compare, Report, Undeformed, Actual, Adjusted x 0.5, Adjusted, Adjusted x 2, Adjusted x 5, Show Mesh, Undeformed Model, Loads and Constraints, Settings, Local Mesh Control, Load Case Attributes, Surface Probes, Show Min/Max, Reaction Force, Slice Plane, Point Probes, Iso-surface, Solver Data, Finish Results
 - `file`: Home, Version History, Export Everything, Insert Mesh, Insert STEP, Insert SVG, Insert DXF, Canvas, Insert Design, Project and Recovery Settings, Connect a Cloud or NAS, AI Panel, Add an AI App, AI Activity, AI Chat, FreeCAD Tools
 - `quick`: Menu, New, Open
 - `nav`: Theme, Ground Plane, Show All, Two Views Horizontal, Two Views Vertical

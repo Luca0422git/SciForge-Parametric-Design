@@ -1353,18 +1353,18 @@ SIM_STUDY = group(
     "STUDY",
     ["New Simulation Study"],
     [
-        item("New Simulation Study", None, SIM_ICON),  # owner: sim-ui
+        item("New Simulation Study", "SciForge_SimNewStudy", "sim_new_study"),  # owner: sim-ui
     ],
 )
 SIM_SIMPLIFY = group(
     "sim_simplify",
     "SIMPLIFY",
-    [],
+    ["Simplify"],
     [
         item(
             "Simplify",
             None,
-            SIM_ICON,
+            "sim_simplify",
             note=_SIM_LATER + ": a study uses the design as it is (leave a body out in Study "
             "Materials)",
         ),
@@ -1375,7 +1375,7 @@ SIM_MATERIALS = group(
     "MATERIALS",
     ["Study Materials"],
     [
-        item("Study Materials", None, SIM_ICON),  # owner: sim-ui
+        item("Study Materials", "SciForge_SimStudyMaterials", "sim_materials"),  # owner: sim-ui
         item(
             "Manage Physical Materials", ("SciForge_ManageMaterials", "Material_Edit"), "material"
         ),
@@ -1386,7 +1386,7 @@ SIM_CONSTRAINTS = group(
     "CONSTRAINTS",
     ["Structural Constraints"],
     [
-        item("Structural Constraints", None, SIM_ICON),  # owner: sim-ui
+        item("Structural Constraints", "SciForge_SimConstraints", "sim_constraints"),  # sim-ui
     ],
 )
 SIM_LOADS = group(
@@ -1394,13 +1394,18 @@ SIM_LOADS = group(
     "LOADS",
     ["Structural Loads"],
     [
-        item("Structural Loads", None, SIM_ICON),  # owner: sim-ui
-        item("Toggle Gravity On/Off", None, SIM_ICON),  # owner: sim-ui
+        item("Structural Loads", "SciForge_SimLoads", "sim_loads"),  # owner: sim-ui
+        item(
+            "Toggle Gravity On/Off",
+            "SciForge_SimGravity",
+            "sim_gravity",
+            toggle="simulation_ui:gravity_on",
+        ),  # owner: sim-ui
         SEP,
-        item("Linear Global Load", None, SIM_ICON, note=_SIM_LATER),
-        item("Angular Global Load", None, SIM_ICON, note=_SIM_LATER),
-        item("Point Mass (Auto)", None, SIM_ICON, note=_SIM_LATER),
-        item("Point Mass (Manual)", None, SIM_ICON, note=_SIM_LATER),
+        item("Linear Global Load", None, "sim_global_linear", note=_SIM_LATER),
+        item("Angular Global Load", None, "sim_global_angular", note=_SIM_LATER),
+        item("Point Mass (Auto)", None, "sim_point_mass_auto", note=_SIM_LATER),
+        item("Point Mass (Manual)", None, "sim_point_mass_manual", note=_SIM_LATER),
     ],
 )
 SIM_CONTACTS = group(
@@ -1408,35 +1413,45 @@ SIM_CONTACTS = group(
     "CONTACTS",
     ["Automatic Contacts"],
     [
-        item("Automatic Contacts", None, SIM_ICON),  # owner: sim-ui
+        item("Automatic Contacts", "SciForge_SimAutoContacts", "sim_contacts"),  # owner: sim-ui
         item(
             "Manual Contacts",
             None,
-            SIM_ICON,
+            "sim_manual_contacts",
             note=_SIM_LATER + ": bodies that touch are bonded, found automatically",
         ),
-        item("Contact Manager", None, SIM_ICON),  # owner: sim-ui
+        item(
+            "Contact Manager", "SciForge_SimContactManager", "sim_contact_manager"
+        ),  # owner: sim-ui
         SEP,
-        item("Bolt Connector", None, SIM_ICON, note=_SIM_LATER),
-        item("Rigid Body Connector", None, SIM_ICON, note=_SIM_LATER),
+        item("Bolt Connector", None, "sim_bolt", note=_SIM_LATER),
+        item("Rigid Body Connector", None, "sim_rigid_connector", note=_SIM_LATER),
     ],
 )
 SIM_DISPLAY = group(
     "sim_display",
     "DISPLAY",
-    [],
+    ["DOF View"],
     [
-        item("DOF View", None, SIM_ICON),  # owner: sim-ui
+        item(
+            "DOF View", "SciForge_SimDOFView", "sim_dof", toggle="simulation_ui:dof_on"
+        ),  # owner: sim-ui
+        item(
+            "Show Mesh",
+            "SciForge_SimShowMesh",
+            "sim_mesh",
+            toggle="simulation_solve_dialog:mesh_shown",
+        ),  # owner: sim-ui
     ],
 )
 SIM_MANAGE = group(
     "sim_manage",
     "MANAGE",
-    [],
+    ["Settings"],
     [
-        item("Settings", None, SIM_ICON),  # owner: sim-ui (Study Settings)
-        item("Local Mesh Control", None, SIM_ICON),  # owner: sim-ui
-        item("Load Case Attributes", None, SIM_ICON),  # owner: sim-ui
+        item("Settings", "SciForge_SimSettings", "sim_settings"),  # owner: sim-ui
+        item("Local Mesh Control", "SciForge_SimLocalMesh", "sim_local_mesh"),  # owner: sim-ui
+        item("Load Case Attributes", "SciForge_SimAttributes", "sim_attributes"),  # sim-ui
     ],
 )
 SIM_SOLVE = group(
@@ -1444,57 +1459,171 @@ SIM_SOLVE = group(
     "SOLVE",
     ["Pre-check", "Solve"],
     [
-        item("Pre-check", None, SIM_ICON),  # owner: sim-ui
-        item("Solve", None, SIM_ICON),  # owner: sim-ui
-        item("Generate Mesh", None, SIM_ICON),  # owner: sim-ui
+        item("Pre-check", "SciForge_SimPrecheck", "sim_precheck"),  # owner: sim-ui
+        item("Solve", "SciForge_SimSolve", "sim_solve"),  # owner: sim-ui
+        item("Generate Mesh", "SciForge_SimGenerateMesh", "sim_mesh"),  # owner: sim-ui
+        item("Job Status", "SciForge_SimJobStatus", "sim_job_status"),  # owner: sim-ui
     ],
 )
+# The right-click marking menu in the SIMULATION workspace (Fusion's offers the setup's
+# commands there, not the design's; the places are SciForge's choice). No Delete: in
+# SIMULATION the design is not changed (a study item is deleted from the browser).
+# owner: sim-ui (simulation_ui.open_marking_menu)
+SIM_MARKING_MENU = [
+    item("Repeat", "__repeat__", "compute"),
+    item("Study Materials", "SciForge_SimStudyMaterials", "sim_materials"),
+    item("Structural Loads", "SciForge_SimLoads", "sim_loads"),
+    item("Undo", "Std_Undo", "qa_undo", "Ctrl+Z"),
+    item("Structural Constraints", "SciForge_SimConstraints", "sim_constraints"),
+    item("Pre-check", "SciForge_SimPrecheck", "sim_precheck"),
+    item("Solve", "SciForge_SimSolve", "sim_solve"),
+    item("Settings", "SciForge_SimSettings", "sim_settings"),
+]
+SIM_MARKING_LIST = [
+    item("Redo", "Std_Redo", "qa_redo", "Ctrl+Y"),
+    item("Generate Mesh", "SciForge_SimGenerateMesh", "sim_mesh"),
+    item("Local Mesh Control", "SciForge_SimLocalMesh", "sim_local_mesh"),
+    item("DOF View", "SciForge_SimDOFView", "sim_dof"),
+    SEP,
+    item("Hide", "Std_HideSelection", "nav_display"),
+    item("Show All", "Std_ShowObjects", "nav_display"),
+    item("Fit", "Std_ViewFitAll", "nav_fit", "F6"),
+    item("Look At", "Std_AlignToSelection", "nav_lookat"),
+    SEP,
+    item("Set Orbit Center", "SciForge_SetOrbitCenter", "orbit_center"),
+    item("Reset Orbit Center", "SciForge_ResetOrbitCenter", "orbit_center"),
+]
 SIMR_TOOLS = group(
     "simr_tools",
     "RESULT TOOLS",
-    ["Animate"],
+    ["Animate", "Results Details", "Report"],
     [
-        item("Animate", None, SIM_ICON),  # owner: sim-results
-        item("Results Details", None, SIM_ICON),  # owner: sim-results
-        item("Compare", None, SIM_ICON, note=_SIM_LATER),
-        item("Report", None, SIM_ICON),  # owner: sim-results
+        item(
+            "Animate",
+            "SciForge_SimResultsAnimate",
+            "simr_animate",
+            toggle="simulation_results_ui:animation_on",
+        ),  # owner: sim-results
+        item("Results Details", "SciForge_SimResultsDetails", "simr_details"),  # owner: sim-results
+        item(
+            "Convergence Plot",
+            "SciForge_SimResultsConvergence",
+            "simr_convergence",
+            note="Only for a study solved with adaptive mesh refinement (Settings)",
+        ),  # owner: sim-results
+        item(
+            "Legend Min/Max",
+            "SciForge_SimResultsRange",
+            "simr_range",
+            note="The values the legend's colours run between (not for the safety factor)",
+        ),  # owner: sim-results
+        item(
+            "Compare",
+            "SciForge_SimResultsCompare",
+            "simr_compare",
+            toggle="simulation_results_ui:comparing",
+            note="Two to four studies in split views on one colour scale",
+        ),  # owner: sim-results
+        item("Report", "SciForge_SimResultsReport", "simr_report"),  # owner: sim-results
     ],
 )
+_SIMR_DEFORM = "simulation_results_ui:deform_"  # owner: sim-results (the ticked scale)
 SIMR_DEFORMATION = group(
     "simr_deformation",
     "DEFORMATION",
     [],
     [
-        item("Undeformed", None, SIM_ICON),  # owner: sim-results
-        item("Actual", None, SIM_ICON),  # owner: sim-results
-        item("Adjusted x 0.5", None, SIM_ICON),  # owner: sim-results
-        item("Adjusted", None, SIM_ICON),  # owner: sim-results
-        item("Adjusted x 2", None, SIM_ICON),  # owner: sim-results
-        item("Adjusted x 5", None, SIM_ICON),  # owner: sim-results
+        item(
+            "Undeformed",
+            "SciForge_SimResultsUndeformed",
+            "simr_deform_none",
+            checked=_SIMR_DEFORM + "undeformed",
+        ),
+        item(
+            "Actual",
+            "SciForge_SimResultsActual",
+            "simr_deform_actual",
+            checked=_SIMR_DEFORM + "actual",
+        ),
+        item(
+            "Adjusted x 0.5",
+            "SciForge_SimResultsAdjustedHalf",
+            "simr_deform_half",
+            checked=_SIMR_DEFORM + "adjusted_half",
+        ),
+        item(
+            "Adjusted",
+            "SciForge_SimResultsAdjusted",
+            "simr_deform_adjusted",
+            checked=_SIMR_DEFORM + "adjusted",
+        ),
+        item(
+            "Adjusted x 2",
+            "SciForge_SimResultsAdjusted2",
+            "simr_deform_x2",
+            checked=_SIMR_DEFORM + "adjusted_2",
+        ),
+        item(
+            "Adjusted x 5",
+            "SciForge_SimResultsAdjusted5",
+            "simr_deform_x5",
+            checked=_SIMR_DEFORM + "adjusted_5",
+        ),
     ],
 )
 SIMR_DISPLAY = group(
     "simr_display",
     "DISPLAY",
-    [],
+    ["Show Mesh"],
     [
-        item("Show Mesh", None, SIM_ICON),  # owner: sim-results
-        item("Wireframe", None, SIM_ICON),  # owner: sim-results
+        item(
+            "Show Mesh",
+            "SciForge_SimResultsMesh",
+            "simr_mesh",
+            toggle="simulation_results_ui:mesh_on",
+        ),  # owner: sim-results
+        item(
+            "Undeformed Model",
+            "SciForge_SimResultsGhost",
+            "simr_ghost",
+            toggle="simulation_results_ui:ghost_on",
+        ),  # owner: sim-results
+        item(
+            "Loads and Constraints",
+            "SciForge_SimResultsLoads",
+            "simr_loads",
+            toggle="simulation_results_ui:loads_on",
+            note="The loads and constraints drawn on the results (with the SETUP tab's glyphs)",
+        ),  # owner: sim-results
     ],
 )
 SIMR_INSPECT = group(
     "simr_inspect",
     "INSPECT",
-    ["Surface Probes"],
+    ["Surface Probes", "Slice Plane"],
     [
-        item("Surface Probes", None, SIM_ICON),  # owner: sim-results
-        item("Show Min/Max", None, SIM_ICON),  # owner: sim-results
-        item("Reaction Force", None, SIM_ICON),  # owner: sim-results
-        item("Slice Plane", None, SIM_ICON),  # owner: sim-results
+        item("Surface Probes", "SciForge_SimResultsProbes", "simr_probe"),  # owner: sim-results
+        item(
+            "Show Min/Max",
+            "SciForge_SimResultsMinMax",
+            "simr_minmax",
+            toggle="simulation_results_ui:minmax_on",
+        ),  # owner: sim-results
+        item(
+            "Reaction Force",
+            "SciForge_SimResultsReactions",
+            "simr_reaction",
+            note="The force each constraint takes (when the solve worked them out)",
+        ),  # owner: sim-results
+        item("Slice Plane", "SciForge_SimResultsSlice", "simr_slice"),  # owner: sim-results
         SEP,
-        item("Point Probes", None, SIM_ICON, note=_SIM_LATER),
-        item("Iso-surface", None, SIM_ICON, note=_SIM_LATER),
-        item("Solver Data", None, SIM_ICON, note=_SIM_LATER),
+        item(
+            "Point Probes", "SciForge_SimResultsPointProbes", "simr_point_probe"
+        ),  # owner: sim-results
+        item("Iso-surface", "SciForge_SimResultsIso", "simr_iso"),  # owner: sim-results
+        item(
+            "Solver Data", "SciForge_SimResultsSolverData", "simr_solver_data"
+        ),  # owner: sim-results
         SEP,
         item("Measure", ("SciForge_Measure", "Std_Measure"), "measure"),
     ],
@@ -1504,7 +1633,7 @@ SIMR_FINISH = group(
     "FINISH RESULTS",
     ["Finish Results"],
     [
-        item("Finish Results", None, SIM_ICON),  # owner: sim-results
+        item("Finish Results", "SciForge_SimResultsFinish", "simr_finish"),  # owner: sim-results
     ],
 )
 
