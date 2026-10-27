@@ -161,6 +161,35 @@ class Regions(unittest.TestCase):
         self.assertEqual(found["ends"], [[15, 20, 8], [15, 20, 0]])
         self.assertIn("a round hole about 8 mm across, 8 deep (32 facets", found["looks_like"])
 
+    def test_a_mesh_hole_with_an_odd_number_of_facets_is_at_its_axis(self):
+        """A polygon with an odd number of corners does not sit in the middle of its box:
+        the hole is placed by its centroid (journey rebuild, beta 3: said at 60.003, 24)."""
+        n, r, depth, cx, cy = 31, 5.0, 8.0, 60.0, 24.0
+        area = n / 2.0 * r * r * math.sin(2 * math.pi / n)
+        corners = [
+            (cx + r * math.cos(2 * math.pi * i / n), cy + r * math.sin(2 * math.pi * i / n))
+            for i in range(n)
+        ]
+        xs, ys = [p[0] for p in corners], [p[1] for p in corners]
+        sides = [
+            plane(
+                (math.cos(2 * math.pi * (i + 0.5) / n), math.sin(2 * math.pi * (i + 0.5) / n), 0.0)
+            )
+            for i in range(n)
+        ]
+        region = {
+            "volume": area * depth,
+            "center": [cx, cy, 4.0],
+            "bbox": [min(xs), min(ys), 0.0, max(xs), max(ys), depth],
+            "faces": sides + [plane((0, 0, 1)), plane((0, 0, -1))],
+        }
+        self.assertGreater(abs((min(xs) + max(xs)) / 2.0 - cx), 1e-3)  # the box is off
+        found = core.classify_region(region, "extra")
+        self.assertTrue(found.get("faceted"))
+        self.assertEqual(found["at"][:2], [cx, cy])
+        self.assertEqual(found["ends"], [[cx, cy, depth], [cx, cy, 0.0]])
+        self.assertEqual(core.point_text(found["at"], found["axis"]), "(60, 24)")
+
     def test_a_rounded_edge(self):
         found = core.classify_region(fillet_region(), "extra")
         self.assertEqual(found["kind"], "fillet")
