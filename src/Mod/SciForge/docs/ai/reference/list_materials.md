@@ -67,6 +67,12 @@ The answer:
    "density_kg_m3": 2700.0
   },
   {
+   "key": "aluminium_almg3",
+   "name": "Aluminium AlMg3 (5754)",
+   "group": "Metal",
+   "density_kg_m3": 2700.0
+  },
+  {
    "key": "copper",
    "name": "Copper",
    "group": "Metal",
@@ -98,13 +104,7 @@ The answer:
   },
   {
    "key": "nylon",
-   "name": "Nylon 6",
-   "group": "Plastic",
-   "density_kg_m3": 1150.0
-  },
-  {
-   "key": "polycarbonate",
-... (330 more lines)
+... (336 more lines)
 ```
 
 ## More argument examples

@@ -42,7 +42,7 @@ The call:
 The answer:
 
 ```text
-3 of 55 examples (read one with docs_read and its uri; a golden model's steps are design steps, the tools that build them are listed):
+3 of 133 examples (read one with docs_read and its uri; a golden model's steps are design steps, the tools that build them are listed):
 {
  "results": [
   {
@@ -66,6 +66,7 @@ The answer:
     "create_sketch",
     "revolve",
     "hole",
+    "undo",
     "circular_pattern",
     "query_geometry",
     "fillet",
@@ -75,9 +76,9 @@ The answer:
     "inspect_design"
    ],
    "note": "A pipe flange: a 100 mm disc, 10 mm thick, with a 40 mm hub 30 mm tall, a 20 mm bore, a",
-   "calls": 12,
+   "calls": 14,
    "uri": "sciforge://docs/recipes/flange-bolt-pattern.md",
-   "score": 22.22
+   "score": 17.679
   },
   {
    "kind": "golden",
@@ -89,7 +90,7 @@ The answer:
    "note": "The picked wall is closed with the top and bottom faces into the hole's cylinder, which is cut at 60 degree steps. V = pi*40^2*10 - 6*pi*4^2*10; A = 2*1600pi + 2pi*40*10 - 12*16pi + 6*2pi*4*10 (same as flange_polar_holes).",
    "known_gap": false,
    "uri": "sciforge://examples/golden/pattern_circ_faces_bolt_circle",
-   "score": 14.999
+   "score": 13.294
   },
   {
    "kind": "recipe",
@@ -110,9 +111,8 @@ The answer:
    "note": "A hex head bolt M8 x 30: a 13 mm across-flats head 5.3 mm high (ISO 4017), a 30 mm shank",
    "calls": 10,
    "uri": "sciforge://docs/recipes/threaded-fastener.md",
-   "score": 8.989
-  }
-... (3 more lines)
+   "score": 9.594
+... (4 more lines)
 ```
 
 ## More argument examples

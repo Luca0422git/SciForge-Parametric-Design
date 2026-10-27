@@ -107,7 +107,7 @@ Body001, read from its 7 faces: 1 feature, a plan of 4 steps. Build the plan in 
   {
    "step": 1,
    "tool": "create_sketch",
-   "args": {"plane": "XY", "geometry": [{"rect": [0.0, 0.0, 60.0, 40.0]}]},
+   "args": {"plane": "XY", "geometry": [{"rect": [0.0, 0.0, 60.0, 40.0], "name": "base"}]},
    "why": "The base profile (rectangle 60 x 40) on the XY plane.",
    "features": [],
    "id": "Sketch1"
@@ -124,7 +124,7 @@ Body001, read from its 7 faces: 1 feature, a plan of 4 steps. Build the plan in 
   {
    "step": 3,
    "tool": "create_sketch",
-... (19 more lines)
+... (24 more lines)
 ```
 
 ## More argument examples
