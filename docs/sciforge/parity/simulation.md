@@ -202,9 +202,10 @@ G = guess (the SciForge choice when the sources are silent).
   "not held enough" in the pre-check; the UI still refuses such results:
   `simulation_solve_dialog.loose_result`), the result summary keyed bodies by label (two
   components' "Body1" shared one entry), the result fingerprint was taken when the solve ended,
-  and "Keep the results in the design file" made results look out of date. Still open: the
-  Bearing Load's default direction along a hole drilled along Z (the UI turns it across), and
-  a body deleted while its study solves (the engine fails on it; the UI stops the job first).
+  and "Keep the results in the design file" made results look out of date. The last two were
+  closed by the sim QA (`docs/sciforge/sessions/beta3-sim-qa.md`): the engine turns a Bearing
+  Load's default across its hole (and refuses a direction along it), and stops a solve whose
+  body was deleted with a sentence, for every caller (the AI, scripts), not only the dialog.
 
 ## Results
 
@@ -282,6 +283,7 @@ and 3rd principal stress; where the plot opens was not found).
 | INSPECT: Solver Data | Solver Data: when the study was solved and how long each step took (model, mesh, solver input, CalculiX, reading the results), the safety factor's basis; the mesh: nodes, degrees of freedom (3 per node), elements, order, element size, smallest / largest element edge, worst aspect ratio, elements over the limit, mesher; the adaptive refinement's solves; the solve's messages; Copy (as text) | A[57]; contents G |
 | MANAGE | sim-ui's (shared with SETUP) | A[49] |
 | FINISH RESULTS | Finish Results | G (mem) |
+| Right click on the results (the marking menu) | The RESULTS tab's own ring (sim QA): Repeat (the last RESULTS command), Surface Probes, Show Min/Max, Undo, Animate, Results Details, Finish Results, Report; its list: Redo, Slice Plane, Reaction Force, Show Mesh, Fit, Look At, the orbit centre (it showed SETUP's ring) | G (sim-results' note) |
 
 ### Known gaps (Results)
 
