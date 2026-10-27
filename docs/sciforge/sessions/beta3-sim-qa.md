@@ -1,7 +1,8 @@
 # Session log: beta 3, QA of the whole SIMULATION workspace (sim-qa)
 
 Branch `sf/sim-qa` (from the integration branch `beta3`: the engine and its accuracy QA, the
-SETUP tab, the RESULTS tab; `beta3` merged again at 48d5500b for its later fixes), 2026-10-27.
+SETUP tab, the RESULTS tab; `beta3` merged again at 48d5500b and at 00575c43 for its later
+fixes: undo_leftover, the SPOOLES retry, version 0.1.0-beta.3), 2026-10-27.
 Rules: `docs/sciforge/dev/briefs/beta3-qa.md`, `beta3-common.md`, `common.md`; the briefs
 `beta3-sim-*.md`, the four reports (sim-core, sim-engine-qa, sim-ui, sim-results) and their
 session logs; research `fusion-simulation.md`; parity `docs/sciforge/parity/simulation.md`.
@@ -79,10 +80,15 @@ constraint and load, not out of date, RESULTS with the same numbers from the sam
    material rows); only the Solve dialog checked. The Job remembers the study's bodies and
    stops with "Beam was deleted while it solved: the solve stopped. Solve again for the design
    as it is now.", nothing left behind. Engine check "a body deleted while it solves".
-7. **`hole_common.abandon` left the closed design's undo step open** (e5f017a7): it now closes
-   it once no dialog is open (`hole_common.close_left_step`, also used by SIMULATION's own
-   check, which did it alone before). Scenario `sim_qa_close`; `sim_setup_odd` H; every hole
-   scenario and `inspect_qa` (Measure uses abandon) pass.
+7. **`hole_common.abandon` left the closed design's undo step open** (e5f017a7): it closed
+   it once no dialog was open (every hole scenario and `inspect_qa` passed with it). Then
+   beta3 got `undo_leftover.py` (another agent): the step is closed for every dialog as the
+   design closes, with a careful rule (another design's or a script's own step is left alone),
+   unit tested. Two mechanisms would compete, and mine was the less careful one, so after
+   merging beta3 again (00575c43; the one conflict, `simulation_ui._close_leftover_step`, taken
+   from beta3) abandon is back to letting go only (da3424ab). Scenario `sim_qa_close` (no step
+   left open, the other design's New Study its own undo step, its solve ends) passes through
+   undo_leftover; `sim_setup_odd` H too.
 8. **Greyed SETUP commands said only "Not in SciForge yet"** (25e4640d): Linear / Angular
    Global Load, Point Mass, Bolt / Rigid Body Connector now say what to use meanwhile. Unit
    test `test_greyed_ribbon_commands_say_what_to_use`.
