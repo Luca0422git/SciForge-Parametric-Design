@@ -284,6 +284,10 @@ class Limits(unittest.TestCase):
         self.assertEqual(len(model.requests), 3)
         self.assertIn("error", rec.kinds())
         self.assertEqual(chat_core.MAX_STEPS, 25)
+        # a rebuild with a timeline carries its whole plan in one Send
+        self.assertEqual(chat_core.step_limit(False), 25)
+        self.assertEqual(chat_core.step_limit(True), chat_core.REBUILD_STEPS)
+        self.assertGreaterEqual(chat_core.REBUILD_STEPS, 60)
 
     def test_stop_between_steps(self):
         model = ScriptedModel(claude_tools([("t1", "get_design", {}), ("t2", "screenshot", {})]))

@@ -25,6 +25,9 @@ from . import catalog, tools_core
 from .providers import _common
 
 MAX_STEPS = 25
+# while a part is rebuilt with a timeline (Auto Timeline) one Send carries the whole plan:
+# describe, a step or two per feature, a compare after each (a 9-feature bracket: about 40)
+REBUILD_STEPS = 80
 RETRIES = 2  # for "the provider had a problem" (5xx / overloaded) answers
 RETRY_DELAYS = (2, 6)
 
@@ -141,6 +144,11 @@ def _error_message(data):
 
 def _result(text, image=None, is_error=False):
     return {"text": text, "image_png_base64": image or None, "is_error": bool(is_error)}
+
+
+def step_limit(rebuilding):
+    """How many requests one Send may make: more while a rebuild goes on."""
+    return REBUILD_STEPS if rebuilding else MAX_STEPS
 
 
 class Chat:
