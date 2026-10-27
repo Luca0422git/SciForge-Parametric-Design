@@ -154,7 +154,7 @@ def clamp_shape():
 def plate_shape():
     import Part
 
-    plate = Part.makeBox(80, 50, 8)
+    plate = Part.makeBox(80, 48, 8)
     holes = [Part.makeCylinder(5, 8, V(x, y, 0)) for x, y in PLATE_HOLES]
     return plate.cut(Part.makeCompound(holes)).removeSplitter()
 
@@ -654,13 +654,29 @@ def joint_steps():
     first.wait_ms = 900
 
     def second():
+        # as a person does: the mouse moved around the counterbore's rim until its centre
+        # lights up, then the click
         h.view().viewIsometric()
         h.view().fitAll()
         QtWidgets.QApplication.processEvents()
-        js.hover(V(CLAMP_AT[0], CLAMP_AT[1] + 6.5, 10))
-        p = js.joint_panel()
-        s["second_kind"] = js.hot_kind(p) if p is not None else None
-        h.click(V(CLAMP_AT[0], CLAMP_AT[1] + 6.5, 10))
+        x, y = CLAMP_AT
+        centre = V(x, y, 10)
+        tried = []
+        for radius in (5.0, 6.0, 7.0):
+            for angle in range(0, 360, 30):
+                a = math.radians(angle)
+                point = V(x + radius * math.cos(a), y + radius * math.sin(a), 10)
+                js.hover(point)
+                p = js.joint_panel()
+                hot = getattr(getattr(p, "hover", None), "hot", None)
+                kind = hot.get("kind") if hot else None
+                at = hot.get("point") if hot else None
+                tried.append((radius, angle, kind))
+                if kind in CENTRES and at is not None and (V(at) - centre).Length < 1e-6:
+                    s["second_kind"] = kind
+                    h.click(point)
+                    return
+        h.check("the counterbore's centre lights up somewhere on its rim", False, tried)
 
     second.wait_ms = 1200
 
@@ -1184,8 +1200,13 @@ def sim_steps():
         faces = shoulders(target)
         s["held"] = faces
         h.check("the four counterbores' floors", len(faces) == 4, faces)
+        # seen from the top (the ViewCube's TOP): from the side the walls hide the floors
+        h.view().viewTop()
+        h.view().fitAll()
+        QtWidgets.QApplication.processEvents()
         for face in faces:
             click_ring(target, face)
+        h.fit()
 
     hold.wait_ms = 1200
 
@@ -1471,9 +1492,29 @@ def mesh_steps():
         h.shot("mesh-compare-holes")
         wi.click(box_.close_button)
 
-    def sketch_top():
+    def finish_early():
         h.check("the window closed", dialog("SciForgeRebuildCompare") is None)
+        utilities_menu("Finish Rebuild")
+
+    finish_early.wait_ms = 2500
+
+    def keeps_original():
+        box_ = dialog("SciForgeRebuildFinish")
+        if not h.check("Finish Rebuild opened (too early)", box_ is not None, h.popups()):
+            return
+        text = box_.state.text()
+        h.check("it says the plate does not match yet", "does not match" in text, text)
+        h.check(
+            "... and keeps the original by default (nothing lost by an early Finish)",
+            box_.keep_original.isChecked() and not box_.delete_original.isChecked(),
+        )
+        wi.click(box_.cancel)
+
+    def sketch_top():
+        h.check("Cancel closed it", dialog("SciForgeRebuildFinish") is None)
+        h.check("... and nothing was finished", len(references()) == 1, references())
         h.fit()
+        tab("solid")  # (Compare was in UTILITIES)
         h.ribbon("Create Sketch")
 
     def click_top():
@@ -1487,14 +1528,16 @@ def mesh_steps():
     def c1():
         si.click(V(20, 24, 8))
 
-    def r1():
-        si.click(V(25, 24, 8))
+    def r1():  # the diameter typed, as in Fusion
+        si.move_towards(V(26, 24.3, 8), V(1, 0, 0))
+        si.type_text("10")
 
     def c2():
         si.click(V(60, 24, 8))
 
     def r2():
-        si.click(V(65, 24, 8))
+        si.move_towards(V(66, 24.3, 8), V(1, 0, 0))
+        si.type_text("10")
 
     def circles_drawn():
         h.press(QtCore.Qt.Key_Escape)
@@ -1512,8 +1555,38 @@ def mesh_steps():
 
     circles_drawn.wait_ms = 1500
 
+    def pick_circles():
+        # the sketch on the face holds the face's outline too (projected, as Fusion does), so
+        # nothing is picked yet: a click inside each circle picks it
+        from sciforge import extrude_ui
+
+        panel = extrude_ui.ExtrudePanel.last
+        if h.check("Extrude opened", panel is not None and not panel._closed):
+            s["profiles_before"] = list(panel.profiles)
+            si.click(V(20, 24, 8))
+
+    def pick_second():
+        si.click(V(60, 24, 8))
+
     def depth():
-        h.check("Extrude opened on the circles", ai.give_distance("-8"))
+        from sciforge import extrude_ui
+
+        panel = extrude_ui.ExtrudePanel.last
+        if panel is None or panel._closed:
+            h.check("the Extrude dialog is still open", False)
+            return
+        subs = sorted(sub for _obj, sub in panel.profiles)
+        h.check("the two circles are the profiles", len(subs) == 2, (subs, s["profiles_before"]))
+        ai.give_distance("-8")
+        h.check(
+            "going down into the plate makes it a Cut",
+            panel.operation.currentData() == "cut",
+            panel.operation.currentData(),
+        )
+        # holes go through: Extent All (they still do when the plate gets thicker)
+        from SciForgeTests.gui import dialog_input as ui
+
+        h.check("Extent: All", ui.choose(panel.extent, "All"))
 
     def cut_made():
         target = doc().getObject(s.get("rebuilt") or "-")
@@ -1529,7 +1602,7 @@ def mesh_steps():
             return
         verdict = box_.verdict.text()
         h.check("it says done (Finish Rebuild)", "Finish Rebuild" in verdict, verdict)
-        h.check("the match", box_.headline.text().startswith("Match 99.9"), box_.headline.text())
+        h.check("the match", "Match 99.99" in box_.headline.text(), box_.headline.text())
         h.shot("mesh-compare-done")
         wi.click(box_.finish_button)
 
@@ -1580,6 +1653,8 @@ def mesh_steps():
         step(compare, "mesh_compare"),
         step(says_holes, "mesh_compare_holes"),
     ], [
+        step(finish_early, "mesh_finish_too_early"),
+        step(keeps_original, "mesh_finish_keeps_original"),
         step(sketch_top, "mesh_sketch_top"),
         step(click_top, "mesh_click_top"),
         step(circle_key, "mesh_circle_key"),
@@ -1588,6 +1663,8 @@ def mesh_steps():
         step(c2, "mesh_circle2_centre"),
         step(r2, "mesh_circle2_radius"),
         step(circles_drawn, "mesh_circles_drawn"),
+        step(pick_circles, "mesh_cut_pick_circle1"),
+        step(pick_second, "mesh_cut_pick_circle2"),
         step(depth, "mesh_cut_depth"),
         step(ok, "mesh_cut_ok"),
         step(cut_made, "mesh_cut_made"),
@@ -1613,17 +1690,20 @@ def reopen_steps(name, check):
 
     def save_dialog():
         if vi.save_dialog() is not None:
+            s["files"][name] = os.path.join(folder(), name + ".FCStd")
+            if os.path.exists(s["files"][name]):
+                os.remove(s["files"][name])
             vi.fill_save_dialog(name, folder())
             vi.click_save()
         else:
+            s["files"][name] = doc().FileName
             h.check("%s: the version prompt" % name, vi.accept_save())
 
-    save_dialog.wait_ms = 2000
+    save_dialog.wait_ms = 4000
 
     def close():
-        path = doc().FileName
-        s["files"][name] = path
-        h.check("%s: saved" % name, path and os.path.isfile(path), path)
+        path = s["files"].get(name)
+        h.check("%s: saved" % name, path and os.path.isfile(path), (path, h.popups()))
         p2.close_tab(doc())
 
     close.wait_ms = 1500
@@ -1712,7 +1792,7 @@ def mesh_edit_steps():
         target = doc().getObject(s.get("rebuilt") or "-")
         want = 80 * 48 * 10 - 2 * math.pi * 25 * 10
         h.check(
-            "10 thick, the holes still through: 36429.20 mm3",
+            "10 thick, the holes still through: 36829.20 mm3",
             near(volume(target), want, 1e-6),
             (volume(target), want),
         )
@@ -1726,3 +1806,83 @@ def mesh_edit_steps():
         h.idle_step("mesh_edit_idle"),
         step(thick, "mesh_edit_thick"),
     ]
+
+
+# -- 7 (the AI's path): saved half way, finished by hand after opening again ---------------------
+def bracket_reopened_half_way():
+    from sciforge import bodies as bodies_mod, rebuild_ui
+
+    refs = references()
+    h.check("half way, opened again: the reference is there", len(refs) == 1, refs)
+    target = doc().getObject(s.get("rebuilt") or "-")
+    h.check("... the AI's rebuild: 53170.09 mm3", near(volume(target), BRACKET, 1e-6))
+    h.check(
+        "... the rebuilt body is the active body",
+        target is not None and bodies_mod.active_body(doc()) is target,
+        getattr(bodies_mod.active_body(doc()), "Label", None),
+    )
+    view = rebuild_ui.view_of(refs[0]) if refs else None
+    h.check("... its ghost is drawn", view is not None and view.ghost_shown())
+    original = doc().getObject(s.get("original") or "-")
+    h.check("... the original hidden", original is not None and not original.ViewObject.Visibility)
+    found = joint_list()
+    h.check(
+        "... the joint still holds the original",
+        len(found) == 1 and holds(found[0], s["original"]),
+        [joint_subs(j) for j in found],
+    )
+
+
+def finish_by_hand_steps():
+    """UTILITIES > AI > Compare with Reference (100 %) > Finish Rebuild... > Finish."""
+
+    def compare():
+        utilities_menu("Compare with Reference")
+
+    compare.wait_ms = 2500
+
+    def hundred():
+        box_ = dialog("SciForgeRebuildCompare")
+        if not h.check("Compare with Reference opened", box_ is not None, h.popups()):
+            return
+        h.check("100 %", "100 %" in box_.headline.text(), box_.headline.text())
+        wi.click(box_.finish_button)
+
+    hundred.wait_ms = 1500
+
+    def finish():
+        box_ = dialog("SciForgeRebuildFinish")
+        if h.check("Finish Rebuild asks", box_ is not None, h.popups()):
+            wi.click(box_.ok)
+
+    finish.wait_ms = 1500
+
+    def finished():
+        target = doc().getObject(s.get("rebuilt") or "-")
+        s["finished"] = True
+        h.check(
+            "finished by hand: the bracket's name",
+            target is not None and target.Label == s["label"],
+            target.Label if target is not None else None,
+        )
+        h.check("... the original and the reference are gone", not references())
+        h.check("... one undo step 'Finish Rebuild'", doc().UndoNames[:1] == ["Finish Rebuild"])
+        _joint_on_rebuild("finished by hand", 10)
+
+    return [
+        step(compare, "hand_compare"),
+        step(hundred, "hand_compare_hundred"),
+        step(finish, "hand_finish"),
+        h.idle_step("hand_finish_idle"),
+        step(finished, "hand_finished"),
+    ]
+
+
+def bracket_reopened_finished():
+    target = doc().getObject(s.get("rebuilt") or "-")
+    h.check("finished, opened again: the bracket", near(volume(target), BRACKET, 1e-6))
+    h.check("... under its name", target is not None and target.Label == s["label"])
+    h.check("... no reference", not references())
+    kinds = timeline_kinds(target)
+    h.check("... its timeline of real steps", _fusion_order(kinds) and len(kinds) == 9, kinds)
+    _joint_on_rebuild("finished, opened again", 10)
