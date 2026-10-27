@@ -9,7 +9,7 @@ design folders):
 
 - A **study** is an App::FeaturePython (SciForgeType "SimStudy", proxy StudyProxy) holding its
   type, settings and study materials as JSON (`SciForgeSimStudy`), the bodies it simulates
-  (`SimBodies`; empty = every solid body shown when it solves), and a summary of its last
+  (`SimBodies`; empty = the design's bodies, design_bodies), and a summary of its last
   solve (`SciForgeSimResult`).
 - Every **constraint** and **load** is an App::FeaturePython of its own (SciForgeType
   "SimItem", proxy ItemProxy): its picks in `References` (faces / edges / corners of the
@@ -210,7 +210,7 @@ def _all_item_labels(doc, but=None):
 
 def create_study(doc, kind="static_stress", label=None, study_bodies=None):
     """A new study of `kind` (only "static_stress" solves). Fusion names it "Study 1 - Static
-    Stress"; `study_bodies` (default: every solid body shown when it solves)."""
+    Stress"; `study_bodies` (default: the design's bodies, shown or hidden: design_bodies)."""
     if doc is None:
         raise SimulationError("Open a design first.")
     if not core.study_type_available(kind):
@@ -227,6 +227,7 @@ def create_study(doc, kind="static_stress", label=None, study_bodies=None):
     _save(obj, STUDY_PROP, {"type": kind, "settings": core.settings(), "materials": {}})
     if study_bodies:
         obj.SimBodies = list(study_bodies)
+    _clean(obj)
     return obj
 
 
@@ -286,20 +287,61 @@ def clone_study(study, label=None):
         obj.Label = "%s %d" % (title, _label_number(_all_item_labels(doc, obj), title))
         obj.Suppressed = bool(item.Suppressed)
         _save(obj, ITEM_PROP, d)
+    _clean(copy)
     return copy
 
 
 def _save(obj, prop, data):
     bodies.save_meta(obj, prop, data)
+    _clean(obj)
+
+
+def _clean(*objs):
+    """Studies and their items have nothing to compute (their execute does nothing): a change
+    SciForge makes to one leaves no recompute mark ("touched"), so the design does not ask for
+    a recompute after a solve or a setting changed after it (a study changed after its solve
+    was still touched when the design was saved, and came back touched). The design is still
+    marked modified (Save asks), and the results' fingerprint still sees the change."""
+    for obj in objs:
+        try:
+            obj.purgeTouched()
+        except Exception:
+            pass
 
 
 def study_bodies(study):
-    """The solid bodies the study simulates, in the design's order."""
+    """The solid bodies the study simulates, in the design's order: the ones chosen for it
+    (SimBodies), else the design's (design_bodies)."""
     doc = study.Document
     chosen = [b for b in (getattr(study, "SimBodies", None) or []) if bodies.has_solid(b)]
     if chosen:
         return sorted(chosen, key=lambda b: b.ID)
-    return bodies.solid_bodies(doc, visible_only=True)
+    return design_bodies(doc)
+
+
+def design_bodies(doc):
+    """The bodies a study of the whole design simulates (Fusion: the simulation model is the
+    design's bodies): every body with a solid, shown or hidden, but not the ones a step uses
+    up (a Combine without Keep Tools: they are no longer part of the design) nor the ones the
+    history marker has not made yet. Never by what is shown: it went by the eyes, so turning a
+    body's eye off after a solve (the RESULTS tab says to, to look inside) made the results
+    out of date, and changed the bodies the next solve took."""
+    if doc is None:
+        return []
+    for name in ("combine", "mesh", "extrude_bodies"):  # (the steps that use bodies up)
+        try:
+            __import__("sciforge." + name)
+        except Exception:
+            pass
+    try:
+        used = bodies.consumed(doc)
+    except Exception:
+        used = set()
+    return [
+        b
+        for b in bodies.solid_bodies(doc)
+        if b.Name not in used and not getattr(b, "SciForgeRolledHidden", False)
+    ]
 
 
 # -- constraints and loads -------------------------------------------------------------------------
@@ -387,6 +429,7 @@ def update_item(item, refs=None, opts=None, suppressed=None):
     _save(item, ITEM_PROP, data)
     if suppressed is not None:
         item.Suppressed = bool(suppressed)
+    _clean(item)
     return item
 
 
@@ -851,11 +894,42 @@ def _geometry_key(found, tol):
     return (tuple(rows), round(float(tol), 9))
 
 
+def _touch_kind(cut, sa, sb):
+    """How two touching bodies touch: None on a face, "edge" along a line only, "corner" at a
+    point only. From the section of their shapes (its edges close around a shared area), and
+    when that does not tell (two coincident round faces, a pin in its hole, give only lines),
+    from their faces: a pair of faces with an area in common."""
+    import Part
+
+    kind = "corner" if not cut.Edges else "edge"
+    if cut.Edges:
+        try:
+            for group in Part.sortEdges(cut.Edges):
+                if Part.Wire(group).isClosed():
+                    return None
+        except Exception:
+            return None  # (when in doubt: a face, as before)
+    try:
+        for fa in sa.Faces:
+            box = fa.BoundBox
+            box.enlarge(1e-6)
+            for fb in sb.Faces:
+                if not box.intersect(fb.BoundBox):
+                    continue
+                common = fa.common(fb)
+                if common.Area > 1e-6 * min(fa.Area, fb.Area):
+                    return None
+    except Exception:
+        return None
+    return kind
+
+
 def _contact_data(study):
     """([(body, body, "bonded")] touching or closer than the contact tolerance, [(body, body,
-    volume mm3)] overlapping) of the study's bodies, remembered for the same geometry (at most
-    16 answers kept). Two bodies whose boundaries cross (OpenCASCADE's section: a third of the
-    time of a distance) touch; the others are measured; only touching ones can overlap."""
+    volume mm3)] overlapping, [(body, body, "edge" / "corner")] touching only along an edge or
+    at a corner) of the study's bodies, remembered for the same geometry (at most 16 answers
+    kept). Two bodies whose boundaries cross (OpenCASCADE's section: a third of the time of a
+    distance) touch; the others are measured; only touching ones can overlap."""
     found = study_bodies(study)
     tol = float(settings(study)["contact_tolerance"])
     key = _geometry_key(found, tol)
@@ -866,7 +940,7 @@ def _contact_data(study):
         return tuple([(by_name[a], by_name[b], v) for a, b, v in rows] for rows in hit)
     shapes = [(b, bodies.global_shape(b, copy=False)) for b in found]
     volumes = {}
-    touching, overlapping = [], []
+    touching, overlapping, slight = [], [], []
     for i, (a, sa) in enumerate(shapes):
         box = sa.BoundBox
         near = sa.BoundBox
@@ -875,10 +949,12 @@ def _contact_data(study):
             if not near.intersect(sb.BoundBox):
                 continue
             gap = None
+            kind = None
             try:
                 cut = sa.section(sb)
                 if cut.Edges or cut.Vertexes:
                     gap = 0.0
+                    kind = _touch_kind(cut, sa, sb)
             except Exception:
                 gap = None
             if gap is None:
@@ -888,6 +964,8 @@ def _contact_data(study):
                     continue
             if gap <= tol + 1e-9:
                 touching.append((a, b, "bonded"))
+                if kind is not None:
+                    slight.append((a, b, kind))
             if gap <= 1e-9 and box.intersect(sb.BoundBox):
                 try:
                     volume = sa.common(sb).Volume
@@ -902,9 +980,9 @@ def _contact_data(study):
         if len(_GEOMETRY_CACHE) >= 16:
             _GEOMETRY_CACHE.pop(next(iter(_GEOMETRY_CACHE)))
         _GEOMETRY_CACHE[full] = tuple(
-            [(x.Name, y.Name, v) for x, y, v in rows] for rows in (touching, overlapping)
+            [(x.Name, y.Name, v) for x, y, v in rows] for rows in (touching, overlapping, slight)
         )
-    return touching, overlapping
+    return touching, overlapping, slight
 
 
 def contacts(study):
@@ -916,6 +994,12 @@ def contacts(study):
 def overlaps(study):
     """[(body, body, volume mm3)] of the study's bodies that overlap."""
     return _contact_data(study)[1]
+
+
+def slight_contacts(study):
+    """[(body, body, "edge" / "corner")] of the study's bodies that touch only along an edge or
+    at a corner: glued only there, like a hinge (Fusion's contacts are between faces)."""
+    return _contact_data(study)[2]
 
 
 def loose_bodies(study, touching=None):
@@ -1132,10 +1216,12 @@ def precheck(study):
             summary["constraints" if d["category"] == "constraint" else "loads"].append(row)
         if not item.Suppressed and not info.get("built"):
             summary.setdefault("unbuilt", []).append(item.Label)
+    slight = []
     if len(found) > 1:
         try:
             touching = contacts(study)
             summary["overlaps"] = [(a.Label, b.Label, v) for a, b, v in overlaps(study)]
+            slight = slight_contacts(study)
         except Exception as exc:
             warn("simulation pre-check: %s" % exc)
             touching = []
@@ -1180,6 +1266,16 @@ def precheck(study):
             )
     except Exception as exc:
         warn("simulation pre-check (held enough): %s" % exc)
+    for a, b, kind in slight:
+        checks.append(
+            (
+                "warning",
+                "%s and %s touch only %s: they are glued only there, like a hinge, so one can "
+                "still turn about it (the solve fails, or gives nonsense). Let them share a face, "
+                "or move them apart and hold each one."
+                % (a.Label, b.Label, "along an edge" if kind == "edge" else "at a corner"),
+            )
+        )
     for label in summary.get("unbuilt", []):
         checks.append(("error", "%s is not in SciForge yet: suppress or delete it." % label))
     try:
@@ -1341,14 +1437,33 @@ def map_picks(item, model, owners=None, index=None):
     """The model's sub-elements ("Face12", "Edge3", "Vertex5", "Solid2") that lie on the
     item's picks (a whole-body pick: the model solids that body owns). index: _model_index of
     the model, when several items are mapped onto it."""
+    picked = []
+    for obj, found, _moved in resolve_picks(item):
+        picked += [(obj, n) for n in found]
+    return _map_onto(picked, model, owners, index)
+
+
+def map_pick_groups(item, model, owners=None, index=None):
+    """[[the model's sub-elements of the 1st pick], [... of the 2nd], ...]: map_picks pick by
+    pick. Force Per Entity and Moment Per Entity give each pick (Fusion's entity) the whole
+    load, and one picked face can be several faces of the model: the bodies are split where
+    another body touches them (a block glued on a plate splits the plate's top face), or an
+    edit split the face. Giving every model face the whole load doubled it."""
+    if index is None:
+        index = _model_index(model)
+    return [
+        _map_onto([(obj, n) for n in found], model, owners, index)
+        for obj, found, _moved in resolve_picks(item)
+    ]
+
+
+def _map_onto(picked, model, owners=None, index=None):
+    """map_picks for [(object, element name)] of resolved picks."""
     import Part
 
     if index is None:
         index = _model_index(model)
     names = []
-    picked = []
-    for obj, found, _moved in resolve_picks(item):
-        picked += [(obj, n) for n in found]
     shapes = {}
     for obj, sub in picked:
         if not sub:
@@ -1814,6 +1929,14 @@ def _face_normal_at(face, point):
         return (n.x, n.y, n.z)
 
 
+def _flat(face):
+    """True for a planar face (its normal is the same everywhere)."""
+    try:
+        return face.Surface.TypeId == "Part::GeomPlane"
+    except Exception:
+        return False
+
+
 def _middle_uv(face):
     u0, u1, v0, v1 = face.ParameterRange
     return (u0 + u1) / 2.0, (v0 + v1) / 2.0
@@ -1935,40 +2058,46 @@ def _load_forces(item, model, mesh, subs):
         faces = [s for s in subs if s.startswith("Face")]
         edges = [s for s in subs if s.startswith("Edge")]
         vertices = [s for s in subs if s.startswith("Vertex")]
-        groups = []  # (direction, {node: weight}, share of the total)
-        if opts.get("direction") == "normal":
-            if not faces:
-                raise SimulationError(
-                    "%s: a force along the normal needs faces; pick faces or give a direction."
-                    % item.Label
-                )
-            areas = [_model_element(model, s).Area for s in faces]
-            total = sum(areas) or 1.0
-            for sub, area in zip(faces, areas):
-                face = _model_element(model, sub)
-                n = face.normalAt(*_middle_uv(face))
-                # a positive force pushes into the face (against its outward normal)
-                direction = (-n.x, -n.y, -n.z)
-                weights, _owner = _weights_on(mesh, model, [sub])
-                share = 1.0 if opts.get("per_entity") else area / total
-                groups.append((direction, weights, share))
-        else:
+        per_entity = bool(opts.get("per_entity"))
+        normal = opts.get("direction") == "normal"
+        # (the dialogs refuse these with the same sentences: simulation_core.check; an item
+        # saved before they did is refused here rather than solved with a part of its picks
+        # left out, or with its total counted twice)
+        if normal and (edges or vertices or not faces):
+            raise SimulationError("%s: %s" % (item.Label, core.FORCE_NORMAL_NEEDS_FACES))
+        kinds = [k for k in (faces, edges, vertices) if k]
+        if not normal and not per_entity and len(kinds) > 1:
+            raise SimulationError("%s: %s" % (item.Label, core.FORCE_ONE_KIND))
+        # an entity is one pick of the person's (each gets the whole force with Force Per
+        # Entity), else all the picks together share it
+        entities = map_pick_groups(item, model) if per_entity else [list(subs)]
+        groups = []  # (direction, {node: weight}, share of the force)
+        for entity in entities:
+            e_faces = [s for s in entity if s.startswith("Face")]
+            e_edges = [s for s in entity if s.startswith("Edge")]
+            e_vertices = [s for s in entity if s.startswith("Vertex")]
+            if normal:
+                # each face along its own normal, the faces sharing the force by area (flat
+                # faces: a curved one has no one normal, simulation_core.NORMAL_NEEDS_FLAT)
+                if any(not _flat(_model_element(model, s)) for s in e_faces):
+                    raise SimulationError("%s: Force %s" % (item.Label, core.NORMAL_NEEDS_FLAT))
+                areas = [_model_element(model, s).Area for s in e_faces]
+                total = sum(areas) or 1.0
+                for sub, area in zip(e_faces, areas):
+                    face = _model_element(model, sub)
+                    n = face.normalAt(*_middle_uv(face))
+                    # a positive force pushes into the face (against its outward normal)
+                    weights, _owner = _weights_on(mesh, model, [sub])
+                    groups.append(((-n.x, -n.y, -n.z), weights, area / total))
+                continue
             direction = core.unit_vector(opts.get("vector") or [0, 0, -1])
-            picks = faces or edges
-            if picks:
-                if opts.get("per_entity"):
-                    for sub in picks:
-                        weights, _owner = _weights_on(mesh, model, [sub])
-                        groups.append((direction, weights, 1.0))
-                else:
-                    weights, _owner = _weights_on(mesh, model, picks)
-                    groups.append((direction, weights, 1.0))
-            if vertices:
-                count = len(vertices)
-                for sub in vertices:
-                    weights = {n: 1.0 for n in mesh.nodes_of(model, sub)}
-                    share = 1.0 if opts.get("per_entity") else 1.0 / count
-                    groups.append((direction, weights, share))
+            if e_faces or e_edges:
+                # faces share it by area, edges by length (FreeCAD's consistent node shares)
+                weights, _owner = _weights_on(mesh, model, e_faces or e_edges)
+                groups.append((direction, weights, 1.0))
+            for sub in e_vertices:
+                weights = {n: 1.0 for n in mesh.nodes_of(model, sub)}
+                groups.append((direction, weights, 1.0 / len(e_vertices)))
         for direction, weights, share in groups:
             total = sum(weights.values())
             if total <= 0:
@@ -1979,7 +2108,12 @@ def _load_forces(item, model, mesh, subs):
         return out
     faces = [s for s in subs if s.startswith("Face")]
     if kind == "moment":
-        sets = [[s] for s in faces] if opts.get("per_entity") else [faces]
+        if opts.get("per_entity"):
+            # each pick of the person's gets the whole moment (map_pick_groups)
+            sets = [[s for s in g if s.startswith("Face")] for g in map_pick_groups(item, model)]
+            sets = [g for g in sets if g]
+        else:
+            sets = [faces]
         for group in sets:
             weights, _owner = _weights_on(mesh, model, group)
             nodes = sorted(weights)
@@ -1987,6 +2121,8 @@ def _load_forces(item, model, mesh, subs):
                 continue
             if opts.get("direction") == "normal":
                 face = _model_element(model, group[0])
+                if not _flat(face):
+                    raise SimulationError("%s: Moment %s" % (item.Label, core.NORMAL_NEEDS_FLAT))
                 n = face.normalAt(*_middle_uv(face))
                 axis = (n.x, n.y, n.z)
             else:
@@ -2067,6 +2203,7 @@ def _solver_cards(study, model, femmesh, subs, groups=None):
     mesh = _MeshData(femmesh, groups)
     rows, reactions, notes = [], {}, []
     held = set()
+    directions = {}  # node -> [(constraint label, direction it holds there)]
     model_lines, step_lines = [], []
     constraint_items = [i for i in items(study, "constraint") if not i.Suppressed]
     for index, item in enumerate(constraint_items, 1):
@@ -2077,6 +2214,13 @@ def _solver_cards(study, model, femmesh, subs, groups=None):
             )
         rows += item_rows
         held.update(nodes)
+        for node, _source, kind, data in item_rows:
+            d = [0.0, 0.0, 0.0]
+            if kind == "spc":
+                d[data[0]] = 1.0
+            else:
+                d = list(data)
+            directions.setdefault(node, []).append((item.Label, tuple(d)))
         name = "SFR%d" % index
         reactions[name] = item.Label
         model_lines.append("*NSET,NSET=%s" % name)
@@ -2113,10 +2257,20 @@ def _solver_cards(study, model, femmesh, subs, groups=None):
     for name in reactions:
         step_lines.append("*NODE PRINT, NSET=%s, TOTALS=ONLY" % name)
         step_lines.append("RF")
+    if held:
+        # every held node's force too: the reactions are worked out node by node from them
+        # (simulation_core.split_reactions; the totals above are the fallback)
+        model_lines.append("*NSET,NSET=%s" % HELD_SET)
+        ordered = sorted(held)
+        for i in range(0, len(ordered), 16):
+            model_lines.append(",".join(str(n) for n in ordered[i : i + 16]))
+        step_lines.append("*NODE PRINT, NSET=%s" % HELD_SET)
+        step_lines.append("RF")
     return {
         "model": model_lines,
         "step": step_lines,
         "reactions": reactions,
+        "held": directions,
         "notes": notes,
         "equations": len(merged["equations"]),
     }
@@ -2138,6 +2292,28 @@ def _inject(path, cards):
     lines = lines[:step] + head + lines[step:end] + tail + lines[end:]
     with open(path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines) + "\n")
+
+
+HELD_SET = "SFRHELD"  # the node set of every held node (its forces are printed node by node)
+
+
+def _held_reactions(inp_path, dat_path, held):
+    """({constraint label: [fx, fy, fz]}, None): the force each constraint takes, from the
+    solver's forces at the held nodes less the loads acting right at them, each node shared
+    among the constraints that hold it (simulation_core.split_reactions); or (None, the reason
+    it could not be worked out). Pure file work, never raises (it runs in the background)."""
+    if not held:
+        return {}, None
+    try:
+        with open(dat_path, encoding="utf-8", errors="replace") as handle:
+            forces = core.node_forces_from_dat(handle.read(), HELD_SET)
+        if not forces:
+            return None, "the solver printed no forces at the held nodes"
+        with open(inp_path, encoding="utf-8", errors="replace") as handle:
+            applied = core.inp_loads_at(handle.read(), set(held))
+        return core.split_reactions(forces, applied, held), None
+    except Exception as exc:
+        return None, str(exc) or exc.__class__.__name__
 
 
 def _straighten_input(path):
@@ -2378,6 +2554,46 @@ print("SciForge netgen: %d nodes" % femmesh.NodeCount)
 """
 
 
+def _thin_wall_note(femmesh, owners, groups, sample=2000):
+    """simulation_core.thin_wall_note for the mesh: each body's wall thickness (2 V / A of
+    its solid) against the median edge of its elements (Gmsh's groups say which elements are
+    whose; without them, the whole mesh against all the bodies together). A sample of at most
+    `sample` elements a body is measured."""
+    import statistics
+
+    solids = (groups or {}).get("Solid", {})
+    per_body = {}
+    for index, body in enumerate(owners, 1):
+        entry = per_body.setdefault(body.Name, (body, []))
+        found = solids.get(index)
+        if found:
+            entry[1].extend(found[0])
+    if not any(elements for _b, elements in per_body.values()):
+        everything = list(femmesh.Volumes)
+        unique = [b for b, _e in per_body.values()]
+        rows_in = [(" and ".join(b.Label for b in unique), unique, everything)]
+    else:
+        rows_in = [(b.Label, [b], elements) for b, elements in per_body.values() if elements]
+    nodes = femmesh.Nodes
+    rows = []
+    for label, owned, elements in rows_in:
+        volume = sum(b.Shape.Volume for b in owned)
+        area = sum(b.Shape.Area for b in owned)
+        if area <= 0 or volume <= 0:
+            continue
+        step = max(1, len(elements) // sample)
+        sizes = []
+        for e in elements[::step]:
+            corners = femmesh.getElementNodes(e)[:4]
+            if len(corners) < 4:
+                continue
+            p = [nodes[n] for n in corners]
+            sizes.append(sum((p[i] - p[j]).Length for i in range(4) for j in range(i + 1, 4)) / 6)
+        if sizes:
+            rows.append((label, 2.0 * volume / area, statistics.median(sizes)))
+    return core.thin_wall_note(rows)
+
+
 def _mesh_stats(femmesh, limit):
     """{"nodes", "elements", "smallest", "largest", "worst_aspect", "over_limit", "sampled"}
     of a volume mesh (element edge lengths and aspect ratios from the corner nodes; a big
@@ -2437,7 +2653,8 @@ def _freecad_cmd():
     None when there is none."""
     home = App.getHomePath()
     names = ("SciForgeCmd", "sciforgecmd", "FreeCADCmd", "freecadcmd")
-    for folder in ("bin", ""):
+    # (Linux / Windows: bin next to FreeCAD's home; macOS: the app bundle's Contents/MacOS)
+    for folder in ("bin", "", os.path.join("..", "MacOS")):
         for name in names:
             candidate = os.path.join(home, folder, name + (".exe" if os.name == "nt" else ""))
             if os.path.isfile(candidate):
@@ -2496,6 +2713,9 @@ class Job:
         self._subs = {}
         self._input = None
         self._reactions = {}
+        self._held = {}  # held node -> [(constraint label, direction it holds)]
+        self._held_forces = None  # constraint label -> its reaction (node by node)
+        self._held_error = None
         self._netgen_out = None
         self._gmsh_problem = None
         self._straight = False  # mesh again with straight-sided elements (bad curved ones)
@@ -2504,6 +2724,7 @@ class Job:
         self._fingerprints = None  # (signature, mesh signature) when the solve started
         self._mesh_scale = 1.0  # smaller elements (0.5, 0.25) after Gmsh's mesh crossed itself
         self._quality_text = None  # the note on stretched mesh elements
+        self._thin_text = None  # the note on walls much thinner than the elements
         self._checked = False  # the pre-check passed (the model is built on the next turn)
         self._getter = None  # FreeCAD's mesh tables for the input (made a turn earlier)
         self._results_step = None  # the next turn of reading the results
@@ -2718,6 +2939,10 @@ class Job:
             return
         from feminout import importCcxFrdResults as frd_module
 
+        inp = os.path.join(self.work, self._input + ".inp")
+        dat = os.path.join(self.work, self._input + ".dat")
+        held = dict(self._held)
+
         def work():
             quiet, real = _Quiet(), frd_module.Console
             frd_module.Console = quiet  # (no printing from this thread)
@@ -2725,6 +2950,7 @@ class Job:
                 self._frd_data = frd_module.read_frd_result(frd)
             finally:
                 frd_module.Console = real
+            self._held_forces, self._held_error = _held_reactions(inp, dat, held)
 
         self._background_call(work, "results")
 
@@ -2835,6 +3061,16 @@ class Job:
         self._quality_text = quality
         if quality:
             self.notes.append(quality)
+        try:
+            thin = _thin_wall_note(mesh, self._owners, self._groups)
+        except Exception as exc:
+            warn("simulation: measuring the walls against the mesh: %s" % exc)
+            thin = None
+        if self._thin_text in self.notes:
+            self.notes.remove(self._thin_text)
+        self._thin_text = thin
+        if thin:
+            self.notes.append(thin)
         if self.mesh_only:
             _close_open_transaction(self.doc)
             _remove_run(self.study, "SimMeshRun")
@@ -2915,6 +3151,7 @@ class Job:
         cards = _solver_cards(self.study, self._model_shape, self._mesh.FemMesh, self._subs, groups)
         _inject(path, cards)
         self._reactions = cards["reactions"]
+        self._held = cards.get("held", {})
         self.notes += cards["notes"]
         self._input = os.path.splitext(os.path.basename(path))[0]
         self.timings["input"] = self.timings.get("input", 0.0) + time.time() - t
@@ -3027,8 +3264,24 @@ class Job:
         if os.path.isfile(dat):
             with open(dat, encoding="utf-8", errors="replace") as handle:
                 printed = core.reactions_from_dat(handle.read())
+            split = self._held_forces
+            if split is None and self._held_error:
+                warn(
+                    "simulation: the reactions could not be worked out node by node (%s): "
+                    "CalculiX's totals are shown" % self._held_error
+                )
             for name, label in self._reactions.items():
-                if name.upper() in printed:
+                if split is not None:
+                    # node by node: CalculiX's force at a held node is the reaction plus the
+                    # loads acting right there, and a node two constraints hold is shared
+                    fx, fy, fz = split.get(label, (0.0, 0.0, 0.0))
+                    reactions[label] = {
+                        "x": fx,
+                        "y": fy,
+                        "z": fz,
+                        "total": (fx * fx + fy * fy + fz * fz) ** 0.5,
+                    }
+                elif name.upper() in printed:
                     fx, fy, fz = printed[name.upper()]
                     reactions[label] = {
                         "x": fx,
@@ -3406,10 +3659,15 @@ def mesh_signature(study):
 
 
 def _shape_key(body):
+    """What of a body the results depend on: its size, its box, where its material lies
+    (centre of mass) and how it is turned (its place in the design, its component's too).
+    The size and the box alone missed changes that keep them: a hole moved along a plate, a
+    square bar turned a quarter about its axis (its loaded top face then a side): the results
+    stayed "in date"."""
     try:
         shape = bodies.global_shape(body, copy=False)
         box = shape.BoundBox
-        return [
+        key = [
             body.Name,
             round(shape.Volume, 4),
             round(shape.Area, 4),
@@ -3423,6 +3681,28 @@ def _shape_key(body):
         ]
     except Exception:
         return [body.Name, "?"]
+    try:
+        # (a body's shape is often a compound, which has no centre of mass of its own)
+        # (each property is worked out again at every read: read each once)
+        solids = shape.Solids
+        if len(solids) == 1:  # (the usual body: no volumes to weigh)
+            c = solids[0].CenterOfMass
+            middle = [c.x, c.y, c.z]
+        else:
+            parts = [(solid.CenterOfMass, solid.Volume) for solid in solids]
+            total = sum(w for _c, w in parts) or 1.0
+            middle = [sum(getattr(c, a) * w for c, w in parts) / total for a in "xyz"]
+        if solids:
+            key.append([round(c, 4) + 0.0 for c in middle])
+    except Exception:
+        key.append("?")
+    try:
+        place = body.getGlobalPlacement()
+    except Exception:
+        place = getattr(body, "Placement", None)
+    if place is not None:
+        key.append([round(v, 6) + 0.0 for v in place.toMatrix().A])
+    return key
 
 
 # -- results ---------------------------------------------------------------------------------------
@@ -3664,7 +3944,11 @@ def _finish(study, result, mesh_obj, owners, job, reactions=None):
     vm = list(result.vonMises)
     lengths = list(result.DisplacementLengths)  # (read once: each read copies every value)
     # Fusion: yield strength / von Mises, or ultimate tensile strength / 1st principal stress
-    divided = vm if basis == "yield" else list(result.PrincipalMax)
+    # (in compression the 3rd when it is the larger in size: simulation_core.ultimate_stresses)
+    if basis == "yield":
+        divided = vm
+    else:
+        divided = core.ultimate_stresses(list(result.PrincipalMax), list(result.PrincipalMin))
     safety = []
     for s, v in zip(strengths, divided):
         if s is None:

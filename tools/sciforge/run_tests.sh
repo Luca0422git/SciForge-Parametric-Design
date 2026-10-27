@@ -8,7 +8,8 @@
 #   3. GUI smoke test      (real FreeCAD GUI on a virtual screen via xvfb-run)
 #
 #   2c. simulation benchmarks (Static Stress against hand calculations, real FreeCAD:
-#                           SciForgeTests/headless/sim_benchmarks.py)
+#                           SciForgeTests/headless/sim_benchmarks.py, and the QA agent's
+#                           own cases, SciForgeTests/headless/sim_accuracy_qa.py)
 #
 #   tools/sciforge/run_tests.sh [--freecad DIR] [--out DIR]
 #                               [--only unit|golden|headless|sim|gui|scenarios|base]
@@ -190,6 +191,20 @@ except Exception as exc:
     print("no simulation report: %s" % exc); sys.exit(1)
 sys.exit(0 if report.get("passed") else 1)
 EOF4
+    # The QA agent's own hand calculations and wrong-without-a-word checks (beta 3 QA,
+    # SciForgeTests/headless/sim_accuracy_qa.py), through the engine and the AI tools.
+    echo "== [SciForge] simulation accuracy (QA's own hand calculations)"
+    SCIFORGE_HEADLESS_OUT="${OUT}" OMP_NUM_THREADS=1 timeout 1500 "${FC_CMD[@]}" -c \
+        "from SciForgeTests.headless import sim_accuracy_qa; sim_accuracy_qa.main()" > "${OUT}/sim-qa.log" 2>&1
+    grep -aoE "\[SciForge\] simqa (FAIL|summary).*" "${OUT}/sim-qa.log"
+    python3 - "${OUT}/sim-accuracy-qa.json" <<'EOF5' || FAILED+=("sim accuracy")
+import json, sys
+try:
+    report = json.load(open(sys.argv[1]))
+except Exception as exc:
+    print("no simulation accuracy report: %s" % exc); sys.exit(1)
+sys.exit(0 if report.get("passed") else 1)
+EOF5
 }
 
 # run_gui_script NAME SCRIPT LOG RESULT: one GUI test in a real FreeCAD window.

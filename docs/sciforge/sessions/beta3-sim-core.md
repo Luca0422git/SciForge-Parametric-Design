@@ -68,6 +68,17 @@ sections Engine and Benchmarks.
 - **No VTK pipeline** is made with the results any more (`Pipeline_SimResults` is gone): draw
   from `results(study)` / the result object.
 
+- **Changed since `fe3bf6a5`** (the commit sim-ui and sim-results merged last), all
+  compatible: a Job's stages take more turns (model: pre-check, then the model; input: FreeCAD's
+  mesh tables, then the input; results: import, renumbering, summary), each closing an undo
+  step left open first; `Job.wait(timeout, idle=None)`; the solve's message is "Solving N nodes
+  with CalculiX" (plus a warning for a big mesh); per-body rows can be keyed "Body1 (Bracket)"
+  and name their body; the out-of-date fingerprints are taken when a solve starts; contacts and
+  overlaps are remembered per geometry; new notes (curved elements made straight, elements made
+  smaller for a thin wall, stretched elements) and pre-check warnings (linear elements, a study
+  material no longer in the materials); a solve first removes what an unfinished solve left in
+  a design saved while it ran.
+
 ## Log
 
 - 18:05 read the briefs, research, code. Baseline cantilever 0.1995 mm at the default mesh.
@@ -198,3 +209,12 @@ sections Engine and Benchmarks.
   hollow_sphere); a shaft glued in a hub (a round contact) under a moment: solves, the hub's
   reaction balances; a 2 x 2 x 200 mm rod: 2.1 % / 0.8 % off beam theory with 16:1 elements,
   so the stretched-elements note only comes far past the limit (over 3 times it).
+- 22:10-22:20 a twisted loft (B-spline faces) with Frictionless on one, pressure on another and
+  a moment on its top: solves at both meshes. Final integration with `sf/sim-results` (and
+  sim-ui's work in it) on this engine: sim_setup_bracket 74, sim_setup_components 37,
+  sim_setup_kinds 52, sim_setup_dialogs 76, sim_setup_workspace 43 (it lost one click while
+  the machine was busy with five other builds; alone it passes), simres_cantilever 80,
+  simres_out_of_date 32, simres_reopen 21, simres_adaptive 16, simres_inspect 93,
+  simres_linear 27 checks pass. `--only base` passes (unit 2504, golden 614 + 2 known, headless
+  306 calls, docs 152 items / 1002 calls, agent 81, sim 138, GUI smoke 79 / restart 17 /
+  journey 25).

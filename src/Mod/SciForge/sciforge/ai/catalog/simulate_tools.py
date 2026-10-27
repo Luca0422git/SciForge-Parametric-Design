@@ -120,13 +120,15 @@ define(
     "solve_study and study_results. The study uses each body's physical material (change it "
     "for the study only with set_study_material) and the bodies as they are now; bodies "
     "that touch (or are closer than 0.1 mm) are glued. bodies: the bodies it simulates "
-    "(default: every solid body shown). Answers the study's id. Linear static only: small "
-    "deflections, materials that stay elastic and isotropic (3D-printed parts are not); "
-    "results are a guide.",
+    "(default: every solid body of the design, shown or hidden; not the tools a Combine "
+    "used up). Answers the study's id. Linear static only: small deflections, materials "
+    "that stay elastic and isotropic (3D-printed parts are not); results are a guide.",
     schema(
         {
             "label": string('its name (default "Study N - Static Stress")'),
-            "bodies": step_ids("the bodies to simulate (default: every solid body shown)"),
+            "bodies": step_ids(
+                "the bodies to simulate (default: every solid body, shown or hidden)"
+            ),
         }
     ),
     needs=("solid",),
@@ -343,7 +345,8 @@ define(
     "acetal, acrylic, polypropylene, ptfe, peek, wood, glass) or same_as_model to go back to "
     "the body's physical material. safety_basis: what the safety factor divides for the "
     "whole study (yield: yield strength / von Mises, Fusion's default; ultimate: ultimate "
-    "tensile strength / 1st principal stress). Answers the values the study uses (E, "
+    "tensile strength / 1st principal stress, or the 3rd where the part is pushed together "
+    "harder than pulled). Answers the values the study uses (E, "
     "Poisson's ratio, density, yield and ultimate strength). " + STUDY_HELP,
     schema(
         {
