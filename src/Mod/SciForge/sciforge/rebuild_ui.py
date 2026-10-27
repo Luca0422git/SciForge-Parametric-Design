@@ -679,6 +679,7 @@ class FinishDialog(QtWidgets.QDialog):
         self.state.setObjectName("SciForgeRebuildFinishState")
         self.state.setWordWrap(True)
         column.addWidget(self.state)
+        matches = True  # (a rebuild that does not match keeps the original by default)
         try:
             data = _busy(
                 rebuild.compare,
@@ -704,9 +705,11 @@ class FinishDialog(QtWidgets.QDialog):
                     ),
                 )
             else:
+                matches = False
                 words = (
                     "%s does not match %s yet (match %s, %d of %d faces). You can finish "
-                    "it as it is anyway."
+                    "it as it is anyway; the original is then kept, hidden, unless you "
+                    "choose to delete it."
                     % (
                         target.Label,
                         ref.SourceLabel,
@@ -719,6 +722,7 @@ class FinishDialog(QtWidgets.QDialog):
             words = rebuild_core.person_words(str(exc))
         except Exception as exc:  # (OpenCASCADE: the window still opens, Finish still works)
             warn("Finish Rebuild: the comparison did not run (%s)" % exc)
+            matches = False
             words = "The comparison did not run; you can finish the rebuild as it is."
         self.state.setText(words)
         self.delete_original = QtWidgets.QRadioButton(
@@ -729,7 +733,10 @@ class FinishDialog(QtWidgets.QDialog):
             'Keep the original, hidden (as "%s (original)")' % ref.SourceLabel
         )
         self.keep_original.setObjectName("SciForgeRebuildKeepOriginal")
-        self.delete_original.setChecked(True)
+        # a rebuild that matches replaces the original (Fusion's way: one body); one that
+        # does not yet keeps it by default, so a Finish clicked early loses nothing (journey
+        # rebuild, beta 3: a mesh plate at 92 % finished with its mesh deleted)
+        (self.delete_original if matches else self.keep_original).setChecked(True)
         column.addWidget(self.delete_original)
         column.addWidget(self.keep_original)
         self.keep_reference = QtWidgets.QCheckBox("Keep the reference (hidden)")

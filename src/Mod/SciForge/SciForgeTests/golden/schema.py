@@ -335,11 +335,13 @@ def validate(model):
             seen[step["id"]] = op
 
         if op == "sketch":
-            if len([k for k in ("plane", "face", "on") if k in step]) != 1:
+            given = [k for k in ("plane", "face", "on") if k in step]
+            # (plane with face: on the face, in the plane's axes: create_sketch's face + plane)
+            if len(given) != 1 and set(given) != {"plane", "face"}:
                 _fail(
                     here,
                     "sketch needs exactly one of 'plane', 'face' (a selector) or 'on' (a "
-                    "construction plane step)",
+                    "construction plane step), or 'plane' with 'face'",
                 )
             if "plane" in step and step["plane"] not in PLANES:
                 _fail(here, "'plane' must be one of %s" % (PLANES,))

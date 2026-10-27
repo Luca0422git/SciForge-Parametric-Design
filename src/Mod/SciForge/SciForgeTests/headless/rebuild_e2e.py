@@ -11,7 +11,11 @@ offers (groups[].fix / extra[].fix: a hole, a fillet of exactly those edges), co
 finish_rebuild. Required: match >= 0.999 with every face matched (done), the timeline holding
 real steps (sketches, extrudes, holes, fillets... not one imported shape), check_design ok,
 and an edit of one early value (the base extrude's distance, else the first hole's diameter)
-rebuilding cleanly. Where a plan step fails, the report shows what the AI read in the answer.
+rebuilding cleanly with nothing sealed inside (one shell). Where a plan step fails, the report
+shows what the AI read in the answer. Also (journey rebuild, beta 3): follow_checks (a hole on
+a boss's top and one in a pocket's floor follow their faces when the plate, the boss and the
+pocket are edited) and strip_checks (a rebuild that only lacks a chamfer is split exactly and
+the chamfer named with its call).
 
 Two ways to run it:
 
@@ -514,6 +518,19 @@ class Agent:
             report.get("ok") is True,
             text[:600],
         )
+        # what was cut from the top still opens on the top: a base made thicker kept a
+        # pocket sketched on an origin plane at the old height, sealed inside (journey
+        # rebuild, beta 3: the plan's sketches on the base's top face go on that face now)
+        sealed = [
+            b.get("label")
+            for b in report.get("bodies", [])
+            if b.get("solid") and b.get("shells", 1) != 1
+        ]
+        self.check(
+            "%s: after the edit nothing is sealed inside the part (one shell)" % pid,
+            not sealed,
+            sealed,
+        )
         self.call("undo", {})
 
 
@@ -626,6 +643,9 @@ def main():
     agent, rows = run_in_process(parts)
     if not wanted:
         fallback_checks(agent)
+    if not wanted or wanted == "follow":
+        follow_checks(agent)
+        strip_checks(agent)
     if not wanted or wanted == "qa":  # (beta 3 QA: jointed parts, reopen, ... rebuild_qa.py)
         from . import rebuild_qa
 
@@ -650,6 +670,154 @@ def main():
         % (len(rows), len(agent.checks), len([c for c in agent.checks if not c["ok"]]))
     )
     return report
+
+
+# -- what starts on a face follows it (journey rebuild, beta 3) -------------------------------
+FOLLOW_PART = [
+    c("create_sketch", plane="XY", geometry=[{"rect": [0, 0, 60, 40]}]),
+    c("extrude", profile="Sketch1", distance=10),
+    c("create_sketch", plane="XY", offset=10, geometry=[{"circle": [40, 20, 8]}]),
+    c("extrude", profile="Sketch2", distance=10),
+    c("create_sketch", plane="XY", offset=20, geometry=[{"circle": [40, 20, 2]}]),
+    c("hole", sketch="Sketch3", diameter=4, depth=6),
+    c("create_sketch", plane="XY", offset=10, geometry=[{"rect": [5, 5, 25, 35]}]),
+    c("extrude", profile="Sketch4", distance=4, operation="cut", flip=True),
+    c("create_sketch", plane="XY", offset=6, geometry=[{"circle": [15, 20, 1.5]}]),
+    c("hole", sketch="Sketch5", diameter=3, depth=3),
+]
+
+
+def follow_checks(agent):
+    """A plate with a boss (a blind hole d 4 x 6 in its top) and a pocket 20 x 30 x 4 (a blind
+    hole d 3 x 3 in its floor), rebuilt only through the tools; then, as a person edits it,
+    the plate made 2 thicker, the boss 5 taller and the pocket 1 deeper: every hole stays on
+    the face it was drilled from (its sketch lies on that face), nothing is sealed inside.
+    By hand: each edit adds exactly its own slab (the plate: 2 x 2400, the pocket's floor
+    rising with the top; the boss: 5 x pi 64, its hole moving up with it; the pocket: -
+    20 x 30 x 1, the hole in its floor moving down with it)."""
+    import math
+
+    import FreeCAD as App
+
+    pid = "follow"
+    folder = tempfile.mkdtemp(prefix="sciforge-rebuild-follow-")
+    agent.call("new_design", {"name": "Golden_follow"})
+    for call in FOLLOW_PART:
+        text, error = agent.call(call["tool"], call["args"])
+        if error:
+            agent.check("%s: the part's %s" % (pid, call["tool"]), False, text)
+            return
+    path = os.path.join(folder, "follow.step")
+    agent.call("export", {"format": "step", "path": path})
+    agent.call("new_design", {"name": "Rebuild_follow"})
+    agent.call("import_file", {"path": path})
+    source = agent._imported_body("", "step")
+    text, error = agent.call("start_rebuild", {"body": source})
+    if not agent.check("%s: start_rebuild" % pid, not error, text):
+        return
+    text, error = agent.call("describe_reference", {})
+    plan = (json_in(text) or {}).get("plan") or []
+    on_faces = sorted(
+        st["args"]["offset"]
+        for st in plan
+        if st["tool"] == "create_sketch" and "face" in st["args"]
+    )
+    agent.check(
+        "%s: the plan sketches on the plate's top, the boss's top and the pocket's floor" % pid,
+        on_faces == [6.0, 10.0, 10.0, 20.0] or on_faces == [6.0, 10.0, 20.0],
+        [st["args"] for st in plan if st["tool"] == "create_sketch"],
+    )
+    made = {}
+    for st in plan:
+        text, error = agent.call(st["tool"], agent._with_ids(st, made, plan))
+        if error:
+            agent.check("%s: plan step %s" % (pid, st.get("step")), False, text)
+            return
+        if made_id(text):
+            made[st.get("step")] = made_id(text)
+    text, error = agent.call("compare_to_reference", {})
+    result = json_in(text) or {}
+    if not agent.check("%s: the rebuild matches" % pid, result.get("done"), text[:400]):
+        return
+    agent.call("finish_rebuild", {})
+    text, _error = agent.call("get_timeline", {})
+    steps = [s for s in (json_in(text) or {}).get("steps", []) if s.get("kind") == "extrude"]
+
+    def body_now():
+        found = []
+        for o in App.ActiveDocument.Objects:
+            if o.TypeId == "PartDesign::Body":
+                try:
+                    found.append((o.Shape.Volume, o))
+                except Exception:
+                    pass
+        return max(found, key=lambda item: item[0])[1] if found else None
+
+    def measure():
+        body = body_now()
+        return (body.Shape.Volume, len(body.Shape.Shells)) if body is not None else (0, 0)
+
+    before, _shells = measure()
+    plate, boss, pocket = (steps + [{}, {}, {}])[:3]
+    edits = (
+        (plate.get("id"), 12.0, 2 * 2400.0),
+        (boss.get("id"), 15.0, 5 * math.pi * 64),
+        (pocket.get("id"), 5.0, -600.0),
+    )
+    total = before
+    for step_id, value, grows in edits:
+        text, error = agent.call("edit_step", {"step": step_id, "set": {"distance": value}})
+        total += grows
+        volume, shells = measure()
+        agent.check(
+            "%s: %s made %g: the holes follow their faces (%.3f mm3 by hand)"
+            % (pid, step_id, value, total),
+            not error and abs(volume - total) < 1e-6 * total and shells == 1,
+            (text[:200], volume, total, shells),
+        )
+    _close_all()
+
+
+def strip_checks(agent):
+    """A rebuild that only lacks a chamfer along one edge (an AI that left the plan's chamfer
+    out): compare splits the two parts exactly and names the chamfer with its call ready. The
+    strip's end triangle had its sample point on its long side, which also lies on the
+    original's end face: the strip was read as common, the pieces did not add up and the
+    volumes were only sampled (no region, no call; journey rebuild, beta 3)."""
+    import FreeCAD as App
+    import Part
+
+    from sciforge import bodies, rebuild
+
+    block = Part.makeBox(100, 60, 10)
+    top_end = [
+        e
+        for e in block.Edges
+        if all(abs(v.Point.x) < 1e-9 and abs(v.Point.z - 10) < 1e-9 for v in e.Vertexes)
+    ]
+    original = block.makeChamfer(2, top_end)
+    doc = App.newDocument("RebuildStrip")
+    try:
+        body = bodies.new_body(doc, "Block")
+        base = doc.addObject("Part::Feature", "Imported")
+        base.Shape = original
+        body.BaseFeature = base
+        doc.recompute()
+        ref = rebuild.start(doc, body)
+        doc.recompute()
+        result = rebuild.compare(ref, block, {"show": False})
+        groups = result.get("groups") or []
+        fix = (groups[0].get("fix") or {}) if groups else {}
+        agent.check(
+            "strip: a missing chamfer is split exactly and named, its call ready",
+            result["method"] in ("exact", "fuzzy")
+            and abs(result["volume"]["extra"] - 120.0) < 1e-6
+            and "chamfered edge" in result["verdict"]
+            and fix.get("tool") == "chamfer",
+            (result["method"], result["volume"], result["verdict"]),
+        )
+    finally:
+        App.closeDocument(doc.Name)
 
 
 # -- compare's fallback when OpenCASCADE cannot split the parts -----------------------------------

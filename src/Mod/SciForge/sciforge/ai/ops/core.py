@@ -130,7 +130,9 @@ class Builder:
 
     def op_sketch(self, step):
         sketch = self.body.newObject("Sketcher::SketchObject", step["id"])
-        if "face" in step:  # Create Sketch on a flat face of the part as it is now
+        if "face" in step and "plane" in step:  # on the face, in the plane's axes
+            self._sketch_on_face_as_plane(sketch, step)
+        elif "face" in step:  # Create Sketch on a flat face of the part as it is now
             tip = self._tip()
             names = selectors.select(tip.Shape, step["face"], "faces")
             if len(names) != 1:
@@ -143,7 +145,8 @@ class Builder:
             sketch.AttachmentSupport = [(plane, "")]
         else:
             sketch.AttachmentSupport = (self._origin(_PLANE_ROLE[step["plane"]]), [""])
-        sketch.MapMode = "FlatFace"
+        if "plane" not in step or "face" not in step:
+            sketch.MapMode = "FlatFace"
         if step.get("auto_project"):  # the face's edges projected (sciforge/sketch_auto_project)
             from sciforge import sketch_auto_project
 
@@ -152,7 +155,7 @@ class Builder:
             target = (target[0], target[1][0])
             if not sketch_auto_project.auto_project(sketch, target):
                 raise BuildError("sketch %r: the face's edges were not projected" % step["id"])
-        if step.get("offset"):
+        if step.get("offset") and not ("face" in step and "plane" in step):
             sketch.AttachmentOffset = App.Placement(
                 App.Vector(0, 0, step["offset"]), App.Rotation()
             )
@@ -163,6 +166,43 @@ class Builder:
         if "Invalid" in list(sketch.State):
             raise BuildError("sketch %r is invalid (over-constrained or conflicting)" % step["id"])
         return sketch
+
+    def _sketch_on_face_as_plane(self, sketch, step):
+        """create_sketch with plane, offset and face: the sketch is attached to the face (so
+        it follows the face when the part changes: a pocket sketched on a plate's top stays
+        on top when the plate gets thicker), turned and moved on it so that its axes and
+        numbers are the plane's at that offset (the face's own axes may differ). When the
+        face is not found, or does not lie in the plane at that offset, the sketch goes on
+        the plane at the offset as without face."""
+        origin = self._origin(_PLANE_ROLE[step["plane"]])
+        wanted = origin.Placement.multiply(
+            App.Placement(App.Vector(0, 0, step.get("offset") or 0.0), App.Rotation())
+        )
+        tip = self._tip()
+        names = []
+        if tip is not None:
+            try:
+                names = selectors.select(tip.Shape, step["face"], "faces")
+            except Exception:
+                names = []
+        if len(names) == 1:
+            try:
+                sketch.AttachmentSupport = [(tip, names[0])]
+                sketch.MapMode = "FlatFace"
+                sketch.AttachmentOffset = App.Placement()
+                sketch.positionBySupport()
+                offset = sketch.Placement.inverse().multiply(wanted)
+                normal = offset.Rotation.multVec(App.Vector(0, 0, 1))
+                if abs(offset.Base.z) < 1e-6 and (normal - App.Vector(0, 0, 1)).Length < 1e-9:
+                    sketch.AttachmentOffset = offset
+                    return
+            except Exception:
+                pass
+        sketch.AttachmentSupport = (origin, [""])
+        sketch.MapMode = "FlatFace"
+        sketch.AttachmentOffset = App.Placement(
+            App.Vector(0, 0, step.get("offset") or 0.0), App.Rotation()
+        )
 
     def op_extrude(self, step):
         """SciForge's Fusion-style Extrude (sciforge/extrude.py), as the E command builds it."""

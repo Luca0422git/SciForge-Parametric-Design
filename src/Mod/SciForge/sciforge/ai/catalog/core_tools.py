@@ -174,10 +174,11 @@ def check_geometry(geometry, problems, path="geometry"):
 
 def _extra_create_sketch(args, problems):
     given = [k for k in ("plane", "face", "on") if k in args]
-    if len(given) != 1:
+    # plane and face together: on the face, in the plane's axes (it follows the face)
+    if len(given) != 1 and set(given) != {"plane", "face"}:
         problems.append(
             "give either plane (XY, XZ or YZ), face (a selector) or on (a construction plane's "
-            "id): one of them, not both"
+            "id): one of them, not both (plane with face: on the face, in the plane's axes)"
         )
     if "face" in args:
         kit.check_selector(args["face"], "face", "faces", problems)
@@ -545,6 +546,8 @@ def _steps_create_sketch(a, step_id):
     step = {"op": "sketch", "id": step_id}
     if "plane" in a:
         step["plane"] = a["plane"]
+        if "face" in a:  # on the face, in the plane's axes
+            step["face"] = copy.deepcopy(a["face"])
     elif "on" in a:
         step["on"] = a["on"]
     else:
@@ -885,7 +888,12 @@ define(
         {
             "plane": {"type": "string", "enum": ["XY", "XZ", "YZ"]},
             "offset": dict(_NUMBER, default=0, description="mm along the plane's normal"),
-            "face": full_selector("Instead of plane: the flat face to sketch on (one face)."),
+            "face": full_selector(
+                "Instead of plane: the flat face to sketch on (one face). With plane and "
+                "offset too: the sketch lies on that face (the face at that offset) in the "
+                "plane's axes, and follows the face when the part changes (a pocket or a hole "
+                "on a plate's top stays on top when the plate gets thicker)."
+            ),
             "on": string("Instead of plane: the id of a construction plane to sketch on"),
             "auto_project": boolean("with face: project the face's edges into the sketch"),
             "geometry": {

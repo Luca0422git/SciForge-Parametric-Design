@@ -15,7 +15,7 @@ Create a sketch with closed shapes (and lines) in it, ready for extrude, revolve
 |---|---|---|---|---|---|
 | `plane` | `XY` \| `XZ` \| `YZ` |  |  |  |  |
 | `offset` | number | mm | `0` |  | mm along the plane's normal |
-| `face` | object |  |  |  | Instead of plane: the flat face to sketch on (one face). (rules: [selectors](sciforge://docs/tools.md#help-selectors)) |
+| `face` | object |  |  |  | Instead of plane: the flat face to sketch on (one face). With plane and offset too: the sketch lies on that face (the face at that offset) in the plane's axes, and follows the face when the part changes (a pocket or a hole on a plate's top stays on top when the plate gets thicker). (rules: [selectors](sciforge://docs/tools.md#help-selectors)) |
 | `on` | string |  |  |  | Instead of plane: the id of a construction plane to sketch on |
 | `auto_project` | boolean |  |  |  | with face: project the face's edges into the sketch |
 | `geometry` (required) | array of objects |  |  | at least 1 item(s) | (rules: [geometry](sciforge://docs/tools.md#help-geometry)) |
