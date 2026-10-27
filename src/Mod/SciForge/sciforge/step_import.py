@@ -20,8 +20,8 @@ from . import exchange_core as core
 UNIT_TYPES = ("App::LinkGroup", "App::Part", "App::Link")
 SKIP_TYPES = ("App::Origin", "App::Line", "App::Plane", "App::Point")
 SOURCE = "SourceFile"
-# on the component an Insert STEP made: the file and its size / date when it was read, so a
-# second insert of the same file is another occurrence of it (Fusion: another instance of
+# on the component an Insert STEP made: the file and its size / digest when it was read, so
+# a second insert of the same file is another occurrence of it (Fusion: another instance of
 # the same component), not a second copy of its solids
 FILE_PROP = "SciForgeSourceFile"
 STAMP_PROP = "SciForgeSourceStamp"
@@ -207,14 +207,31 @@ def _pieces(shape, colours):
 
 
 # -- building ----------------------------------------------------------------------------------
+_STAMPS = {}  # (path, size, date) -> stamp: a file is read once while it does not change
+
+
 def file_stamp(path):
-    """What tells one version of a file from another: its size and date ("" when the file
-    cannot be read)."""
+    """What tells one version of a file from another: its size and a digest of its bytes
+    ("" when the file cannot be read). Not its date: the same bytes copied again (a
+    teammate's copy of the parts folder, a git checkout, a download over the old file) are
+    the same part, while a real change of the file is another (beta 3 QA)."""
+    import hashlib
     import os
 
     try:
         st = os.stat(path)
-        return "%d:%d" % (st.st_size, int(st.st_mtime))
+        key = (os.path.normcase(os.path.abspath(path)), st.st_size, st.st_mtime_ns)
+        stamp = _STAMPS.get(key)
+        if stamp is None:
+            digest = hashlib.sha1()
+            with open(path, "rb") as handle:
+                for block in iter(lambda: handle.read(1 << 20), b""):
+                    digest.update(block)
+            stamp = "%d:%s" % (st.st_size, digest.hexdigest()[:20])
+            if len(_STAMPS) > 512:
+                _STAMPS.clear()
+            _STAMPS[key] = stamp
+        return stamp
     except OSError:
         return ""
 
@@ -230,7 +247,7 @@ def _same_file(a, b):
 
 def inserted_from(doc, path):
     """The component a STEP / IGES file was inserted as earlier in this design (the same
-    path, size and date: the file did not change since), or None."""
+    path and bytes: the file did not change since), or None."""
     stamp = file_stamp(path)
     if not stamp:
         return None
@@ -248,7 +265,7 @@ def inserted_from(doc, path):
 
 def _remember_file(comp, path):
     bodies.add_prop(comp, "App::PropertyString", FILE_PROP, "Insert", "The file it came from")
-    bodies.add_prop(comp, "App::PropertyString", STAMP_PROP, "Insert", "Its size and date")
+    bodies.add_prop(comp, "App::PropertyString", STAMP_PROP, "Insert", "Its size and digest")
     setattr(comp, FILE_PROP, path)
     setattr(comp, STAMP_PROP, file_stamp(path))
 

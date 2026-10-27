@@ -159,6 +159,39 @@ class BrowserTests(unittest.TestCase):
         self.assertEqual(core.unit_label(3), "in")
         self.assertIsNone(core.unit_label(8))
 
+    def test_plain_number_in_design_units(self):
+        """Fusion: a plain number typed in a dialog is in the design's units (beta 3 VEX QA:
+        an inch design read "-1.5" as -1.5 mm)."""
+
+        class Doc:
+            def __init__(self, system):
+                self.UnitSystem = system
+
+            def getEnumerationsOfProperty(self, name):
+                return [
+                    "Standard (mm, kg, s, degree)",
+                    "MKS (m, kg, s, degree)",
+                    "US customary (in, lb)",
+                    "Imperial decimal (in, lb)",
+                    "Building Euro (cm, m², m³)",
+                    "Building US (ft-in, sqft, cft)",
+                    "Metric small parts & CNC (mm, mm/min)",
+                    "Imperial for Civil Eng (ft, ft/s)",
+                    "FEM (mm, N, s)",
+                    "Meter decimal (m, m², m³)",
+                ]
+
+        names = Doc("").getEnumerationsOfProperty("UnitSystem")
+        self.assertEqual(core.doc_length_unit(Doc(names[0])), "mm")
+        self.assertEqual(core.doc_length_unit(Doc(names[3])), "in")
+        self.assertEqual(core.doc_length_unit(Doc(names[4])), "cm")
+        self.assertEqual(core.doc_length_unit(Doc(names[7])), "ft")
+        self.assertEqual(core.doc_length_unit(Doc(names[8])), "mm")  # not one of Fusion's
+        self.assertEqual(core.doc_length_unit(None), "mm")
+        self.assertAlmostEqual(core.plain_length(-1.5, Doc(names[3])), -38.1)
+        self.assertAlmostEqual(core.plain_length(2, Doc(names[9])), 2000.0)
+        self.assertAlmostEqual(core.plain_length(20, Doc(names[0])), 20.0)
+
     def test_named_views_with_saved_ones(self):
         views = self.folder(self.tree(views=["Corner"]), "Named Views")
         self.assertEqual(self.labels(views), ["TOP", "FRONT", "RIGHT", "HOME", "Corner"])
