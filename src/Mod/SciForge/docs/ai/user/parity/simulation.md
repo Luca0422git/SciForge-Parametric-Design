@@ -204,9 +204,10 @@ G = guess (the SciForge choice when the sources are silent).
   "not held enough" in the pre-check; the UI still refuses such results:
   `simulation_solve_dialog.loose_result`), the result summary keyed bodies by label (two
   components' "Body1" shared one entry), the result fingerprint was taken when the solve ended,
-  and "Keep the results in the design file" made results look out of date. Still open: the
-  Bearing Load's default direction along a hole drilled along Z (the UI turns it across), and
-  a body deleted while its study solves (the engine fails on it; the UI stops the job first).
+  and "Keep the results in the design file" made results look out of date. The last two were
+  closed by the sim QA (`docs/sciforge/sessions/beta3-sim-qa.md`): the engine turns a Bearing
+  Load's default across its hole (and refuses a direction along it), and stops a solve whose
+  body was deleted with a sentence, for every caller (the AI, scripts), not only the dialog.
 
 ## Results
 
@@ -284,6 +285,7 @@ and 3rd principal stress; where the plot opens was not found).
 | INSPECT: Solver Data | Solver Data: when the study was solved and how long each step took (model, mesh, solver input, CalculiX, reading the results), the safety factor's basis; the mesh: nodes, degrees of freedom (3 per node), elements, order, element size, smallest / largest element edge, worst aspect ratio, elements over the limit, mesher; the adaptive refinement's solves; the solve's messages; Copy (as text) | A[57]; contents G |
 | MANAGE | sim-ui's (shared with SETUP) | A[49] |
 | FINISH RESULTS | Finish Results | G (mem) |
+| Right click on the results (the marking menu) | The RESULTS tab's own ring (sim QA): Repeat (the last RESULTS command), Surface Probes, Show Min/Max, Undo, Animate, Results Details, Finish Results, Report; its list: Redo, Slice Plane, Reaction Force, Show Mesh, Fit, Look At, the orbit centre (it showed SETUP's ring) | G (sim-results' note) |
 
 ### Known gaps (Results)
 
@@ -518,6 +520,22 @@ Through the AI tools (study_results' answers only):
 | out of date after a change that keeps the size | solved: in date; the hole moved from x 30 to 60: out of date; the bar solved: in date; the bar turned a quarter about its axis: out of date | 4 | PASS |
 | bodies that touch only along an edge or at a corner | touching along an edge: warned; touching at a corner: warned; a cube on a cube's face: no such warning; a pin in its hole: no such warning | 4 | PASS |
 | results kept in and dropped from the file | kept: reopened with its results and the same numbers, in date; dropped: reopened with the numbers only, in date, says solve again; reopened, then the part changed: out of date | 3 | PASS |
+
+### The bracket journey (sim QA, real clicks: `journey_sim_bracket*.py`)
+
+An L-bracket drawn, extruded, drilled, filleted and made PLA in DESIGN, then studied in
+SIMULATION with the mouse and keyboard only: base 60 x 40 x 5, upright arm 5 thick and 40
+high, two 6 mm bolt holes fixed, 50 N across the top of the arm (hand numbers and why each
+band in `SciForgeTests/gui/journey_sim_steps.py`):
+
+| What | SciForge | By hand | Band |
+|---|---|---|---|
+| Largest movement (the arm's top) | 2.091 mm | 0.47 (arm) + 1.62 (base plate turning) = 2.09 mm | 1.0 .. 3.2 |
+| Highest von Mises (a bolt hole's edge) | 18.08 MPa | 16.1 MPa across the bolt line, raised by the hole | 12 .. 60 |
+| Safety factor (PLA yield 35.9 MPa) | 1.986 | 35.9 / 18.08 | exact |
+| Surface Probe on the arm, z 14.2 | 7.38 MPa | 6 M / (b t^2) = 7.74 MPa | 0.80 .. 1.10 (a wide arm: plane strain) |
+| The arm 5 -> 7 mm from the timeline: the probe | 3.86 MPa, ratio 0.523 | (5/7)^2 = 0.510; 3.95 MPa | 0.45 .. 0.58 |
+| Reaction at the holes | 50, 0, 0 N | 50 N | exact |
 
 ### Big parts
 
