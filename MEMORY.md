@@ -16,13 +16,19 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   [x] released: **PUBLISHED 2026-10-26 21:37 UTC**, tag `sciforge-v0.1.0-beta.2.2` on `fac2005e`
   (CI #274 green; patch release run 40402286290, 25 min; Release moved 1a511933..fac2005e by
   the workflow). Newest session log "Patch 0.1.0-beta.2.2".
-- **Beta 3 (`0.1.0-beta.3`, this line of sessions): Auto Timeline and Simulation.** Auto
-  Timeline = tools and instructions so a connected AI turns a model with no timeline (an
-  imported STEP body; simple meshes) into a real parametric one. Simulation = Fusion's Static
-  Stress study only (spec changed: outline 7.18, sections 0 and 8). Notes and starting points in
-  the "Beta 3" block under Phase 1 below. Status: [ ] Auto Timeline  [ ] Static Stress  [ ] released.
-- **VEX robotics (not assigned to the patch or beta 3 yet; asked Luca):** STEP parts imported in
-  large numbers into one assembly, and Align / Joint snapping to the centre of a square hole.
+- **Beta 3 (`0.1.0-beta.3`, this line of sessions): Auto Timeline, Static Stress simulation
+  and VEX assemblies** (Luca 2026-10-26: "put the vex stuff in beta 3 ... one shot for beta 3").
+  **IN PROGRESS (2026-10-27 00:40 UTC): integration on `develop`.** The six builders' work
+  (plan `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`, session
+  logs `docs/sciforge/sessions/beta3-*.md`) is merged with patch 0.1.0-beta.2.2 and pushed so
+  CI runs and the work is safe (the sandbox restarted twice); QA fixes, the SETUP tab's last
+  commits and journey tests follow in later pushes; then docs, CHANGELOG and the version.
+  **Not released; not ready for a quick update yet.** Status: [x] Static Stress engine (9
+  silent-wrong-result bugs fixed by its QA, 205 hand-calculation checks) [x] RESULTS tab
+  [~] SETUP tab (finishing) [x] Auto Timeline recognition + tools [~] Auto Timeline QA [x] VEX
+  [~] VEX QA [ ] journeys [ ] docs / version [ ] released.
+- **VEX robotics: in beta 3** (above): STEP parts in large numbers, linked occurrences,
+  Duplicate With Joints, and Align / Joint snapping to the centre of a square hole.
 - Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
 
 **2026-10-23: `experimental` is merged into `develop`, for the second beta, 0.1.0-beta.2**
