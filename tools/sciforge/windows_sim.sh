@@ -68,7 +68,9 @@ run() {
     echo "== [SciForge] ${name}"
     "${exe}" -c "from SciForgeTests.headless import ${module}; ${module}.main()" 2>&1 \
         | tr -d '\r' > "${OUT}/${module}.log" || true
-    grep -aE "\[SciForge\] ${prefix} (FAIL|summary)" "${OUT}/${module}.log" || true
+    # (and the engine's line when CalculiX stopped without a reason and was tried again)
+    grep -aE "\[SciForge\] (${prefix} (FAIL|summary)|simulation: CalculiX stopped)" \
+        "${OUT}/${module}.log" || true
     if [ ! -f "${OUT}/${report}" ]; then
         echo "[SciForge] no ${report}; the end of FreeCAD's output:"
         tail -n 60 "${OUT}/${module}.log"
