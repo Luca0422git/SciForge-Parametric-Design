@@ -344,6 +344,34 @@ class Menus(unittest.TestCase):
         for kind in s.MENUS:
             self.assertIsInstance(s.menu_for({"kind": kind}), list)
 
+    def test_greyed_ribbon_commands_say_what_to_use(self):
+        # (sim QA: Linear Global Load, Point Mass, Bolt Connector... said only "Not in SciForge
+        # yet"; a beginner is told what to use instead, as the dialogs' greyed types do)
+        from sciforge import ribbon_config as rc
+
+        def leaves(items):
+            for it in items:
+                if not it:
+                    continue
+                sub = it.get("children") or it.get("submenu")
+                if sub:
+                    yield from leaves(sub)
+                else:
+                    yield it
+
+        for tab in rc.TABS:
+            if tab["id"] not in ("sim_setup", "sim_results"):
+                continue
+            for group in tab["groups"]:
+                if not str(group.get("id", "")).startswith("sim"):
+                    continue  # (INSPECT, SELECT: the design's own groups)
+                for it in leaves(group["items"]):
+                    if it.get("command") is not None:
+                        continue
+                    note = it.get("note") or ""
+                    self.assertTrue(note.startswith("Not in SciForge yet: "), (it["label"], note))
+                    self.assertGreater(len(note), len("Not in SciForge yet: ") + 20, it["label"])
+
 
 class Glyphs(unittest.TestCase):
     def test_size_follows_the_zoom(self):

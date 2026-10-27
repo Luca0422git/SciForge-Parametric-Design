@@ -1436,10 +1436,34 @@ SIM_LOADS = group(
             toggle="simulation_ui:gravity_on",
         ),  # owner: sim-ui
         SEP,
-        item("Linear Global Load", None, "sim_global_linear", note=_SIM_LATER),
-        item("Angular Global Load", None, "sim_global_angular", note=_SIM_LATER),
-        item("Point Mass (Auto)", None, "sim_point_mass_auto", note=_SIM_LATER),
-        item("Point Mass (Manual)", None, "sim_point_mass_manual", note=_SIM_LATER),
+        item(
+            "Linear Global Load",
+            None,
+            "sim_global_linear",
+            note=_SIM_LATER + ": Edit Gravity does the same for a part that speeds up in a "
+            "straight line (any direction and size)",
+        ),
+        item(
+            "Angular Global Load",
+            None,
+            "sim_global_angular",
+            note=_SIM_LATER + ": work out a spinning part's outward pull by hand (mass x "
+            "radius x turning speed squared) and add it as a Force",
+        ),
+        item(
+            "Point Mass (Auto)",
+            None,
+            "sim_point_mass_auto",
+            note=_SIM_LATER + ": add the weight of a part you did not model as a Force "
+            "(9.81 N per kg), or model it as a body and switch Gravity on",
+        ),
+        item(
+            "Point Mass (Manual)",
+            None,
+            "sim_point_mass_manual",
+            note=_SIM_LATER + ": add the weight of a part you did not model as a Force "
+            "(9.81 N per kg), or model it as a body and switch Gravity on",
+        ),
     ],
 )
 SIM_CONTACTS = group(
@@ -1458,8 +1482,20 @@ SIM_CONTACTS = group(
             "Contact Manager", "SciForge_SimContactManager", "sim_contact_manager"
         ),  # owner: sim-ui
         SEP,
-        item("Bolt Connector", None, "sim_bolt", note=_SIM_LATER),
-        item("Rigid Body Connector", None, "sim_rigid_connector", note=_SIM_LATER),
+        item(
+            "Bolt Connector",
+            None,
+            "sim_bolt",
+            note=_SIM_LATER + ": hold the bolt holes with Fixed or Pin, or model the bolt as a "
+            "body (bodies that touch are bonded)",
+        ),
+        item(
+            "Rigid Body Connector",
+            None,
+            "sim_rigid_connector",
+            note=_SIM_LATER + ": a Remote Force carries a load from a point to the faces you "
+            "pick",
+        ),
     ],
 )
 SIM_DISPLAY = group(
