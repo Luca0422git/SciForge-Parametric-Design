@@ -576,6 +576,8 @@ def aim(where, point_fn, dot_fn, kinds, view="iso", size=40.0, label=""):
         S["dot"] = dot_fn()
         S["pt"] = point_fn()
         vx.look_at(S["dot"], size)
+        seconds = timed_hover(S["pt"], S["dot"])
+        S.setdefault("hovers", []).append(("%s: %s" % (where, label), seconds))
         vx.hover(S["pt"])
 
     def click():
@@ -600,6 +602,40 @@ def aim(where, point_fn, dot_fn, kinds, view="iso", size=40.0, label=""):
         h.click(S["pt"])
 
     return [hover, click]
+
+
+def timed_hover(point, dot, limit=2.0):
+    """The time from the mouse arriving on `point` until the dot at `dot` is lit (what a person
+    waits for), in seconds; `limit` when it never lights."""
+    h.uncover(point)
+    pixel = h.screen_point(point)
+    h.move(pixel + QtCore.QPoint(3, 2))
+    QtWidgets.QApplication.processEvents()
+    t0 = time.perf_counter()
+    h.move(pixel)
+    while time.perf_counter() - t0 < limit:
+        QtWidgets.QApplication.processEvents()
+        hov = hovering()
+        hot = getattr(hov, "hot", None) if hov is not None else None
+        if hot is not None and (hot["point"] - dot).Length < 1e-5:
+            return time.perf_counter() - t0
+        time.sleep(0.002)
+    return limit
+
+
+def hover_report():
+    """The hover times measured on the way (the session log's speed table)."""
+    found = S.get("hovers", [])
+    if not found:
+        return
+    times = sorted(t for _w, t in found)
+    print(
+        "[SciForge] journey_vex: %d hovers: median %.3f s, slowest %.3f s (%s)"
+        % (len(times), times[len(times) // 2], times[-1], max(found, key=lambda x: x[1])[0]),
+        flush=True,
+    )
+    for where, t in found:
+        print("[SciForge] journey_vex: hover %.3f s %s" % (t, where), flush=True)
 
 
 def ring(centre, r, view_dir=None):
@@ -1655,6 +1691,7 @@ def reopen_steps():
         wheel_ok("reopened")
         errors_free("reopened")
         h.shot("7-reopened")
+        hover_report()
 
     return [
         step(save, "j7_ctrl_s", 1500),
@@ -1663,3 +1700,499 @@ def reopen_steps():
         step(closed, "j7_ctrl_o", 6000),
         step(reopened, "j7_reopened", 1500),
     ] + drive_steps("j7_drive_reopened", 30.0)
+
+
+# == 8. SIMULATION on rail 1 ====================================================================
+# By hand (rail 1, the 1x2x1x25 aluminium C-channel, its web down and flanges up):
+#   section: web 1 x 0.064 in, two flanges 0.064 x 0.436 in above it: A = 0.1198 in2, the
+#   centroid 0.1485 in above the web's underside, I = 2.769e-3 in4 (without the holes); the
+#   flanges' tops are c = 0.3516 in from it.
+#   Held at the walls of its end holes (0, 1) and (24, 1), 12 in apart: square holes 0.182 in
+#   wide grip the rail over 0.064 in only, so the ends turn: a beam on two supports (not
+#   clamped), 20 lbf down at the middle hole (12, 0):
+#     deflection P L^3 / (48 E I) = 20 x 12^3 / (48 x 10.15e6 x 2.769e-3) = 0.0256 in (0.65 mm)
+#     moment P L / 4 = 60 lbf in, bending stress M c / I = 7617 psi (52.5 MPa)
+#   The holes take metal out of the section (more deflection and stress), the load is 0.25 in
+#   off the web's middle (the open channel twists), the hole corners concentrate stress.
+#   SciForge's "Aluminium" (FreeCAD's Aluminum-Generic: E 70 GPa, yield 95 MPa when the card
+#   has none) is softer in strength than VEX's 5052-H32 (yield 193 MPa): safety factor by hand
+#   95 / 52.5 = 1.8 on the plain section; less at the holes.
+SIM_LOAD_LBF = 20.0
+FINE_MESH_IN = 0.08  # the second solve's Average Element Size (about the walls' 0.064 in)
+HAND_DEFLECTION_MM = 0.65
+HAND_STRESS_MPA = 52.5
+HAND_STRESS_NET_MPA = 67.0  # through a column of holes: I = 2.14e-3 in4, c = 0.347 in
+PROBE_Z = 0.47 * IN  # the probe: on the flange's outer face, 0.03 in under its top
+# at the probe's height the bending stress is (0.47 - z0) / (0.5 - z0) of the top fibre's:
+HAND_PROBE_MPA = HAND_STRESS_MPA * (0.47 - 0.1485) / (0.5 - 0.1485)  # 48.0 (plain section)
+HAND_PROBE_NET_MPA = HAND_STRESS_NET_MPA * (0.47 - 0.1532) / (0.5 - 0.1532)  # 61.2 (holes)
+FIXED_HOLES = [(0, 1), (24, 1)]
+LOAD_HOLE = (12, 0)
+VIEWS = [  # where a person turns the view to see a hole's wall (from the camera into the design)
+    (-1.0, 1.0, -1.0),
+    (1.0, 1.0, -1.0),
+    (-1.0, -1.0, -1.0),
+    (1.0, -1.0, -1.0),
+    (-0.3, 0.3, -1.0),
+    (0.3, 0.3, -1.0),
+    (-0.3, -0.3, -1.0),
+    (0.3, -0.3, -1.0),
+    (-1.0, 1.0, 1.0),
+    (1.0, 1.0, 1.0),
+    (-1.0, -1.0, 1.0),
+    (1.0, -1.0, 1.0),
+]
+
+
+def rail_body():
+    return body_of(S["rail1"])
+
+
+def hole_walls(i, j):
+    """The four flat walls of rail 1's web hole (i, j) (face names of its body)."""
+    body = rail_body()
+    c = grid(i, j)
+    half = vp.HOLE / 2.0 + 1e-6
+    out = []
+    for k, f in enumerate(body.Shape.Faces, 1):
+        b = f.BoundBox
+        if "Plane" not in f.Surface.TypeId:
+            continue
+        if (
+            b.XMin > c.x - half
+            and b.XMax < c.x + half
+            and b.YMin > c.y - half
+            and b.YMax < c.y + half
+            and b.ZMax <= T + 1e-6
+            and b.ZLength > T - 1e-6
+        ):
+            out.append("Face%d" % k)
+    return out
+
+
+def click_wall(face, centre):
+    """Turn the view until the wall can be clicked (as a person orbits), then click it."""
+    from SciForgeTests.gui import simsetup_steps as ss
+
+    for view in VIEWS:
+        look(view)
+        vx.look_at(centre, 14.0)
+        point = ss.aim(rail_body(), face)
+        if point is not None:
+            h.click(point)
+            return True
+    return h.check("the wall %s of rail 1 can be clicked" % face, False)
+
+
+def sim_steps():
+    from SciForgeTests.gui import simsetup_steps as ss
+
+    def enter():
+        h.click_empty()
+        ss.workspace("Simulation")
+
+    def create():
+        dialog = ss.new_study_dialog()
+        if h.check("j8: New Study opens by itself", dialog is not None):
+            h.check("j8: Create Study enabled (Static Stress)", dialog.create_button.isEnabled())
+            ss.click_widget(dialog.create_button)
+
+    def materials():
+        study = ss.active_study()
+        h.check(
+            "j8: Study 1 - Static Stress made",
+            study is not None and study.Label == "Study 1 - Static Stress",
+            study and study.Label,
+        )
+        h.ribbon("Study Materials")
+
+    def leave_out():
+        from sciforge import simulation_dialogs
+        from SciForgeTests.gui import widget_input as wi
+
+        p = simulation_dialogs.MaterialsPanel.last
+        if not h.check("j8: Study Materials opened", p is not None and not p._closed):
+            return
+        rows = [p.table.item(r, 0).text() for r in range(p.table.rowCount())]
+        S["material_rows"] = rows
+        want = "%s / %s" % (RAIL1, rail_body().Label)
+        h.check(
+            "j8: a row per body, each named with its component (rail 1: %s)" % want,
+            want in rows and len(set(rows)) == len(rows),
+            rows,
+        )
+        if want not in rows:
+            return
+        keep = rows.index(want)
+        for r in range(len(rows)):
+            tick = p.ticks[r]
+            if r != keep and tick.isChecked():
+                p.table.scrollTo(p.table.model().index(r, 1))
+                wi.click(tick, QtCore.QPoint(8, tick.height() // 2))
+        h.check(
+            "j8: In Study unticked for every body but rail 1",
+            [t.isChecked() for t in p.ticks] == [r == keep for r in range(len(rows))],
+            [t.isChecked() for t in p.ticks],
+        )
+        p.table.scrollTo(p.table.model().index(keep, 3))
+        di.choose(p.combos[keep], "Aluminium")
+        ss.ok()
+
+    def studied():
+        from sciforge import simulation
+
+        study = ss.active_study()
+        found = [b.Name for b in simulation.study_bodies(study)]
+        h.check("j8: only rail 1 in the study", found == [rail_body().Name], found)
+        name, _props, source = simulation.study_material(study, rail_body())
+        h.check("j8: rail 1 in aluminium for the study", "Alumin" in name, (name, source))
+        labels = ss.browser_labels()
+        want = "%s / %s" % (RAIL1, rail_body().Label)
+        h.check(
+            "j8: the browser's Simulation Model names rail 1's body with its component",
+            want in labels,
+            [x for x in labels if " / " in x or x.startswith("Body")][:20],
+        )
+        h.ribbon("Structural Constraints")
+
+    def fixed_walls():
+        p = ss.item_panel()
+        if not h.check("j8: Structural Constraints opened", p is not None):
+            return
+        h.check("j8: Fixed", p.type_box.currentText() == "Fixed", p.type_box.currentText())
+        S["fixed_faces"] = []
+        for i, j in FIXED_HOLES:
+            walls = hole_walls(i, j)
+            h.check("j8: hole (%d, %d) has four walls" % (i, j), len(walls) == 4, walls)
+            for face in walls:
+                if click_wall(face, grid(i, j)):
+                    S["fixed_faces"].append(face)
+
+    def fixed_ok():
+        p = ss.item_panel()
+        if p is None:
+            return
+        picked = sorted(sub for _b, sub in p.picks)
+        h.check(
+            "j8: the eight end-hole walls picked",
+            picked == sorted(S.get("fixed_faces", [])) and len(picked) == 8,
+            picked,
+        )
+        ss.ok()
+
+    def loads():
+        found = ss.items("constraint")
+        h.check("j8: Fixed 1 made", [x.Label for x in found] == ["Fixed 1"], found)
+        h.ribbon("Structural Loads")
+
+    def load_walls():
+        p = ss.item_panel()
+        if not h.check("j8: Structural Loads opened", p is not None):
+            return
+        h.check("j8: Force", p.type_box.currentText() == "Force", p.type_box.currentText())
+        S["load_faces"] = []
+        i, j = LOAD_HOLE
+        for face in hole_walls(i, j):
+            if click_wall(face, grid(i, j)):
+                S["load_faces"].append(face)
+        ss.type_in("SciForgeSim_magnitude", "%g lbf" % SIM_LOAD_LBF)
+        ss.choose("SciForgeSim_direction", "Vector")
+
+    def load_down():
+        for axis, text in (("fx", "0"), ("fy", "0"), ("fz", "-%g lbf" % SIM_LOAD_LBF)):
+            ss.type_in("SciForgeSim_" + axis, text)
+
+    def load_ok():
+        p = ss.item_panel()
+        if p is not None:
+            picked = sorted(sub for _b, sub in p.picks)
+            h.check(
+                "j8: the middle hole's four walls picked",
+                picked == sorted(S.get("load_faces", [])) and len(picked) == 4,
+                picked,
+            )
+        ss.ok()
+
+    def load_made():
+        from sciforge import simulation
+
+        found = ss.items("load")
+        h.check("j8: Force 1 made", [x.Label for x in found] == ["Force 1"], found)
+        if found:
+            data = simulation.item_data(found[0])
+            opts = data["options"]
+            newtons = SIM_LOAD_LBF * 4.4482216152605
+            vec = opts.get("vector") or [0, 0, 0]
+            h.check(
+                "j8: 20 lbf (88.96 N) straight down",
+                abs(opts.get("magnitude", 0) - newtons) < 0.01
+                and opts.get("direction") == "vector"
+                and abs(vec[2] + 1.0) < 1e-6,
+                opts,
+            )
+        h.ribbon("Pre-check")
+
+    def precheck():
+        h.check("j8: the pre-check is not red", ss.light() in ("green", "yellow"), ss.light())
+        ss.close_popup("SciForgeSimPrecheck")
+        h.ribbon("Solve")
+
+    def solve():
+        dialog = ss.solve_dialog()
+        if h.check("j8: the Solve dialog", dialog is not None):
+            h.check("j8: Solve 1 Study", dialog.go.text() == "Solve 1 Study", dialog.go.text())
+            S["solve_t0"] = time.perf_counter()
+            ss.click_widget(dialog.go)
+
+    def solved():
+        study = ss.active_study()
+        first = read_results(study, "j8 first solve")
+        S["first"] = first
+        h.check(
+            "j8: a result: rail 1 bends down (max displacement %.3f mm)" % first["d"],
+            first["d"] > 0.1,
+            first,
+        )
+        status = ss.status_dialog()
+        text = status.message.text() if status is not None else ""
+        S["mesh_warning"] = text
+        h.check(
+            "j8: the solve says the default mesh is too coarse for the 0.064 in walls",
+            "smaller" in text and "too stiff" in text,
+            text,
+        )
+        h.check("j8: the RESULTS tab shows", ss.current_tab() == "sim_results", ss.current_tab())
+        h.shot("8-results-default-mesh")
+        if status is not None:
+            ss.click_widget(status.close_button)
+
+    def settings():
+        ss.menu_item("MANAGE", "Settings")
+
+    def finer():
+        from sciforge import simulation_dialogs
+        from SciForgeTests.gui import widget_input as wi
+
+        p = simulation_dialogs.SettingsPanel.last
+        if not h.check("j8: Study Settings opened", p is not None and not p._closed):
+            return
+        bar = p.tabs.tabBar()
+        for k in range(bar.count()):
+            if bar.tabText(k) == "Mesh":
+                wi.click(bar, bar.tabRect(k).center())
+        h.check("j8: the Mesh tab", p.tabs.tabText(p.tabs.currentIndex()) == "Mesh")
+        di.choose(p.tabs.size_kind, "Absolute value (in)")
+        # as the warning says: elements about as small as the walls are thick (0.064 in)
+        di.type_into(p.tabs.size_mm, "%g" % FINE_MESH_IN)
+        ss.ok()
+
+    def again():
+        from sciforge import simulation
+
+        study = ss.active_study()
+        mesh = simulation.settings(study)["mesh"]
+        h.check(
+            "j8: the mesh size %.2f mm (0.08 in)" % (FINE_MESH_IN * IN),
+            abs(mesh.get("size_mm", 0) - FINE_MESH_IN * IN) < 0.01,
+            mesh,
+        )
+        h.check("j8: the results are out of date", simulation.out_of_date(study))
+        ss.click_tab("sim_setup")
+        h.ribbon("Solve")
+
+    def again_go():
+        dialog = ss.solve_dialog()
+        if h.check("j8: the Solve dialog again", dialog is not None):
+            S["solve_t0"] = time.perf_counter()
+            ss.click_widget(dialog.go)
+
+    def compared():
+        study = ss.active_study()
+        fine = read_results(study, "j8 fine mesh")
+        S["fine"] = fine
+        first = S.get("first") or fine
+        h.check(
+            "j8: the finer mesh bends more (the coarse one was too stiff): %.3f > %.3f mm"
+            % (fine["d"], first["d"]),
+            fine["d"] > first["d"],
+            (first, fine),
+        )
+        h.check(
+            "j8: max displacement %.3f mm: the hand %.2f mm (beam on two supports, no holes)"
+            " plus the holes, the twist and shear: between 1 and 1.6 times it"
+            % (fine["d"], HAND_DEFLECTION_MM),
+            HAND_DEFLECTION_MM < fine["d"] < 1.6 * HAND_DEFLECTION_MM,
+            fine,
+        )
+        at = V(*fine["vm_at"])
+        ends = [grid(i, j) for i, j in FIXED_HOLES]
+        near_end = min((V(at.x, at.y, 0) - V(e.x, e.y, 0)).Length for e in ends)
+        h.check(
+            "j8: the highest stress (%.0f MPa) sits at a corner of a held end hole (%.2f in from"
+            " its centre): a sharp corner held fixed, where a finer mesh always reads more"
+            % (fine["vm"], near_end / IN),
+            near_end < 0.2 * IN and fine["vm"] > first["vm"],
+            (fine["vm_at"], fine["vm"], first["vm"]),
+        )
+        h.shot("8-results-fine-mesh")
+        status = ss.status_dialog()
+        if status is not None and status.isVisible():
+            ss.click_widget(status.close_button)
+
+    return [
+        step(enter, "j8_simulation", 2500),
+        step(create, "j8_create_study", 2500),
+        step(materials, "j8_study_materials", 1500),
+        step(leave_out, "j8_leave_out", 1500),
+        step(studied, "j8_constraints", 1500),
+        step(fixed_walls, "j8_fixed_walls", 1200),
+        step(fixed_ok, "j8_fixed_ok", 1500),
+        step(loads, "j8_loads", 1500),
+        step(load_walls, "j8_load_walls", 1200),
+        step(load_down, "j8_load_down", 1000),
+        step(load_ok, "j8_load_ok", 1500),
+        step(load_made, "j8_precheck", 2000),
+        step(precheck, "j8_solve", 1500),
+        step(solve, "j8_go", 3000),
+        ss.wait_solved("j8_wait_solved", 600),
+        step(solved, "j8_solved", 1500),
+        step(settings, "j8_settings", 1500),
+        step(finer, "j8_finer_mesh", 1500),
+        step(again, "j8_solve_again", 1500),
+        step(again_go, "j8_go_again", 3000),
+        ss.wait_solved("j8_wait_solved_again", 900),
+        step(compared, "j8_compared", 1500),
+    ]
+
+
+def read_results(study, where):
+    """The solve's numbers (the RESULTS legend's), printed for the session log."""
+    from sciforge import simulation, simulation_solve_dialog
+
+    seconds = time.perf_counter() - S.get("solve_t0", time.perf_counter())
+    results = simulation_solve_dialog.last_results()
+    h.check("%s: solved" % where, results.get(study.Name, ("?",))[0] == "done", results)
+    summary = simulation.summary(study) or {}
+    st = summary.get("stats", {})
+    out = {
+        "d": st.get("displacement", {}).get("max", 0.0),
+        "vm": st.get("von_mises", {}).get("max", 0.0),
+        "vm_at": st.get("von_mises", {}).get("max_at", [0, 0, 0]),
+        "sf": st.get("safety", {}).get("min", 0.0),
+        "sf_at": st.get("safety", {}).get("min_at", [0, 0, 0]),
+        "nodes": summary.get("mesh", {}).get("nodes"),
+        "elements": summary.get("mesh", {}).get("elements"),
+        "seconds": seconds,
+    }
+    print(
+        "[SciForge] journey_vex: %s in %.1f s: max displacement %.3f mm (hand %.2f), max von"
+        " Mises %.1f MPa at %s (hand %.1f on the plain section), min safety factor %.2f,"
+        " %s nodes"
+        % (
+            where,
+            seconds,
+            out["d"],
+            HAND_DEFLECTION_MM,
+            out["vm"],
+            out["vm_at"],
+            HAND_STRESS_MPA,
+            out["sf"],
+            out["nodes"],
+        ),
+        flush=True,
+    )
+    return out
+
+
+def results_steps():
+    from SciForgeTests.gui import simres_steps as rs
+
+    def probes():
+        rs.big("Surface Probes")
+
+    def probe():
+        p = rs.task_panel()
+        if not h.check("j8: Surface Probes open", p is not None and p.title == "Surface Probes"):
+            return
+        rs.choose_result("Stress")
+        sess = rs.session()
+        pts = sess.data.points
+        # a node on the front flange's outer face near its top at the middle of the rail
+        # (over the flange's hole 12, 0.03 in under the top edge: on the face, not its edge):
+        # where the bending stress is largest away from the held ends
+        want = (grid(12, 0).x, 0.0, PROBE_Z)
+        best = None
+        for n in sess.display.nodes.tolist():
+            p_ = pts[n]
+            on_face = abs(p_[1]) < 1e-6 and 0.40 * IN < p_[2] < 0.485 * IN
+            d = sum((p_[k] - c) ** 2 for k, c in enumerate(want)) + (0.0 if on_face else 1e6)
+            if best is None or d < best[0]:
+                best = (d, n)
+        S["probe_node"] = best[1]
+        look("iso")  # the front flange's outer face toward the viewer
+        vx.look_at(V(*sess.display.node_place(best[1])), 40.0)
+        h.click(V(*sess.display.node_place(best[1])))
+
+    def probed():
+        sess = rs.session()
+        found = rs.tags("probe")
+        h.check("j8: one probe on the rail", len(found) == 1, found)
+        if found:
+            value = float(sess.data.values(sess.result)[S["probe_node"]])
+            h.check(
+                "j8: the probe reads the node's %s (%.4g)" % (sess.result, value),
+                abs(found[0]["value"] - value) < 1e-9,
+                (found[0], value),
+            )
+            S["probe"] = (sess.result, found[0]["value"])
+            print("[SciForge] journey_vex: probe %s = %.4g" % S["probe"], flush=True)
+            h.check(
+                "j8: the probe near the flange's top at mid-span reads %.1f MPa: the hand %.1f MPa"
+                " (the plain section) to %.1f (through the holes), give or take the twist"
+                % (found[0]["value"], HAND_PROBE_MPA, HAND_PROBE_NET_MPA),
+                sess.result == "von_mises"
+                and 0.75 * HAND_PROBE_MPA < found[0]["value"] < 1.6 * HAND_PROBE_NET_MPA,
+                (sess.result, found[0]["value"]),
+            )
+        h.task_button("Close")
+
+    def report():
+        rs.big("Report")
+
+    def fill():
+        dialog = rs.dialog("SciForgeSimReport")
+        if not h.check("j8: the Report dialog", dialog is not None):
+            return
+        S["report"] = os.path.join(h.OUT_DIR, "journey_vex_report.html")
+        if os.path.isfile(S["report"]):
+            os.remove(S["report"])
+        di.type_into(dialog.findChild(QtWidgets.QLineEdit, "SciForgeSimReportAuthor"), "VEX team")
+        di.type_into(dialog.findChild(QtWidgets.QLineEdit, "SciForgeSimReportPath"), S["report"])
+        rs.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReportSave"))
+
+    def written():
+        core = rs.results_core()
+        h.check("j8: the report written", os.path.isfile(S.get("report", "")), S.get("report"))
+        if not os.path.isfile(S.get("report", "")):
+            return
+        with open(S["report"], encoding="utf-8") as handle:
+            text = handle.read()
+        sf = (S.get("fine") or {}).get("sf", 0.0)
+        for name, needle in (
+            ("the study", "Study 1 - Static Stress"),
+            ("the author", "VEX team"),
+            ("the lowest safety factor", core.fmt(sf)),
+            ("the material", "Alumin"),
+            ("the constraint", "Fixed 1"),
+            ("the load", "Force 1"),
+        ):
+            h.check("j8: the report has %s" % name, needle in text, needle)
+
+    return [
+        step(probes, "j8_surface_probes", 1500),
+        step(probe, "j8_probe", 1200),
+        step(probed, "j8_probed", 1000),
+        step(report, "j8_report", 1500),
+        step(fill, "j8_report_save", 3000),
+        step(written, "j8_report_written"),
+    ]
