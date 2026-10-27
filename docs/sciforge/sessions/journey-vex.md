@@ -154,8 +154,11 @@ A real screw spreads that load; the peak is not the rail yielding.
 - **xvfb has no window manager**: after the file dialog closed nothing gave the main window
   the keyboard back, so J and M went nowhere (`keys_to_window` in the steps raises the
   window, as a desktop's window manager does).
-- **Ctrl+O with no design open** did nothing when QTest sent it to the main window (Home in
-  front); the application bar's Open was clicked instead. Not checked on a real desktop.
+- **Ctrl+O with no design open** did nothing (Home in front, the keyboard in Home's text
+  box: QTest to that box or to the window), while Ctrl+O in a design opens the Open dialog;
+  the only owner of the key is SciForge's window shortcut. The journey clicks the
+  application bar's Open instead. Not checked on a real desktop (synthetic keys under xvfb):
+  worth a try on Luca's PC (Home, Ctrl+O).
 - **Align's turn**: with only a face's normal to match (a hole's X is not used, unlike a
   joint's), Align takes the smallest turn, which here pointed rail 2 the other way; Angle
   twice fixed it. Fusion's Align has the same Flip / Angle buttons for this (G).
