@@ -338,6 +338,31 @@ def _original(source):
     )
 
 
+def _linked_design(source):
+    """The name of the design a body comes from when it is a linked copy (Insert into Current
+    Design of a saved design: its component follows that file), else "". (beta 3 QA: such a
+    body was rebuilt in place, its link to the other design deleted at Finish while its
+    component still said it was linked.)"""
+    try:
+        from . import components, design_insert
+
+        base = getattr(source, "BaseFeature", None) if bodies.is_body(source) else None
+        if base is None or not design_insert.is_copy_feature(base):
+            return ""
+        container = components.container_of(source)
+        while container is not None:
+            if design_insert.is_linked(container):
+                path = getattr(container, design_insert.LINKED_FILE, "")
+                return design_insert.design_name(path) or container.Label
+            container = components.container_of(container)
+        source_body = getattr(base, "Source", None)
+        doc = getattr(source_body, "Document", None)
+        return design_insert.design_name(getattr(doc, "FileName", "")) if doc else "another"
+    except Exception as exc:
+        warn("rebuild: %s" % exc)
+    return ""
+
+
 def _solid_of(kind, source):
     """The original's solid in design coordinates, and a note (or "")."""
     import Part
@@ -451,6 +476,14 @@ def start(doc, source, label=None):
     if is_reference(source):
         raise RebuildError("%s is a rebuild reference itself; pick a body." % source.Label)
     kind, source = _original(source)
+    linked = _linked_design(source)
+    if linked:
+        raise RebuildError(
+            "%s comes from the design %s (it is in a component linked to that design, and "
+            "follows it): open %s and rebuild it there (every linked copy follows), or Break "
+            "Link first (the component's right-click in the browser) to rebuild this copy on "
+            "its own." % (source.Label, linked, linked)
+        )
     ref = reference_for(source)
     if ref is not None and not getattr(ref, "Shown", True):
         ref = None  # a finished rebuild whose reference was kept: this is a new one

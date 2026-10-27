@@ -44,6 +44,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
   (back to the original's name at start); the original renamed meanwhile: the rebuild took
   its old name.
 * bumps: 60 free-form bumps on a plate were said in 60 entries (38,000 characters); now one.
+* linked copy: a body of a component linked to another design was rebuilt in place; Finish
+  deleted its link while the component still said linked. Now refused, with what to do.
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -1160,6 +1162,39 @@ def bumps(agent, folder):
     )
 
 
+# -- a body that is a linked copy of another design ---------------------------------------------
+def linked_copy(agent, folder):
+    import FreeCAD as App
+
+    from sciforge import components, rebuild
+
+    source = os.path.join(folder, "QaLinkedWheel.FCStd")
+    target = os.path.join(folder, "QaLinkedRobot.FCStd")
+    for path in (source, target):
+        if os.path.exists(path):
+            os.remove(path)
+    agent.call("new_design", {"name": "QaLinkedWheel"})
+    agent.call("create_sketch", {"plane": "XY", "geometry": [{"circle": [0, 0, 20]}]})
+    agent.call("extrude", {"profile": "Sketch1", "distance": 8})
+    agent.call("save_as", {"path": source})
+    agent.call("new_design", {"name": "QaLinkedRobot"})
+    agent.call("save_as", {"path": target})
+    text, error = agent.call("import_file", {"path": source})
+    doc = App.ActiveDocument
+    linked = [c for c in components.list_components(doc) if c.Label.startswith("QaLinkedWheel")]
+    found = components.bodies_in(doc, linked[0]) if linked else []
+    if not agent.check("linked copy: the wheel design is inserted, linked", found, text):
+        return
+    text, error = agent.call("start_rebuild", {"body": found[0].Name})
+    agent.check(
+        "linked copy: a body linked from another design is not rebuilt in place (its link was "
+        "deleted at Finish while its component still said linked): the answer says to "
+        "rebuild it in its design or Break Link first",
+        error and "Break" in text and "QaLinkedWheel" in text and not rebuild.references(doc),
+        text[:300],
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -1180,6 +1215,7 @@ CHECKS = (
     big_mesh,
     renamed,
     bumps,
+    linked_copy,
 )
 
 

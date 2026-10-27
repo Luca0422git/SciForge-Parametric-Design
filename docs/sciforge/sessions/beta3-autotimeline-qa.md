@@ -41,6 +41,8 @@ up to bc1bf483); `sf/at-recognize` merged again as it went on (see "Merges").
 | Two rebuilds going on, the 3D view's right-click on one rebuilt body | **Bug, fixed**: Compare, Finish and Stop took the other one (the active body's) |
 | The rebuilt body renamed by the person half way; the original renamed half way | **Bug, fixed**: Finish put the original's old name on both |
 | check_design after a Finish that kept the original | **Bug, fixed**: "NOT OK: Body and Body (original) overlap" |
+| 60 free-form bumps on a plate | **Bug, fixed**: 60 unrecognized entries (38,000 characters); now one |
+| A body of a component linked to another design (a VEX part inserted from the Data Panel) | **Bug, fixed**: rebuilt in place, its link deleted at Finish (Break Link then refused); now refused at start with what to do |
 
 ## Fixes (each with a check that fails on the code before it)
 
@@ -103,6 +105,10 @@ Commits on `sf/autotimeline-qa` (oldest first):
 26. The browser's right-click on a rebuilt body offers Compare with Reference, Finish Rebuild
     and Stop Rebuild... (it offered Rebuild with Timeline (AI)..., which refused it).
     Scenario `rebuild_qa_joints` D.
+27. Free-form islands on one face are said in one entry (60 bumps: 60 entries, 38,000
+    characters). Check `bumps`.
+28. A body linked from another design is not rebuilt in place (Finish deleted its link, the
+    component still said linked and Break Link then refused). Check `linked_copy`.
 
 `SciForgeTests/headless/rebuild_qa.py` is run by `rebuild_e2e.main()` (so by
 `run_tests.sh --only headless / base`); `SCIFORGE_REBUILD_FILTER=qa` runs only it. On the code
