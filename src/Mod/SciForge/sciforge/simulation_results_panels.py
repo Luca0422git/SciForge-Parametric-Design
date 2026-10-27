@@ -83,10 +83,28 @@ class _Hover:
             warn("probes: no value under the mouse: %s" % exc)
 
     def left(self):
+        """The mouse left the 3D view: the value under it goes, a moment later. Never inside
+        Qt's own handling of the Leave: a design closed while the probes are open sends one
+        while its 3D view is being destroyed, and drawing the tags then (they ask the view
+        where each tag is) crashed SciForge."""
         self.place = None
         try:
             self.timer.stop()
-            self.session.set_hover(None)
+        except RuntimeError:
+            pass
+        QtCore.QTimer.singleShot(0, self._clear)
+
+    def _live(self):
+        """The hover's results still show in a 3D view that still exists."""
+        from .simulation_results_view import _alive
+
+        session = self.session
+        return not self.closed and bool(session.active) and _alive(session.gl)
+
+    def _clear(self):
+        try:
+            if self._live():
+                self.session.set_hover(None)
         except Exception as exc:
             warn("probes: %s" % exc)
 
@@ -102,7 +120,7 @@ class _Hover:
 
     def _update(self):
         try:
-            if self.closed or self.place is None or not self.session.active:
+            if self.place is None or not self._live():
                 return
             x, y = self.place
             self.session.set_hover(x, y, self.inside)

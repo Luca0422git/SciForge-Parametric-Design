@@ -719,6 +719,27 @@ class Session:
         self._timer = self._anim_timer = None
         self.hidden = {}
         self.active = False
+        # A dialog of these results left open (Surface Probes, Point Probes, Slice Plane...)
+        # ends too, a moment later, without touching the gone view: its hover never draws
+        # again, its view callbacks are not taken off a view that no longer exists.
+        self.view = None
+        self.gl = None
+        for panel in list(self.panels):
+            hover = getattr(panel, "hover", None)
+            if hover is not None:
+                hover.closed = True
+            if hasattr(panel, "callbacks"):
+                panel.callbacks = []
+        if self.panels:
+            QtCore.QTimer.singleShot(0, self._close_panels)
+
+    def _close_panels(self):
+        for panel in list(self.panels):
+            try:
+                panel.close()
+            except Exception as exc:
+                warn("results: %s" % exc)
+        self.panels = []
 
     # -- the design, hidden on the view only
     def _hide_design(self):
