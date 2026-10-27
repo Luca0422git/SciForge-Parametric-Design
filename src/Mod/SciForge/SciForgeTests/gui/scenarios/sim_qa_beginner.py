@@ -12,7 +12,9 @@ B  Finish Results, Structural Loads: Force 100 N down on the free end (clicks, t
 C  Clone Study from the study's right-click menu: a second study with its own copies of the
    constraint and load; its force edited to 200 N from the browser; the Solve dialog with both
    ticked says "Solve 2 Studies"; the clone moves twice as far (linear), the first study is
-   unchanged and up to date.
+   unchanged and up to date; no solve among the undo steps.
+D  Ctrl+Z: the clone's force is 100 N again (the last setup change undone, never a solve), its
+   results out of date (kept), the first study's not; Redo: 200 N, up to date again.
 """
 
 import FreeCAD as App
@@ -261,6 +263,39 @@ def c_check():
     h.check("C the first study unchanged", abs(d1 - state["d1"]) < 1e-9 * max(d1, 1), (d1, state))
     h.check("C the clone moves twice as far", abs(d2 / d1 - 2.0) < 1e-6 if d1 else False, (d1, d2))
     h.check("C both up to date", not s.sim().out_of_date(first) and not s.sim().out_of_date(clone))
+    state["undo"] = list(doc.UndoNames)
+    h.check("C no solve among the undo steps", not any("olve" in n for n in doc.UndoNames))
+
+
+# -- D ------------------------------------------------------------------------------------------
+def d_undo():
+    s.undo_key()
+
+
+def d_undone():
+    doc = App.ActiveDocument
+    first = doc.getObject(state["study1"])
+    clone = doc.getObject(state["clone"])
+    load = s.sim().items(clone, "load")[0]
+    h.check(
+        "D Ctrl+Z takes the clone's 200 N back to 100 N (a setup change, not a solve)",
+        abs(s.sim().item_data(load)["options"]["magnitude"] - 100.0) < 1e-9,
+        (state["undo"], doc.UndoNames),
+    )
+    h.check("D the clone's results are out of date", s.sim().out_of_date(clone))
+    h.check("D the first study's are not", not s.sim().out_of_date(first))
+    h.check("D its results are still there", bool(s.sim().summary(clone)))
+    s.redo()
+
+
+def d_redone():
+    doc = App.ActiveDocument
+    clone = doc.getObject(state["clone"])
+    load = s.sim().items(clone, "load")[0]
+    h.check(
+        "D Redo: 200 N again", abs(s.sim().item_data(load)["options"]["magnitude"] - 200.0) < 1e-9
+    )
+    h.check("D the clone's results are up to date again", not s.sim().out_of_date(clone))
 
 
 h.run(
@@ -298,5 +333,11 @@ h.run(
         c_tick,
         s.wait_solved("wait_solved_c", 300),
         c_check,
+        h.idle_step(),
+        d_undo,
+        h.idle_step("wait_undo"),
+        d_undone,
+        h.idle_step("wait_redo"),
+        d_redone,
     ],
 )
