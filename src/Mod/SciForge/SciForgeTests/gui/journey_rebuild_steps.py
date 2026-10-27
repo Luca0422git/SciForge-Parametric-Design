@@ -423,6 +423,8 @@ def decide(request):
     made = {}
     pos = 1
     for st in plan:
+        if st["tool"] == s.get("forget"):
+            continue  # (a sloppy AI: compare's verdict has to bring it back)
         args = json.loads(json.dumps(st.get("args") or {}))
         for key, number in (st.get("uses") or {}).items():
             old, new = planned.get(number), made.get(number)
@@ -774,6 +776,22 @@ def rebuild_steps():
             names,
         )
         h.check("... and did not finish by itself", "finish_rebuild" not in names, names)
+        forgot = s.get("forget")
+        if forgot:
+            # the AI left the plan's chamfer out; compare named it with the call ready and
+            # the AI made it from the verdict
+            calls = _history(s["requests"][-1].get("messages", []))
+            at = [i for i, c in enumerate(calls) if c[0] == forgot]
+            told = [
+                c[2]
+                for c in calls[: at[0]]
+                if at and c[0] == "compare_to_reference" and forgot in (c[2] or "")
+            ]
+            h.check(
+                "the AI forgot the %s; compare's verdict named it and the AI made it" % forgot,
+                len(at) == 1 and bool(told) and calls[at[0] + 1][0] == "compare_to_reference",
+                [c[0] for c in calls],
+            )
         last = (s["log"][-1].get("content") or "") if s.get("log") else ""
         h.check("it asks whether to finish", "Shall I finish it?" in last, last)
         text = panel.transcript.toPlainText() if panel is not None else ""

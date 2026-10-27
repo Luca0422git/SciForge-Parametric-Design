@@ -433,3 +433,54 @@ Known gaps found by the QA pass (not fixed):
   original, not the rebuild.
 - UTILITIES > AI > Compare / Finish / Stop take the active body's rebuild when several go on
   (the right-clicks take the one clicked).
+
+## Journey (beta 3)
+
+(the journey tester, branch `sf/journey-rebuild`; session log
+`docs/sciforge/sessions/journey-rebuild.md`; scenarios `SciForgeTests/gui/scenarios/
+journey_rebuild*.py`, their steps and the numbers worked out by hand in
+`SciForgeTests/gui/journey_rebuild_steps.py`)
+
+Auto Timeline used the way Luca would, with real clicks and keys only: a mounting bracket a
+stranger sent as a STEP file (four counterbored holes on a 2 x 2 grid, a pocket, a chamfer, two
+fillets) and a meshed STL plate, rebuilt as parametric parts, then used in the rest of
+SciForge. The AI is a fake local model in SciForge's own chat that reads only SciForge's answers
+(as scenario `rebuild_chat`): describe_reference's plan, compare_to_reference after every
+feature, the fixes the verdict offers, finish_rebuild when the person says so.
+
+| Scenario | What a person does | Checks |
+|---|---|---|
+| `journey_rebuild` | Insert STEP (bracket and a clamp), a joint (J, two clicks), right-click > Rebuild with Timeline (AI)..., Send; Compare with Reference 100 %; "finish" in the chat; one Ctrl+Z / Ctrl+Y; the base extrude double-clicked 10 -> 12, the hole 6 -> 6.5 | 86 |
+| `journey_rebuild_sim` | the same rebuild, then SIMULATION: Fixed on the counterbores' floors, 1000 N down on the far end, Solve; DESIGN: 2 mm thicker; out of date; Solve again | 76 |
+| `journey_rebuild_mesh` | Insert Mesh, rebuilt by hand (no AI set up): typed rectangle, E 8, Compare, an early Finish (Cancel), saved and opened again half way, two circles on the top face, E -8 All, Compare done, Finish; saved, opened again, made 10 thick | 65 |
+| `journey_rebuild_reopen` | the AI's rebuild saved half way, closed, opened again, finished by hand; saved, opened again; the edits | 88 |
+
+What the journey found and fixed (each with a test that fails on the code before):
+
+| Found | Fixed |
+|---|---|
+| A rebuilt part made 2 mm thicker (its base extrude double-clicked, 10 -> 12) kept its pocket and its counterbores at the old height, sealed under a 2 mm skin: two shells, 65115 mm3 instead of 64889 by hand, and check_design said OK. The plan sketched every feature that starts on the top face on an origin plane at a fixed offset | those sketches go on the top face itself, in the plane's axes (`create_sketch` takes `face` with `plane` and `offset` now: attached to the face, turned and moved on it so the plan's numbers stay the plane's; the plane at its offset when the face is not found); describe_reference adds the face when the part has exactly one flat face there. Tests: `test_ai_catalog`, `rebuild_e2e` (one shell after the early edit), `journey_rebuild` |
+| The recipe's own example said "its holes still go through" at 12 mm: its hole sketch was at offset 10, so the top 2 mm stayed closed (27576.3 mm3 instead of 27350.1); the docs runner only checked the size | the recipe sketches the holes on the top face, a good habit says why, and the last call expects 27350.1 mm3 (docs runner) |
+| Compare said a meshed plate's holes were at (60.003, 24) and offered the Single Hole there: a 63-facet polygon's box is off its axis | the faceted region is placed by its centroid: (60, 24) (`test_rebuild_core`) |
+| Finish Rebuild in the window deleted the original by default even when the rebuild did not match yet (a meshed plate at 92 %, its holes not cut) | a rebuild that does not match keeps the original, hidden, by default; Delete stays the default for one that matches (`journey_rebuild_mesh`) |
+
+Tried and found right: the chat's ready message, the AI's steps as one undo step each, the
+timeline in Fusion's order (sketch, extrude, sketch, cut, sketch, hole, pattern, chamfer,
+fillet), Compare 100 %, Finish (the original's name, component and place; one undo step), the
+joint made before the rebuild moved onto the rebuild at Finish and back at Ctrl+Z, the clamp
+riding up 2 mm with the thicker top, the pattern following the hole's new diameter, the
+study out of date after the edit and the stress dropping (120 -> 87 MPa; by hand 0.68 at the
+pocket), Save / close / open again half way (the ghost, the active rebuilt body, the joint
+still on the original) and after Finish, both for the AI's rebuild and the one by hand.
+
+Known gaps found by the journey (not fixed):
+
+- Only the base's top face is followed: a feature that starts on another face (a hole on top
+  of a boss, a cut in a pocket's floor) is still sketched at a fixed offset, so making that
+  boss taller leaves the hole where it was.
+- SciForge's own chat stops after 25 requests per Send (`chat_core.MAX_STEPS`): a model that
+  makes one call per request and follows the recipe's loop (describe, every plan step, a
+  compare after every feature) reaches it on a part of more than about 14 plan steps (the
+  bracket took 17), and the person then says "continue" (counted, not run).
+- A sketch made by hand on a face holds the face's projected outline (Fusion's auto project),
+  so pressing E from it picks no profile: the person clicks the circles (as in Fusion).
