@@ -43,6 +43,7 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * renamed: the rebuild renamed by the person while it was built lost that name at Finish
   (back to the original's name at start); the original renamed meanwhile: the rebuild took
   its old name.
+* bumps: 60 free-form bumps on a plate were said in 60 entries (38,000 characters); now one.
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -1129,6 +1130,36 @@ def renamed(agent, folder):
             )
 
 
+# -- many small free-form bumps on one face ------------------------------------------------------
+def bumps(agent, folder):
+    import json as _json_module
+
+    import FreeCAD as App
+    import Part
+
+    from sciforge import recognize
+
+    V = App.Vector
+    plate = Part.makeBox(120, 80, 6).cut(Part.makeCylinder(4, 6, V(110, 70, 0)))
+    domes = []
+    for i in range(10):
+        for j in range(6):
+            x, y = 8 + i * 9, 8 + j * 9
+            low = Part.Wire(Part.makeCircle(3, V(x, y, 6)))
+            high = Part.Wire(Part.makeCircle(1.2, V(x + 0.5, y, 8)))
+            domes.append(Part.makeLoft([low, high], True, False))
+    part = plate.fuse(Part.makeCompound(domes)).removeSplitter()
+    out = recognize.describe(part, {})
+    said = [u for u in out["unrecognized"] if "free-form shape" in u.get("why", "")]
+    size = len(_json_module.dumps(out))
+    agent.check(
+        "bumps: 60 free-form bumps on one face are said in one entry (60 entries, 38,000 "
+        "characters for the AI to read) (%d entries, %d characters)" % (len(said), size),
+        out["base"].get("kind") == "extrude" and len(said) == 1 and "60 raised" in said[0]["why"],
+        (len(said), size, [u.get("why", "")[:120] for u in out["unrecognized"]][:3]),
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -1148,6 +1179,7 @@ CHECKS = (
     stopped,
     big_mesh,
     renamed,
+    bumps,
 )
 
 

@@ -1598,38 +1598,55 @@ class _Reader:
         return out
 
     def _island_notes(self, islands, planned):
-        """The islands taken off said in unrecognized; their faces (said, not read)."""
+        """The islands taken off said in unrecognized, one entry per face they stand on (or
+        are cut into), raised or engraved (60 bumps on a plate made 60 entries, 38,000
+        characters); their faces (said, not read)."""
         out = set()
+        groups = {}
         for g in islands:
             if g["id"] not in planned:
                 continue
             out.update(g["_faces"])
-            box = g["_box"]
+            groups.setdefault((g["_hosts"][0], bool(g["raised"])), []).append(g)
+        for (host, raised), items in sorted(groups.items()):
+            faces = sorted(i for g in items for i in g["_faces"])
+            box = _box_copy(items[0]["_box"])
+            for g in items[1:]:
+                box.add(g["_box"])
+            if len(items) == 1:
+                what = "a %s free-form shape (a text, a logo...)" % (
+                    "raised" if raised else "engraved"
+                )
+                where, it = "about", "it"
+            else:
+                what = "%d %s free-form shapes (a text, a logo...)" % (
+                    len(items),
+                    "raised" if raised else "engraved",
+                )
+                where, it = "together about", "them"
             self.unrecognized.append(
                 {
-                    "faces": self.face_refs(g["_faces"]),
-                    "why": "%s (%d faces, %d free-form) %s the flat face %s, about %s x %s x %s "
-                    "mm at (%s, %s, %s): not read. The plan builds the part without it; a "
+                    "faces": self.face_refs(faces),
+                    "why": "%s (%d faces, %d free-form) %s the flat face %s, %s %s x %s x %s "
+                    "mm at (%s, %s, %s): not read. The plan builds the part without %s; a "
                     "text can be made with sketch_text and an extrude (operation %s), a logo "
                     "by hand, then compare again (finish with even_if_different if it stays a "
                     "little off)."
                     % (
-                        (
-                            "a raised free-form shape (a text, a logo...)"
-                            if g["raised"]
-                            else "an engraved free-form shape (a text, a logo...)"
-                        ),
-                        len(g["_faces"]),
-                        sum(1 for i in g["_faces"] if self.facts[i].kind not in _ANALYTIC),
-                        "standing on" if g["raised"] else "cut into",
-                        self.facts[g["_hosts"][0]].name,
+                        what,
+                        len(faces),
+                        sum(1 for i in faces if self.facts[i].kind not in _ANALYTIC),
+                        "standing on" if raised else "cut into",
+                        self.facts[host].name,
+                        where,
                         core.fmt(round(box.XLength, 2)),
                         core.fmt(round(box.YLength, 2)),
                         core.fmt(round(box.ZLength, 2)),
                         core.fmt(round(box.Center.x, 2)),
                         core.fmt(round(box.Center.y, 2)),
                         core.fmt(round(box.Center.z, 2)),
-                        "join" if g["raised"] else "cut",
+                        it,
+                        "join" if raised else "cut",
                     ),
                 }
             )
