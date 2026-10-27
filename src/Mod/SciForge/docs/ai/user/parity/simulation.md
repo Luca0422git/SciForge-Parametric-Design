@@ -193,7 +193,7 @@ The engine's QA wrote its own cases, independent of the builder's: every formula
 source next to it in `SciForgeTests/headless/sim_accuracy_qa.py` (run by `run_tests.sh --only
 sim` after the builder's benchmarks), at the default and a finer mesh, a few through the AI
 tools (their answers only), and engine checks for numbers that would be wrong without a word.
-Run of 2026-10-27 (`sim-accuracy-qa.json`): 191 checks (152 accuracy rows, 39 engine checks), 0 failed. A row marked "warned" is outside its
+Run of 2026-10-27 (`sim-accuracy-qa.json`): 197 checks (154 accuracy rows, 43 engine checks), 0 failed. A row marked "warned" is outside its
 tolerance at the default mesh and the solve says why (a thin wall met by large elements); the
 finer mesh is within it. Steel is Steel-Generic, aluminium Aluminum-Generic (E read from the
 study material).
@@ -232,7 +232,8 @@ study material).
 | **gravity_bracket**: Steel L bracket held at its wall face with an aluminium block glued on it, gravity alone | the wall holds the weight (N, z) = g sum(rho V) | 2.226 | 2.226 (0 %) | 2.226 (0 %) | 0.2 % | PASS |
 |  | nothing sideways (N) | 0 | 8.748e-08 (0 %) | 1.885e-07 (0 %) | 0.2 % | PASS |
 |  | the arm's tip goes down, not up (sign of its z movement) | -1 | -1 (0 %) | -1 (0 %) | 0 % | PASS |
-| **gravity_sideways**: The same bracket with gravity along -Y: the wall holds the weight along +Y | the wall holds the weight along +Y (N) | 2.12 | 2.12 (0 %) | 2.12 (0 %) | 0.2 % | PASS |
+| **gravity_sideways**: The same bracket with gravity along -Y: the wall holds the weight along +Y | the weight = Inspect's mass 0.216144 kg x 9.80665 m/s2 (N) | 2.12 | 2.12 (0 %) | 2.12 (0 %) | 0.2 % | PASS |
+|  | the wall holds the weight along +Y (N) | 2.12 | 2.12 (0 %) | 2.12 (0 %) | 0.2 % | PASS |
 |  | nothing along Z (N) | 0 | 8.347e-10 (0 %) | 5.418e-09 (0 %) | 0.2 % | PASS |
 | **shaft_bearing**: Shaft 20 mm across, 120 mm long, held at one end, 500 N bearing load on its last 20 mm | free end deflection (mm), distributed load on the journal | 0.1631 | 0.1599 (1.967 %) | 0.1613 (1.128 %) | 3 % | PASS |
 |  | the held end takes the load (N, z) | 500 | 500 (0 %) | 500 (0 %) | 0.5 % | PASS |
@@ -309,6 +310,7 @@ Through the AI tools (study_results' answers only):
 | nothing asks for a recompute after a solve | after the solve; after Keep results in the file off and on; after a study material; after a load changed; those changes leave the results out of date | 5 | PASS |
 | along the normal of a curved face | force along a round face's normal: refused; moment along a round face's normal: refused; a force along a vector on it: taken | 3 | PASS |
 | out of date after a change that keeps the size | solved: in date; the hole moved from x 30 to 60: out of date; the bar solved: in date; the bar turned a quarter about its axis: out of date | 4 | PASS |
+| bodies that touch only along an edge or at a corner | touching along an edge: warned; touching at a corner: warned; a cube on a cube's face: no such warning; a pin in its hole: no such warning | 4 | PASS |
 | results kept in and dropped from the file | kept: reopened with its results and the same numbers, in date; dropped: reopened with the numbers only, in date, says solve again; reopened, then the part changed: out of date | 3 | PASS |
 
 ### Big parts

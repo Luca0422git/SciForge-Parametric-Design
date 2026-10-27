@@ -95,8 +95,18 @@ word. GUI scenario `sim_qa_engine.py` for what only shows with the window up.
    keeps the size" (it also caught my own first version, which read the centre of mass of the
    body's compound and so fingerprinted nothing).
 
+9. **Bodies touching only along an edge or at a corner counted as glued, and the pre-check
+   was green** (c26ba18c): the model glues them only there, like a hinge; the solve then
+   failed with "not held enough", naming neither body nor the reason. The pre-check now warns
+   with both names and how they touch (`slight_contacts`; from the section of the two shapes,
+   confirmed on their faces, so a pin in its hole or a cube on a face is not taken for one).
+   Test: QA engine check "bodies that touch only along an edge or at a corner".
+
 ## Looked at and found right
 
+- Equivalent strain: 3 G x strain = von Mises at every node of a twisted tube (CalculiX's
+  tensor shear strains read right). Gravity's weight equals Inspect's mass x 9.80665 (a body
+  on FreeCAD's Default material counts as Steel in both).
 - Simply supported beam (line load on an edge; uniform pressure), symmetry half against the
   full beam, cantilever on an edge / corners, stepped steel + aluminium bar (materials not
   swapped, also three glued blocks listed in another order), clamped plate (fine mesh 0.9 %),
@@ -149,3 +159,24 @@ word. GUI scenario `sim_qa_engine.py` for what only shows with the window up.
 - 23:46-23:55 fix 8; a fillet on the loaded end in the picks check; timings: the thin-wall
   note 0.18 s on a 204 000-node mesh, the reactions' input reading 2.7 s for a 900 000-node
   input (background thread).
+- 23:55 `--only sim` (benchmarks 138, QA 191), GUI sim_core_job 29 / sim_qa_engine 15,
+  `--only headless` (306 calls, docs 152 items / 1002 calls, agent 81), unit 2513 (one stale
+  generated page, regenerated): all pass.
+- 23:58-00:01 fix 9 (edge / corner contacts); strain and mass cross-checks.
+- 00:02 sim-results' export again with the final engine: sim_setup_components 43,
+  sim_setup_documents 71, sim_setup_lost 48, sim_setup_mesh 42, sim_setup_two 40,
+  simres_adaptive 37, simres_compare 76, simres_out_of_date 32, simres_reopen 21,
+  simres_workspace 65: all pass.
+- 00:05 a 126-face plate with 120 holes at 4 %: 198 398 nodes, 175 s (CalculiX 146 s, one
+  thread); the reaction 609.968 N for 609.926 N of pressure and weight (0.007 %); results
+  read (with the reactions) 3.6 s in the background.
+
+## Final results (00:15)
+
+- `run_tests.sh --only sim`: builder's benchmarks 138 checks, QA's `sim_accuracy_qa` 197
+  checks (154 accuracy rows, 43 engine checks): 0 failed. The QA table is in the parity doc,
+  Benchmarks, "QA's own hand calculations".
+- `--only unit`: 2513 tests OK (9 skipped). `--only headless`: 306 calls, docs 152 items /
+  1002 calls, agent 81 checks: pass.
+- GUI: sim_core_job 29, sim_qa_engine 15 checks: pass; sim-ui / sim-results scenarios on this
+  engine (export): 16 scenarios, all pass (see the log above).
