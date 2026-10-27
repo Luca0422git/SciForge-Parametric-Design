@@ -1055,7 +1055,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
         sim_rows = [
             item.data(1, ROLE_NODE)
             for item in self.selectedItems()
-            if item.data(1, ROLE_NODE)["kind"] == "sim_item"
+            if (item.data(1, ROLE_NODE) or {}).get("kind") == "sim_item"
         ]
         keep = (_simulation_call("keep_selected", self._doc, sim_rows) or set()) if sim_rows else ()
         self._syncing = True
