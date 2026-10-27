@@ -32,7 +32,6 @@ RUN = {
     "study": None,
     "kind": None,  # "solve" | "mesh"
     "started": None,
-    "signature": None,  # the study's fingerprint when its solve started
     "timer": None,
     "status": None,  # the progress window
     "results": {},  # study name -> "done" / "failed" / "cancelled" / message, this run
@@ -370,10 +369,6 @@ def _next():
             RUN["bodies"] = []
         RUN["started"] = time.time()
         try:
-            RUN["signature"] = sim.signature(study)
-        except Exception:
-            RUN["signature"] = None
-        try:
             RUN["job"] = _make_job(study, RUN["kind"])
         except Exception as exc:
             RUN["job"] = None
@@ -508,7 +503,6 @@ def _after(study, state, message):
             if RUN["kind"] == "mesh":
                 show_mesh(study)
             else:
-                _keep_out_of_date(study)
                 loose = loose_result(study)
                 if loose:
                     state, message = "suspect", loose
@@ -619,20 +613,6 @@ def loose_result(study):
         )
     except Exception:
         return None
-
-
-def _keep_out_of_date(study):
-    """The design or the study changed while it solved: the results are of the setup the solve
-    started from, so they show as out of date."""
-    sim = _sim()
-    try:
-        started = RUN["signature"]
-        data = sim.summary(study)
-        if started and data and data.get("signature") != started:
-            data["signature"] = started
-            bodies.save_meta(study, sim.RESULT_PROP, data)
-    except Exception as exc:
-        warn("solve: %s" % exc)
 
 
 def _finish_all():

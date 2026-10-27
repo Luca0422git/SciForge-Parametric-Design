@@ -18,6 +18,9 @@ H  Right-click the study > Clone Study: "Study 2 - Static Stress", active, with 
    of the constraint and the load and no results; double-click Study 1: active again; right-
    click Study 2 > Delete: gone.
 I  The design changes (the plate made thicker): the Results row of Study 1 says out of date.
+J  The arm deleted and made again in the same place (a design change): FreeCAD loses Force 1's
+   face, which must be found again by its shape; Solve: solved, and the results are up to date
+   at once (the engine's fingerprint, taken after it found the face again, is kept).
 """
 
 import FreeCAD as App
@@ -297,6 +300,41 @@ def i_check():
     h.check("the Results row says so", "Results (out of date)" in labels, labels)
 
 
+# -- J ------------------------------------------------------------------------------------------
+def j_redo_arm():
+    # (the design change, made by script as a person would redo it: the arm deleted and made
+    # again in the same place; FreeCAD loses Force 1's face name, "?Face7")
+    doc = App.ActiveDocument
+    body = s.body()
+    arm = doc.getObject("Arm")
+    body.removeObject(arm)
+    doc.removeObject(arm.Name)
+    doc.recompute()
+    s._box(body, "Additive", "Arm2", (6, 30, 30), (74, 0, 6))
+    doc.recompute()
+    force = item("Force 1")
+    moved = [m for _o, _n, m in s.sim().resolve_picks(force)] if force is not None else []
+    h.check("Force 1's face must be found again (by its shape)", any(moved), moved)
+    h.ribbon("Solve")
+
+
+def j_go():
+    dialog = s.solve_dialog()
+    if h.check("Solve dialog (J)", dialog is not None):
+        s.click_widget(dialog.go)
+
+
+def j_check():
+    h.check("solved", bool(s.sim().summary(study())))
+    h.check("up to date at once (the face was found again)", not s.sim().out_of_date(study()))
+    labels = s.browser_labels()
+    h.check("the Results row plain", "Results" in labels, labels)
+    force = item("Force 1")
+    moved = [m for _o, _n, m in s.sim().resolve_picks(force)] if force is not None else []
+    h.check("Force 1 points at its face again", force is not None and not any(moved), moved)
+    s.close_popup("SciForgeSimJobStatus")
+
+
 h.run(
     "sim_setup_browser",
     [
@@ -332,5 +370,9 @@ h.run(
         h_deleted,
         i_change_design,
         i_check,
+        j_redo_arm,
+        j_go,
+        s.wait_solved("wait_solved_j"),
+        j_check,
     ],
 )

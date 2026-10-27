@@ -3,7 +3,8 @@
 Builder sim-ui of beta 3 (2026-10-26/27). Brief: `docs/sciforge/dev/briefs/beta3-sim-ui.md`.
 Spec: `docs/sciforge/parity/simulation.md` section "Setup" (behaviour table S1-S28 with sources,
 scenarios, Known gaps). Engine: sim-core's `simulation.py` / `simulation_core.py`, merged into
-this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30a6).
+this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30a6), then
+`sf/sim-engine-qa` at 45c340d5 (sim-core's final engine with the engine QA's fixes).
 
 ## What was built
 
@@ -118,7 +119,7 @@ this branch four times (`sf/sim-core` at 117f9162, 18fdf61c, fe3bf6a5 and 42dd30
 |---|---|---|
 | `sim_setup_bracket` | 80 | PASS |
 | `sim_setup_dialogs` | 92 | PASS |
-| `sim_setup_browser` | 61 | PASS |
+| `sim_setup_browser` | 67 | PASS |
 | `sim_setup_documents` | 71 | PASS |
 | `sim_setup_kinds` | 72 | PASS |
 | `sim_setup_workspace` | 70 | PASS |
@@ -169,8 +170,11 @@ GUI smoke / journey / restart: all passed.
    size (`simulation_solve_dialog.loose_result`).
 4. Fixed by sim-core (merged at 42dd30a6): `_finish` took `signature(study)` when the solve
    ended, so a design change made while it ran looked up to date; the engine now keeps the
-   fingerprint from the start (`Job._fingerprints`). The UI's
-   `simulation_solve_dialog._keep_out_of_date` (the same idea) stays as a harmless check.
+   fingerprint from the start (`Job._fingerprints`). The UI's own copy
+   (`simulation_solve_dialog._keep_out_of_date`) is gone: the engine takes its fingerprint
+   after it finds lost picks again (`repair_picks`), and the copy taken before made such
+   results look out of date at once (found by the engine QA; `sim_setup_browser` part J: the
+   arm deleted and made again, solved, up to date).
 5. Open (cosmetic): `simulation_core.describe_free_mode` prints the rounding noise of the axis
    point ("turn about an axis along X through (5, 8.882e-16, 8.882e-16)"), which reaches the
    pre-check's sentences. DOF View cleans it (`simulation_dialogs.describe_motion`); the engine
