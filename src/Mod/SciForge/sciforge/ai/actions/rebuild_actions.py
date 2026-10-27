@@ -41,11 +41,50 @@ def reference(ctx, args):
     except rebuild.RebuildError as exc:
         raise UserError(str(exc))
     if ref is None:
+        words = no_rebuild_here(doc)
+        if words:
+            raise UserError(words)
         raise UserError(
             "This design has no rebuild going on: call start_rebuild with the body to rebuild "
             "first."
         )
     return ref
+
+
+def no_rebuild_here(doc):
+    """The refusal when this design has no rebuild going on but another open design has
+    (beta 3 QA: "call start_rebuild" made an AI start a second rebuild in the wrong design),
+    else None."""
+    elsewhere = _rebuilds_elsewhere(doc) if doc is not None else []
+    if not elsewhere:
+        return None
+    return (
+        "No rebuild is going on in this design (%s); %s: switch_design to it to carry on, or "
+        "call start_rebuild with a body of this design to rebuild it."
+        % (doc.Label, "; ".join(elsewhere))
+    )
+
+
+def _rebuilds_elsewhere(doc):
+    """Words for the rebuilds going on in the other open designs."""
+    import FreeCAD as App
+
+    rebuild = _rebuild()
+    out = []
+    for name, other in sorted(App.listDocuments().items()):
+        if other is doc:
+            continue
+        try:
+            for ref in rebuild.active_references(other):
+                target = rebuild.target_of(ref)
+                if target is not None:
+                    out.append(
+                        "the design %r has one (%s, rebuilt in %r)"
+                        % (other.Label, ref.SourceLabel, target.Label)
+                    )
+        except Exception:
+            continue
+    return out
 
 
 def _size(shape):

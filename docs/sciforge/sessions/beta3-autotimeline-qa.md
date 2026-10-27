@@ -118,6 +118,9 @@ Commits on `sf/autotimeline-qa` (oldest first):
 30. With the history marker rolled back, compare and Finish say so (they said "still empty:
     build the base shape first", and an AI would build the plan again). Check
     `rolled_back`, unit test.
+31. A rebuild going on in another open design is named when the active one has none (the
+    tools said "call start_rebuild": a second rebuild in the wrong design). Check
+    `two_designs`.
 
 `SciForgeTests/headless/rebuild_qa.py` is run by `rebuild_e2e.main()` (so by
 `run_tests.sh --only headless / base`); `SCIFORGE_REBUILD_FILTER=qa` runs only it. On the code

@@ -51,6 +51,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
   another object); now the link finds the body again by its name.
 * rolled back: with the history marker rolled back, compare and finish said the rebuild was
   still empty ("build the base shape first"): an AI would build the plan a second time.
+* two designs: a rebuild going on in another open design: the tools said "no rebuild going
+  on: call start_rebuild" (a second rebuild in the wrong design); now they name it.
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -1294,6 +1296,27 @@ def rolled_back(agent, folder):
     )
 
 
+# -- a rebuild going on in another open design ---------------------------------------------------
+def two_designs(agent, folder):
+    import FreeCAD as App
+
+    agent.call("new_design", {"name": "QaRebuildHere"})
+    doc = App.ActiveDocument
+    plate = _featureless(doc, "Plate", _plate())
+    agent.call("start_rebuild", {"body": plate.Name})
+    agent.call("new_design", {"name": "QaOtherDesign"})  # (now the active design)
+    text, error = agent.call("compare_to_reference", {})
+    agent.check(
+        "two designs: compare in another design points to the rebuild going on (it said to "
+        "start_rebuild, and an AI started a second one in the wrong design)",
+        error and "switch_design" in text and "QaRebuildHere" in text,
+        text[:300],
+    )
+    agent.call("switch_design", {"design": "QaRebuildHere"})
+    text, error = agent.call("compare_to_reference", {})
+    agent.check("two designs: after switch_design it compares", not error, text[:200])
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -1317,6 +1340,7 @@ CHECKS = (
     linked_copy,
     linked_source,
     rolled_back,
+    two_designs,
 )
 
 

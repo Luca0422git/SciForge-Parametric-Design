@@ -260,6 +260,18 @@ def _redo_note(answer, redo):
     return answer
 
 
+def _where_rebuild(why):
+    """A refusal for want of a rebuild names the open design that has one (beta 3 QA)."""
+    try:
+        if why == catalog.NEEDS.get("reference"):
+            from .actions import rebuild_actions
+
+            return rebuild_actions.no_rebuild_here(App.ActiveDocument) or why
+    except Exception:
+        pass
+    return why
+
+
 def _run(tool, args, host):
     try:
         problems = catalog.validate(tool, args)
@@ -268,7 +280,7 @@ def _run(tool, args, host):
         entry = catalog.tool(tool)
         ok, why = catalog.availability(tool, state(host))
         if not ok:
-            return bridge_core.error_result(why)
+            return bridge_core.error_result(_where_rebuild(why))
         ctx = Context(host, tool, args)
         from . import actions
         from .. import timeline_ops
