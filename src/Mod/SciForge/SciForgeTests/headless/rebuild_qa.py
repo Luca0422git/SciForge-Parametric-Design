@@ -49,6 +49,8 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * linked source: a part rebuilt in its own design while another design links it: the other
   design said the part's design was not found and kept the old shape (the rebuilt body is
   another object); now the link finds the body again by its name.
+* rolled back: with the history marker rolled back, compare and finish said the rebuild was
+  still empty ("build the base shape first"): an AI would build the plan a second time.
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -1263,6 +1265,35 @@ def linked_source(agent, folder):
     )
 
 
+# -- the history marker rolled back while a rebuild goes on ----------------------------------------
+def rolled_back(agent, folder):
+    import FreeCAD as App
+
+    from sciforge import rebuild
+
+    agent.call("new_design", {"name": "QaRolled"})
+    doc = App.ActiveDocument
+    plate = _featureless(doc, "Plate", _plate())
+    result = rebuild_through_tools(agent, plate.Name)
+    agent.call("roll_timeline", {"to": "start"})
+    text, error = agent.call("compare_to_reference", {})
+    said = "history marker is rolled back" in text and "roll_timeline" in text
+    text2, error2 = agent.call("finish_rebuild", {"even_if_different": True})
+    agent.check(
+        "rolled back: with the marker rolled back, compare and finish say so (they said the "
+        "rebuild was still empty: an AI would build the plan again)",
+        result.get("done") and error and said and error2 and "rolled back" in text2,
+        (text[:300], text2[:300]),
+    )
+    agent.call("roll_timeline", {"to": "end"})
+    text, error = agent.call("finish_rebuild", {})
+    agent.check(
+        "rolled back: with the marker at the end again, finish works",
+        not error and not rebuild.references(doc),
+        text[:300],
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -1285,6 +1316,7 @@ CHECKS = (
     bumps,
     linked_copy,
     linked_source,
+    rolled_back,
 )
 
 

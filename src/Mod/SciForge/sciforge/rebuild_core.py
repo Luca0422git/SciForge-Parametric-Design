@@ -841,6 +841,12 @@ _PERSON_WORDS = (
     ("start_rebuild", "Rebuild with Timeline (AI)..."),
     ("finish_rebuild", "Finish Rebuild"),
     ("about 1 % exact: see note.)", "about 1 % exact.)"),
+    # (beta 3 QA: the marker rolled back)
+    (
+        "(roll_timeline with to: end; in the window, drag the history marker to the end of "
+        "the timeline)",
+        "(drag the history marker to the end of the timeline)",
+    ),
 )
 
 

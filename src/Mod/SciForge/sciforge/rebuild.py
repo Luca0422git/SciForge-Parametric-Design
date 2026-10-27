@@ -626,6 +626,43 @@ DEFAULTS = {
 }
 
 
+def rolled_back_steps(target):
+    """The rebuilt body's steps that the history marker has rolled back (not computed)."""
+    from . import timeline_ops
+
+    try:
+        body = target if bodies.is_body(target) else bodies.body_of(target)
+        if body is None:
+            return []
+        tl = timeline_ops.timeline(body.Document, deps=False)
+        if tl.at_end:
+            return []
+        return [i.name for i in tl.items if i.body == body.Name and i.state == "rolled_back"]
+    except Exception as exc:
+        warn("rebuild: %s" % exc)
+        return []
+
+
+def _not_rolled_back(target, what):
+    """RebuildError when the history marker leaves steps of the rebuild out (beta 3 QA: with
+    the marker rolled back, compare and Finish said the rebuild was still empty, and an AI
+    would build the plan a second time)."""
+    rolled = rolled_back_steps(target)
+    if rolled:
+        raise RebuildError(
+            "The history marker is rolled back: %d step(s) of %s (%s) are not computed, so "
+            "the rebuild cannot be %s as it is. Move the marker to the end (roll_timeline "
+            "with to: end; in the window, drag the history marker to the end of the "
+            "timeline), then try again."
+            % (
+                len(rolled),
+                target.Label,
+                ", ".join(rolled[:4]) + (" ..." if len(rolled) > 4 else ""),
+                what,
+            )
+        )
+
+
 def _target_shape(target):
     """(body or None, its solids in design coordinates or None)."""
     import Part
@@ -655,6 +692,7 @@ def compare(ref, target=None, options=None):
                 "The rebuilt body of %s is gone (deleted?): undo that, or call start_rebuild "
                 "on %s again for a new one." % (ref.Label, ref.SourceLabel or "the original")
             )
+    _not_rolled_back(target, "compared")
     body, rebuilt = _target_shape(target)
     place = frame(body=body) if body is not None else App.Placement()
     known = _reference_facts(ref, place)  # (measured once for all the compares of a rebuild)
@@ -2128,6 +2166,7 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
             "The rebuilt body of %s is gone: there is nothing to finish (start_rebuild again)."
             % (ref.SourceLabel or ref.Label)
         )
+    _not_rolled_back(target, "finished")
     if not bodies.has_solid(target):
         raise RebuildError(
             "%s is still empty: build the part first (describe_reference gives the plan)."

@@ -103,6 +103,16 @@ class Regions(unittest.TestCase):
         self.assertIn("counterbore", found["looks_like"])
         self.assertIn("10 mm across 3 deep", found["looks_like"])
 
+    def test_a_rolled_back_marker_said_for_a_person(self):
+        said = core.person_words(
+            "The history marker is rolled back: 2 step(s) of B (Sketch1, Extrude1) are not "
+            "computed, so the rebuild cannot be compared as it is. Move the marker to the end "
+            "(roll_timeline with to: end; in the window, drag the history marker to the end of "
+            "the timeline), then try again."
+        )
+        self.assertNotIn("roll_timeline", said)
+        self.assertIn("(drag the history marker to the end of the timeline)", said)
+
     def test_a_drill_point_and_a_chamfered_rim(self):
         # (beta 3 QA: a hole with a chamfered rim was "a round hole ... with a pointed
         # (drilled) end")
