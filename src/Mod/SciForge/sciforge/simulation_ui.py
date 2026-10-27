@@ -443,7 +443,9 @@ def _close_leftover_step():
     """A design closed while a dialog of it was open leaves the dialog's undo step open in
     FreeCAD (the step's name is application-wide): the next design's changes went into a step
     of that name, and a solve waited for it forever. Once no dialog is open it is closed
-    (keeping what is in it). False while a dialog is still open (it is tried again)."""
+    (keeping what is in it). False while a dialog is still open (it is tried again).
+    (undo_leftover.py now closes such a step for every dialog as the design closes; this
+    stays as a second guard and then finds nothing open.)"""
     try:
         if Gui.Control.activeDialog():
             return False
