@@ -139,6 +139,30 @@ def _is_linked(obj):
         return False
 
 
+# (beta 3 QA) a body being rebuilt: its right-click has the rebuild's own entries instead of
+# Rebuild with Timeline (AI)... (which refused it: "the rebuild of ..."), as the 3D view's has
+REBUILD_ENTRIES = (
+    ("Compare with Reference", "SciForge_CompareReference"),
+    ("Finish Rebuild", "SciForge_FinishRebuild"),
+    ("Stop Rebuild...", "SciForge_StopRebuild"),
+)
+
+
+def _rebuilt_body(obj):
+    """Whether obj is the body a rebuild going on is made in."""
+    try:
+        from . import rebuild
+
+        ref = rebuild.reference_for(obj)
+        return (
+            ref is not None
+            and getattr(ref, "Shown", True)
+            and getattr(ref, "TargetName", "") == obj.Name
+        )
+    except Exception:
+        return False
+
+
 def _settings_rows(doc):
     """Rows under Document Settings beside Units: the design's active sheet metal rule, once
     the design uses sheet metal (a click opens Sheet Metal Rules)."""
@@ -1854,6 +1878,12 @@ class BrowserWidget(QtWidgets.QTreeWidget):
                 continue
             if entry in ("Paste", "Paste New") and not _can_paste(doc, entry == "Paste New"):
                 continue  # nothing copied (Paste New: no component copied)
+            if entry == "Rebuild with Timeline (AI)..." and obj is not None and _rebuilt_body(obj):
+                for text, command in REBUILD_ENTRIES:
+                    action = menu.addAction(text)
+                    self._handlers[action] = lambda c=command: self._run_with(obj, c)
+                added = True
+                continue
             if entry == "Break Link" and not _is_linked(obj):
                 continue  # only a component inserted from another design
             if entry == "Move to Component":
