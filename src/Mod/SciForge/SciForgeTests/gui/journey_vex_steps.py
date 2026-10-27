@@ -1693,13 +1693,102 @@ def reopen_steps():
         h.shot("7-reopened")
         hover_report()
 
-    return [
-        step(save, "j7_ctrl_s", 1500),
-        step(save_dialog, "j7_save", 3000),
-        step(saved, "j7_close", 2000),
-        step(closed, "j7_ctrl_o", 6000),
-        step(reopened, "j7_reopened", 1500),
-    ] + drive_steps("j7_drive_reopened", 30.0)
+    def edit_joint():
+        # the shaft sticks out 0.5 in on top: a quarter inch down (the joint edited)
+        h.click_empty()
+        S["before_edit"] = places()
+        S["shaft_box"] = bbox(S["shaft"])
+        S["wheel_box"] = bbox(S["wheel"])
+        joint = revolute()
+        if h.check("j7: the revolute joint", joint is not None):
+            js.browser_menu(joint.Label, "Edit Joint")
+
+    def edit_offset():
+        p = joint_panel()
+        if h.check("j7: Edit Joint opens the joint's dialog", p is not None, p):
+            text = p.offset_fields["z"].widget.text()
+            h.check("j7: its Offset Z reads -5.5 in", "-5.5" in text and "in" in text, text)
+            bs.type_value(p.offset_fields["z"].widget, "-5.75")
+
+    def edited():
+        down = 0.25 * IN
+        sb, wb = bbox(S["shaft"]), bbox(S["wheel"])
+        h.check(
+            "j7: the shaft 0.25 in lower",
+            abs(sb.ZMin - (S["shaft_box"].ZMin - down)) < EPS
+            and abs(sb.ZMax - (S["shaft_box"].ZMax - down)) < EPS,
+            (sb.ZMin / IN, S["shaft_box"].ZMin / IN),
+        )
+        h.check(
+            "j7: the wheel (rigid on the shaft) went with it",
+            abs(wb.ZMin - (S["wheel_box"].ZMin - down)) < EPS,
+            (wb.ZMin / IN, S["wheel_box"].ZMin / IN),
+        )
+        moved = sorted(moved_since(S["before_edit"]))
+        h.check("j7: nothing else moved", moved == sorted([SHAFT, WHEEL]), moved)
+        vx.ok()
+
+    def edit_undo():
+        js.no_dialog("Edit Joint OK")
+        vx.undo()
+
+    def edit_undone():
+        sb = bbox(S["shaft"])
+        h.check(
+            "j7: Undo: the shaft back at -0.272 in",
+            abs(sb.ZMin - S["shaft_box"].ZMin) < EPS,
+            sb.ZMin / IN,
+        )
+        wheel_ok("j7: Undo")
+
+    def insert_again():
+        S["labels_before"] = {c.Label for c in comps()}
+        S["dialog5"] = {}
+        insert_step([SCREW], S["dialog5"])
+
+    def still_linked():
+        from sciforge import instances
+
+        d = S.get("dialog5", {})
+        h.check("j7: the screw's file picked again", d.get("done") and not d.get("error"), d)
+        new = [c for c in comps() if c.Label not in S["labels_before"]]
+        h.check("j7: one new component", len(new) == 1, [c.Label for c in new])
+        if new:
+            h.check(
+                "j7: after the reopen the same file is still an occurrence of the first screw"
+                " (%s)" % new[0].Label,
+                instances.is_instance(new[0])
+                and instances.source_of(new[0]) is S["screw"]
+                and new[0].Label == SCREW + ":8",
+                (new[0].Label, instances.is_instance(new[0])),
+            )
+            qty = parts_list()
+            h.check("j7: the parts list counts 8 screws", qty.get(SCREW) == 8, qty)
+        h.press(QtCore.Qt.Key_Escape)
+
+    def esc_kept():
+        h.check("j7: Esc leaves the Move dialog", move_panel() is None)
+
+    return (
+        [
+            step(save, "j7_ctrl_s", 1500),
+            step(save_dialog, "j7_save", 3000),
+            step(saved, "j7_close", 2000),
+            step(closed, "j7_ctrl_o", 6000),
+            step(reopened, "j7_reopened", 1500),
+        ]
+        + drive_steps("j7_drive_reopened", 30.0)
+        + [
+            step(edit_joint, "j7_edit_joint", 2000),
+            step(edit_offset, "j7_edit_offset", 1500),
+            step(edited, "j7_edited", 1200),
+            step(edit_undo, "j7_edit_undo", 1500),
+            step(edit_undone, "j7_edit_undone"),
+            step(insert_again, "j7_insert_screw_again", 2500),
+            step(still_linked, "j7_still_linked", 1200),
+            step(esc_kept, "j7_esc"),
+        ]
+    )
 
 
 # == 8. SIMULATION on rail 1 ====================================================================
