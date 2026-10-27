@@ -1,8 +1,9 @@
 # Session log: beta 3, QA of the whole SIMULATION workspace (sim-qa)
 
 Branch `sf/sim-qa` (from the integration branch `beta3`: the engine and its accuracy QA, the
-SETUP tab, the RESULTS tab; `beta3` merged again at 48d5500b and at 00575c43 for its later
-fixes: undo_leftover, the SPOOLES retry, version 0.1.0-beta.3), 2026-10-27.
+SETUP tab, the RESULTS tab; `beta3` merged again at 48d5500b, at 00575c43 for its later
+fixes: undo_leftover, the SPOOLES retry, version 0.1.0-beta.3, and at 949ebeb9 for the VEX
+journey: Study Materials rows named "<component> / <body>", the AlMg3 aluminium), 2026-10-27.
 Rules: `docs/sciforge/dev/briefs/beta3-qa.md`, `beta3-common.md`, `common.md`; the briefs
 `beta3-sim-*.md`, the four reports (sim-core, sim-engine-qa, sim-ui, sim-results) and their
 session logs; research `fusion-simulation.md`; parity `docs/sciforge/parity/simulation.md`.
@@ -196,12 +197,34 @@ run after each doc change.
   checks 230 (205 before + my 25: free motions, bearing default, a body deleted mid-solve, the
   material read, a mesh-only design), 0 failed.
 - Re-runs after the late fixes (the fixed / changed ones and what they touch):
-  journey_sim_bracket 113, journey_sim_bracket_edit 112, sim_qa_beginner 46, sim_qa_speed 32, sim_setup_dialogs 92, sim_setup_during 30, sim_qa_results_close 26,
-  sim_setup_odd 82, simres_adaptive 37, simres_cantilever 80, simres_compare 76,
+  journey_sim_bracket 113, journey_sim_bracket_edit 112, sim_qa_beginner 46, sim_qa_speed 32,
+  sim_setup_dialogs 92, sim_setup_during 30, sim_qa_results_close 26, sim_setup_odd 82, simres_adaptive 37, simres_cantilever 80, simres_compare 76,
   simres_deformation 70, simres_inspect 94, simres_linear 31, simres_out_of_date 32,
   simres_probes_slice 84, simres_reopen 21, simres_report 61, simres_workspace 65; for
   `bodies.py`: bodies_look 58, bodies_qa 317, inspect_qa4 330, misc_materials 51: PASS.
 - Unit (`--only unit`) again at the end: 2726 tests OK (9 skipped).
+- **The final branch, everything again** after beta3 was merged at 00575c43 (abandon handed
+  back to undo_leftover at da3424ab: `.sciforge-cache/m_*`, all PASS, unit 2741 OK) and once
+  more at 949ebeb9 (the VEX journey's Study Materials rows and AlMg3; `.sciforge-cache/n_*`):
+  40 scenarios, 2478 checks, no time-out: journey_sim_bracket 113, journey_sim_bracket_edit
+  112, journey_vex_sim 224 (it uses Study Materials and the engine, which this branch changed),
+  marking_menu_command 31, ribbon_sweep 222, sim_core_job 29, sim_qa_beginner 46, sim_qa_close
+  17, sim_qa_engine 15, sim_qa_menus 34, sim_qa_picks 15, sim_qa_results_close 26,
+  sim_qa_speed 32, sim_setup_bracket 80, sim_setup_browser 67, sim_setup_canvas 29,
+  sim_setup_components 42, sim_setup_dialogs 92, sim_setup_documents 71, sim_setup_during 30,
+  sim_setup_glyphs 20, sim_setup_kinds 72, sim_setup_lost 60, sim_setup_mesh 42,
+  sim_setup_more 63, sim_setup_odd 82, sim_setup_two 52, sim_setup_units 39,
+  sim_setup_workspace 70, simres_adaptive 37, simres_cantilever 80, simres_compare 76,
+  simres_deformation 70, simres_inspect 94, simres_linear 31, simres_out_of_date 32,
+  simres_probes_slice 84, simres_reopen 21, simres_report 61, simres_workspace 65: all PASS.
+  Unit: 2743 tests OK (9 skipped). `--only sim`: the benchmarks 141 checks (beta3 brought 3)
+  and the QA's 230, 0 failed. Lint (black, flake8) clean on every Python file the branch
+  changes; `parity.py` and `make_ai_docs.py` have nothing to write. The speed run again:
+  solve 28.1 s, longest pause 3.16 s, every RESULTS tool under 1 s, the report 2.39 s.
+- No "Cannot add static property" in any of my runs. The Gui document observers
+  (`doc_epoch`, `drawing_ui._DocWatch`, `grid_ui`, `text_ui`, `sketch_mode`) have no
+  slotCreatedObject / slotChangedObject (doc_epoch leaves them out on purpose); the ones that
+  do are App observers.
 - A test-harness trap my own scenarios fell into: `harness.task_button("Close")` clicks the
   first visible "Close" in the main window, which is the solve's progress window (Job Status)
   while it shows, not the Surface Probes dialog. The journey's new checks ("Surface Probes
@@ -210,8 +233,8 @@ run after each doc change.
 
 ## Not fixed (with the evidence)
 
-- **The window's longest pause while a big part solves is about 3 s** (2.98 / 3.10 s on the
-  62 677-node plate): one main-thread turn of writing the solver's input or reading its results
+- **The window's longest pause while a big part solves is about 3 s** (2.98 to 3.28 s on
+  the 62 677-node plate, four runs): one main-thread turn of writing the solver's input or reading its results
   with FreeCAD's FEM tools; sim-core measured the same (~3-4 s on 131 000 nodes). Splitting it
   further needs FreeCAD's writer and reader in pieces.
 - **FreeCAD's PLA card gives an ultimate tensile strength (26.4 MPa) below its yield strength
