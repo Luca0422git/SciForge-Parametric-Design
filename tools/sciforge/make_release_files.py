@@ -147,12 +147,20 @@ def checksums_text(hashes):
 
 
 def patch_note(version, base_version):
-    """The few lines a patch release adds at the top of its notes (patch_release.py)."""
+    """The few lines a release without a build (patch_release.py: the base release's program
+    with the new SciForge files) adds at the top of its notes. A patch number (0.1.0-beta.2.1
+    on 0.1.0-beta.2) is "a patch release"; a new beta number (0.1.0-beta.3) says what it is
+    built on instead."""
+    if version.startswith(base_version + "."):
+        first = "**A patch release.**"
+    else:
+        first = "**Built on %s's program.**" % base_version
     return (
-        "**A patch release.** Only SciForge's own files changed since %s, so if you have %s "
+        "%s Only SciForge's own files changed since %s, so if you have %s "
         "or a later patch, **Help > Check for Updates > Update now** installs %s in a minute "
         "(a few MB, SciForge restarts by itself). The downloads below are %s's program with "
-        "%s's SciForge files in it." % (base_version, base_version, version, base_version, version)
+        "%s's SciForge files in it."
+        % (first, base_version, base_version, version, base_version, version)
     )
 
 
