@@ -2699,6 +2699,48 @@ def deleted_mid_solve(doc, out):
     out.append(("no temporary folder", not os.path.isdir(job.work), job.work))
 
 
+@engine_check("reading a body's material changes nothing")
+def material_read_untouched(doc, out):
+    """A PartDesign body made of PLA (MODIFY > Physical Material's way): the study's material
+    read (Study Materials, the pre-check, a solve) must not mark the body as changed. Reading a
+    value of the body's own material object did: the design asked to be recomputed and stayed
+    "unsaved" right after a Save (the bracket journey)."""
+    from sciforge import material
+    from sciforge import simulation as sim
+
+    body = doc.addObject("PartDesign::Body", "Bracket")
+    box = body.newObject("PartDesign::AdditiveBox", "Box")
+    box.Length, box.Width, box.Height = 100.0, 10.0, 10.0
+    doc.recompute()
+    material.assign(body, [r["key"] for r in material.available() if r["label"] == "PLA"][0])
+    doc.recompute()
+
+    def touched():
+        return [o.Label for o in doc.Objects if "Touched" in (o.State or [])]
+
+    out.append(("PLA assigned, recomputed: nothing to recompute", not touched(), touched()))
+    name, props = sim.model_material(body)
+    out.append(
+        (
+            "Same as Model reads PLA's yield 35.9 MPa",
+            sb.near(props["yield_mpa"], 35.9, 1e-6),
+            (name, props),
+        )
+    )
+    out.append(("reading it: nothing to recompute", not touched(), touched()))
+    study = sim.create_study(doc, study_bodies=[body])
+    left = sb.one_face(body, lambda f: sb.near(f.CenterOfMass.x, 0.0, 1e-9))
+    right = sb.one_face(body, lambda f: sb.near(f.CenterOfMass.x, 100.0, 1e-9))
+    sim.add_item(study, "constraint", "fixed", [(body, left)])
+    sim.add_item(
+        study, "load", "force", [(body, right)], {"direction": "vector", "vector": [0, 0, -1]}
+    )
+    sim.precheck(study)
+    out.append(("the pre-check: nothing to recompute", not touched(), touched()))
+    sim.solve(study, timeout=600)
+    out.append(("a solve: nothing to recompute", not touched(), touched()))
+
+
 def main():
     import FreeCAD as App
 

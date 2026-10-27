@@ -851,7 +851,13 @@ def _material_object(body):
     try:
         uuid = body.ShapeMaterial.UUID
         if uuid and uuid != material.FREECAD_DEFAULT_UUID:
-            return body.ShapeMaterial
+            # FreeCAD's library copy of the body's material: reading a value of the body's
+            # own (body.ShapeMaterial.getPhysicalValue) marks the body as changed, so the
+            # design asked to be recomputed and stayed "unsaved" right after a Save
+            try:
+                return material._manager().getMaterial(uuid)
+            except Exception:
+                return body.ShapeMaterial  # (a material only this file has: read below)
     except Exception:
         pass
     return material.material_of(row)
@@ -859,7 +865,24 @@ def _material_object(body):
 
 def model_material(body):
     """The body's own physical material as a card (Fusion's "Same as Model")."""
-    return card(_material_object(body))
+    was = _touched(body)
+    try:
+        return card(_material_object(body))
+    finally:
+        # (a material only this file has is read from the body's own property, which marks
+        # the body as changed: taken away again when the body had no such mark)
+        if not was and _touched(body):
+            try:
+                body.purgeTouched()
+            except Exception:
+                pass
+
+
+def _touched(obj):
+    try:
+        return "Touched" in (obj.State or [])
+    except Exception:
+        return False
 
 
 def study_material(study, body):
