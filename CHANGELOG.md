@@ -85,6 +85,8 @@ SciForge's own part.
   in, each jointed like the first.
 - **Big assemblies are much faster**: a 300-part robot opens in about 28 seconds (it took over
   two minutes), hovering a rail with 245 holes is instant, and driving a joint is live.
+- **Aluminium AlMg3 (5754)** in the materials: the alloy next to the 5052 VEX metal is made
+  of, so a stress test of a VEX part reads a realistic safety factor.
 - A page for teams: [docs/sciforge/vex.md](docs/sciforge/vex.md).
 
 ### Fixed
