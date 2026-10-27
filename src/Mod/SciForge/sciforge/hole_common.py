@@ -287,7 +287,10 @@ def end_after_undo(panel):
 
 
 def abandon(panel):
-    """The document is closing: let go of everything without touching it."""
+    """The document is closing: let go of everything without touching it. The dialog's undo
+    step stays open in FreeCAD after its document went (the step's name is application-wide:
+    the next design's changes went into it, and a solve waited for it forever): it is closed
+    once the dialog is gone (close_left_step)."""
     from .compat import QtCore
 
     try:
@@ -300,5 +303,28 @@ def abandon(panel):
         if taskui.current() is panel:
             taskui.set_current(None)
         QtCore.QTimer.singleShot(0, Gui.Control.closeDialog)
+        QtCore.QTimer.singleShot(0, close_left_step)
     except Exception:
         pass
+
+
+def close_left_step(tries=50):
+    """Close FreeCAD's open undo step (keeping what is in it) once no dialog is open: not
+    inside the closing document's own signal, and never under a dialog that is still open
+    (its Cancel must be able to undo its step). Tried again every 100 ms, at most `tries`
+    times. True when no step is left open."""
+    from .compat import QtCore
+
+    try:
+        if Gui.Control.activeDialog():
+            if tries > 0:
+                QtCore.QTimer.singleShot(100, lambda: close_left_step(tries - 1))
+            return False
+        if App.getActiveTransaction():
+            App.closeActiveTransaction(False)
+            from . import log
+
+            log("an undo step left open by a closed design's dialog was closed")
+    except Exception as exc:
+        warn("undo step: %s" % exc)
+    return True
