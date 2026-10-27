@@ -159,28 +159,30 @@ class BrowserTests(unittest.TestCase):
         self.assertEqual(core.unit_label(3), "in")
         self.assertIsNone(core.unit_label(8))
 
+    class UnitDoc:
+        """A design with only FreeCAD's unit systems (its UnitSystem enumeration)."""
+
+        def __init__(self, system):
+            self.UnitSystem = system
+
+        def getEnumerationsOfProperty(self, name):
+            return [
+                "Standard (mm, kg, s, degree)",
+                "MKS (m, kg, s, degree)",
+                "US customary (in, lb)",
+                "Imperial decimal (in, lb)",
+                "Building Euro (cm, m², m³)",
+                "Building US (ft-in, sqft, cft)",
+                "Metric small parts & CNC (mm, mm/min)",
+                "Imperial for Civil Eng (ft, ft/s)",
+                "FEM (mm, N, s)",
+                "Meter decimal (m, m², m³)",
+            ]
+
     def test_plain_number_in_design_units(self):
         """Fusion: a plain number typed in a dialog is in the design's units (beta 3 VEX QA:
         an inch design read "-1.5" as -1.5 mm)."""
-
-        class Doc:
-            def __init__(self, system):
-                self.UnitSystem = system
-
-            def getEnumerationsOfProperty(self, name):
-                return [
-                    "Standard (mm, kg, s, degree)",
-                    "MKS (m, kg, s, degree)",
-                    "US customary (in, lb)",
-                    "Imperial decimal (in, lb)",
-                    "Building Euro (cm, m², m³)",
-                    "Building US (ft-in, sqft, cft)",
-                    "Metric small parts & CNC (mm, mm/min)",
-                    "Imperial for Civil Eng (ft, ft/s)",
-                    "FEM (mm, N, s)",
-                    "Meter decimal (m, m², m³)",
-                ]
-
+        Doc = self.UnitDoc
         names = Doc("").getEnumerationsOfProperty("UnitSystem")
         self.assertEqual(core.doc_length_unit(Doc(names[0])), "mm")
         self.assertEqual(core.doc_length_unit(Doc(names[3])), "in")
@@ -191,6 +193,22 @@ class BrowserTests(unittest.TestCase):
         self.assertAlmostEqual(core.plain_length(-1.5, Doc(names[3])), -38.1)
         self.assertAlmostEqual(core.plain_length(2, Doc(names[9])), 2000.0)
         self.assertAlmostEqual(core.plain_length(20, Doc(names[0])), 20.0)
+
+    def test_length_text_in_design_units(self):
+        """A sketch's value boxes show a length in the design's units, like Fusion (beta 3
+        VEX QA: an inch design's boxes showed millimetres); mm designs as before."""
+        Doc = self.UnitDoc
+        names = Doc("").getEnumerationsOfProperty("UnitSystem")
+        inch, mm, cm = Doc(names[3]), Doc(names[0]), Doc(names[4])
+        self.assertEqual(core.length_text(25.4, inch), "1 in")
+        self.assertEqual(core.length_text(0.182 * 25.4, inch), "0.182 in")
+        self.assertEqual(core.length_text(12.5, mm), "12.5 mm")
+        self.assertEqual(core.length_text(30.0, mm), "30 mm")
+        self.assertEqual(core.length_text(-0.001, mm), "0 mm")
+        self.assertEqual(core.length_text(25.0, cm), "2.5 cm")
+        self.assertEqual(core.length_text(1000.0, Doc(names[9])), "1 m")
+        self.assertEqual(core.length_text(19.05, None), "19.05 mm")
+        self.assertEqual(core.length_text(25.4 / 3, inch, digits=6), "0.333333 in")
 
     def test_named_views_with_saved_ones(self):
         views = self.folder(self.tree(views=["Corner"]), "Named Views")

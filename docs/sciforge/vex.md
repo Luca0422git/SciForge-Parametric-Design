@@ -22,8 +22,9 @@ Fusion. (The details and the sources: `docs/sciforge/parity/vex-assembly.md`.)
 ## 2. Use inches
 
 Browser > the design's row > Document Settings > **Change Active Units** > Inch. VEX sizes are
-in inches (holes 0.182 in square, 0.5 in apart). Then a plain number typed in a dialog is in
-inches (`1.5` is 1.5 in, as in Fusion); type `20 mm` for millimetres.
+in inches (holes 0.182 in square, 0.5 in apart). Then a plain number typed in a dialog, or in
+a sketch's value boxes (a dimension, a circle's diameter, a slot's width), is in inches
+(`1.5` is 1.5 in, as in Fusion), and those boxes show inches; type `20 mm` for millimetres.
 
 ## 3. Square holes: the centre dots
 

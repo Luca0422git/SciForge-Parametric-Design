@@ -2138,7 +2138,12 @@ class DimensionEditor(theme.OwnBackground, QtWidgets.QFrame):
             q = self.sketch.getDatum(self.index)
             if self.is_angle():
                 return "%g deg" % round(q.getValueAs("deg").Value, 6)
-            return "%g mm" % round(q.getValueAs("mm").Value, 6)
+            # in the design's units, like Fusion (an inch design showed mm: beta 3 VEX QA)
+            from . import browser_core
+
+            unit = browser_core.doc_length_unit(self.sketch.Document)
+            per = browser_core.MM_PER_UNIT.get(unit, 1.0)
+            return "%g %s" % (round(q.getValueAs("mm").Value / per, 6), unit)
         except Exception:
             return ""
 
@@ -2179,7 +2184,13 @@ class DimensionEditor(theme.OwnBackground, QtWidgets.QFrame):
             raise ValueError("Not a value: %s" % text)
         angle = self.is_angle()
         if q.Unit == App.Units.Quantity(1.0).Unit:  # a bare number (or 10+5*2)
-            q = App.Units.Quantity("%r deg" % q.Value if angle else "%r mm" % q.Value)
+            if angle:
+                q = App.Units.Quantity("%r deg" % q.Value)
+            else:  # in the design's units, like Fusion ("2" in an inch design is 2 in)
+                from . import browser_core
+
+                mm = browser_core.plain_length(q.Value, self.sketch.Document)
+                q = App.Units.Quantity("%r mm" % mm)
         wanted = App.Units.Quantity("1 deg" if angle else "1 mm").Unit
         if q.Unit != wanted:
             raise ValueError(

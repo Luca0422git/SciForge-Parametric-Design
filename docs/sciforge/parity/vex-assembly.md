@@ -148,4 +148,3 @@ published numbers (G).
 | A hole whose outline is split between two faces (a face split through a row of holes) | not offered: a hole centre is the centre of a closed inner outline of one flat face (QA beta 3; VEX's channels have their holes inside one face) |
 | Hole centres on flat faces a STEP file stores as B-spline surfaces (some exporters) | not offered (no hole centres, no edge middles): the index takes planes only (QA beta 3) |
 | Duplicate With Joints of an assembly picked as a whole (a motor) whose joint is on one of its nested components (the motor's case) | refused (the joint is not the picked component's); pick the nested component, or insert the motor again and joint it |
-| A plain number typed while sketching in a design in inches | the sketch's own value boxes show and read millimetres (sketch_draw); the dialogs' boxes read the design's units (QA beta 3) |

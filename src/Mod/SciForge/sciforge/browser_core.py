@@ -92,6 +92,24 @@ def plain_length(number, doc):
     return float(number) * MM_PER_UNIT.get(doc_length_unit(doc), 1.0)
 
 
+# the decimals a sketch's value box shows a length with, in each of Fusion's units
+LENGTH_DIGITS = {"mm": 2, "cm": 3, "m": 4, "in": 3, "ft": 4}
+
+
+def length_text(mm, doc, digits=None):
+    """A length (mm) as a value box of the design shows it: in the design's units ("25.4 mm",
+    "1 in", "0.182 in"), the trailing zeros dropped. Fusion's sketch boxes show the design's
+    units; SciForge's showed millimetres in an inch design (beta 3 VEX QA)."""
+    unit = doc_length_unit(doc)
+    places = LENGTH_DIGITS.get(unit, 2) if digits is None else digits
+    text = ("%." + str(places) + "f") % (float(mm) / MM_PER_UNIT.get(unit, 1.0))
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    if text in ("-0", ""):
+        text = "0"
+    return "%s %s" % (text, unit)
+
+
 # The icon of each kind of analysis in the Analysis folder (Section is the default).
 ANALYSIS_ICONS = {
     "CenterOfMassAnalysis": "center_of_mass",
