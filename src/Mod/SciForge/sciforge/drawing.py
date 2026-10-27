@@ -2050,12 +2050,32 @@ def _sight_line(view, local_point):
 
 def _sight_hit(view, bodies, local_point, tolerance=0.05):
     """(body, depth) of the body nearest to the viewer that the sight line through a view
-    point touches (depth: how far towards the viewer), or None."""
+    point touches (depth: how far towards the viewer), or None.
+
+    The line is in design coordinates (as the view shows the parts); a body's Shape is where
+    it sits inside its component, so the line is taken into each body's component first (a
+    design of inserted parts has every component moved: the VEX journey's balloons found no
+    part and walked every edge of the view for minutes). A body whose box the line misses
+    is passed over without measuring."""
+    import Part
+
     line, d = _sight_line(view, local_point)
+    ends = [line.Vertexes[0].Point, line.Vertexes[-1].Point]
     best = None
     for body in bodies:
         try:
-            dist, pairs, _info = body.Shape.distToShape(line)
+            shape = body.Shape
+            place = _parent_placement(body)
+            a, b = ends
+            if place is not None:
+                back = place.inverse()
+                a, b = back.multVec(a), back.multVec(b)
+            box = shape.BoundBox
+            box.enlarge(tolerance)
+            if not _segment_meets_box(a, b, box):
+                continue
+            test = Part.makeLine(a, b)
+            dist, pairs, _info = shape.distToShape(test)
         except Exception:
             continue
         if dist > tolerance or not pairs:
@@ -2063,13 +2083,50 @@ def _sight_hit(view, bodies, local_point, tolerance=0.05):
         points = [p for p, _q in pairs]
         try:
             # (where the line runs along a face, distToShape gives any one point of it)
-            points += [v.Point for v in body.Shape.section(line).Vertexes]
+            points += [v.Point for v in shape.section(test).Vertexes]
         except Exception:
             pass
+        if place is not None:
+            points = [place.multVec(p) for p in points]
         depth = max(core.v_dot((p.x, p.y, p.z), d) for p in points)
         if best is None or depth > best[1] + 1e-6:
             best = (body, depth)
     return best
+
+
+def _parent_placement(obj):
+    """The design placement of the component a body sits in (None: at the design's root or
+    not moved)."""
+    try:
+        parent = obj.getParentGeoFeatureGroup()
+        place = parent.getGlobalPlacement() if parent is not None else None
+    except Exception:
+        return None
+    if place is None or place.isIdentity():
+        return None
+    return place
+
+
+def _segment_meets_box(a, b, box):
+    """Whether the segment a-b passes through the box (the slab test)."""
+    t0, t1 = 0.0, 1.0
+    for p, q, lo, hi in (
+        (a.x, b.x, box.XMin, box.XMax),
+        (a.y, b.y, box.YMin, box.YMax),
+        (a.z, b.z, box.ZMin, box.ZMax),
+    ):
+        step = q - p
+        if abs(step) < 1e-15:
+            if p < lo or p > hi:
+                return False
+            continue
+        u0, u1 = (lo - p) / step, (hi - p) / step
+        if u0 > u1:
+            u0, u1 = u1, u0
+        t0, t1 = max(t0, u0), min(t1, u1)
+        if t0 > t1:
+            return False
+    return True
 
 
 def component_at(view, local_point, sources=None):

@@ -212,7 +212,74 @@ def check_align_after_a_captured_position():
         _close(doc)
 
 
-CHECKS = [check_align_is_not_a_pending_move, check_align_after_a_captured_position]
+# -- a drawing's balloons on parts inside moved components ---------------------------------------
+def check_balloons_on_moved_components():
+    """Before: the balloons of a parts list looked for each part along sight lines in design
+    coordinates but tested the bodies where they sit inside their components: in a design of
+    inserted parts (every component moved: the VEX robot) no line ever hit, so each row walked
+    every visible edge of the view (TABLES > Table took over 10 minutes on the 22-part VEX
+    piece, the window frozen) and the balloons pointed at the wrong part or nowhere."""
+    import time
+
+    from sciforge import drawing
+
+    files = _files(["c_channel_1x2x1x5", "keps_nut"])
+    doc = App.newDocument("JourneyVexBalloons")
+    try:
+        a = _insert(doc, files["c_channel_1x2x1x5"], App.Placement(V(40, 30, 0), App.Rotation()))
+        b = _insert(doc, files["keps_nut"], App.Placement(V(150, 30, 0), App.Rotation()))
+        ba, bb = _body(doc, a), _body(doc, b)
+        page = drawing.create_drawing(doc, [ba, bb])
+        view = drawing.add_base_view(page, [ba, bb], 150.0, 150.0, "Top", scale=1.0)
+        doc.recompute()
+        # a point of the view on the nut (its washer, 4 mm right of its axis) and on the channel
+        from sciforge import drawing_core as core
+
+        axes = drawing.axes_of(view)
+        centre = drawing.centre_of(view)
+
+        def local_of(p):
+            d = (p.x - centre[0], p.y - centre[1], p.z - centre[2])
+            return (core.v_dot(d, axes[0]), core.v_dot(d, axes[1]))
+
+        on_nut = local_of(V(150 + 4.0, 30, 0))
+        on_channel = local_of(V(40 + 30.0, 30 + 6.35 + 3.6, 1.0))
+        found = drawing.component_at(view, on_nut)
+        _out(
+            "balloons: a point of the view on the nut (in a moved component) is the nut's",
+            found is bb,
+            found and found.Label,
+        )
+        found = drawing.component_at(view, on_channel)
+        _out(
+            "balloons: a point on the channel's web is the channel's",
+            found is ba,
+            found and found.Label,
+        )
+        t0 = time.time()
+        table, made = drawing.add_parts_list(page, view, (300.0, 120.0))
+        seconds = time.time() - t0
+        _out("balloons: a balloon per row", len(made) == 2, len(made))
+        _out("balloons: the parts list and its balloons in under 5 s", seconds < 5.0, seconds)
+        owners = []
+        for balloon in made:
+            origin, _spot = drawing.balloon_page_points(balloon)
+            body = drawing.component_at(view, drawing.page_to_local(view, origin))
+            owners.append(body.Label if body is not None else None)
+        _out(
+            "balloons: each balloon's arrow on its own part",
+            sorted(owners) == sorted([ba.Label, bb.Label]) and len(set(owners)) == 2,
+            owners,
+        )
+    finally:
+        _close(doc)
+
+
+CHECKS = [
+    check_align_is_not_a_pending_move,
+    check_align_after_a_captured_position,
+    check_balloons_on_moved_components,
+]
 
 
 def main():
