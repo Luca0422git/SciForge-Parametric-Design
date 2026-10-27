@@ -10,7 +10,9 @@ A  A solved beam, RESULTS, Surface Probes, the mouse over the result (the value 
    shows), the design closed with the dialog open: no crash, the dialog ended, no results
    left, no error.
 B  A second beam, Point Probes, the mouse over the result, its design closed: the same.
-C  A third design opens and solves after it (SciForge still works).
+C  A third beam, Slice Plane open (its drag arrow on the view), its design closed: the same.
+D  A fourth beam, Animate playing, its design closed: no crash, no results left.
+E  A fifth design opens and solves after it (SciForge still works).
 """
 
 import FreeCAD as App
@@ -75,9 +77,33 @@ def closed(tag):
     return check
 
 
-def c_solved():
+def d_animate():
+    h.check("D: results shown", s.session() is not None)
+    s.big("Animate")
+
+
+d_animate.wait_ms = 1500
+
+
+def d_close():
+    from sciforge import simulation_results_ui as ui
+
+    h.check("D: Animate plays", ui.animation_on())
+    state["D"] = App.ActiveDocument.Name
+    App.closeDocument(state["D"])
+
+
+def d_closed():
+    h.check("D: the design closed (no crash)", state["D"] not in App.listDocuments())
+    h.check("D: no results left", s.session() is None)
+
+
+d_closed.wait_ms = 800
+
+
+def e_solved():
     stats = s.stats("displacement")
-    h.check("C a new design solves after it", stats.get("max", 0) > 0, stats)
+    h.check("E a new design solves after it", stats.get("max", 0) > 0, stats)
 
 
 h.run(
@@ -98,6 +124,18 @@ h.run(
         close("B"),
         closed("B"),
         s.new_solved_beam("SimQAClosedC"),
-        c_solved,
+        enter,
+        results,
+        tool("Slice Plane"),
+        close("C"),
+        closed("C"),
+        s.new_solved_beam("SimQAClosedD"),
+        enter,
+        results,
+        d_animate,
+        d_close,
+        d_closed,
+        s.new_solved_beam("SimQAClosedE"),
+        e_solved,
     ],
 )
