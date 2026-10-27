@@ -125,6 +125,11 @@
   3D-printer parts) were swept too: 27 solids, 18 rebuilt exactly, no crash after the fix
   above. The Y rod mount's root fillets (r 3.997) were made before the opening in its plate cut
   them short: the plan rounds edges last, OpenCASCADE refuses the fillet there (a Known gap).
+- OpenCASCADE's defeaturing can answer a solid with a hole still open: for two bores of the CAM
+  hole puzzle, countersunk at both ends, the volume grew by 110 mm3 for 9150 mm3 of bores, which
+  the volume check (an upper bound only) accepted; the base still had the bores, read as turned
+  cuts, and the plan cut them twice (a revolve cut, then a hole). A hole taken off must now fill
+  at least half its bore; else it stays in the base, where the turned cut makes both ends.
 - The QA builder found that `Face.cutHoles` answers None (it changes the face in place):
   `_drop_holes` took the answer, so every face that keeps another loop failed and its holes
   went to defeaturing; I took their fix and fixed the same mistake in `_fill_copies`.
@@ -140,14 +145,15 @@
   tools 284 calls 0 failed (117 tools), documentation examples 141 items 0 failed, AI agent end
   to end (MCP) 81 checks 0 failed, **recognition benchmark 67 parts 0 failed**, GUI smoke 79
   checks, journey 25, restarts 8 + 9. (A run started just before was killed by the restart.)
-- After the last change (turned parts about an offset axis line, 38089c8c): the recognition
-  benchmark again, 69 parts, 0 failed (the torus and the dome added), and the sweeps below.
+- After the last changes (turned parts about an offset axis line, turned bosses and cuts, a
+  hole taken off must fill its bore; 260f24bf): the recognition benchmark again, 71 parts, 0
+  failed (a torus, a dome, a domed block and a torus groove added), and the sweeps below.
 - Earlier, `--only base` at 21:59-22:11 UTC (the code of e59e4f28): the same stages all passed
   but the unit stage, whose two AI-docs contract tests failed on a stale generated copy of the
   parity doc (`docs/ai/user/parity/auto-timeline.md`): after every edit of the parity doc,
   `tools/sciforge/make_ai_docs.py` must be run (then `--only unit` passed: 2519 tests).
 - `SciForgeTests/unit/test_recognize_core.py`: 56 tests, OK (5 new: where a base extrude may end).
-- Recognition benchmark (`--only recognize`): 54 parts built from golden steps or my own (the
+- Recognition benchmark (`--only recognize`): 56 parts built from golden steps or my own (the
   VEX-like channel, plate and angle, a keyed shaft, a pipe with a port, a clevis, opposed blind
   holes, a shaft collar, chamfered round edges, a link rod, the 300-face plate...), sent through
   STEP and back, described, rebuilt by the headless AI executor: every one within 0.1 % volume
@@ -156,8 +162,9 @@
   the contract on odd input, with the BREP part that crashed FreeCAD answered in under 30 s.
   Table: the parity doc's Benchmark section.
 - Scratch sweeps (not in the suite), with the final code: 601 golden models tried, the 505 that
-  build one solid described, 408 rebuilt exactly (391 earlier in the session), 422 with
+  build one solid described, 410 rebuilt exactly (391 earlier in the session), 424 with
   a base read, 0 crashes, no regression between runs; 71 solids of 36 real files: 23 exact
   (19 before the rods with an eye), 12 exact with faces split in the file, 4 within 1e-7 of the
-  volume, 1 step stopped (a fillet selector), 31 base not read (said so); 27 BREP solids: 18
-  exact, no crash.
+  volume, 2 within 1e-5 with some faces different (CAM plates, bores countersunk at both ends),
+  1 step stopped (a fillet selector), 29 base not read (said so); 27 BREP solids: 18 exact, no
+  crash, the slowest 9.3 s.
