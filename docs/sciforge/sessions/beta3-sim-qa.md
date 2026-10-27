@@ -101,6 +101,20 @@ constraint and load, not out of date, RESULTS with the same numbers from the sam
    a material outside SciForge's list (PVC from a FreeCAD file): every mass shown left the
    design needing a recompute. Read from FreeCAD's library copy; the engine check above covers
    a PVC body. `bodies_look`, `misc_materials`, `bodies_qa`, `inspect_qa4` run again.
+13. **SciForge crashed when a design was closed with Surface / Point Probes open**
+   (e86782e1): closing the design destroys its 3D view, Qt then sends the view's widget a
+   "mouse left" event, and the probes' hover redrew its tags at once, asking the dying view
+   where each tag is: a segmentation fault (every open design lost). Found because the
+   journey's FreeCAD crashed at its very end (all checks passed, the process exit failed);
+   Python's `faulthandler` in a copy of the scenario named the chain (`_LeaveWatch` ->
+   `_Hover.left` -> `set_hover` -> `TagLayer.relayout` -> `getPointOnViewport`), and a small
+   scenario made it plain (a solved beam, Surface Probes, the mouse over the result, the design
+   closed: crash, every time). The hover now clears a moment later and only while its results
+   show in a live view; results that go with their design stop the hover and end their dialog
+   a moment later (it stayed open on the closed design). Scenario `sim_qa_results_close`.
+14. **My own regression, caught by `sim_setup_during`** (552f4e75): after fix 6 the Solve
+   dialog's cancel of a job whose body was deleted became "failed" with a "simulation failed"
+   line in the Report view; the engine now leaves a job someone cancelled alone.
 
 ## What else I tried as a beginner would (scenarios `sim_qa_*.py`)
 
@@ -159,3 +173,6 @@ constraint and load, not out of date, RESULTS with the same numbers from the sam
   hole_thread_inside 36, and inspect_qa 557 (Measure uses `abandon`): PASS.
 - Unit (`--only unit`): 2726 tests, 2 failed: the AI docs mirror of the simulation parity doc
   was out of date (regenerated, c1afc04b); `test_ai_docs_contract` and `test_parity` OK since.
+- `--only sim`: the builder's benchmarks 138 checks and the QA's hand calculations and engine
+  checks 230 (205 before + my 25: free motions, bearing default, a body deleted mid-solve, the
+  material read, a mesh-only design), 0 failed.
