@@ -2861,7 +2861,9 @@ class Job:
         """Advance as far as possible without waiting. Returns the state."""
         if self.state != "running":
             return self.state
-        if self._gone_text is None:
+        if self._gone_text is None and not self._cancel:
+            # (a caller that cancelled first, as the Solve dialog does on seeing the body
+            # gone, gets its "cancelled")
             self._gone_text = self._gone()
             if self._gone_text:
                 self.cancel()
