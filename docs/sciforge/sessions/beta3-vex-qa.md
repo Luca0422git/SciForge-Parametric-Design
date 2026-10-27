@@ -175,7 +175,11 @@ insert or delete components ran again (all pass), and the base suites
 folder; `test_vex_qa_freecad` ran its 14 checks), golden models 614 pass + 2 known expected
 failures, headless AI tools 284 calls 0 failed, documentation examples 141 items 0 failed, AI
 agent end to end 81 checks 0 failed, GUI smoke 79 checks, journey 25, restart 17. After the
-sketch boxes' fix (fix 10): unit tests (plain Python) 2500 OK and the sketch scenarios above.
+sketch boxes' fix (fix 10), on the branch's last code: the sketch scenarios above, and the
+base suites once more, all pass: unit tests 2500 OK (9 skipped; `test_vex_qa_freecad` ran
+its 14 checks), golden models 614 + 2 known expected failures, headless AI tools 284 calls
+0 failed, documentation examples 141 items 0 failed, AI agent end to end 81 checks 0
+failed, GUI smoke 79, journey 25, restart 17.
 
 `components2_marker` failed once (the first run, cut short by the container restart, under
 load: "Lid 6000 0.0", the builder's report) and passed in the full run: flaky, not from the
