@@ -3,7 +3,8 @@
 Independent QA of builder vex's work (`sf/vex`, brief `docs/sciforge/dev/briefs/beta3-vex.md`,
 rules `docs/sciforge/dev/briefs/beta3-qa.md`; spec `docs/sciforge/parity/vex-assembly.md`, the
 team page `docs/sciforge/vex.md`). The branch already holds develop's patch 0.1.0-beta.2.2.
-The container restarted at about 23:26 UTC (the first browser batch was cut off and run again).
+The container restarted at about 23:26, 00:31 and 01:15 UTC; every run it cut off (no final
+summary line) was run again.
 
 ## What was tried
 
@@ -20,12 +21,14 @@ The container restarted at about 23:26 UTC (the first browser batch was cut off 
   TWO channels (one jointed face to face onto the other, 1 in apart) on a revolute, driven 45
   degrees, saved, reopened, driven again (`vex_qa_shaft2`); Align of a channel onto a channel,
   hole onto hole, both ways round (from the dots next to the holes, and from a hole's edge),
-  with Undo / Redo (`vex_qa_align`); a design in inches (`vex_qa_inch`).
+  with Undo / Redo (`vex_qa_align`); a design in inches (`vex_qa_inch`), sketching in it
+  (`vex_qa_inch_sketch`).
 - **Occurrences and inserting** (`vex_qa_occ` and headless checks): ten files, then twenty in
   one Insert STEP (ten of them again: occurrences), Undo / Redo of the twenty (all back with
   their solids, where they were, still linked); a file changed on disk; the first occurrence
-  deleted (the others stay, frozen) with Undo / Redo and save / reopen; the parts list's Qty;
-  Duplicate With Joints with limits, with a Rigid Group, from a sub-assembly.
+  deleted (the next one takes over) with Undo / Redo, save / reopen and the same file
+  inserted again; the parts list's Qty; Duplicate With Joints with limits, with a Rigid
+  Group, from a sub-assembly.
 - **The browser after the speed changes**: read `browser_ui.py`'s diff against every use of a
   row's node (eyes, Show / Hide from menus, rename, drag-organize, activate, Isolate, Opacity
   Control, the hover ghost, selection sync, folders, undo / redo); nothing else needs a row's
@@ -49,7 +52,8 @@ The container restarted at about 23:26 UTC (the first browser batch was cut off 
    then once more: the occurrence was numbered 2 again (clashing with the surviving
    "screw:2"), and FreeCAD renamed it "screw:001", which reads as the first occurrence. The
    numbers taken now include every component still named "<part>:<n>" ("screw:4"). Test:
-   headless `occurrence_names_after_delete`.
+   headless `occurrence_names_after_delete` (since fix 9 it makes that state the way a
+   design saved before fix 9 has it: frozen occurrences, their original gone).
 4. **The same STEP file with a new date was a new part** (ac2266ca): a file is recognised by
    its path, size and a digest of its bytes instead of its date, so a teammate's copy of the
    parts folder, a git checkout or a fresh download over the old file still gives an
@@ -78,6 +82,33 @@ The container restarted at about 23:26 UTC (the first browser batch was cut off 
    "real_motor" 1 (the occurrence holds its copies flat and counted itself as one part). A copy
    now counts as the nested component of the original it repeats: Case 2, Cartridge 2, Cap 2.
    Test: headless `parts_list_assembly_twice`.
+9. **Deleting the first occurrence froze the others** (03c305c3): Fusion keeps a component
+   while one of its occurrences remains; SciForge left the others frozen: they no longer
+   followed an edit, a copy or Duplicate With Joints of them was refused ("its original
+   was deleted"), and the same file inserted again came in as a new part. Deleting an
+   original (or a component around it) now hands over to its first occurrence that stays
+   (`instances.hand_over`, from `components.remove`): it takes the original's name and
+   file, its bodies keep the solids they showed (a frozen base, the model of
+   `direct.py`), the other occurrences repeat it, it is a timeline step; one undo step.
+   SciForge's own clean-ups (a pattern's copies, a cancelled copy) still only delete.
+   Tests (all failed on the old code): headless `occurrence_takes_over` (copy again, the
+   same file again, Ctrl+Z / Ctrl+Y, save and reopen), `takes_over_jointed_and_edited`
+   (its joint still holds it; a feature added to it shows in the other occurrence),
+   `takes_over_nested` (an original inside a deleted frame), `takes_over_fresh_copy` (the
+   original deleted right after a copy, before a recompute: the copy kept its solid);
+   scenario `vex_qa_occ` O4 - O6 through the browser's right-click > Delete.
+10. **Sketching in an inch design read and showed millimetres** (9d0b2518): fix 6 covered
+    the dialogs; in a sketch, the dimension box (Sketch Dimension, a double-clicked
+    dimension) and the value boxes of SciForge's own sketch tools (2-Point Circle,
+    Midpoint Line, 3-Point Rectangle, the tangent circles and arc, Edge Polygon, slots,
+    sketch Fillet and Chamfer) still showed millimetres and read a plain number as mm: a
+    circle typed 1 was 1 mm wide, a dimension typed 1.5 was 1.5 mm. They now show the
+    design's units and read a plain number in them, like Fusion ("20 mm" typed with its
+    unit stays 20 mm); millimetre designs exactly as before. FreeCAD's own line,
+    rectangle and circle fields already did (checked: a line typed 2 is 2 in). Tests:
+    scenario `vex_qa_inch_sketch` (failed on the old code: the box showed "D 29.96 mm",
+    typed 1 gave a circle 1 mm wide, the dimension's box showed "20 mm"), unit test
+    `test_length_text_in_design_units`.
 
 My own slip: a first test script set FreeCAD's STEP export unit to inch in the shared FreeCAD
 profile (`/root/.config/FreeCAD`) for about two minutes (23:07 - 23:09 UTC) before I reset it;
@@ -117,9 +148,10 @@ of each step is the same in both (profiles compared). Nothing got slower in SciF
 
 ## Scenarios and suites (all with real FreeCAD 1.1.4)
 
-New: `vex_qa_real` 74 checks, `vex_qa_shaft2` 68, `vex_qa_align` 99, `vex_qa_occ` 38,
-`vex_qa_inch` 21 (all pass; `vex_qa_inch` and `vex_qa_real` failed on the old code). Headless
-`SciForgeTests/headless/vex_qa_check.py` (10 checks, run by the unit test
+New: `vex_qa_real` 74 checks, `vex_qa_shaft2` 68, `vex_qa_align` 99, `vex_qa_occ` 43,
+`vex_qa_inch` 21, `vex_qa_inch_sketch` 21 (all pass; `vex_qa_real`, `vex_qa_inch`,
+`vex_qa_inch_sketch` and `vex_qa_occ`'s O4 - O6 failed on the old code). Headless
+`SciForgeTests/headless/vex_qa_check.py` (14 checks, run by the unit test
 `test_vex_qa_freecad`): all pass.
 
 Run after the last code change of each area, all pass: VEX `vex_align` 145, `vex_duplicate` 52,
@@ -127,13 +159,23 @@ Run after the last code change of each area, all pass: VEX `vex_align` 145, `vex
 components `browser_ghost` 33, `browser_opacity_hover` 46, `components2_bodies` 302,
 `components2_copy` 278, `components2_marker` 209, `components2_move` 345,
 `components2_pattern` 278, `components_basic` 252, `components_extrude` 171,
-`components_move` 219, `timeline_browser` 92, `timeline_browser_2` 134, `timeline_browser_qa`
-222, `timeline_browser_qa2` 245, `timeline_browser_qa3` 240, `timeline_browser_qa4` 280;
-shared files `data_panel_fusion` 60, `drawing_assembly` 62, `exchange2_step_insert` 76,
-`insert_step` 31, `fillet` 67, `joints2_modes` 71, `joints_asbuilt_group` 135, `joints_basic`
-86, `joints_delete` 143, `joints_limits_drag` 48, `joints_types` 230, `modify_align` 232,
-`modify_align_points` 224; speed `perf_big_model` 33 (four runs). Unit tests (plain Python):
-2499 OK.
+`components_move` 219, `joints_components` 47, `timeline_browser` 92, `timeline_browser_2`
+134, `timeline_browser_qa` 222, `timeline_browser_qa2` 245, `timeline_browser_qa3` 240,
+`timeline_browser_qa4` 280; shared files `data_panel_fusion` 60, `drawing_assembly` 62,
+`exchange2_step_insert` 76, `insert_step` 31, `fillet` 67, `extrude_presspull_qa5` 86,
+`primitives_box` 78, `joints2_modes` 71, `joints_asbuilt_group` 135, `joints_basic` 86,
+`joints_delete` 143, `joints_limits_drag` 48, `joints_types` 230, `modify_align` 232,
+`modify_align_points` 224; sketch `sketch2_fillet` 165, `sketch_dim_box_closes` 35, `sketch_draw`
+134, `sketch_explain_box` 37, `sketch_qa` 460, `sketch_qa_keys` 119, `sketch_tools_circles`
+120, `sketch_tools_draw` 151, `sketch_tools_slots` 97; speed `perf_big_model` 33 (four runs).
+
+After the occurrence hand-over (fix 9) the components and VEX scenarios above that copy,
+insert or delete components ran again (all pass), and the base suites
+(`run_tests.sh --only base`): unit tests 2499 OK (9 skipped: Windows-only and a read-only
+folder; `test_vex_qa_freecad` ran its 14 checks), golden models 614 pass + 2 known expected
+failures, headless AI tools 284 calls 0 failed, documentation examples 141 items 0 failed, AI
+agent end to end 81 checks 0 failed, GUI smoke 79 checks, journey 25, restart 17. After the
+sketch boxes' fix (fix 10): unit tests (plain Python) 2500 OK and the sketch scenarios above.
 
 `components2_marker` failed once (the first run, cut short by the container restart, under
 load: "Lid 6000 0.0", the builder's report) and passed in the full run: flaky, not from the
@@ -141,15 +183,13 @@ VEX work (the builder saw it fail on the beta 3 scaffold too).
 
 ## Gaps (not fixed; in `parity/vex-assembly.md`, Known gaps)
 
-- Deleting the first occurrence leaves the others frozen (components.md's gap): they keep
-  their solids, joints and place, the parts list counts them, but they no longer follow an edit
-  and cannot be copied or duplicated; the same file inserted again is a part of its own.
-  Promoting the next occurrence to the original would close it (not done: it touches
-  components.remove, undo and the timeline; too risky for the time left).
+- Deleting the first occurrence: the one that takes over holds the solids, not the
+  original's features (Fusion keeps the features in the component): a part designed
+  here loses its timeline steps (an inserted STEP part has none); a decal on the
+  original, a pattern's copies of it and an Insert Into Design link do not carry over.
 - A hole whose outline is split between two faces gets no centre; flat faces that a STEP file
   stores as B-spline surfaces give no hole centres (VEX's files have neither, as far as known).
 - Duplicate With Joints of an assembly picked as a whole whose joint is on a nested
   component is refused (occurrences of assemblies are flat).
-- Sketching in an inch design: the sketch's own value boxes still show and read mm.
 - The browser's timer read is paced on big designs (`POLL_PAUSE`): after Ctrl+Z on the robot
   the rows follow 1 - 4 s later (a deliberate trade-off of the builder for driving joints).
