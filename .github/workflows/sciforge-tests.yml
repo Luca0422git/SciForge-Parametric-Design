@@ -23,11 +23,12 @@ env:
   FREECAD_VERSION: "1.1.4"
 
 jobs:
-  # The tests run side by side on 7 machines (one machine took about 2 hours): "base" runs
-  # the unit tests, golden models, smoke test and journey; "1/6".."6/6" each run a sixth
+  # The tests run side by side on 10 machines (one machine took about 2 hours): "base" runs
+  # the unit tests, golden models, smoke test and journey; "1/9".."9/9" each run a ninth
   # of the GUI scenarios (tools/sciforge/run_tests.sh --shard). Four parts of 481 scenarios
   # took 83-91 minutes (one hit the 90-minute limit, run #258); the merge of experimental
-  # (0.1.0-beta.2) made 519.
+  # (0.1.0-beta.2) made 519, six parts of 560 took over 80 minutes (beta 3: the simulation
+  # scenarios solve), so nine parts.
   tests:
     name: tests (${{ matrix.part }})
     runs-on: ubuntu-24.04
@@ -39,24 +40,33 @@ jobs:
           - part: base
             args: --only base
             id: base
-          - part: scenarios 1/6
-            args: --only scenarios --shard 1/6
+          - part: scenarios 1/9
+            args: --only scenarios --shard 1/9
             id: scenarios-1
-          - part: scenarios 2/6
-            args: --only scenarios --shard 2/6
+          - part: scenarios 2/9
+            args: --only scenarios --shard 2/9
             id: scenarios-2
-          - part: scenarios 3/6
-            args: --only scenarios --shard 3/6
+          - part: scenarios 3/9
+            args: --only scenarios --shard 3/9
             id: scenarios-3
-          - part: scenarios 4/6
-            args: --only scenarios --shard 4/6
+          - part: scenarios 4/9
+            args: --only scenarios --shard 4/9
             id: scenarios-4
-          - part: scenarios 5/6
-            args: --only scenarios --shard 5/6
+          - part: scenarios 5/9
+            args: --only scenarios --shard 5/9
             id: scenarios-5
-          - part: scenarios 6/6
-            args: --only scenarios --shard 6/6
+          - part: scenarios 6/9
+            args: --only scenarios --shard 6/9
             id: scenarios-6
+          - part: scenarios 7/9
+            args: --only scenarios --shard 7/9
+            id: scenarios-7
+          - part: scenarios 8/9
+            args: --only scenarios --shard 8/9
+            id: scenarios-8
+          - part: scenarios 9/9
+            args: --only scenarios --shard 9/9
+            id: scenarios-9
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
