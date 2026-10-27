@@ -14,12 +14,17 @@ Fusion. (The details and the sources: `docs/sciforge/parity/vex-assembly.md`.)
   right-click > **Insert into Current Design**, or drag a card into the 3D view.
 - Inserting the **same file again** gives another copy of the same part ("screw:2",
   "screw:3"...), linked to the first (a change to the part shows in every copy); the file
-  is not read again, and a drawing's parts list counts them in one row (Qty).
+  is not read again, and a drawing's parts list counts them in one row (Qty). A copy of the
+  same file (a teammate's parts folder, a fresh download) counts as the same file; a file
+  whose content changed comes in as a new part. Deleting the first one is fine: the next
+  copy takes over as the part (it takes the name "screw"), and the others stay linked to it.
 
 ## 2. Use inches
 
 Browser > the design's row > Document Settings > **Change Active Units** > Inch. VEX sizes are
-in inches (holes 0.182 in square, 0.5 in apart).
+in inches (holes 0.182 in square, 0.5 in apart). Then a plain number typed in a dialog, or in
+a sketch's value boxes (a dimension, a circle's diameter, a slot's width), is in inches
+(`1.5` is 1.5 in, as in Fusion), and those boxes show inches; type `20 mm` for millimetres.
 
 ## 3. Square holes: the centre dots
 

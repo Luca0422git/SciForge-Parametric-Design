@@ -41,11 +41,50 @@ def reference(ctx, args):
     except rebuild.RebuildError as exc:
         raise UserError(str(exc))
     if ref is None:
+        words = no_rebuild_here(doc)
+        if words:
+            raise UserError(words)
         raise UserError(
             "This design has no rebuild going on: call start_rebuild with the body to rebuild "
             "first."
         )
     return ref
+
+
+def no_rebuild_here(doc):
+    """The refusal when this design has no rebuild going on but another open design has
+    (beta 3 QA: "call start_rebuild" made an AI start a second rebuild in the wrong design),
+    else None."""
+    elsewhere = _rebuilds_elsewhere(doc) if doc is not None else []
+    if not elsewhere:
+        return None
+    return (
+        "No rebuild is going on in this design (%s); %s: switch_design to it to carry on, or "
+        "call start_rebuild with a body of this design to rebuild it."
+        % (doc.Label, "; ".join(elsewhere))
+    )
+
+
+def _rebuilds_elsewhere(doc):
+    """Words for the rebuilds going on in the other open designs."""
+    import FreeCAD as App
+
+    rebuild = _rebuild()
+    out = []
+    for name, other in sorted(App.listDocuments().items()):
+        if other is doc:
+            continue
+        try:
+            for ref in rebuild.active_references(other):
+                target = rebuild.target_of(ref)
+                if target is not None:
+                    out.append(
+                        "the design %r has one (%s, rebuilt in %r)"
+                        % (other.Label, ref.SourceLabel, target.Label)
+                    )
+        except Exception:
+            continue
+    return out
 
 
 def _size(shape):
@@ -206,6 +245,7 @@ def finish_rebuild(ctx, args):
                 "even_if_different: true to finish it as it is." % data["verdict"]
             )
     original = ref.SourceLabel
+    ref_name = ref.Name
     from ..executor import _broken
 
     before = _broken(doc)  # (steps that used the original and break with it are said)
@@ -227,6 +267,9 @@ def finish_rebuild(ctx, args):
         steps = [i for i in timeline_ops.timeline(doc).items if i.body == body.Name]
     except Exception:
         steps = []
+    report = rebuild.FINISHED.get(ref_name) or {}
+    original = report.get("original_label") or original  # (renamed while rebuilt: beta 3 QA)
+    kept = bool(args.get("keep_original") or report.get("kept_original"))
     text = (
         "Done: %s. %s is now the rebuilt part (id %r) with %d timeline steps; the original "
         % (
@@ -235,15 +278,21 @@ def finish_rebuild(ctx, args):
             body.Name,
             len(steps),
         )
-        + (
-            "is kept hidden as %r" % ("%s (original)" % original)
-            if args.get("keep_original")
-            else "was deleted"
-        )
+        + ("is kept hidden as %r" % ("%s (original)" % original) if kept else "was deleted")
         + (
             ", the reference kept hidden."
             if args.get("keep_reference")
             else ", the reference removed."
         )
     )
+    if report.get("followed"):
+        text += " Now on the rebuilt part instead of the original (they used it): %s." % (
+            ", ".join(report["followed"])
+        )
+    if report.get("kept_because") and not args.get("keep_original"):
+        text += (
+            " The original was kept (hidden) instead of deleted: %s still use%s it and could "
+            "not be moved onto the rebuild."
+            % (", ".join(report["kept_because"]), "" if len(report["kept_because"]) > 1 else "s")
+        )
     return ctx.done(text, doc, before)

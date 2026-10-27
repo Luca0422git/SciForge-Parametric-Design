@@ -68,7 +68,13 @@ class Host:
         body = doc.getObject(name) if name else None
         if body is not None and bodies.alive(body):
             return body
-        return bodies.find_body(doc)
+        try:  # (beta 3 QA) a design opened again with a rebuild going on carries on there
+            from .. import rebuild
+
+            working = rebuild.working_body(doc)
+        except Exception:
+            working = None
+        return working if working is not None else bodies.find_body(doc)
 
     def ensure_body(self, doc):
         from .. import bodies
@@ -124,6 +130,7 @@ class Host:
                 App.setActiveDocument(doc.Name)
                 return doc
         doc = App.openDocument(path)
+        self._active.pop(doc.Name, None)  # (a design closed before had this name)
         App.setActiveDocument(doc.Name)
         return doc
 
@@ -253,6 +260,18 @@ def _redo_note(answer, redo):
     return answer
 
 
+def _where_rebuild(why):
+    """A refusal for want of a rebuild names the open design that has one (beta 3 QA)."""
+    try:
+        if why == catalog.NEEDS.get("reference"):
+            from .actions import rebuild_actions
+
+            return rebuild_actions.no_rebuild_here(App.ActiveDocument) or why
+    except Exception:
+        pass
+    return why
+
+
 def _run(tool, args, host):
     try:
         problems = catalog.validate(tool, args)
@@ -261,7 +280,7 @@ def _run(tool, args, host):
         entry = catalog.tool(tool)
         ok, why = catalog.availability(tool, state(host))
         if not ok:
-            return bridge_core.error_result(why)
+            return bridge_core.error_result(_where_rebuild(why))
         ctx = Context(host, tool, args)
         from . import actions
         from .. import timeline_ops

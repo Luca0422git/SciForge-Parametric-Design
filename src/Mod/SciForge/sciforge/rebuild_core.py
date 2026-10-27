@@ -211,7 +211,7 @@ def _cylinder(region, volume, side):
             else "a stepped round boss: %s" % words
         )
         return out
-    end = " with a pointed (drilled) end" if cones else ""
+    end = _hole_end(cones, main["radius"])
     if side == "extra":
         out["looks_like"] = "a round hole about %s mm across, %s deep%s" % (
             across,
@@ -225,6 +225,21 @@ def _cylinder(region, volume, side):
             end,
         )
     return out
+
+
+def _hole_end(cones, radius):
+    """Words for the cone faces of a hole: a point drilled at its end (the cone narrows to
+    almost nothing) or a widened rim (it widens past the bore: a countersink or a chamfer)."""
+    if not cones:
+        return ""
+    measured = [c for c in cones if c.get("r_min") is not None and c.get("r_max") is not None]
+    if not measured:
+        return " with a pointed (drilled) end"
+    if any(c["r_min"] < 0.25 * radius for c in measured):
+        return " with a pointed (drilled) end"
+    if any(c["r_max"] > radius * (1 + 1e-6) for c in measured):
+        return " with a widened rim (a countersink or a chamfer)"
+    return " with a cone at its end"
 
 
 def _faceted_cylinder(region, volume, dims, side):
@@ -619,9 +634,13 @@ def verdict(result, limit=3):
     matched = faces.get("matched", 0)
     left_over = len(faces.get("unmatched_rebuilt", []))
     if result.get("empty"):
+        # (beta 3 QA: "its step 1 is the base" also when describe_reference could not read the
+        # base: that plan starts with a hole, which fails on the empty body)
         return (
-            "The rebuilt body is still empty: build the base shape first (describe_reference "
-            "gives the plan; its step 1 is the base), then compare_to_reference again."
+            "The rebuilt body is still empty: build the base shape first (the plan of "
+            "describe_reference starts with it; when it could not read the base, its notes say "
+            "to build it yourself, and the plan's steps need it), then compare_to_reference "
+            "again."
         )
     if result.get("done"):
         return (
@@ -739,8 +758,82 @@ def chat_message(body_label, rebuilt_label=None, mesh=False):
     )
 
 
+# -- what used the original follows the rebuild (finish) -----------------------------------------
+def split_sub(sub):
+    """A link's sub-element path in its parts: "Body001.Face7" -> (["Body001"], "Face7");
+    "Face7" -> ([], "Face7"); "Body001." -> (["Body001"], ""). FreeCAD's mapped element
+    names (";#7:1;:G0;XTR;:H1:7,F.Face7": topological naming) are dropped: the plain name
+    after them is what SciForge reads."""
+    parts = (sub or "").split(".")
+    element = parts[-1]
+    path = [p for p in parts[:-1] if p and not p.startswith(";")]
+    if element.startswith(";"):
+        element = ""
+    return path, element
+
+
+def rewrite_sub(sub, names, element_for):
+    """`sub` with the original's objects swapped for the rebuild's. names: {old object name:
+    new name, "" to drop it from the path (a step inside the original: the rebuilt body
+    itself holds the shape), or None when it has no counterpart (a sketch of the original)};
+    element_for(old element name) -> the rebuild's element name or None. Returns (new sub,
+    changed); new sub None when something on the path or the element has no counterpart.
+    A path that does not pass through the original stays as it is."""
+    path, element = split_sub(sub)
+    if not any(p in names for p in path):
+        return sub, False
+    out = []
+    for p in path:
+        if p in names:
+            if names[p] is None:
+                return None, True
+            if names[p]:
+                out.append(names[p])
+        else:
+            out.append(p)
+    new_element = ""
+    if element:
+        new_element = element_for(element)
+        if not new_element:
+            return None, True
+    return "".join(p + "." for p in out) + new_element, True
+
+
+def rewrite_direct(subs, element_for):
+    """The element names of a link straight to the original (no path through it): each
+    mapped; None when one of them has no counterpart."""
+    out = []
+    for sub in subs:
+        path, element = split_sub(sub)
+        if not element:
+            out.append("".join(p + "." for p in path))
+            continue
+        new = element_for(element)
+        if not new:
+            return None
+        out.append("".join(p + "." for p in path) + new)
+    return out
+
+
+def keys_between(count, low, high):
+    """`count` increasing timeline keys strictly between low and high (where the rebuild's
+    steps go: the original's place in the timeline)."""
+    if count <= 0:
+        return []
+    if high is None or high <= low:
+        high = low + 1.0
+    step = (high - low) / float(count + 1)
+    return [low + step * (i + 1) for i in range(count)]
+
+
 # -- the same words for a person (the dialogs) -------------------------------------------------
 _PERSON_WORDS = (
+    (
+        " (the plan of describe_reference starts with it; when it could not read the base, its "
+        "notes say to build it yourself, and the plan's steps need it), then "
+        "compare_to_reference again.",
+        ", then Compare Again.",
+    ),
     (
         " (describe_reference gives the plan; its step 1 is the base), then "
         "compare_to_reference again.",
@@ -758,6 +851,12 @@ _PERSON_WORDS = (
     ("start_rebuild", "Rebuild with Timeline (AI)..."),
     ("finish_rebuild", "Finish Rebuild"),
     ("about 1 % exact: see note.)", "about 1 % exact.)"),
+    # (beta 3 QA: the marker rolled back)
+    (
+        "(roll_timeline with to: end; in the window, drag the history marker to the end of "
+        "the timeline)",
+        "(drag the history marker to the end of the timeline)",
+    ),
 )
 
 

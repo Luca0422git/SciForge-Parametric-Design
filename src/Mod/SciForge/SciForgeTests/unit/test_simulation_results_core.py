@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: LGPL-2.1-or-later
 """The RESULTS tab's rules (sciforge/simulation_results_core.py). Runs without FreeCAD; the mesh
-tests need numpy (FreeCAD and the CI's Python have it)."""
+tests need numpy (FreeCAD has it; the CI installs python3-numpy for these)."""
 
 import math
 import os
@@ -17,7 +17,7 @@ try:
     import numpy  # noqa: F401
 
     HAVE_NUMPY = True
-except ImportError:  # (FreeCAD and the CI's Python have numpy)
+except ImportError:  # (FreeCAD has numpy; so has the CI, python3-numpy)
     HAVE_NUMPY = False
 
 

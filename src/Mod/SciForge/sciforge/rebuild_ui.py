@@ -132,9 +132,13 @@ class ViewProviderReference:
 
         try:
             self.ghost.removeAllChildren()
+            self.motion = None
             shape = getattr(obj, rebuild.SHAPE, None)
             if shape is not None and not shape.isNull():
-                self.ghost.addChild(
+                group = coin.SoSeparator()
+                self.motion = coin.SoTransform()  # (the rebuild's component moved: follow it)
+                group.addChild(self.motion)
+                group.addChild(
                     _mesh(
                         coin,
                         shape,
@@ -146,9 +150,35 @@ class ViewProviderReference:
                         0.55,
                     )
                 )
+                self.ghost.addChild(group)
+                self.follow(obj)
             self.ghost.whichChild = 0 if getattr(obj, "Shown", True) else -1
         except Exception as exc:
             warn("rebuild: the reference is not drawn (%s)" % exc)
+
+    def follow(self, obj):
+        """The ghost where the reference stands now (moved with the rebuilt body's
+        component since it was frozen)."""
+        from pivy import coin
+
+        motion = getattr(self, "motion", None)
+        if motion is None:
+            return
+        try:
+            place = rebuild.moved_by(obj) or App.Placement()
+            motion.translation.setValue(place.Base.x, place.Base.y, place.Base.z)
+            q = place.Rotation.Q
+            motion.rotation.setValue(coin.SbRotation(q[0], q[1], q[2], q[3]))
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
+
+    def moved(self):
+        """Where the ghost is drawn now: the placement its picture is moved by (tests)."""
+        motion = getattr(self, "motion", None)
+        if motion is None:
+            return None
+        t = motion.translation.getValue()
+        return App.Vector(t[0], t[1], t[2])
 
     def show_differences(self, missing, extra):
         """The comparison's regions: missing material red, extra green (design
@@ -194,6 +224,8 @@ class ViewProviderReference:
     def updateData(self, obj, prop):
         if prop in (rebuild.SHAPE, "Shown"):
             self._update(obj)
+        elif prop in ("FrozenFrame", "TargetName"):
+            self.follow(obj)
 
     def onChanged(self, vobj, prop):
         pass
@@ -237,7 +269,10 @@ def _listener(event, ref, data):
     view = view_of(ref)
     if view is None:
         return
-    if event == "compare":
+    if event == "moved":
+        view.follow(ref)
+    elif event == "compare":
+        view.follow(ref)
         view.show_differences(data.get("missing", []), data.get("extra", []))
     else:
         view.clear_differences()
@@ -414,6 +449,11 @@ def offer_message(ref):
             cursor = chat.input.textCursor()
             cursor.movePosition(QtGui.QTextCursor.End)
             chat.input.setTextCursor(cursor)
+            # (beta 3 QA: nothing said the message waits for the person; a beginner waited)
+            commands.tell(
+                "The message for the AI is ready in the chat (AI panel): read it, then press "
+                "Send."
+            )
             return "chat"
         except Exception as exc:
             warn("rebuild: the chat could not be prepared (%s)" % exc)
@@ -651,15 +691,17 @@ class FinishDialog(QtWidgets.QDialog):
                     target.Label if target is not None else "The rebuilt body"
                 )
             elif data["done"]:
-                words = (
-                    "%s matches %s (match %s, all %d faces). It takes the original's name "
-                    "and place."
-                    % (
-                        target.Label,
-                        ref.SourceLabel,
-                        _pct(data["match"]),
-                        data["faces"]["reference"],
-                    )
+                own = not rebuild._default_rebuilt_label(target.Label, ref.SourceLabel)
+                words = "%s matches %s (match %s, all %d faces). %s" % (
+                    target.Label,
+                    ref.SourceLabel,
+                    _pct(data["match"]),
+                    data["faces"]["reference"],
+                    (
+                        "It keeps its name and takes the original's place."
+                        if own
+                        else "It takes the original's name and place."
+                    ),
                 )
             else:
                 words = (
@@ -726,6 +768,7 @@ def finish(ref, keep_original=False, keep_reference=False):
     doc = ref.Document
     if not commands.finish_open_dialog():
         return None
+    name, original = ref.Name, ref.SourceLabel
     doc.openTransaction("Finish Rebuild")
     try:
         body = _busy(
@@ -748,6 +791,21 @@ def finish(ref, keep_original=False, keep_reference=False):
         components.activate_body(body)
     except Exception:
         pass
+    report = rebuild.FINISHED.get(name) or {}
+    original = report.get("original_label") or original  # (renamed while rebuilt: beta 3 QA)
+    if report.get("followed"):
+        log("Finish Rebuild: now on %s: %s" % (body.Label, ", ".join(report["followed"])))
+    if report.get("kept_because") and not keep_original:
+        users = report["kept_because"]
+        commands.tell(
+            '%s was kept, hidden, as "%s (original)" instead of deleted: %s still use%s it.'
+            % (
+                original,
+                original,
+                ", ".join(users[:3]) + (" ..." if len(users) > 3 else ""),
+                "" if len(users) > 1 else "s",
+            )
+        )
     return body
 
 
@@ -766,6 +824,96 @@ def _open_finish_later(ref):
             open_finish(ref)
     except Exception as exc:
         warn("Finish Rebuild: %s" % exc)
+
+
+# -- Stop Rebuild (beta 3 QA: there was no way back but Undo, none in a design opened again) --
+class StopDialog(QtWidgets.QDialog):
+    """Stop Rebuild: the original shown again, the reference gone; the rebuilt body deleted
+    or kept."""
+
+    def __init__(self, ref):
+        super().__init__(Gui.getMainWindow())
+        self.setObjectName("SciForgeRebuildStop")
+        self.setWindowTitle("Stop Rebuild")
+        self.setModal(True)
+        self.ref = ref
+        self.result = None
+        column = QtWidgets.QVBoxLayout(self)
+        target = rebuild.target_of(ref)
+        original = rebuild.source_of(ref)
+        if original is not None:
+            text = (
+                "Stop rebuilding %s? The original is shown again, as it was, and the "
+                "rebuild's reference goes." % ref.SourceLabel
+            )
+        else:  # (the original was deleted meanwhile: the rebuild is all there is)
+            text = (
+                "Stop rebuilding %s? The original is gone (deleted); the rebuild's reference "
+                "goes." % ref.SourceLabel
+            )
+        words = QtWidgets.QLabel(text)
+        words.setObjectName("SciForgeRebuildStopState")
+        words.setWordWrap(True)
+        column.addWidget(words)
+        name = target.Label if target is not None else "the rebuilt body"
+        self.delete_rebuilt = QtWidgets.QRadioButton("Delete %s and its steps" % name)
+        self.delete_rebuilt.setObjectName("SciForgeRebuildStopDelete")
+        self.keep_rebuilt = QtWidgets.QRadioButton("Keep %s as a body of its own" % name)
+        self.keep_rebuilt.setObjectName("SciForgeRebuildStopKeep")
+        if original is None and target is not None:
+            self.keep_rebuilt.setChecked(True)
+        else:
+            self.delete_rebuilt.setChecked(True)
+        self.keep_rebuilt.setEnabled(target is not None)
+        column.addWidget(self.delete_rebuilt)
+        column.addWidget(self.keep_rebuilt)
+        buttons = QtWidgets.QDialogButtonBox()
+        self.ok = buttons.addButton("Stop Rebuild", QtWidgets.QDialogButtonBox.AcceptRole)
+        self.ok.setObjectName("SciForgeRebuildStopOK")
+        self.cancel = buttons.addButton("Cancel", QtWidgets.QDialogButtonBox.RejectRole)
+        self.cancel.setObjectName("SciForgeRebuildStopCancel")
+        buttons.accepted.connect(self._accept)
+        buttons.rejected.connect(self.reject)
+        column.addWidget(buttons)
+
+    def _accept(self):
+        try:
+            self.result = stop(self.ref, keep_rebuilt=self.keep_rebuilt.isChecked())
+        except Exception as exc:
+            warn("Stop Rebuild: %s" % exc)
+        self.accept()
+
+
+def stop(ref, keep_rebuilt=False):
+    """Stop Rebuild as one undo step; a refusal is said. Returns the original (or None)."""
+    doc = ref.Document
+    if not commands.finish_open_dialog():
+        return None
+    for widget in QtWidgets.QApplication.topLevelWidgets():  # (its compare window: stale)
+        try:
+            if isinstance(widget, CompareDialog) and widget.isVisible() and widget.ref is ref:
+                widget.close()
+        except Exception:
+            pass
+    doc.openTransaction("Stop Rebuild")
+    try:
+        source = rebuild.stop(ref, keep_rebuilt=keep_rebuilt)
+    except rebuild.RebuildError as exc:
+        doc.abortTransaction()
+        commands.tell(rebuild_core.person_words(str(exc)))
+        return None
+    except Exception:
+        doc.abortTransaction()
+        raise
+    doc.commitTransaction()
+    doc.recompute()
+    return source
+
+
+def open_stop(ref):
+    from . import versions_ui
+
+    return versions_ui._show(StopDialog(ref), "rebuild-stop")
 
 
 # -- the 3D view's right-click ------------------------------------------------------------------
@@ -818,8 +966,14 @@ def marking_entries(global_pos):
     if going and getattr(ref, "TargetName", "") == body.Name:
         return [
             cfg.SEP,
-            cfg.item("Compare with Reference", "SciForge_CompareReference", "rebuild_compare"),
-            cfg.item("Finish Rebuild", "SciForge_FinishRebuild", "rebuild_finish"),
+            # (the body under the mouse's rebuild: beta 3 QA)
+            cfg.item(
+                "Compare with Reference",
+                "SciForge_CompareReferenceUnderMouse",
+                "rebuild_compare",
+            ),
+            cfg.item("Finish Rebuild", "SciForge_FinishRebuildUnderMouse", "rebuild_finish"),
+            cfg.item("Stop Rebuild...", "SciForge_StopRebuildUnderMouse", "cancel"),
         ]
     return [
         cfg.SEP,
@@ -931,11 +1085,90 @@ class FinishCommand:
             warn("Finish Rebuild: %s" % exc)
 
 
+class StopCommand:
+    """(beta 3 QA: a rebuild could only be taken back with Undo)"""
+
+    def GetResources(self):
+        return {
+            "MenuText": "Stop Rebuild...",
+            "ToolTip": "Give the rebuild up: the original is shown again as it was; the "
+            "rebuilt body is deleted or kept",
+            "Pixmap": ui_icon_path("cancel"),
+        }
+
+    def IsActive(self):
+        return bool(rebuild.active_references(App.ActiveDocument))
+
+    def Activated(self):
+        try:
+            if not commands.finish_open_dialog():
+                return
+            ref = current_reference()
+            if ref is not None:
+                open_stop(ref)
+        except Exception as exc:
+            warn("Stop Rebuild: %s" % exc)
+
+
+def _pending_reference():
+    """The rebuild going on in the body the 3D view's right-click was on (None: none, and
+    the command falls back to the active body's). (beta 3 QA: with several rebuilds going
+    on, the right-click's Compare / Finish / Stop took the active body's rebuild, not the
+    one clicked.)"""
+    doc = App.listDocuments().get(_PENDING.get("doc") or "")
+    body = doc.getObject(_PENDING.get("name") or "") if doc is not None else None
+    _PENDING.update(doc=None, name=None)
+    ref = rebuild.reference_for(body) if body is not None else None
+    if ref is None or not getattr(ref, "Shown", True):
+        return None
+    return ref
+
+
+class CompareUnderMouseCommand(CompareCommand):
+    def Activated(self):
+        try:
+            ref = _pending_reference()
+            if ref is None:
+                CompareCommand.Activated(self)
+            else:
+                open_compare(ref)
+        except Exception as exc:
+            warn("Compare with Reference: %s" % exc)
+
+
+class FinishUnderMouseCommand(FinishCommand):
+    def Activated(self):
+        try:
+            ref = _pending_reference()
+            if ref is None:
+                FinishCommand.Activated(self)
+            elif commands.finish_open_dialog():
+                open_finish(ref)
+        except Exception as exc:
+            warn("Finish Rebuild: %s" % exc)
+
+
+class StopUnderMouseCommand(StopCommand):
+    def Activated(self):
+        try:
+            ref = _pending_reference()
+            if ref is None:
+                StopCommand.Activated(self)
+            elif commands.finish_open_dialog():
+                open_stop(ref)
+        except Exception as exc:
+            warn("Stop Rebuild: %s" % exc)
+
+
 COMMANDS = {
     "SciForge_RebuildWithTimeline": RebuildCommand,
     "SciForge_RebuildUnderMouse": RebuildUnderMouseCommand,
     "SciForge_CompareReference": CompareCommand,
     "SciForge_FinishRebuild": FinishCommand,
+    "SciForge_StopRebuild": StopCommand,
+    "SciForge_StopRebuildUnderMouse": StopUnderMouseCommand,
+    "SciForge_CompareReferenceUnderMouse": CompareUnderMouseCommand,
+    "SciForge_FinishRebuildUnderMouse": FinishUnderMouseCommand,
 }
 
 _install_marking()

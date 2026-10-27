@@ -974,6 +974,12 @@ UTIL_AI = group(
             "rebuild_finish",
             note="The rebuild takes the original's name and place",
         ),
+        item(  # (beta 3 QA: a rebuild could only be taken back with Undo)
+            "Stop Rebuild...",
+            "SciForge_StopRebuild",
+            "cancel",
+            note="Give the rebuild up: the original is shown again",
+        ),
     ],
 )
 UTIL_FREECAD = group(

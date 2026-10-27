@@ -281,8 +281,20 @@ def interference(ctx, args):
     from ... import analysis, bodies
 
     found = [b for b in _chosen_bodies(ctx, args) if bodies.has_solid(b)]
+    note = ""
+    if not args.get("bodies"):
+        # (beta 3 QA) the original of a rebuild going on lies under its rebuild on purpose
+        from .verify_actions import _being_rebuilt
+
+        rebuilt = _being_rebuilt(ctx.need_doc())
+        left = [b for b in found if b.Name in rebuilt]
+        if left:
+            found = [b for b in found if b.Name not in rebuilt]
+            note = " (Left out: %s.)" % "; ".join(
+                "%s, %s" % (b.Label, rebuilt[b.Name]) for b in left
+            )
     if len(found) < 2:
-        raise UserError(analysis.TOO_FEW)
+        raise UserError(analysis.TOO_FEW + note)
     named = [(b.Label, bodies.global_shape(b)) for b in found]
     try:
         pairs = analysis.interference(named, bool(args.get("include_coincident")))
@@ -295,7 +307,7 @@ def interference(ctx, args):
         else "%d pair(s) overlap, %.6g mm3 in all."
         % (len(rows), sum(r["volume_mm3"] for r in rows))
     )
-    return json_result({"pairs": rows}, text)
+    return json_result({"pairs": rows}, text + note)
 
 
 @action("section_analysis")

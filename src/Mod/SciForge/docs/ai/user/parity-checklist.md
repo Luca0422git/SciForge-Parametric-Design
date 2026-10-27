@@ -344,7 +344,7 @@ not cover, or a name the alias file should map. Greyed entries are left out.
 - `tab:mesh`: Delete Faces, User Coordinate System, Environmental Map Analysis
 - `tab:sheet_metal`: Lofted Flange, Join by Bend, Corner Closure, User Coordinate System, Environmental Map Analysis, Insert Component, Insert STEP
 - `tab:plastic`: Assign Plastic Rule, User Coordinate System, Environmental Map Analysis, Design Advice, Insert Component, Insert STEP
-- `tab:utilities`: Export, Export Everything, Add-on Manager, AI, Add an AI App, AI Chat, AI Activity, Rebuild with Timeline (AI)..., Compare with Reference, Finish Rebuild, FreeCAD Tools, Project and Recovery Settings, Version History, Recover Documents, Save As, SciForge Diagnostics, Report a Problem, Command Search
+- `tab:utilities`: Export, Export Everything, Add-on Manager, AI, Add an AI App, AI Chat, AI Activity, Rebuild with Timeline (AI)..., Compare with Reference, Finish Rebuild, Stop Rebuild..., FreeCAD Tools, Project and Recovery Settings, Version History, Recover Documents, Save As, SciForge Diagnostics, Report a Problem, Command Search
 - `tab:sketch`: Isoparametric Curve, Environmental Map Analysis, Insert Component, Insert STEP, Toggle Construction
 - `tab:drawing`: Bend Note, Bend Table
 - `tab:flat_pattern`: Environmental Map Analysis

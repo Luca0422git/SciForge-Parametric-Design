@@ -540,7 +540,7 @@ def run_in_process(parts=None, folder=None):
 
     agent = Agent(call, folder)
     rows = []
-    for part in parts or PARTS:
+    for part in PARTS if parts is None else parts:
         began = time.time()
         try:
             row = agent.rebuild(part)
@@ -626,6 +626,10 @@ def main():
     agent, rows = run_in_process(parts)
     if not wanted:
         fallback_checks(agent)
+    if not wanted or wanted == "qa":  # (beta 3 QA: jointed parts, reopen, ... rebuild_qa.py)
+        from . import rebuild_qa
+
+        rebuild_qa.run(agent)
     text, passed = markdown("Auto Timeline end to end (in-process)", agent, rows)
     report = {"passed": passed, "parts": rows, "checks": agent.checks, "calls": agent.log}
     with open(os.path.join(out_dir, "rebuild-e2e-report.json"), "w", encoding="utf-8") as handle:

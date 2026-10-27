@@ -151,6 +151,9 @@ def _add_copy(doc, comp, source):
     feature = doc.addObject("Part::FeaturePython", COPY_TYPE)
     LinkedCopy(feature)
     feature.Source = source
+    # (beta 3 QA) the body's name, to find it again if it is replaced (_relink)
+    bodies.add_prop(feature, "App::PropertyString", "SourceLabel", "Linked", "", False)
+    feature.SourceLabel = source.Label
     comp.addObject(feature)
     body = components.new_body_in(doc, comp, label=source.Label)
     body.BaseFeature = feature
@@ -179,6 +182,12 @@ def refresh(doc):
         for feature in copy_features(comp):
             source = feature.Source
             if source is None or not bodies.alive(source):
+                try:
+                    if _relink(doc, comp, feature):
+                        feature.touch()
+                        changed = True
+                except Exception as exc:
+                    warn("linked %s: %s" % (comp.Label, exc))
                 continue
             try:
                 new = bodies.global_shape(source)
@@ -189,6 +198,39 @@ def refresh(doc):
             except Exception as exc:
                 warn("linked %s: %s" % (comp.Label, exc))
     return changed
+
+
+def _relink(doc, comp, feature):
+    """A linked copy whose body is gone from the other design, linked again to the body of
+    that design with the same name. (beta 3 QA: Finish of an Auto Timeline rebuild there
+    gives the rebuilt body the original's name, as another object: every design that linked
+    the part said "not found" and kept the old shape.) True when it was."""
+    from . import versions
+
+    relative = getattr(comp, LINKED_FILE, "")
+    if not relative or not doc.FileName:
+        return False
+    path = versions.resolve_relative(doc.FileName, relative)
+    if not os.path.isfile(path):
+        return False
+    body = copy_body(feature)
+    wanted = getattr(feature, "SourceLabel", "") or (body.Label if body is not None else "")
+    if not wanted:
+        return False
+    other = None
+    for name in App.listDocuments():
+        if versions.same_path(App.getDocument(name).FileName, path):
+            other = App.getDocument(name)
+    if other is None or getattr(other, "Partial", False):
+        # (FreeCAD opens a linked design partly, with only the objects linked: none of them
+        # is there any more; opening it again loads it whole)
+        other = App.openDocument(path, True)
+    found = [b for b in source_bodies(other) if b.Label == wanted]
+    if len(found) != 1:
+        return False
+    feature.Source = found[0]
+    log("linked %s: %s found again in %s" % (comp.Label, wanted, design_name(path)))
+    return True
 
 
 def _same(a, b):

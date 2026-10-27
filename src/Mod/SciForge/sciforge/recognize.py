@@ -536,12 +536,19 @@ class _Reader:
         t0 = time.time()
         timing = {}
         holes = self.find_holes()
+        threads = self.thread_walls(holes)  # (beta 3 QA)
+        islands = self.free_islands(holes)  # (beta 3 QA: raised / engraved text, logos)
         timing["holes"] = time.time() - t0
         t = time.time()
-        blends = self.find_fillets(holes)
-        chamfers = self.find_chamfers(holes, blends)
+        blends = self.find_fillets(holes + islands)  # (an island's faces are its own)
+        chamfers = self.find_chamfers(holes + islands, blends)
         timing["blends"] = time.time() - t
-        free = self._free_form(holes + chamfers + blends)
+        free = self._free_form(holes + chamfers + blends + islands)
+        if free and islands:
+            # other free-form faces: nothing is taken off, the islands' faces are listed
+            # with the rest, as before (beta 3 QA)
+            islands = []
+            free = self._free_form(holes + chamfers + blends)
         if free:
             # no extrude or revolve makes these faces: the base cannot be read, so the
             # features are not taken off (defeaturing such parts can take minutes)
@@ -566,7 +573,7 @@ class _Reader:
             )
             base = {"public": {"kind": "none"}, "ops": [], "faces": [], "volume_error": 0.0}
             self.base_shape = self.shape
-        elif not self._some_axis_fits(holes + chamfers + blends):
+        elif not self._some_axis_fits(holes + chamfers + blends + islands):
             # the faces left would fit no extrude or revolve even without the features:
             # defeaturing (seconds to minutes) would not make the base readable
             removed = {
@@ -585,14 +592,14 @@ class _Reader:
             self.base_shape = self.shape
         else:
             t = time.time()
-            removed = self.defeature(holes, chamfers, blends)
+            removed = self.defeature(holes + islands, chamfers, blends)
             timing["defeaturing"] = time.time() - t
             t = time.time()
             self.base_shape = removed["base"]
             base = self.find_base(removed["base"])
             timing["base"] = time.time() - t
         if base["public"].get("kind") == "none" and not free:
-            self._axis_hint(holes + chamfers + blends)
+            self._axis_hint(holes + chamfers + blends + islands)
         t = time.time()
         plan = core.Plan(self.options.get("taken_ids") or ())
         features = []
@@ -629,6 +636,9 @@ class _Reader:
         for f in features:
             explained.update(f.get("_faces", []))
         explained.update(base.get("faces", []))
+        threaded = self._thread_notes(threads, removed["ok"])  # (beta 3 QA)
+        threaded |= self._island_notes(islands, removed["ok"])
+        explained.update(threaded)
         for f in features:
             f.pop("_faces", None)
         missing = [
@@ -644,7 +654,9 @@ class _Reader:
                 }
             )
         out["unrecognized"] = self.unrecognized
-        area_ok = sum(f.area for f in self.facts if f.index in explained)
+        area_ok = sum(
+            f.area for f in self.facts if f.index in explained and f.index not in threaded
+        )
         out["confidence"] = core.confidence(
             area_ok,
             self.shape.Area,
@@ -670,7 +682,7 @@ class _Reader:
         [{"axis", "odd" (area that fits no level, wall or draft along it), "total", "turned"
         (all could be a revolve about it), "faces" (the odd ones), "unknown" (a kind this
         check does not know)}]. (Optimistic: defeaturing only extends these faces.)"""
-        used = set(i for g in groups for i in g["_faces"])
+        used = set(i for g in groups for i in _wall(g))  # (a hole's thread is its own)
         rest = [f for f in self.facts if f.index not in used]
         total = sum(f.area for f in rest) or 1.0
         out = []
@@ -746,7 +758,7 @@ class _Reader:
         (B-spline, swept or offset surfaces; a flat B-spline is a tapered wall)."""
         used = set()
         for g in groups:
-            used.update(g["_faces"])
+            used.update(_wall(g))  # (a hole's thread is its own: beta 3 QA)
         out = []
         for f in self.facts:
             if f.index in used or f.kind in ("plane", "cylinder", "cone", "sphere", "torus"):
@@ -1452,6 +1464,216 @@ class _Reader:
         attempt(list(groups))
         return accepted[len(start) :], rejected
 
+    # -- threads (beta 3 QA) ----------------------------------------------------------------------
+    def thread_walls(self, holes):
+        """A modeled thread: free-form faces (B-splines) wound round a hole's bore, within a
+        little of its radius. They are kept with their hole (h["_thread"]): closed with it, so
+        the base is read without them, and listed as not read (never guessed: the plan drills
+        the bore and says a thread is cut into it). Returns the holes that have one."""
+        free = {f.index for f in self.facts if f.kind not in _ANALYTIC}
+        found = []
+        if not free:
+            return found
+        for h in holes:
+            region, todo = set(), list(h["_faces"])
+            seen = set(todo)
+            while todo:
+                i = todo.pop()
+                for j in self.topo.neighbours(i):
+                    if j not in seen:
+                        seen.add(j)
+                        if j in free:
+                            region.add(j)
+                            todo.append(j)
+            if not region:
+                continue
+            axis, origin = h["_axis"], h["_origin"]
+            radius = max(
+                (
+                    self.facts[i].radius or 0.0
+                    for i in h["_faces"]
+                    if self.facts[i].kind == "cylinder"
+                ),
+                default=0.0,
+            )
+            if radius <= 0:
+                continue
+            reach = 0.0
+            ends = []
+            for i in region:
+                for v in self.facts[i].face.Vertexes:
+                    w = core.sub(_t(v.Point), origin)
+                    t = core.dot(w, axis)
+                    reach = max(reach, core.norm(core.sub(w, core.mul(axis, t))))
+                    ends.append(t)
+            if reach > 1.5 * radius:
+                continue  # (free-form faces round a hole, but no thread: a blend, a boss)
+            length = (max(ends) - min(ends)) if ends else 0.0
+            h["_thread"] = sorted(region)
+            h["_thread_void"] = math.pi * max(0.0, reach * reach - radius * radius) * length
+            free -= region
+            found.append(h)
+        return found
+
+    def free_islands(self, holes):
+        """Raised or engraved text and logos: groups of faces with free-form ones among them
+        that meet the rest of the part only along whole inner loops of flat faces (the face
+        they stand on or are cut into). They are taken off like holes (that face closed over
+        them), so the base is read without them, and listed as not read (never guessed).
+        Returns [{"id", "kind": "island", "_faces", "_hosts", "_island_volume", "raised"}]."""
+        claimed = set()
+        for h in holes:
+            claimed.update(_wall(h))
+        free = [
+            f.index
+            for f in self.facts
+            if f.index not in claimed and f.kind not in _ANALYTIC and _flat_normal(f.face) is None
+        ]
+        if not free:
+            return []
+        inner = {}  # flat face -> hashes of the edges of its inner loops
+        for f in self.facts:
+            if f.kind == "plane" and len(f.face.Wires) > 1:
+                outer = f.face.OuterWire
+                keys = set()
+                for wire in f.face.Wires:
+                    if not wire.isSame(outer):
+                        keys.update(e.hashCode() for e in wire.Edges)
+                inner[f.index] = keys
+        out, seen = [], set(claimed)
+        limit = 0.6 * len(self.facts)
+        for first in free:
+            if first in seen:
+                continue
+            island, todo, hosts, ok = {first}, [first], set(), True
+            while todo and ok:
+                i = todo.pop()
+                for key in self.topo.face_edges[i]:
+                    for j in self.topo.edge_faces.get(key, []):
+                        if j == i or j in island:
+                            continue
+                        if key in inner.get(j, ()):
+                            hosts.add(j)  # (it stands on / is cut into j: not crossed)
+                            continue
+                        if j in claimed or len(island) >= limit:
+                            ok = False
+                            break
+                        island.add(j)
+                        todo.append(j)
+                    if not ok:
+                        break
+            seen |= island
+            hosts -= island  # (a floor reached first by its inner loop: it is the island's)
+            if not ok or not hosts:
+                continue
+            box = None
+            for i in island:
+                b = self.facts[i].face.BoundBox
+                if box is None:
+                    box = _box_copy(b)
+                else:
+                    box.add(b)
+            host = self.facts[min(hosts)]
+            centre = (box.Center.x, box.Center.y, box.Center.z)
+            raised = core.dot(centre, host.normal) > host.h
+            out.append(
+                {
+                    "id": "island%d" % len(out),
+                    "kind": "island",
+                    "_faces": sorted(island),
+                    "_hosts": sorted(hosts),
+                    "_island_volume": box.XLength * box.YLength * box.ZLength,
+                    "raised": raised,
+                    "_box": box,
+                }
+            )
+        if out:
+            # only the islands their host faces close over (milliseconds): one that does not
+            # close leaves its free-form faces to the free-form rule, as before
+            _solid, closed, _left = self._drop_holes(out)
+            closed_ids = {g["id"] for g in closed}
+            out = [g for g in out if g["id"] in closed_ids]
+            for g in out:
+                g["id"] = self.new_id()
+        return out
+
+    def _island_notes(self, islands, planned):
+        """The islands taken off said in unrecognized, one entry per face they stand on (or
+        are cut into), raised or engraved (60 bumps on a plate made 60 entries, 38,000
+        characters); their faces (said, not read)."""
+        out = set()
+        groups = {}
+        for g in islands:
+            if g["id"] not in planned:
+                continue
+            out.update(g["_faces"])
+            groups.setdefault((g["_hosts"][0], bool(g["raised"])), []).append(g)
+        for (host, raised), items in sorted(groups.items()):
+            faces = sorted(i for g in items for i in g["_faces"])
+            box = _box_copy(items[0]["_box"])
+            for g in items[1:]:
+                box.add(g["_box"])
+            if len(items) == 1:
+                what = "a %s free-form shape (a text, a logo...)" % (
+                    "raised" if raised else "engraved"
+                )
+                where, it = "about", "it"
+            else:
+                what = "%d %s free-form shapes (a text, a logo...)" % (
+                    len(items),
+                    "raised" if raised else "engraved",
+                )
+                where, it = "together about", "them"
+            self.unrecognized.append(
+                {
+                    "faces": self.face_refs(faces),
+                    "why": "%s (%d faces, %d free-form) %s the flat face %s, %s %s x %s x %s "
+                    "mm at (%s, %s, %s): not read. The plan builds the part without %s; a "
+                    "text can be made with sketch_text and an extrude (operation %s), a logo "
+                    "by hand, then compare again (finish with even_if_different if it stays a "
+                    "little off)."
+                    % (
+                        what,
+                        len(faces),
+                        sum(1 for i in faces if self.facts[i].kind not in _ANALYTIC),
+                        "standing on" if raised else "cut into",
+                        self.facts[host].name,
+                        where,
+                        core.fmt(round(box.XLength, 2)),
+                        core.fmt(round(box.YLength, 2)),
+                        core.fmt(round(box.ZLength, 2)),
+                        core.fmt(round(box.Center.x, 2)),
+                        core.fmt(round(box.Center.y, 2)),
+                        core.fmt(round(box.Center.z, 2)),
+                        it,
+                        "join" if raised else "cut",
+                    ),
+                }
+            )
+        return out
+
+    def _thread_notes(self, threads, planned):
+        """The threads of planned holes said in unrecognized; their faces (counted as said,
+        not as read)."""
+        out = set()
+        for h in threads:
+            faces = h.get("_thread") or []
+            if not faces or h["id"] not in planned:
+                continue
+            out.update(faces)
+            centre = ", ".join(core.fmt(self.value(c)) for c in h["start"])
+            self.unrecognized.append(
+                {
+                    "faces": self.face_refs(faces),
+                    "why": "a thread (%d free-form faces) in hole %s (%s mm across at (%s)): "
+                    "not read. The plan drills the plain hole; if it is a standard thread, "
+                    "add it with the thread tool (modeled: true) and compare again, else "
+                    "finish with even_if_different."
+                    % (len(faces), h["id"], core.fmt(h["diameter"]), centre),
+                }
+            )
+        return out
+
     def _plausible(self, result, groups, shape=None):
         """Taking these features off changed the volume by about what they hold (a chamfer's
         wedge, a fillet's corner, a hole's bore): a "chamfer" that was in fact the slanted
@@ -1496,10 +1718,10 @@ class _Reader:
             return self.shape, [], []
         owner = {}  # edge key -> hole ids
         for h in holes:
-            for i in h["_faces"]:
+            for i in _wall(h):
                 for key in self.topo.face_edges[i]:
                     owner.setdefault(key, set()).add(h["id"])
-        in_hole = {i: h["id"] for h in holes for i in h["_faces"]}
+        in_hole = {i: h["id"] for h in holes for i in _wall(h)}
         bad = set()
         rims = {}  # face index -> [(wire, hole id)]
         for f in self.facts:
@@ -1524,7 +1746,7 @@ class _Reader:
             for wire, hid in items:
                 dropped_keys.update(e.hashCode() for e in wire.Edges)
         for h in holes:
-            for i in h["_faces"]:
+            for i in _wall(h):
                 for key in self.topo.face_edges[i]:
                     others = [j for j in self.topo.edge_faces.get(key, []) if j not in in_hole]
                     if others and key not in dropped_keys:
@@ -1559,8 +1781,16 @@ class _Reader:
             solid = Part.Solid(Part.Shell(faces))
             if solid.isNull() or not solid.isValid():
                 raise ValueError("not a valid solid")
-            expected = self.shape.Volume + sum(_hole_void(self, h) for h in good)
-            if abs(solid.Volume - expected) > 1e-6 * max(1.0, expected):
+            expected = self.shape.Volume + sum(
+                _hole_void(self, h) for h in good if h.get("kind") != "island"
+            )
+            # a thread's grooves add a little void its bore's cylinder does not count: at most
+            # the ring out to the thread's widest point; a raised / engraved island takes or
+            # gives at most its box (beta 3 QA)
+            grooves = sum(h.get("_thread_void", 0.0) for h in good)
+            islands = sum(h.get("_island_volume", 0.0) for h in good)
+            tol = 1e-6 * max(1.0, expected)
+            if not (expected - islands - tol <= solid.Volume <= expected + grooves + islands + tol):
                 raise ValueError("%.6g mm3, %.6g expected" % (solid.Volume, expected))
         except Exception as exc:
             warn("recognize: holes not closed by their rims (%s)" % exc)
@@ -1607,6 +1837,19 @@ class _Reader:
         holes = self._untangled(holes)  # (one crossed by many faces is not taken off)
 
         start, holes_ok, left = self._drop_holes(holes)
+        for g in [h for h in left if h.get("kind") == "island"]:
+            self.notes.append(
+                "The free-form island %s (a text or a logo) could not be taken off the base "
+                "shape: the part is read with it." % g["id"]
+            )
+        left = [h for h in left if h.get("kind") != "island"]
+        threaded = [h for h in left if h.get("_thread")]
+        left = [h for h in left if not h.get("_thread")]
+        for h in threaded:  # (beta 3 QA: 210 s on one M6 thread, then no base anyway)
+            self.notes.append(
+                "Hole %s has a thread that could not be taken off the base shape: it is left "
+                "in the base and not in the plan." % h["id"]
+            )
         groups = left + chamfers + blends
         ok, rejected = self._accept(groups, shape=start)
         base = self._defeature(ok, start) if ok else start
@@ -1701,7 +1944,10 @@ class _Reader:
         # how well the decomposition rebuilds the defeatured solid
         try:
             rebuilt = _build_ops(chosen)
-            error = rebuilt.cut(solid).Volume + solid.cut(rebuilt).Volume
+            if _same_faces(rebuilt, solid):  # (beta 3 QA: two booleans on 500 faces, 18 s)
+                error = 0.0
+            else:
+                error = rebuilt.cut(solid).Volume + solid.cut(rebuilt).Volume
         except Exception as exc:
             warn("recognize: base check failed (%s)" % exc)
             error = solid.Volume
@@ -1736,6 +1982,11 @@ class _Reader:
                 b_steps, b_moved, _ops, b_slabs, _a = best[0]
                 if b_steps <= 2 and b_moved <= 0.25 and slabs >= b_slabs + 5:
                     continue
+                # (beta 3 QA) many times more levels than an axis read already: each costs a
+                # section and the cuts' booleans (a VEX C-channel's 50 square holes along X:
+                # 51 levels, describe 37 s), and its reading cannot need fewer steps
+                if slabs > max(8, 4 * b_slabs):
+                    continue
             try:
                 found = _prismatic(solid, axis, lenient)
             except Exception as exc:
@@ -1753,14 +2004,22 @@ class _Reader:
         return best
 
     def _faces_in(self, solid):
-        """Indexes of the original's faces that lie on the surface of a face of `solid`."""
-        buckets = {}
+        """Indexes of the original's faces that lie on the surface of a face of `solid`.
+        (Planes are bucketed by their offset too, the neighbouring buckets looked at as well:
+        a VEX plate's 500 walls on two directions made 30 000 surface tests, 3 s; beta 3 QA.)"""
+        buckets, by_key = {}, {}
         for face in solid.Faces:
-            buckets.setdefault(_surface_key(face), []).append(face)
+            key = _surface_key(face)
+            buckets.setdefault((key, _plane_slot(face, key)), []).append(face)
+            by_key.setdefault(key, []).append(face)
         out = []
         for f in self.facts:
-            for face in buckets.get(_surface_key(f.face), []):
-                if _same_surface(f.face, face, 1e-5):
+            key = _surface_key(f.face)
+            slot = _plane_slot(f.face, key)
+            near = [] if slot is None else [slot, slot - 1, slot + 1]
+            tries = [buckets.get((key, at), []) for at in near] + [by_key.get(key, [])]
+            for faces in tries:  # (the whole kind last: a plane whose slot came out apart)
+                if any(_same_surface(f.face, face, 1e-5) for face in faces):
                     out.append(f.index)
                     break
         return out
@@ -2758,6 +3017,56 @@ def _coarse_key(face):
     except Exception:
         pass
     return (kind, id(face))
+
+
+def _plane_slot(face, key):
+    """A plane's offset along its normal in 0.01 mm slots (None for other surfaces): a finer
+    bucket than _surface_key for _faces_in."""
+    if not key or key[0] != "plane" or len(key) < 4:
+        return None
+    try:
+        if _face_kind(face) == "plane":
+            n = core.canonical_direction(core.unit(_t(face.Surface.Axis)))
+        else:
+            n = core.canonical_direction(_flat_normal(face))  # (a flat B-spline)
+        return int(math.floor(core.dot(_t(face.Vertexes[0].Point), n) / 0.01))
+    except Exception:
+        return None
+
+
+def _same_faces(a, b, tol=1e-6):
+    """Two solids with the same faces (each on the same surface, with the same area and box)
+    and the same volume: the same solid, told without a boolean (beta 3 QA: the base check's
+    two booleans on a VEX plate's 506 coincident faces took 18 s)."""
+    try:
+        fa, fb = a.Faces, b.Faces
+        if len(fa) != len(fb) or abs(a.Volume - b.Volume) > 1e-6 * max(1.0, abs(b.Volume)):
+            return False
+        buckets = {}
+        for f in fb:
+            buckets.setdefault(_surface_key(f), []).append([f, f.Area, f.BoundBox, False])
+        for f in fa:
+            area, box = f.Area, f.BoundBox
+            for item in buckets.get(_surface_key(f), []):
+                if item[3] or abs(item[1] - area) > 1e-6 * max(1.0, area):
+                    continue
+                other = item[2]
+                if max(
+                    abs(other.XMin - box.XMin),
+                    abs(other.YMin - box.YMin),
+                    abs(other.ZMin - box.ZMin),
+                    abs(other.XMax - box.XMax),
+                    abs(other.YMax - box.YMax),
+                    abs(other.ZMax - box.ZMax),
+                ) > tol or not _same_surface(f, item[0], tol):
+                    continue
+                item[3] = True
+                break
+            else:
+                return False
+        return True
+    except Exception:
+        return False
 
 
 def _surface_key(face):

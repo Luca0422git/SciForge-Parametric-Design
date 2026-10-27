@@ -362,7 +362,8 @@ the category "Rebuild with a timeline":
 - `start_rebuild` (`body`): the part becomes the **reference**: its solid frozen in a hidden
   object (drawn faint and see-through, never a body or a step, so it stays the target), the
   original hidden, and a new empty body `<name> (rebuilt)` made at its place, active. A mesh
-  must be watertight; it is turned into a solid of flat facets first.
+  must be watertight and of at most 10,000 triangles; it is turned into a solid of flat
+  facets first.
 - `describe_reference`: the part read as numbers: base shape, features (holes, pockets,
   bosses, patterns, fillets, chamfers), a **plan** of tool calls in Fusion's order whose
   arguments pass the tools' own checks, what could not be read, a confidence.
@@ -373,13 +374,20 @@ the category "Rebuild with a timeline":
   `fix`: the call that makes it; the faces not matched yet with selectors; `deviation`;
   `done`; and a `verdict` that says what to do next. In the window the differences show in
   the 3D view: missing red, extra green.
-- `finish_rebuild`: when done, the rebuild takes the original's name, component and place;
-  the original is deleted or kept hidden (`keep_original`); one undo step. It refuses a
-  rebuild that is not done unless `even_if_different` is given.
+- `finish_rebuild`: when done, the rebuild takes the original's name (unless the person
+  renamed it meanwhile), component and place;
+  whatever used the original (joints, a ground, a pattern of it, sketches on its faces)
+  moves onto the rebuild; the original is deleted or kept hidden (`keep_original`; also kept
+  when something cannot move, said in the answer); one undo step. It refuses a rebuild that
+  is not done unless `even_if_different` is given.
 
 The whole loop with real calls: [rebuilding a part](sciforge://docs/recipes/reverse-engineer.md).
 A person starts it from a body's right-click, **Rebuild with Timeline (AI)...**: SciForge
 starts the rebuild and hands you a message naming the body; carry on from describe_reference.
+To give a rebuild up (the person asks to stop), `delete_step` the reference (its id is in
+start_rebuild's answer): the original is shown again as it was; the rebuilt body stays
+(`delete_bodies` it if the person does not want it). A person uses UTILITIES > AI > **Stop
+Rebuild...** (or the rebuilt body's right-click in the 3D view).
 
 ## A good way to work
 

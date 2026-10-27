@@ -18,15 +18,20 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   the workflow). Newest session log "Patch 0.1.0-beta.2.2".
 - **Beta 3 (`0.1.0-beta.3`, this line of sessions): Auto Timeline, Static Stress simulation
   and VEX assemblies** (Luca 2026-10-26: "put the vex stuff in beta 3 ... one shot for beta 3").
-  **IN PROGRESS (2026-10-27 00:40 UTC): integration on `develop`.** The six builders' work
-  (plan `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`, session
-  logs `docs/sciforge/sessions/beta3-*.md`) is merged with patch 0.1.0-beta.2.2 and pushed so
-  CI runs and the work is safe (the sandbox restarted twice); QA fixes, the SETUP tab's last
-  commits and journey tests follow in later pushes; then docs, CHANGELOG and the version.
-  **Not released; not ready for a quick update yet.** Status: [x] Static Stress engine (9
-  silent-wrong-result bugs fixed by its QA, 205 hand-calculation checks) [x] RESULTS tab
-  [~] SETUP tab (finishing) [x] Auto Timeline recognition + tools [~] Auto Timeline QA [x] VEX
-  [~] VEX QA [ ] journeys [ ] docs / version [ ] released.
+  **IN PROGRESS (2026-10-27 01:55 UTC): integration on `develop` (22b20f3b).** The six
+  builders' work (plan `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`,
+  session logs `docs/sciforge/sessions/beta3-*.md`), the engine QA, the Auto Timeline QA and the
+  VEX QA are merged with patch 0.1.0-beta.2.2 and pushed; README and known issues say beta 3;
+  CI now also runs the Static Stress hand calculations on FreeCAD for Windows
+  (`tools/sciforge/windows_sim.sh`) and the GUI scenarios in nine parts. Still running: the
+  simulation QA (`sf/sim-qa`), the VEX and Auto Timeline journeys (`sf/journey-vex`,
+  `sf/journey-rebuild`), and a check of "a design closed with a dialog open leaves its undo
+  step open" (`sf/undo-leftover`). Then: CHANGELOG final, VERSION 0.1.0-beta.3, CI green.
+  **Not released.** Nothing compiled changed since 0.1.0-beta.2 (core id the same), so it can
+  go out with Actions > SciForge patch release (its notes then say "Built on 0.1.0-beta.2's
+  program") once Luca says go. Status: [x] Static Stress engine + QA [x] SETUP tab [x] RESULTS
+  tab [x] Auto Timeline + QA [x] VEX + QA [~] simulation QA [~] journeys [~] docs / version
+  [ ] released.
 - **VEX robotics: in beta 3** (above): STEP parts in large numbers, linked occurrences,
   Duplicate With Joints, and Align / Joint snapping to the centre of a square hole.
 - Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
@@ -536,40 +541,42 @@ Quick updates come from green "SciForge tests" runs on `develop`.
       Face. Specs `parity/surface.md`, `parity/surface-modify.md`; scenarios `surface3_*`,
       `surface4_*`.
 
-### Beta 3 (0.1.0-beta.3): Auto Timeline and Static Stress (decided 2026-10-26, not started)
+### Beta 3 (0.1.0-beta.3): Static Stress, Auto Timeline, VEX (built 2026-10-26/27)
 
-Nothing built yet. Starting points from the 2026-10-26 reading (no code changed):
+Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`; Fusion research
+`docs/sciforge/dev/research/fusion-simulation.md`, `fusion-vex-assembly.md`; parity specs
+`docs/sciforge/parity/simulation.md`, `auto-timeline.md`, `vex-assembly.md`; session logs
+`docs/sciforge/sessions/beta3-*.md` (one per builder and QA). Nothing compiled changed.
 
-- [ ] **Auto Timeline.** Luca: "Using a connected AI, I want there to be the tool necessary for
-      the AI to reverse engineer premade models and make them parametric. That means mesh to
-      parametric, or objects with no timeline to have a timeline. In my testing, Claude opus
-      5.5 was able to reverse engineer a pretty complicated model ... A tool call and
-      instructions on how to reverse engineer a model would be cool. or however you think is
-      easier/faster/efficient. I know that mesh to parametric already exists in the mesh tab,
-      but for non complex parts, i want a nicer option to make real parametric objects."
-      What the AI already has: 117 tools, among them `query_geometry` / `inspect_design`
-      (every face's facts and a stable selector, `sciforge/ai/geometry_facts.py`), `render`,
-      `check_geometry`, `diff_design` (compares with a snapshot in time, not with another
-      body). Proposed, most valuable first: (1) a **compare-with-the-original** tool: the
-      imported body stays as a hidden reference and the tool answers how far the rebuild is
-      from it (extra and missing volume, largest gap, faces not matched yet), a score the AI
-      drives to zero; (2) a **feature summary** of a featureless body in one call (overall
-      block, holes with sizes and places, fillets and radii, chamfers, patterns) instead of
-      hundreds of face facts; (3) a **recipe** in the AI docs (big shapes first, cuts and
-      holes, patterns, fillets / chamfers last, key sizes as parameters, compare after every
-      step) and a right-click "rebuild with a timeline (AI)" on a body that opens the chat
-      panel with it; (4) meshes: fit flat / round / spherical regions first so the AI gets
-      numbers, not triangles; the compare tool works against a mesh too (simple parts only).
-- [ ] **Static Stress** (outline 7.18). Luca first asked for "stress and flow"; then "stress-only
-      sim is fine". Research Fusion's Static Stress study (setup, constraints, loads,
-      contacts, mesh, solve, results) from Autodesk's documentation before building. Engine:
-      FreeCAD's FEM module, already built (FreeCAD Tools lists FEM). The solver and meshers
-      already ship: `package/rattler-build/recipe.yaml` has `calculix` and `gmsh`, the
-      Windows bundle copies `ccx.exe` and `gmsh.exe` into `bin`
-      (`package/rattler-build/windows/create_bundle.sh`), and the conda preset builds Netgen
-      (`BUILD_FEM_NETGEN`). So Static Stress may need no compiled change at all; confirm on a
-      real beta.2 install that both programs are there and run. SciForge's own workspace on
-      top; FreeCAD's FEM workbench never shown.
+- [x] **Static Stress** (outline 7.18). Engine `sciforge/simulation_core.py` (pure, unit tested)
+      + `simulation.py` (Gmsh, Netgen fallback, CalculiX in a background thread, results read
+      back; SciForge writes the CalculiX constraints itself; `Job` with stages and Cancel).
+      SETUP tab `simulation_ui.py`, `simulation_setup_*`, glyphs `simulation_glyphs.py`, solve
+      dialog / Job Status; RESULTS tab `simulation_results*.py` (own Coin nodes, legend,
+      probes, slice, iso-surface, Compare in Viewports, Animate GIF, HTML report). AI tools:
+      create_study, add_constraint, add_load, local_mesh_control, set_study_material,
+      study_settings, precheck_study, solve_study, study_results, delete_study (recipe
+      `docs/ai/recipes/static-stress.md`). Accuracy: `SciForgeTests/headless/sim_benchmarks.py`
+      (138 checks) and `sim_accuracy_qa.py` (205), run by `run_tests.sh --only sim` and in base,
+      and on FreeCAD for Windows by CI (`tools/sciforge/windows_sim.sh`). Gaps: one load case
+      per study (Clone Study), bonded contacts only, no remote moment / hydrostatic / bolt /
+      point mass, thin walls stiff at the default mesh (a note says so), Simplify greyed.
+- [x] **Auto Timeline.** `sciforge/recognize.py` (+ `recognize_core.py`, `recognize_mesh.py`):
+      describe(shape) -> base, features, plan in Fusion's order, unrecognized; `rebuild.py`
+      (+ `rebuild_core.py`, `rebuild_links.py`, `rebuild_ui.py`): start / describe / compare /
+      finish / stop, the reference as a ghost, Finish moves joints, grounds and patterns onto
+      the rebuild. AI tools start_rebuild, describe_reference, compare_to_reference,
+      finish_rebuild (recipe `docs/ai/recipes/reverse-engineer.md`). Tests: `rebuild_e2e.py`
+      (140 checks incl. the QA's `rebuild_qa.py`), `recognize_bench.py` (71 parts), scenarios
+      `rebuild_*`. Gaps: free-form faces (lofts, sweeps, text on round faces), threads read but
+      not rebuilt exactly, describe ~25 s on a VEX C-channel, Find Features not built.
+- [x] **VEX.** Hole-centre snaps `hole_snaps_core.py` / `hole_snaps.py` in Joint, Align,
+      Duplicate With Joints; Insert STEP of many files; the same file again = linked occurrence
+      (path + bytes); Duplicate With Joints; speed (298-part robot opens in ~28 s, was 127 s).
+      Team page `docs/sciforge/vex.md`; fixtures `SciForgeTests/fixtures/vex/`. Gaps: open speed
+      would gain ~8 s from a C++ change (lazy placement indicator in ViewProviderDragger),
+      the "Selectable" switch needs C++ (both held for Luca), occurrence takeover keeps solids
+      not history, browser forced rebuild 0.37 s (target 0.3).
 
 ## Known issues / findings
 
@@ -1607,9 +1614,13 @@ Nothing built yet. Starting points from the 2026-10-26 reading (no code changed)
 
 (See outline section 12. Also:)
 
-- **VEX (2026-10-26):** do the VEX items (square-hole centre snaps for Align and Joint; many
-  STEP parts in one assembly, fast) go into the patch, into beta 3, or later? The snap fix is
-  SciForge's own Python only, so a patch can carry it.
+- **Beta 3 release route:** Actions > SciForge patch release publishes 0.1.0-beta.3 in about
+  half an hour on beta.2's program (nothing compiled changed); a full build (tag
+  `sciforge-v0.1.0-beta.3`, ~4 h) is the other way. Which one?
+- **VEX speed, compiled part:** opening a 300-part robot could lose ~8 s more if FreeCAD built
+  each body's placement indicator only when it is shown (`ViewProviderDragger.cpp`), and the
+  Fusion "Selectable" switch for a body inside a component needs C++ too. Both need a full
+  build (and a core-patches entry); do you want them in a later release?
 
 - Merge `sf/home-cloud-ai` (Home, places, AI connector, chat panel: M0-M4) into `develop`?
   The brief says to ask after M3; not merged without your OK.

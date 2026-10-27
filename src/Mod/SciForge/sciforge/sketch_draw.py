@@ -413,8 +413,8 @@ class Field:
         value = self.typed if self.typed is not None else self.value
         if value is None:
             return ""
-        if self.kind == LENGTH:
-            return "%s mm" % _num(value)
+        if self.kind == LENGTH:  # in the design's units, like Fusion (mm: as before)
+            return _length_text(value)
         if self.kind == ANGLE:
             return "%s deg" % _num(math.degrees(value))
         if self.kind == COUNT:
@@ -439,8 +439,9 @@ class Field:
             except Exception:
                 raise ValueError("Not a value: %s" % text)
             unit = "deg" if self.kind == ANGLE else "mm"
-            if q.Unit == App.Units.Quantity(1.0).Unit:
-                q = App.Units.Quantity("%r %s" % (q.Value, unit))
+            if q.Unit == App.Units.Quantity(1.0).Unit:  # a plain number: the design's units
+                value = q.Value if self.kind == ANGLE else _plain_length(q.Value)
+                q = App.Units.Quantity("%r %s" % (value, unit))
             if q.Unit != App.Units.Quantity("1 %s" % unit).Unit:
                 raise ValueError(
                     "Type %s" % ("an angle, e.g. 30" if self.kind == ANGLE else "a length, e.g. 25")
@@ -455,6 +456,27 @@ class Field:
         if self.high is not None and value > self.high:
             raise ValueError("The value must be at most %s." % _num(self.high))
         return value
+
+
+def _length_text(mm):
+    """A length as the box shows it: in the design's units ("25.4 mm", "1 in")."""
+    try:
+        from . import browser_core
+
+        return browser_core.length_text(mm, App.ActiveDocument)
+    except Exception:
+        return "%s mm" % _num(mm)
+
+
+def _plain_length(number):
+    """A plain number typed in a length box, in mm: it is in the design's units ("2" in a
+    design in inches is 2 in, as in Fusion; it was 2 mm, beta 3 VEX QA)."""
+    try:
+        from . import browser_core
+
+        return browser_core.plain_length(number, App.ActiveDocument)
+    except Exception:
+        return float(number)
 
 
 def _num(value, digits=2):

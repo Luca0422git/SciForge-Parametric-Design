@@ -8,6 +8,10 @@ download of a few MB that installs itself and restarts SciForge. Nobody unzips a
 A **full release** (the 4-hour build, started by pushing a tag `sciforge-v<version>`) is only
 needed when the compiled program changes, or for a big release you want built from scratch.
 
+A new beta whose changes are all in SciForge's own files (0.1.0-beta.3: simulation, Auto
+Timeline and VEX, nothing compiled) can go out the same quick way: its notes then start with
+"Built on 0.1.0-beta.2's program" instead of "A patch release".
+
 ## What you do
 
 1. Claude fixes the bug on `develop`, sets the new number in `src/Mod/SciForge/VERSION`

@@ -309,7 +309,49 @@ rebuilt; a body already being rebuilt is not started twice (carry on in its rebu
   ids of the later steps that name it (`uses` lists them). compare_to_reference afterwards
   says what that step should have made.
 - **A mesh is refused** ("not watertight"): the mesh has holes or loose triangles; the person
-  repairs it first (MESH tab > Repair), then starts again.
+  repairs it first (MESH tab > Repair), then starts again. ("a mesh of N triangles"): over
+  10,000 triangles a mesh is not made into a solid (that takes minutes, and FreeCAD cannot be
+  stopped meanwhile); the person reduces it (MESH tab > Reduce) or exports it again from its
+  CAD program with a coarser setting.
+- **describe_reference lists a thread, a text or free-form faces** in `unrecognized`: they
+  are never guessed. A thread: the plan drills the plain hole; add the thread with `thread`
+  (modeled) if it is a standard one, compare again, and finish with `even_if_different` when
+  the person accepts it as close. A text or a logo standing on (or cut into) a flat face: the
+  plan builds the part without it and `unrecognized` says where it is, how big, raised or
+  engraved; make a text with `sketch_text` and an extrude (`join` / `cut`), or leave it out
+  and finish with `even_if_different` if the person agrees. Other free-form faces (a loft):
+  the base is not read; the notes say what to build by hand (`loft`, `sweep`).
+- **The person wants to stop the rebuild** (the wrong body, or not now): `delete_step` the
+  reference (its id is in start_rebuild's answer): the original is shown again, as it was.
+  The rebuilt body stays; `delete_bodies` it if the person does not want it.
+- **The base is not read** (`base` is `none`: free-form faces, or no axis fits): the plan has
+  only the features, and their steps need the base (a hole there answers "there is no solid
+  ... to drill into"). Build the base yourself first (the notes name the axis most of the
+  part fits and list the faces that do not), then the plan, then compare.
+- **A fillet or chamfer of the plan is "too big here"** (the largest that fits is much
+  smaller) and compare then shows small pieces of material along those edges: the original
+  rounded the edges before a later cut trimmed the round (the plan rounds last, and may have
+  put that cut into an earlier sketch: an opening in the base's profile). Do not take the
+  smaller value; make the round before the cut. A cut that is a step of its own:
+  `roll_timeline` with `before` it, the fillet, `roll_timeline` to `end`. An opening in an
+  earlier sketch: build that sketch without the opening, make the rounds, then cut the
+  opening with an extrude of its own (`operation: cut`). Compare again (a 3D-printer part's
+  uprights came out at match 1 this way); a sliver face or two left over is fine to finish
+  with `even_if_different`.
+- **A plan step's selector picks more edges than it expects** ("picked 5 edges, expected 1"):
+  the rebuild differs a little from the original there (an earlier step came out slightly
+  different: compare says where). `query_geometry` with the selector lists what it picks:
+  take the `ref` of the edge at the plan's place, or leave the step and let compare's fixes
+  (with refs on the rebuild) take over.
+- **describe_reference takes half a minute or more** on a big part (400 faces and more):
+  OpenCASCADE's defeaturing cannot be interrupted; wait for the answer (do not call it again
+  meanwhile). Its notes say when the time budget ran out and what was skipped.
+- **finish_rebuild kept the original** ("kept (hidden) instead of deleted: ... still use it"):
+  joints, patterns and sketches that used the original moved onto the rebuild; the ones
+  named could not (they use something of the original the rebuild has not). Point them at
+  the rebuild by hand, then delete the hidden original.
+- **After opening the design again** the rebuild carries on in its rebuilt body (it is the
+  active body again); with several rebuilds going on, `activate` the one to work in.
 - **The match stays just under 1 on a mesh**: a mesh is flat facets, so a round hole of the
   mesh is a polygon; the faces are matched within the mesh's tolerance and `done` comes when
   every face is within it. Build round holes anyway (the person wants a real part).

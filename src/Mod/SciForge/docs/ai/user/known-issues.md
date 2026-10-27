@@ -1,6 +1,6 @@
 <!-- A copy of docs/sciforge/known-issues.md for AI models, made by tools/sciforge/make_ai_docs.py: edit the original, then run the script. -->
 
-# Known issues in SciForge 0.1.0-beta.2.2
+# Known issues in SciForge 0.1.0-beta.3
 
 This is a beta: it works, but it is not finished. These are the things you are most likely to
 run into, each with what you can do about it. The list is kept short on purpose and is updated
@@ -31,6 +31,25 @@ time you start it, but treat that as a safety net, not a plan.
   of Fusion's options are not there yet (for example weld corner reliefs, and a flat pattern
   for a Brake Form lofted flange), and Design Advice is slow on big parts. The details are
   in [parity/sheet-metal.md](parity/sheet-metal.md) and [parity/plastic.md](parity/plastic.md).
+- **Simulation is new in this beta.** It has Fusion's Static Stress study only, one set of
+  loads per study (make a second study for another load case), and bodies that touch are glued
+  together (no sliding or separating contacts). Its numbers are checked against hand
+  calculations, but they are only as good as the setup and the mesh: thin walls at the default
+  mesh come out a little too stiff, and SciForge then says so in a note (a finer mesh in Study
+  Settings fixes it). A very fine mesh (over about 150,000 nodes) takes minutes and a lot of
+  memory; the solve's message warns first. *Workaround:* start coarse, then refine where the
+  colours change most (Local Mesh Control) and compare.
+- **Auto Timeline needs an AI** (SciForge's chat with your own key, or an AI app connected to
+  SciForge), and it reads blocks, plates, turned parts, holes, pockets, bosses, fillets and
+  chamfers. Free-form shapes (lofts, sweeps, sculpted surfaces) and threads are listed as "not
+  read" for you or the AI to build by hand, and a mesh over 10,000 triangles is refused.
+  *Workaround:* MESH > Reduce, or export the mesh coarser, and build the free-form parts
+  yourself; Stop Rebuild (UTILITIES > AI) gives a rebuild up.
+- **Big robots open slowly.** A 300-part VEX robot takes about half a minute to open on the
+  test machine (it took over two minutes in beta 2). Much of what is left is FreeCAD building
+  a small axis marker for every body, which needs a change to the compiled program. On such a
+  robot the browser can take a second or so to catch up after Ctrl+Z.
+  *Workaround:* none needed; once open, hovering, joints and Drive Joints are quick.
 - **The AI cannot use the SHEET METAL and PLASTIC tabs yet**, nor the SURFACE tab's Fillet,
   Chamfer, Press Pull, Delete and Merge on surface bodies. Everything else you can do, it
   can do. *Workaround:* make those steps yourself; the AI can carry on from there. Its tools
@@ -39,9 +58,11 @@ time you start it, but treat that as a safety net, not a plan.
 ## Not built (yet)
 
 - **Not all of Fusion's features.** SciForge covers the Design workspace: sketches, solid and
-  surface modeling, patterns, components and joints, mesh, drawings, 3D printing, and more. It
-  does **not** have sculpting (T-splines), simulation, rendering and animation, CAM, electronics,
-  or cloud collaboration. Some options inside the tools that do
+  surface modeling, patterns, components and joints, mesh, drawings, 3D printing, and more,
+  and the Simulation workspace's Static Stress study. It does **not** have sculpting
+  (T-splines), the other simulation studies (thermal, vibration modes, buckling, nonlinear,
+  event, shape optimization), rendering and animation, CAM, electronics, or cloud
+  collaboration. Some options inside the tools that do
   exist are shown greyed out with the reason. For example, the Fillet options Setback corners,
   Curvature (G2) continuity and Asymmetric radius, and the Chamfer corner types Miter and Blend,
   need work that OpenCASCADE (FreeCAD's geometry engine) does not do yet.

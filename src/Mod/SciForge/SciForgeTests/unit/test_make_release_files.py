@@ -222,14 +222,27 @@ class Built(Fixture):
         self.assertIn("Get-FileHash", notes)
         self.assertTrue(notes.endswith("\n"))
 
-    def test_a_patch_release_says_so_first(self):
+    def test_a_release_without_a_build_says_so_first(self):
         plain = self.build()["release-notes.md"]
         self.assertNotIn("A patch release", plain)
+        self.assertNotIn("program.**", plain)
         notes = self.build(patch_of="0.0.9-beta")["release-notes.md"]
-        self.assertTrue(notes.startswith("**A patch release.**"))
+        self.assertTrue(notes.startswith("**Built on 0.0.9-beta's program.**"))
         self.assertIn("since 0.0.9-beta", notes)
         self.assertIn("Update now", notes)
         self.assertIn("First public beta.", notes)  # the changelog section follows
+
+    def test_only_a_patch_number_is_called_a_patch_release(self):
+        note = self.tool.patch_note("0.1.0-beta.2.1", "0.1.0-beta.2")
+        self.assertTrue(note.startswith("**A patch release.**"))
+        self.assertIn("installs 0.1.0-beta.2.1", note)
+        # a new beta with no change to the compiled program (0.1.0-beta.3)
+        note = self.tool.patch_note("0.1.0-beta.3", "0.1.0-beta.2")
+        self.assertTrue(note.startswith("**Built on 0.1.0-beta.2's program.**"))
+        self.assertNotIn("patch release", note)
+        self.assertIn("installs 0.1.0-beta.3", note)
+        # 0.1.0-beta.20 is not a patch of 0.1.0-beta.2
+        self.assertFalse(self.tool.patch_note("0.1.0-beta.20", "0.1.0-beta.2").startswith("**A"))
 
     def test_the_notes_of_the_smartscreen_text_come_from_the_file_given(self):
         notes = self.build(smartscreen="# Windows protected your PC\n\nA different sentence here.\n")["release-notes.md"]

@@ -70,7 +70,13 @@ class RebuildError(ValueError):
 
 REFERENCE = "RebuildReference"
 SHAPE = "FrozenShape"
+KEPT_UNDER = "SciForgeKeptUnder"  # on an original kept at Finish: the rebuild's name
+# (beta 3 QA) triangles beyond which a mesh is not made into a solid: the time grows much
+# faster than the count (in the sandbox: 6,000 5 s; 15,000 23 s; 16,780 79 s under load;
+# 37,740 160 s, then describe as long again), and FreeCAD cannot be stopped meanwhile
+MESH_TRIANGLES = 10000
 LISTENERS = []  # fn(event, ref, data): the window's red / green overlay (rebuild_ui)
+_LIVE_DOCS = set()  # documents a rebuild was started or opened in (the move watcher looks there)
 _HIDDEN = {}  # document name -> {reference name: original's name}: hidden while it is rebuilt
 
 
@@ -101,6 +107,15 @@ class ReferenceFeature:
         add(obj, "App::PropertyString", "SourceKind", "Rebuild", "body or mesh")
         add(obj, "App::PropertyString", "TargetName", "Rebuild", "The body the rebuild is in")
         add(obj, "App::PropertyFloat", "Tolerance", "Rebuild", "Faces agree within this (mm)")
+        # where the rebuilt body's coordinates stood when the solid was frozen: the reference
+        # moves with the rebuild's component (a jointed part driven while it is rebuilt)
+        if add(obj, "App::PropertyPlacement", "FrozenFrame", "Rebuild", "The frame at freezing"):
+            try:  # (a reference saved before: its frame as it stands)
+                target = target_of(obj) if getattr(obj, "TargetName", "") else None
+                if target is not None:
+                    obj.FrozenFrame = frame(body=target)
+            except Exception:
+                pass
         if add(obj, "App::PropertyBool", "Shown", "Rebuild", "Drawn faint in the 3D view"):
             obj.Shown = True
         bodies.mark(obj, REFERENCE)
@@ -108,6 +123,12 @@ class ReferenceFeature:
 
     def onDocumentRestored(self, obj):
         self.ensure(obj)
+        _LIVE_DOCS.add(obj.Document.Name)
+        try:
+            if getattr(obj, "Shown", True):
+                _resume_later(obj.Document.Name)
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
 
     def execute(self, obj):
         return None
@@ -130,13 +151,34 @@ def is_reference(obj):
 
 
 def reference_shape(ref):
-    """The frozen solid, in design coordinates (a copy)."""
+    """The frozen solid, in design coordinates (a copy): where it stands now, moved with the
+    rebuilt body's component since it was frozen (QA: a jointed part driven while it was
+    rebuilt left the reference behind, and compare and the plan went wrong)."""
     if not is_reference(ref) or not bodies.alive(ref):
         raise RebuildError("That is not a rebuild reference (start_rebuild makes one).")
     shape = getattr(ref, SHAPE, None)
     if shape is None or shape.isNull() or not shape.Solids:
         raise RebuildError("The reference %s holds no solid." % ref.Label)
-    return shape.copy()
+    motion = moved_by(ref)
+    if motion is None:
+        return shape.copy()
+    out = bodies.baked(shape)
+    out.transformShape(motion.toMatrix(), True)
+    return out
+
+
+def moved_by(ref):
+    """How far the rebuilt body's frame moved since the reference was frozen (a placement),
+    or None when it did not (or the rebuilt body is gone)."""
+    try:
+        start = getattr(ref, "FrozenFrame", None)
+        target = target_of(ref)
+        if start is None or target is None:
+            return None
+        motion = frame(body=target).multiply(start.inverse())
+        return None if motion.isIdentity() or motion.isSame(App.Placement(), 1e-12) else motion
+    except Exception:
+        return None
 
 
 def source_of(ref):
@@ -172,6 +214,73 @@ def active_references(doc):
     return [r for r in references(doc) if getattr(r, "Shown", True)]
 
 
+def under_rebuilds(doc):
+    """{body or mesh body name: why} for the originals that lie under their rebuild on
+    purpose: the ones being rebuilt (hidden, the reference) and the ones Finish kept, hidden
+    (beta 3 QA: check_design called each pair an overlap)."""
+    out = {}
+    try:
+        for ref in active_references(doc):
+            if target_of(ref) is not None and getattr(ref, "SourceName", ""):
+                out[ref.SourceName] = "being rebuilt, hidden under the rebuild"
+        for obj in doc.Objects:
+            name = getattr(obj, KEPT_UNDER, "") if KEPT_UNDER in obj.PropertiesList else ""
+            if name and doc.getObject(name) is not None and not obj.Visibility:
+                out[obj.Name] = "the original, kept hidden under its rebuild"
+    except Exception as exc:
+        warn("rebuild: %s" % exc)
+    return out
+
+
+def working_body(doc):
+    """The body the rebuild going on is made in, when there is exactly one (a design opened
+    again carries on there: QA found the next steps going into another body), else None."""
+    try:
+        live = [r for r in active_references(doc) if target_of(r) is not None]
+    except Exception:
+        return None
+    return target_of(live[0]) if len(live) == 1 else None
+
+
+def _resume_later(name, tries=0):
+    """In the window: once a design with a rebuild going on is open, its rebuilt body is the
+    active one again (FreeCAD keeps no active body in the file, and SciForge would pick the
+    design's oldest body: the AI's or the person's next steps went there)."""
+    if not App.GuiUp:
+        return
+    from .compat import QtCore
+
+    def run():
+        try:
+            doc = App.listDocuments().get(name)
+            if doc is None:
+                return
+            if getattr(doc, "Restoring", False) or getattr(doc, "Recomputing", False):
+                if tries < 50:
+                    _resume_later(name, tries + 1)
+                return
+            import FreeCADGui as Gui
+
+            gdoc = Gui.getDocument(name)
+            if gdoc is None or gdoc.ActiveView is None:
+                if tries < 50:
+                    _resume_later(name, tries + 1)
+                return
+            for ref in active_references(doc):  # (the ghost where its component stands now)
+                _notify("moved", ref, None)
+            body = working_body(doc)
+            if body is None or bodies.active_body(doc) is not None:
+                return
+            from . import components
+
+            components.activate_body(body)
+            log("rebuild: %s is the active body again (a rebuild goes on there)" % body.Label)
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
+
+    QtCore.QTimer.singleShot(0 if tries == 0 else 100, run)
+
+
 def find(doc, body=None):
     """The reference to work with: the one rebuilt into `body` (the active body), else the
     only one being worked on. None when there is none; RebuildError when it is not clear."""
@@ -202,10 +311,56 @@ def _original(source):
     body = source if bodies.is_body(source) else bodies.body_of(source)
     if body is not None:
         return "body", body
+    if getattr(source, "TypeId", "") == "App::Part":
+        # a component (import_file answers with the component's id): its one solid body
+        # (beta 3 QA: an AI that passed the id it was given was told to pick a body)
+        from . import components
+
+        found = [
+            b
+            for b in components.bodies_in(source.Document, source, recursive=True)
+            if bodies.has_solid(b)
+        ]
+        if len(found) == 1:
+            return "body", found[0]
+        if found:
+            raise RebuildError(
+                "%s holds %d bodies (%s): pick the one to rebuild by its id."
+                % (
+                    source.Label,
+                    len(found),
+                    ", ".join("%s (%s)" % (b.Label, b.Name) for b in found),
+                )
+            )
     raise RebuildError(
         "%s is not a body or a mesh body: pick the body to rebuild (an imported STEP body, "
         "any solid body, or a mesh body)." % getattr(source, "Label", source)
     )
+
+
+def _linked_design(source):
+    """The name of the design a body comes from when it is a linked copy (Insert into Current
+    Design of a saved design: its component follows that file), else "". (beta 3 QA: such a
+    body was rebuilt in place, its link to the other design deleted at Finish while its
+    component still said it was linked.)"""
+    try:
+        from . import components, design_insert
+
+        base = getattr(source, "BaseFeature", None) if bodies.is_body(source) else None
+        if base is None or not design_insert.is_copy_feature(base):
+            return ""
+        container = components.container_of(source)
+        while container is not None:
+            if design_insert.is_linked(container):
+                path = getattr(container, design_insert.LINKED_FILE, "")
+                return design_insert.design_name(path) or container.Label
+            container = components.container_of(container)
+        source_body = getattr(base, "Source", None)
+        doc = getattr(source_body, "Document", None)
+        return design_insert.design_name(getattr(doc, "FileName", "")) if doc else "another"
+    except Exception as exc:
+        warn("rebuild: %s" % exc)
+    return ""
 
 
 def _solid_of(kind, source):
@@ -217,6 +372,14 @@ def _solid_of(kind, source):
     note = ""
     if kind == "mesh":
         mesh = insert.kernel_copy(source)
+        if mesh.CountFacets > MESH_TRIANGLES:
+            raise RebuildError(
+                "%s is a mesh of %s triangles: turning that many into a solid takes many "
+                "minutes (the time grows much faster than the count), so it is not rebuilt. "
+                "Reduce it to under %s triangles first (MESH tab > Reduce), or export it again "
+                "from its CAD program with a coarser setting, then try again."
+                % (source.Label, "{:,}".format(mesh.CountFacets), "{:,}".format(MESH_TRIANGLES))
+            )
         broken = _mesh_problem(mesh)
         if broken:
             raise RebuildError(
@@ -313,6 +476,14 @@ def start(doc, source, label=None):
     if is_reference(source):
         raise RebuildError("%s is a rebuild reference itself; pick a body." % source.Label)
     kind, source = _original(source)
+    linked = _linked_design(source)
+    if linked:
+        raise RebuildError(
+            "%s comes from the design %s (it is in a component linked to that design, and "
+            "follows it): open %s and rebuild it there (every linked copy follows), or Break "
+            "Link first (the component's right-click in the browser) to rebuild this copy on "
+            "its own." % (source.Label, linked, linked)
+        )
     ref = reference_for(source)
     if ref is not None and not getattr(ref, "Shown", True):
         ref = None  # a finished rebuild whose reference was kept: this is a new one
@@ -329,6 +500,7 @@ def start(doc, source, label=None):
             )
     solid, note = _solid_of(kind, source)
     container = components.container_of(source)
+    fresh = ref is None
     if ref is None:
         ref = doc.addObject("App::FeaturePython", REFERENCE)
         ReferenceFeature(ref)
@@ -346,6 +518,9 @@ def start(doc, source, label=None):
         except Exception:
             pass
     ref.TargetName = target.Name
+    if fresh:
+        ref.FrozenFrame = frame(body=target)
+    _LIVE_DOCS.add(doc.Name)
     ref.Shown = True
     _attach_view(ref)
     bodies.set_shown(source, False)
@@ -431,7 +606,10 @@ def describe(ref, options=None):
                     whole = place.inverse().multiply(source.Placement)
                 if not whole.isIdentity():
                     mesh.transform(whole.toMatrix())
-                return recognize_mesh.describe_mesh(mesh, options)
+                # the reference's solid was made from these triangles at start: not again
+                # (beta 3 QA: half of a big mesh's minutes)
+                faceted = in_frame(reference_shape(ref), place)
+                return recognize_mesh.describe_mesh(mesh, options, faceted=faceted)
         options.setdefault("source", "mesh")
     shape = in_frame(reference_shape(ref), place)
     return recognize.describe(shape, options)
@@ -446,6 +624,43 @@ DEFAULTS = {
     "tolerance": None,  # mm (default: the reference's)
     "show": True,  # the window shows the differences (missing red, extra green)
 }
+
+
+def rolled_back_steps(target):
+    """The rebuilt body's steps that the history marker has rolled back (not computed)."""
+    from . import timeline_ops
+
+    try:
+        body = target if bodies.is_body(target) else bodies.body_of(target)
+        if body is None:
+            return []
+        tl = timeline_ops.timeline(body.Document, deps=False)
+        if tl.at_end:
+            return []
+        return [i.name for i in tl.items if i.body == body.Name and i.state == "rolled_back"]
+    except Exception as exc:
+        warn("rebuild: %s" % exc)
+        return []
+
+
+def _not_rolled_back(target, what):
+    """RebuildError when the history marker leaves steps of the rebuild out (beta 3 QA: with
+    the marker rolled back, compare and Finish said the rebuild was still empty, and an AI
+    would build the plan a second time)."""
+    rolled = rolled_back_steps(target)
+    if rolled:
+        raise RebuildError(
+            "The history marker is rolled back: %d step(s) of %s (%s) are not computed, so "
+            "the rebuild cannot be %s as it is. Move the marker to the end (roll_timeline "
+            "with to: end; in the window, drag the history marker to the end of the "
+            "timeline), then try again."
+            % (
+                len(rolled),
+                target.Label,
+                ", ".join(rolled[:4]) + (" ..." if len(rolled) > 4 else ""),
+                what,
+            )
+        )
 
 
 def _target_shape(target):
@@ -477,6 +692,7 @@ def compare(ref, target=None, options=None):
                 "The rebuilt body of %s is gone (deleted?): undo that, or call start_rebuild "
                 "on %s again for a new one." % (ref.Label, ref.SourceLabel or "the original")
             )
+    _not_rolled_back(target, "compared")
     body, rebuilt = _target_shape(target)
     place = frame(body=body) if body is not None else App.Placement()
     known = _reference_facts(ref, place)  # (measured once for all the compares of a rebuild)
@@ -1105,6 +1321,20 @@ def _round_facts(face, surface, kind, centre):
         row["span"] = face.Area / (surface.Radius * length) if length > 1e-12 else 0.0
         if ts:
             row["ends"] = [_xyz(point + axis * min(ts)), _xyz(point + axis * max(ts))]
+    elif kind == "cone":
+        # how far from the axis it goes: a drill point narrows to (almost) nothing, a
+        # countersink or a chamfered rim widens the hole (beta 3 QA: a chamfered rim was
+        # called "a pointed (drilled) end")
+        rs = []
+        for edge in face.Edges:
+            try:
+                for q in edge.discretize(12):
+                    w = q - point
+                    rs.append((w - axis * w.dot(axis)).Length)
+            except Exception:
+                continue
+        if rs:
+            row["r_min"], row["r_max"] = min(rs), max(rs)
     elif kind == "torus":
         row["major"] = surface.MajorRadius
         row["minor"] = surface.MinorRadius
@@ -1936,15 +2166,44 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
             "The rebuilt body of %s is gone: there is nothing to finish (start_rebuild again)."
             % (ref.SourceLabel or ref.Label)
         )
+    _not_rolled_back(target, "finished")
     if not bodies.has_solid(target):
         raise RebuildError(
             "%s is still empty: build the part first (describe_reference gives the plan)."
             % target.Label
         )
     source = source_of(ref)
-    label = getattr(ref, "SourceLabel", "") or (source.Label if source is not None else "")
+    # the original's name as it is now (beta 3 QA: renamed while it was rebuilt, the rebuild
+    # took the old name), else the one it had at start
+    label = (source.Label if source is not None else "") or getattr(ref, "SourceLabel", "")
+    renamed = not _default_rebuilt_label(target.Label, getattr(ref, "SourceLabel", "") or label)
+    report = {
+        "followed": [],
+        "kept_because": [],
+        "kept_original": bool(keep_original),
+        "original_label": label,
+    }
     if source is not None:
         container = components.container_of(source)
+        if components.container_of(target) is not container:
+            components.place(target, container, keep_position=True)
+        _take_looks(source, target)
+        place = _timeline_place(doc, source, target)
+        # what used the original (joints, patterns, sketches on its faces...) follows the
+        # rebuild; what cannot follow keeps the original, hidden (QA: deleting it took the
+        # joints of a jointed part with it)
+        users = []
+        if not insert.is_mesh_body(source):
+            from . import rebuild_links
+
+            follow = rebuild_links.Follow(doc, source, target, ref).plan()
+            follow.apply()
+            report["followed"] = [o.Label for o in follow.moved]
+        users = _still_used(doc, source, target, ref)
+        if users and not keep_original:
+            keep_original = True
+            report["kept_because"] = users
+        report["kept_original"] = bool(keep_original)
         if keep_original:
             new_label = "%s (original)" % label
             if insert.is_mesh_body(source):
@@ -1954,11 +2213,19 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
             else:
                 source.Label = new_label
             bodies.set_shown(source, False)
+            # (beta 3 QA) it lies under its rebuild on purpose: check_design and interference
+            # leave it out (they called the pair an overlap, NOT OK)
+            try:
+                bodies.add_prop(source, "App::PropertyString", KEPT_UNDER, "Rebuild", "", True)
+                setattr(source, KEPT_UNDER, target.Name)
+            except Exception as exc:
+                warn("rebuild: %s" % exc)
         else:
             _delete_original(doc, source)
-        if components.container_of(target) is not container:
-            components.place(target, container, keep_position=True)
-    if label:
+        if place is not None:
+            place()
+    FINISHED[ref.Name] = report
+    if label and not renamed:  # (a name the person gave the rebuild stays: beta 3 QA)
         target.Label = label
     _HIDDEN.get(doc.Name, {}).pop(ref.Name, None)
     NOTES.pop(ref.Name, None)
@@ -1967,7 +2234,12 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
     if keep_reference:
         ref.Shown = False
     else:
-        doc.removeObject(ref.Name)
+        name = ref.Name  # (a removed object has no name any more)
+        _FINISHING.add(name)
+        try:
+            doc.removeObject(name)
+        finally:
+            _FINISHING.discard(name)
     bodies.set_shown(target, True)
     try:
         components.activate_body(target)
@@ -1984,6 +2256,151 @@ def finish(ref, target=None, keep_reference=False, keep_original=False):
     return target
 
 
+FINISHED = {}  # reference name -> what its finish did: {"followed", "kept_because", ...}
+
+
+def _default_rebuilt_label(label, original):
+    """Whether a rebuilt body still has the name start gave it ("<original> (rebuilt)", with
+    a number FreeCAD may have added): not renamed by the person."""
+    return not original or str(label).startswith("%s (rebuilt)" % original)
+
+
+def stop(ref, keep_rebuilt=False):
+    """Give the rebuild up: the original is shown again and the reference goes; the rebuilt
+    body goes with its steps (keep_rebuilt: it stays, a body like any other). Inside the
+    caller's undo step. Returns the original (None when it is gone). (beta 3 QA: there was
+    no way back but Undo, and none at all in a design opened again.)"""
+    from . import components, timeline_ops
+
+    if not is_reference(ref) or not bodies.alive(ref):
+        raise RebuildError("There is no rebuild to stop.")
+    if not getattr(ref, "Shown", True):
+        raise RebuildError(
+            "The rebuild of %s is finished already: there is nothing to stop."
+            % (getattr(ref, "SourceLabel", "") or ref.Label)
+        )
+    doc = ref.Document
+    source = source_of(ref)
+    target = target_of(ref)
+    if target is not None and not keep_rebuilt:
+        timeline_ops.delete_bodies(doc, [target.Name], transaction=False)
+    _HIDDEN.get(doc.Name, {}).pop(ref.Name, None)
+    NOTES.pop(ref.Name, None)
+    _KNOWN.pop((doc.Name, ref.Name), None)
+    _notify("clear", ref, None)
+    name = ref.Name  # (a removed object has no name any more)
+    _FINISHING.add(name)
+    try:
+        doc.removeObject(name)
+    finally:
+        _FINISHING.discard(name)
+    if source is not None and bodies.alive(source):
+        bodies.set_shown(source, True)
+        if bodies.is_body(source) and (keep_rebuilt is False or target is None):
+            try:
+                components.activate_body(source)
+            except Exception:
+                bodies.set_active_body(source)
+    log(
+        "rebuild of %s stopped (rebuilt body %s)"
+        % (
+            getattr(source, "Label", "") or getattr(ref, "SourceLabel", ""),
+            "kept" if keep_rebuilt and target is not None else "deleted",
+        )
+    )
+    return source
+
+
+def _still_used(doc, source, target, ref):
+    """Words for what still needs the original after the links followed the rebuild (it is
+    then kept, hidden): objects that link it, and steps of other bodies its extrudes drive."""
+    from . import rebuild_links, timeline_ops
+
+    out = []
+    try:
+        for obj in rebuild_links.still_used(doc, source, target, ref):
+            out.append(obj.Label)
+        own = rebuild_links.own_objects(source)
+        for name in timeline_ops.followers(doc, own):
+            obj = doc.getObject(name)
+            if obj is not None and name not in own and obj.Label not in out:
+                out.append(obj.Label)
+    except Exception as exc:
+        warn("rebuild: %s" % exc)
+    return out
+
+
+def _take_looks(source, target):
+    """The original's material and appearance (an imported STEP's colours, kept by the
+    faces' places) go to the rebuild: it is the same part."""
+    try:
+        from . import appearance
+
+        mat = getattr(source, "ShapeMaterial", None)
+        if mat is not None and "ShapeMaterial" in target.PropertiesList:
+            if getattr(target.ShapeMaterial, "UUID", None) != getattr(mat, "UUID", None):
+                target.ShapeMaterial = mat
+                for step in target.Group:
+                    if "ShapeMaterial" in step.PropertiesList:
+                        step.ShapeMaterial = mat
+        for prop in ("SciForgeUserMaterial", appearance.PROP):
+            text = getattr(source, prop, "") if prop in source.PropertiesList else ""
+            if text and getattr(target, prop, None) != text:
+                bodies.add_prop(target, "App::PropertyString", prop, "Base", "", True)
+                setattr(target, prop, text)
+        if App.GuiUp:
+            appearance.apply(target)
+    except Exception as exc:
+        warn("rebuild: the original's look was not taken over (%s)" % exc)
+
+
+def _timeline_place(doc, source, target):
+    """A function that puts the rebuild's steps where the original's stood in the timeline
+    (whatever used the original comes after it there, as before), or None when they stay
+    at the end (the history marker rolled back, or a step of the rebuild uses a step that
+    came later than the original)."""
+    from . import rebuild_links, timeline_ops
+
+    try:
+        if not timeline_ops.timeline(doc, deps=False).at_end:
+            return None
+        old = rebuild_links.own_objects(source)
+        new = rebuild_links.own_objects(target)
+        rows = [(obj, timeline_ops._key(obj)) for obj, _body in timeline_ops.steps(doc)]
+        theirs = [k for obj, k in rows if obj.Name in old]
+        ours = [obj for obj, _k in rows if obj.Name in new]  # (in the body's own order)
+        if not theirs or not ours:
+            return None
+        low = min(theirs)
+        later = [k for obj, k in rows if obj.Name not in old and obj.Name not in new and k > low]
+        high = min(later) if later else None
+        if high is not None and max(timeline_ops._key(o) for o in ours) < high:
+            return None  # (already there)
+        for obj in ours:
+            for dep in obj.OutList:
+                if dep.Name in new or not timeline_ops._is_step(dep):
+                    continue
+                if timeline_ops._key(dep) > low:
+                    return None  # (it would come before a step it uses)
+        keys = core.keys_between(len(ours), low, high)
+    except Exception as exc:
+        warn("rebuild: the rebuild stays at the end of the timeline (%s)" % exc)
+        return None
+
+    def apply():
+        for obj, key in zip(ours, keys):
+            try:
+                if bodies.alive(obj):
+                    timeline_ops._add_prop(
+                        obj, "App::PropertyFloat", timeline_ops.RANK, "Place in the design timeline"
+                    )
+                    setattr(obj, timeline_ops.RANK, float(key))
+            except Exception as exc:
+                warn("rebuild: %s keeps its place in the timeline (%s)" % (obj.Label, exc))
+
+    return apply
+
+
 def _delete_original(doc, source):
     """The original body (with its imported shape) or mesh body, gone."""
     from . import insert, timeline_ops
@@ -1996,12 +2413,25 @@ def _delete_original(doc, source):
         except Exception:
             doc.removeObject(source.Name)
         return
-    base = getattr(source, "BaseFeature", None)
+    bases = [getattr(source, "BaseFeature", None)]
+    for step in source.Group:  # an Insert STEP step's imported shape (outside the body)
+        if "BaseFeature" in step.PropertiesList:
+            bases.append(getattr(step, "BaseFeature", None))
+    bases = [b for b in bases if b is not None and bodies.body_of(b) is None]
     timeline_ops.delete_bodies(doc, [source.Name], transaction=False)
-    if base is not None and bodies.alive(base):
-        users = [u for u in base.InList if bodies.alive(u)]
+    for base in bases:
+        if not bodies.alive(base):
+            continue
+        # a component holding it is no use of it (QA: the imported shape stayed behind in
+        # the component, a stray "Body001 (imported)" step in the timeline)
+        users = [
+            u for u in base.InList if bodies.alive(u) and not u.hasExtension("App::GroupExtension")
+        ]
         if not users:
             try:
+                for holder in base.InList:
+                    if bodies.alive(holder) and hasattr(holder, "removeObject"):
+                        holder.removeObject(base)
                 doc.removeObject(base.Name)
             except Exception as exc:
                 warn("rebuild: the original's imported shape stays (%s)" % exc)
@@ -2044,6 +2474,30 @@ def sync(doc):
 
 
 class _Watch:
+    def __init__(self):
+        self.closing = set()  # documents being closed: their objects are torn down
+
+    def slotCreatedDocument(self, doc):
+        self.closing.discard(doc.Name)
+
+    def slotChangedObject(self, obj, prop):
+        """A component (or a body) moved: the references of the rebuilds in it follow on
+        the screen (reference_shape follows by itself)."""
+        if prop != "Placement":
+            return
+        try:
+            if obj.TypeId not in ("App::Part", "PartDesign::Body") or App.isRestoring():
+                return
+            doc = obj.Document
+            if doc is None or doc.Name in self.closing or doc.Name not in _LIVE_DOCS:
+                return  # (no rebuild in this design: nothing to look for)
+            for ref in active_references(doc):
+                target = target_of(ref)
+                if target is not None and (target is obj or obj in _containers(target)):
+                    _notify("moved", ref, None)
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
+
     def slotUndoDocument(self, doc):
         sync(doc)
 
@@ -2052,10 +2506,54 @@ class _Watch:
 
     def slotDeletedDocument(self, doc):
         try:
+            self.closing.add(doc.Name)
             _HIDDEN.pop(doc.Name, None)
             forget(doc)
         except Exception:
             pass
+
+    def slotDeletedObject(self, obj):
+        """A reference deleted some other way than Finish (the AI's delete_step, a script):
+        the rebuild is given up, so its original is shown again (QA: it stayed hidden, and
+        a person could not find the part)."""
+        try:
+            if not is_reference(obj):
+                return
+            doc = obj.Document
+            if doc is None or doc.Name in self.closing or getattr(doc, "Transacting", False):
+                return  # (closing; undo / redo: sync() puts it right afterwards)
+            if obj.Name in _FINISHING:
+                return
+            hidden = _HIDDEN.get(doc.Name, {})
+            source_name = hidden.pop(obj.Name, None)
+            if source_name is None and getattr(obj, "Shown", False):
+                source_name = getattr(obj, "SourceName", "")  # (a design opened again)
+            source = doc.getObject(source_name) if source_name else None
+            if source is not None and bodies.alive(source):
+                bodies.set_shown(source, True)
+                log(
+                    "rebuild of %s given up (its reference was deleted): shown again" % source.Label
+                )
+            NOTES.pop(obj.Name, None)
+            _KNOWN.pop((doc.Name, obj.Name), None)
+        except Exception as exc:
+            warn("rebuild: %s" % exc)
+
+
+_FINISHING = set()  # references being removed by finish (their original is dealt with there)
+
+
+def _containers(obj):
+    """The components `obj` sits in, nearest first."""
+    out = []
+    try:
+        current = obj.getParentGeoFeatureGroup()
+        while current is not None and len(out) < 30:
+            out.append(current)
+            current = current.getParentGeoFeatureGroup()
+    except Exception:
+        pass
+    return out
 
 
 _WATCH = {"on": None}
