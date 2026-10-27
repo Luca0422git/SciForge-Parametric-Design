@@ -194,7 +194,8 @@ def answer_file_dialog(paths, report):
         try:
             edit.setFocus()
             QtTest.QTest.keyClick(edit, QtCore.Qt.Key_A, QtCore.Qt.ControlModifier)
-            QtTest.QTest.keyClicks(edit, names)
+            # one file: its bare name (quotes are for several)
+            QtTest.QTest.keyClicks(edit, names if len(paths) > 1 else os.path.basename(paths[0]))
             report["typed"] = names
             report["folder"] = dlg.directory().absolutePath()
             QtTest.QTest.keyClick(edit, QtCore.Qt.Key_Return)
@@ -578,6 +579,23 @@ def aim(where, point_fn, dot_fn, kinds, view="iso", size=40.0, label=""):
         vx.hover(S["pt"])
 
     def click():
+        kinds_ = (kinds,) if isinstance(kinds, str) else kinds
+        for wiggle in (QtCore.QPoint(1, 0), QtCore.QPoint(0, 1), QtCore.QPoint(-1, -1)):
+            hov = hovering()
+            hot = getattr(hov, "hot", None) if hov is not None else None
+            if (
+                hot is not None
+                and hot["kind"] in kinds_
+                and (hot["point"] - S["dot"]).Length < 1e-5
+            ):
+                break
+            # the dot is not lit (yet): a person moves the mouse a little until it is
+            print(
+                "[SciForge] journey_vex: %s: the mouse moved again (lit: %s)"
+                % (where, hot and hot["kind"]),
+                flush=True,
+            )
+            vx.hover_pixel(h.screen_point(S["pt"]) + wiggle)
         vx.lit(hovering(), "%s: %s" % (where, label), kinds, S["dot"])
         h.click(S["pt"])
 
@@ -632,7 +650,28 @@ def type_offset(text):
 def joint_steps(prefix, first, second, offset=None, revolute=False, check=None):
     """J; `first` = (where, point_fn, dot_fn, kinds, view, size) of the part that moves, then
     `second` the same for where it goes; Offset Z typed, Motion Revolute; OK; `check(where)`."""
-    out = [step(press_j(), prefix + "_j", 900)]
+
+    def opened():
+        p = joint_panel()
+        if p is not None:
+            return
+        from sciforge import commands
+
+        app = QtWidgets.QApplication
+        focus = app.focusWidget()
+        diag = {
+            "told": (getattr(commands, "_TOLD", None) or {}).get("msg"),
+            "popup": app.activePopupWidget(),
+            "modal": app.activeModalWidget(),
+            "focus": focus and focus.metaObject().className(),
+            "window": app.activeWindow() and app.activeWindow().metaObject().className(),
+            "dialog": Gui.Control.activeDialog(),
+            "task": vx.panel(),
+        }
+        h.check("%s: J opened the Joint dialog" % prefix, False, diag)
+        js.menu("Joint")  # a person then takes ASSEMBLE > Joint
+
+    out = [step(press_j(), prefix + "_j", 900), step(opened, prefix + "_opened", 900)]
     names = ("first", "second")
     for n, (where, point_fn, dot_fn, kinds, view, size) in enumerate((first, second)):
         hover, click = aim(prefix, point_fn, dot_fn, kinds, view, size, where)
@@ -917,7 +956,7 @@ def bearing1_steps():
         "the bearing's top next to its bore",
         lambda: local("bearing", 0, -3.2, BEARING_T),
         lambda: local("bearing", 0, 0, BEARING_T),
-        ("loop", "centre"),
+        ("loop", "centre", "circle"),
         "iso",
         25.0,
     )
@@ -962,7 +1001,7 @@ def bearing2_steps():
         "the second bearing's top next to its bore",
         lambda: local("bearing2", 0, -3.2, BEARING_T),
         lambda: local("bearing2", 0, 0, BEARING_T),
-        ("loop", "centre"),
+        ("loop", "centre", "circle"),
         "iso",
         25.0,
     )
@@ -1004,9 +1043,11 @@ def screw_ok(c):
     """(ok, detail): screw component `c` on one of the six places, its head on the face."""
     box = bbox(c)
     mid = V((box.XMin + box.XMax) / 2.0, (box.YMin + box.YMax) / 2.0, 0)
-    for x, y, face, way in screw_places():
+    seen = False
+    for x, y, face, way in screw_places():  # (the two bearings' screws share x and y)
         if not vx.near_xy(mid, V(x, y, 0), EPS):
             continue
+        seen = True
         if way > 0:
             ok = (
                 abs(box.ZMin - (face - SCREW_HEAD)) < EPS
@@ -1017,8 +1058,9 @@ def screw_ok(c):
                 abs(box.ZMax - (face + SCREW_HEAD)) < EPS
                 and abs(box.ZMin - (face - SCREW_LEN)) < EPS
             )
-        return ok, (c.Label, fmt(mid), box.ZMin / IN, box.ZMax / IN)
-    return False, (c.Label, fmt(mid), "on no hole")
+        if ok:
+            return True, (c.Label, fmt(mid), box.ZMin / IN, box.ZMax / IN)
+    return False, (c.Label, fmt(mid), box.ZMin / IN, box.ZMax / IN, "" if seen else "on no hole")
 
 
 def screws_ok(where, count=6):
@@ -1054,7 +1096,7 @@ def screw_steps():
         "the bottom bearing's mounting hole",
         beside("bearing", -PITCH, 0.0),
         bearing_hole("bearing", -PITCH, 0.0),
-        ("loop", "centre"),
+        ("loop", "centre", "circle"),
         "bottom",
         30.0,
     )
@@ -1075,7 +1117,7 @@ def screw_steps():
             "the bottom bearing's other mounting hole",
             beside("bearing", PITCH, 0.0),
             bearing_hole("bearing", PITCH, 0.0),
-            ("loop", "centre"),
+            ("loop", "centre", "circle"),
             "bottom",
             30.0,
         )
@@ -1097,7 +1139,7 @@ def screw_steps():
                 "the top bearing's mounting hole",
                 beside("bearing2", x, 0.0),
                 bearing_hole("bearing2", x, 0.0),
-                ("loop", "centre"),
+                ("loop", "centre", "circle"),
                 "top",
                 30.0,
             )
@@ -1124,12 +1166,13 @@ def nuts_ok(where, count=4):
         box = bbox(c)
         mid = V((box.XMin + box.XMax) / 2.0, (box.YMin + box.YMax) / 2.0, 0)
         ok = False
-        for x, y, face, way in nut_places():
+        for x, y, face, way in nut_places():  # (rail 1's and rail 2's share x and y)
             if vx.near_xy(mid, V(x, y, 0), EPS):
                 if way > 0:
-                    ok = abs(box.ZMin - face) < EPS and abs(box.ZMax - (face + NUT_H)) < EPS
+                    good = abs(box.ZMin - face) < EPS and abs(box.ZMax - (face + NUT_H)) < EPS
                 else:
-                    ok = abs(box.ZMax - face) < EPS and abs(box.ZMin - (face - NUT_H)) < EPS
+                    good = abs(box.ZMax - face) < EPS and abs(box.ZMin - (face - NUT_H)) < EPS
+                ok = ok or good
         h.check(
             "%s: %s on a screw's end, against the rail's inside face" % (where, c.Label),
             ok,
@@ -1280,7 +1323,7 @@ def shaft_steps():
         "the top bearing next to its bore",
         lambda: local("bearing2", 0, -3.2, 0.0),
         lambda: local("bearing2", 0, 0, 0.0),
-        ("loop", "centre"),
+        ("loop", "centre", "circle"),
         "iso",
         25.0,
     )
@@ -1292,7 +1335,7 @@ def wheel_steps():
         "the wheel's face next to its square hole",
         lambda: local("wheel", 0, -2.4, WHEEL_T),
         lambda: local("wheel", 0, 0, WHEEL_T),
-        ("loop", "centre"),
+        ("loop", "centre", "circle"),
         "iso",
         20.0,
     )
@@ -1417,3 +1460,205 @@ def rigid_group_steps():
         step(members, "j5_members", 1200),
         step(made, "j5_group_made"),
     ]
+
+
+# == 6. the screw's file again: another occurrence; the parts list ==============================
+def parts_list():
+    """{part: Qty} of a drawing's parts list of the whole design (drawing_core.parts_rows: what
+    DRAWING's Parts List shows)."""
+    from sciforge import drawing, drawing_core
+
+    found = [b for b in doc().Objects if b.TypeId == "PartDesign::Body"]
+    rows = drawing_core.parts_rows(drawing.components_of(found))
+    return {r["PartNumber"]: r["Qty"] for r in rows}
+
+
+def again_steps():
+    def insert():
+        S["labels_before"] = {c.Label for c in comps()}
+        S["dialog3"] = {}
+        insert_step([SCREW], S["dialog3"])
+
+    def occurrence():
+        from sciforge import instances
+
+        d = S.get("dialog3", {})
+        h.check("j6: the screw's file picked again", d.get("done") and not d.get("error"), d)
+        new = [c for c in comps() if c.Label not in S["labels_before"]]
+        h.check("j6: one new component", len(new) == 1, [c.Label for c in new])
+        if not new:
+            return
+        S["screw7"] = new[0]
+        h.check(
+            "j6: an occurrence of the first screw (%s), not a second reading of the file"
+            % new[0].Label,
+            instances.is_instance(new[0]) and instances.source_of(new[0]) is S["screw"],
+            new[0].Label,
+        )
+        h.check("j6: named after it, numbered on", new[0].Label == SCREW + ":7", new[0].Label)
+        p = move_panel()
+        if h.check("j6: its Move dialog", p is not None):
+            c2.type_value(p, "dy", "-3")  # 3 in toward the front, clear of the frame
+
+    def placed():
+        vx.ok()
+
+    def counted():
+        qty = parts_list()
+        want = {
+            SCREW: 7,
+            NUT: 4,
+            STANDOFF: 2,
+            BEARING: 2,
+            RAIL1: 1,
+            RAIL2: 1,
+            SHAFT: 1,
+            WHEEL: 1,
+        }
+        h.check(
+            "j6: the parts list counts 7 screws in one row (and every other part)",
+            qty == want,
+            qty,
+        )
+
+    first = (
+        "the new screw's head underside",
+        lambda: ring(local("screw7", 0, 0, 0), 2.75),
+        lambda: local("screw7", 0, 0, 0),
+        ("centre", "loop", "circle"),
+        "bottom",
+        25.0,
+    )
+    i, j = STANDOFF_HOLES[0]
+    second = (
+        "rail 2's outer face next to its hole (%d, %d), over the standoff" % (i, 1 - j),
+        lambda: next_to("rail2", i, 1 - j, top=False),
+        lambda: V(grid(i, j).x, grid(i, j).y, 2 * T + GAP),
+        "loop",
+        "iso",
+        40.0,
+    )
+
+    def on_standoff(where):
+        box = bbox(S["screw7"])
+        face = 2 * T + GAP
+        h.check(
+            "%s: the seventh screw through rail 2 into the standoff's top" % where,
+            vx.near_xy(axis_at("screw7"), grid(i, j), EPS)
+            and abs(box.ZMax - (face + SCREW_HEAD)) < EPS
+            and abs(box.ZMin - (face - SCREW_LEN)) < EPS,
+            (fmt(axis_at("screw7")), box.ZMin / IN, box.ZMax / IN),
+        )
+
+    return [
+        step(insert, "j6_insert_screw_again", 2500),
+        step(occurrence, "j6_occurrence", 1500),
+        step(placed, "j6_placed", 1200),
+        step(counted, "j6_parts_list"),
+    ] + joint_steps("j6_screw7", first, second, check=on_standoff)
+
+
+# == 7. save, close, reopen =====================================================================
+KEYS = (
+    "rail1",
+    "rail2",
+    "standoff",
+    "screw",
+    "nut",
+    "shaft",
+    "bearing",
+    "bearing2",
+    "wheel",
+    "screw7",
+)
+
+
+def reopen_steps():
+    def save():
+        S["places"] = {c.Label: App.Placement(c.Placement) for c in comps()}
+        S["joint_labels"] = sorted(o.Label for o in vx.joints_list())
+        S["key_labels"] = {k: S[k].Label for k in KEYS if S.get(k) is not None}
+        S["out"] = os.path.join(h.OUT_DIR, "journey_vex_design")
+        os.makedirs(S["out"], exist_ok=True)
+        S["file"] = os.path.join(S["out"], "JourneyVex.FCStd")
+        if os.path.isfile(S["file"]):
+            os.remove(S["file"])
+        keys_to_window()
+        h.click_empty()
+        h.press(QtCore.Qt.Key_S, QtCore.Qt.ControlModifier)
+
+    def save_dialog():
+        from SciForgeTests.gui import versions_input as vi
+
+        if h.check("Ctrl+S: the Save dialog", vi.save_dialog() is not None, h.popups()):
+            vi.fill_save_dialog(name="JourneyVex", location=S["out"])
+            t0 = time.perf_counter()
+            vi.click_save()
+            S["save_s"] = time.perf_counter() - t0
+
+    def saved():
+        h.check("JourneyVex.FCStd written", os.path.isfile(S["file"]), os.listdir(S["out"]))
+        h.check("the design is that file", doc().FileName == S["file"], doc().FileName)
+        print("[SciForge] journey_vex: saved in %.2f s" % S.get("save_s", -1), flush=True)
+        from SciForgeTests.gui import polish2_steps as p2
+
+        S["doc_name"] = doc().Name
+        p2.close_tab(doc())
+
+    def closed():
+        h.check("the design closed", S["doc_name"] not in App.listDocuments(), App.listDocuments())
+        S["dialog4"] = {}
+        answer_file_dialog([S["file"]], S["dialog4"])
+        keys_to_window()
+        t0 = time.perf_counter()
+        # (no design open: no 3D view; the key goes to the window)
+        QtTest.QTest.keyClick(Gui.getMainWindow(), QtCore.Qt.Key_O, QtCore.Qt.ControlModifier)
+        QtWidgets.QApplication.processEvents()
+        S["open_s"] = time.perf_counter() - t0
+
+    def reopened():
+        d = S.get("dialog4", {})
+        h.check("Ctrl+O: the Open dialog took the file", d.get("done") and not d.get("error"), d)
+        h.check(
+            "the design is open again",
+            doc() is not None and doc().FileName == S["file"],
+            doc() and doc().FileName,
+        )
+        print("[SciForge] journey_vex: reopened in %.2f s" % S.get("open_s", -1), flush=True)
+        if doc() is None:
+            return
+        by = {c.Label: c for c in comps()}
+        for k, label in S.get("key_labels", {}).items():
+            S[k] = by.get(label)
+        moved = [
+            label
+            for label, plc in S["places"].items()
+            if by.get(label) is None or not by[label].Placement.isSame(plc, 1e-7)
+        ]
+        h.check(
+            "every one of the %d components where it was" % len(S["places"]),
+            not moved and len(by) == len(S["places"]),
+            moved or sorted(by),
+        )
+        h.check(
+            "every joint back",
+            sorted(o.Label for o in vx.joints_list()) == S["joint_labels"],
+            sorted(o.Label for o in vx.joints_list()),
+        )
+        h.check("the design is still in inches", doc().UnitSystem.startswith("Imperial decimal"))
+        on_rail1("reopened", GAP)
+        standoffs_ok("reopened")
+        screws_ok("reopened", 7)
+        nuts_ok("reopened")
+        shaft_ok("reopened")
+        wheel_ok("reopened")
+        errors_free("reopened")
+        h.shot("7-reopened")
+
+    return [
+        step(save, "j7_ctrl_s", 1500),
+        step(save_dialog, "j7_save", 3000),
+        step(saved, "j7_close", 2000),
+        step(closed, "j7_ctrl_o", 6000),
+        step(reopened, "j7_reopened", 1500),
+    ] + drive_steps("j7_drive_reopened", 30.0)
