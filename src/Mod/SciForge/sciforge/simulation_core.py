@@ -54,17 +54,46 @@ def study_type_available(key):
 DEFAULT_SETTINGS = {
     "mesh": {
         "size_pct": 10.0,  # Average Element Size, % of the model size (see model_size())
+        "size_mm": 0.0,  # Average Element Size as a length (mm); 0 = use size_pct
         "order": "parabolic",  # parabolic (2nd order, Fusion's default) | linear
         "curved": True,  # curved (mid-side nodes on the geometry) parabolic elements
         "scale_per_part": False,  # Fusion: Scale Mesh Size Per Part
         "min_pct": 20.0,  # smallest element, % of the average size
         "max_turn": 60.0,  # degrees an element may turn along a curve
+        "adjacent_ratio": 1.5,  # largest size ratio of neighbouring elements (local controls)
+        "aspect_ratio": 10.0,  # elements longer than this x their height are reported
+    },
+    "adaptive": {
+        # Fusion's Adaptive Mesh Refinement: "none" (default) or "custom"/"low"/"medium"/
+        # "high" (see ADAPTIVE_LEVELS): solve, make the elements where the result changes the
+        # most smaller, solve again, until the largest value changes by less than `tolerance`
+        # % or `passes` solves were made
+        "level": "none",
+        "passes": 4,
+        "tolerance": 5.0,  # %
+        "portion": 10.0,  # % of the elements refined in each pass
+        "result": "von_mises",  # von_mises | displacement | principal_1 | principal_3
     },
     "gravity": {"on": False, "direction": [0.0, 0.0, -1.0], "g": 9806.65},  # mm/s2
     "safety_basis": "yield",  # yield | ultimate: what the safety factor divides
     "contacts": "bonded",  # bodies that touch are glued (Fusion's automatic contacts)
     "contact_tolerance": 0.1,  # mm: faces closer than this touch
+    # Fusion's Remove rigid body modes (General tab, off): for a model held by nothing whose
+    # loads balance; SciForge holds each free piece at three of its corners, statically
+    # determinate (the 3-2-1 rule), so the balanced loads give no reaction there
+    "remove_rigid": False,
+    # keep the mesh and the results in the design file (off: only the summary is saved, the
+    # coloured results need a new solve after reopening; a fine mesh can add many MB)
+    "keep_results": True,
 }
+
+ADAPTIVE_LEVELS = {
+    # level: (passes, tolerance %, portion %)
+    "low": (2, 10.0, 10.0),
+    "medium": (4, 5.0, 10.0),
+    "high": (6, 2.0, 15.0),
+}
+ADAPTIVE_RESULTS = ("von_mises", "displacement", "principal_1", "principal_3")
 
 MESH_ORDERS = ("parabolic", "linear")
 SAFETY_BASES = ("yield", "ultimate")
@@ -93,8 +122,46 @@ def settings(data=None):
         out["mesh"]["order"] = DEFAULT_SETTINGS["mesh"]["order"]
     if out["safety_basis"] not in SAFETY_BASES:
         out["safety_basis"] = DEFAULT_SETTINGS["safety_basis"]
-    out["mesh"]["size_pct"] = min(max(float(out["mesh"]["size_pct"]), 0.5), 50.0)
+    mesh = out["mesh"]
+    mesh["size_pct"] = min(max(float(mesh["size_pct"]), 0.5), 50.0)
+    mesh["size_mm"] = max(float(mesh["size_mm"]), 0.0)
+    mesh["min_pct"] = min(max(float(mesh["min_pct"]), 1.0), 100.0)
+    mesh["max_turn"] = min(max(float(mesh["max_turn"]), 1.0), 90.0)
+    mesh["adjacent_ratio"] = min(max(float(mesh["adjacent_ratio"]), 1.05), 10.0)
+    mesh["aspect_ratio"] = min(max(float(mesh["aspect_ratio"]), 1.5), 1000.0)
+    adaptive = out["adaptive"]
+    if adaptive["level"] not in ("none", "custom") + tuple(ADAPTIVE_LEVELS):
+        adaptive["level"] = "none"
+    if adaptive["result"] not in ADAPTIVE_RESULTS:
+        adaptive["result"] = "von_mises"
+    adaptive["passes"] = int(min(max(int(adaptive["passes"]), 1), 10))
+    adaptive["tolerance"] = min(max(float(adaptive["tolerance"]), 0.1), 50.0)
+    adaptive["portion"] = min(max(float(adaptive["portion"]), 1.0), 100.0)
+    out["contact_tolerance"] = min(max(float(out["contact_tolerance"]), 0.0), 10.0)
     return out
+
+
+def adaptive_plan(adaptive):
+    """(passes, tolerance %, portion %) of the adaptive refinement settings, or None when it
+    is off. A named level ("low"/"medium"/"high") uses its own numbers; "custom" the
+    settings'. `passes` counts every solve, the first one included."""
+    level = (adaptive or {}).get("level", "none")
+    if level == "none":
+        return None
+    if level in ADAPTIVE_LEVELS:
+        return ADAPTIVE_LEVELS[level]
+    return (int(adaptive["passes"]), float(adaptive["tolerance"]), float(adaptive["portion"]))
+
+
+def converged(previous, current, tolerance_pct):
+    """True when `current` differs from `previous` by at most `tolerance_pct` % (of the
+    larger of the two)."""
+    if previous is None or current is None:
+        return False
+    scale = max(abs(previous), abs(current))
+    if scale <= 1e-300:
+        return True
+    return abs(current - previous) / scale * 100.0 <= tolerance_pct
 
 
 def _same_kind(value, default):
@@ -114,8 +181,11 @@ def model_size(bbox):
     return math.sqrt(dx * dx + dy * dy + dz * dz)
 
 
-def element_size(bbox, size_pct):
-    """Average element size (mm) for `size_pct` % of the model size, never below 0.05 mm."""
+def element_size(bbox, size_pct, size_mm=0.0):
+    """Average element size (mm) for `size_pct` % of the model size (or `size_mm` when it is
+    given), never below 0.05 mm."""
+    if size_mm and float(size_mm) > 0:
+        return max(float(size_mm), 0.05)
     return max(model_size(bbox) * float(size_pct) / 100.0, 0.05)
 
 
@@ -136,23 +206,26 @@ CONSTRAINTS = {
         "title": "Pin",
         "targets": ("faces",),
         "faces": "round",
-        # Fusion's default holds radial and axial, leaves tangential free (research 3.4)
+        # Fusion's default holds radial and axial, leaves tangential free (research 3.4):
+        # radial = the hole keeps its size and place, axial = no sliding along the pin,
+        # tangential = no turning about it
         "options": {"radial": True, "axial": True, "tangential": False},
-        "built": False,
+        "built": True,
     },
     "frictionless": {
         "title": "Frictionless",
+        # any face: no movement along the face's normal at each of its points, free to slide
+        # along it (a flat face: a symmetry plane, a part resting on a smooth table)
         "targets": ("faces",),
-        "faces": "flat",
         "options": {},
-        "built": False,
+        "built": True,
     },
     "displacement": {
         "title": "Prescribed Displacement",
         "targets": TARGETS_ANY,
-        # None = free in that direction; a number = moved by that many mm
+        # None = free in that direction; a number = moved by that many mm (design axes)
         "options": {"x": 0.0, "y": None, "z": None},
-        "built": False,
+        "built": True,
     },
 }
 
@@ -179,23 +252,57 @@ LOADS = {
     "moment": {
         "title": "Moment",
         "targets": ("faces",),
-        "options": {"magnitude": 1000.0, "vector": [0.0, 0.0, 1.0]},  # N mm, about this axis
-        "built": False,
+        # N mm about an axis through the middle of the picked faces: normal = the first
+        # face's normal (Fusion's Normal), vector = the axis [x, y, z] (Fusion's Vectors).
+        # The faces turn as a whole but stay deformable (forces that grow with the distance
+        # from the axis, as a shaft end in torsion); per_entity: each face gets the whole
+        # moment about its own middle
+        "options": {
+            "magnitude": 1000.0,
+            "direction": "normal",
+            "vector": [0.0, 0.0, 1.0],
+            "per_entity": False,
+            "flip": False,
+        },
+        "built": True,
     },
     "bearing": {
         "title": "Bearing Load",
         "targets": ("faces",),
         "faces": "round",
-        "options": {"magnitude": 100.0, "vector": [0.0, 0.0, -1.0]},
-        "built": False,
+        # N, the total; spread over the half of the round faces it pushes on, most in the
+        # middle and none at the sides (a parabola), always pushing into the material
+        "options": {"magnitude": 100.0, "vector": [0.0, 0.0, -1.0], "flip": False},
+        "built": True,
     },
     "remote_force": {
         "title": "Remote Force",
         "targets": ("faces",),
-        "options": {"magnitude": 100.0, "vector": [0.0, 0.0, -1.0], "point": [0.0, 0.0, 0.0]},
-        "built": False,
+        # N acting at `point` (mm, design coordinates), carried to the picked faces: the
+        # force plus the moment of its lever arm, spread over the faces as a deformable link
+        "options": {
+            "magnitude": 100.0,
+            "vector": [0.0, 0.0, -1.0],
+            "point": [0.0, 0.0, 0.0],
+            "flip": False,
+        },
+        "built": True,
     },
 }
+
+# Fusion's Local Mesh Control (SETUP > MANAGE): smaller (or larger) elements on picked faces,
+# edges or whole bodies, blending into the global size.
+MESH_CONTROLS = {
+    "local": {
+        "title": "Local Mesh Control",
+        "targets": ("faces", "edges", "bodies"),
+        "options": {"size": 1.0},  # mm
+        "built": True,
+    },
+}
+
+TABLES = {"constraint": CONSTRAINTS, "load": LOADS, "mesh": MESH_CONTROLS}
+CATEGORIES = tuple(TABLES)
 
 UNITS = {
     "magnitude:force": "N",
@@ -203,6 +310,7 @@ UNITS = {
     "magnitude:moment": "N mm",
     "magnitude:bearing": "N",
     "magnitude:remote_force": "N",
+    "size:local": "mm",
     "displacement": "mm",
     "stress": "MPa",
     "safety": "",
@@ -211,12 +319,36 @@ UNITS = {
 }
 
 
+# A force's picks: along the normal it pushes into faces; shared by its picks they are of one
+# kind (faces share it by area, edges by length, corners equally: Fusion, research 3.5); with
+# Force Per Entity every pick gets the whole force, whatever its kind.
+FORCE_NORMAL_NEEDS_FACES = (
+    "a force along the normal pushes into faces, and edges and corners have no normal: pick "
+    "only faces, or give the force a direction (vector)."
+)
+NORMAL_NEEDS_FLAT = (
+    "along the normal needs flat faces: a round or curved face has no one normal (it took the "
+    "normal at the middle of the face's parameters, a direction that has nothing to do with "
+    "the part). Give it a direction (vector); to push across a curved face everywhere use a "
+    "Pressure, on a hole or shaft a Bearing Load."
+)
+FORCE_ONE_KIND = (
+    "a force shared by its picks needs picks of one kind: faces (shared by area), edges (by "
+    "length) or corners (equally). Make one force for each kind, or switch on Force Per Entity "
+    "(each pick gets the whole force)."
+)
+
+
 class SimulationError(ValueError):
     """Something the person (or the AI) has to change; the message is a plain sentence."""
 
 
 def kind_info(category, kind):
-    table = CONSTRAINTS if category == "constraint" else LOADS
+    table = TABLES.get(category)
+    if table is None:
+        raise SimulationError(
+            "Unknown category %r: choose one of %s." % (category, ", ".join(CATEGORIES))
+        )
     info = table.get(kind)
     if info is None:
         raise SimulationError(
@@ -237,8 +369,8 @@ def options(category, kind, data=None):
 
 def check(category, kind, opts, picks):
     """Problems with a constraint or load, as sentences (an empty list when it is fine).
-    `picks`: [(element kind "faces"/"edges"/"vertices", surface "plane"/"cylinder"/... or
-    None)] of what was picked."""
+    `picks`: [(element kind "faces"/"edges"/"vertices"/"bodies", surface "plane"/
+    "cylinder"/... or None)] of what was picked."""
     problems = []
     try:
         info = kind_info(category, kind)
@@ -259,7 +391,7 @@ def check(category, kind, opts, picks):
     opts = options(category, kind, opts)
     if category == "load":
         magnitude = opts.get("magnitude")
-        if not isinstance(magnitude, (int, float)) or isinstance(magnitude, bool):
+        if not _number_ok(magnitude):
             problems.append("%s needs a number for its size." % title)
         elif magnitude == 0:
             problems.append("%s of 0 does nothing: give it a size." % title)
@@ -267,13 +399,52 @@ def check(category, kind, opts, picks):
         if vector is not None and (opts.get("direction", "vector") == "vector"):
             if not _vector_ok(vector):
                 problems.append("%s needs a direction that is not zero." % title)
+        if "direction" in opts and opts["direction"] not in ("normal", "vector"):
+            problems.append("%s: the direction is normal or vector." % title)
+        if kind == "force" and picks:
+            elements = set(element for element, _surface in picks)
+            if opts.get("direction") == "normal" and elements - {"faces"}:
+                problems.append("Force: " + FORCE_NORMAL_NEEDS_FACES)
+            elif not opts.get("per_entity") and len(elements) > 1:
+                problems.append("Force: " + FORCE_ONE_KIND)
+        if kind in ("force", "moment") and opts.get("direction") == "normal":
+            # (a moment turns about its first face's normal)
+            surfaces = [surface for element, surface in picks if element == "faces"]
+            if kind == "moment":
+                surfaces = surfaces[:1]
+            if any(surface not in (None, "plane") for surface in surfaces):
+                problems.append("%s %s" % (title, NORMAL_NEEDS_FLAT))
+        if kind == "remote_force":
+            point = opts.get("point")
+            if not (
+                isinstance(point, (list, tuple))
+                and len(point) == 3
+                and all(_number_ok(c) for c in point)
+            ):
+                problems.append("%s needs the point it acts from: three numbers (mm)." % title)
     if category == "constraint" and kind == "fixed":
         if not any(opts.get(axis) for axis in ("x", "y", "z")):
             problems.append("Fixed holds nothing with X, Y and Z all off: switch one on.")
+    if category == "constraint" and kind == "pin":
+        if not any(opts.get(axis) for axis in ("radial", "axial", "tangential")):
+            problems.append(
+                "Pin holds nothing with radial, axial and tangential all off: switch one on."
+            )
     if category == "constraint" and kind == "displacement":
-        if all(opts.get(axis) is None for axis in ("x", "y", "z")):
+        values = [opts.get(axis) for axis in ("x", "y", "z")]
+        if all(v is None for v in values):
             problems.append("Prescribed Displacement needs a value in X, Y or Z.")
+        elif any(v is not None and not _number_ok(v) for v in values):
+            problems.append("Prescribed Displacement needs numbers (mm) or nothing (free).")
+    if category == "mesh":
+        size = opts.get("size")
+        if not _number_ok(size) or size <= 0:
+            problems.append("%s needs an element size above 0 mm." % title)
     return problems
+
+
+def _number_ok(value):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def _vector_ok(vector):
@@ -306,7 +477,14 @@ def describe(category, kind, opts):
                 if opts.get(a) is not None
             ]
             return "%s (%s)" % (title, ", ".join(parts))
+        if kind == "pin":
+            held = [a for a in ("radial", "axial", "tangential") if opts.get(a)]
+            if held == ["radial", "axial"]:
+                return title
+            return "%s (%s)" % (title, ", ".join(held))
         return title
+    if category == "mesh":
+        return "%s %s mm" % (title, fmt(opts.get("size", 0.0)))
     unit = UNITS.get("magnitude:" + kind, "")
     return "%s %s %s" % (title, fmt(opts.get("magnitude", 0.0)), unit)
 
@@ -441,9 +619,9 @@ def result_unit(key):
 
 def safety_factors(von_mises, strength_mpa, cap=None):
     """Safety factor at every node: strength / stress (MPa): Fusion divides the yield strength by
-    the von Mises stress, the ultimate tensile strength by the 1st principal stress (pass that
-    list here then). A node without stress (or in compression for the 1st principal) gets `cap`
-    (or infinity when cap is None)."""
+    the von Mises stress, the ultimate tensile strength by the 1st principal stress (pass
+    ultimate_stresses() here then). A node without stress gets `cap` (or infinity when cap is
+    None)."""
     out = []
     top = float("inf") if cap is None else float(cap)
     for s in von_mises:
@@ -451,6 +629,26 @@ def safety_factors(von_mises, strength_mpa, cap=None):
             out.append(top)
         else:
             out.append(min(strength_mpa / float(s), top))
+    return out
+
+
+def ultimate_stresses(principal_1, principal_3):
+    """The stress the ultimate tensile strength is divided by at every node: the largest
+    principal stress in size, max(1st, -3rd) (Rankine's maximum normal stress theory, the
+    material taken as strong in compression as in tension). Fusion's help names the 1st
+    principal stress; in a part that is pushed together that is 0 or below, and the safety
+    factor would read 15 ("very strong") however hard the part is crushed: a bar at 100 MPa
+    of compression showed 15 instead of 3.45. Brittle materials are mostly stronger in
+    compression, so this errs on the safe side; in tension it is Fusion's 1st principal. A
+    node with no stress (NaN) gets NaN."""
+    out = []
+    for p1, p3 in zip(principal_1, principal_3):
+        try:
+            p1, p3 = float(p1), float(p3)
+        except (TypeError, ValueError):
+            out.append(float("nan"))
+            continue
+        out.append(float("nan") if p1 != p1 or p3 != p3 else max(p1, -p3))
     return out
 
 
@@ -516,6 +714,1000 @@ def legend_ticks(lo, hi, count=9):
     return [hi - i * step for i in range(count)]
 
 
+# -- what CalculiX gets at the nodes ---------------------------------------------------------------
+# SciForge writes the constraints itself (not with FreeCAD's constraint objects) so that every
+# kind can share a node with every other: a Fixed face next to a Pin, a Frictionless symmetry
+# plane meeting another one at a corner. Each node collects "spc" rows (a displacement set to
+# a value along a design axis: dof 0/1/2 = X/Y/Z) and "eq" rows (no movement along a direction
+# (cx, cy, cz): cx*ux + cy*uy + cz*uz = 0, a Pin's radial / axial / tangential, a Frictionless
+# face's normal); node_constraints() merges them into CalculiX's *BOUNDARY and *EQUATION lines
+# (an equation's first term is eliminated by CalculiX, so it must be free: not set by a
+# *BOUNDARY and not first in another equation).
+EPS = 1e-9
+
+
+def node_constraints(rows, tol=1e-9):
+    """Merge per-node constraint rows. `rows`: iterable of (node, source, kind, data) with
+    kind "spc" (data = (dof, value)) or "eq" (data = (cx, cy, cz)).
+
+    Returns {"spc": {node: {dof: value}}, "equations": [(node, [(dof, coef), ...])] (the first
+    term is the dependent one, its coefficient 1), "conflicts": [(node, source, other)]}: two
+    sources asking a node for different things (a Fixed face next to a Prescribed Displacement
+    of 0.5 mm): the first one made wins and the conflict is reported."""
+    per_node = {}
+    order = []
+    for node, source, kind, data in rows:
+        if node not in per_node:
+            per_node[node] = ([], [])
+            order.append(node)
+        per_node[node][0 if kind == "spc" else 1].append((source, data))
+    spc_out, equations, conflicts = {}, [], []
+    for node in order:
+        spcs, eqs = per_node[node]
+        fixed, fixed_by = {}, {}
+        for source, (dof, value) in spcs:
+            value = float(value)
+            if dof in fixed:
+                if abs(fixed[dof] - value) > tol * max(1.0, abs(value)):
+                    conflicts.append((node, source, fixed_by[dof]))
+                continue
+            fixed[dof], fixed_by[dof] = value, source
+        rows_m = []
+        for source, vector in eqs:
+            length = math.sqrt(sum(float(c) ** 2 for c in vector))
+            if length > EPS:
+                rows_m.append(([float(c) / length for c in vector], source))
+        free = [d for d in range(3) if d not in fixed]
+        used, pivots = set(), []
+        while True:
+            best = None
+            for r, (row, _src) in enumerate(rows_m):
+                if r in used:
+                    continue
+                for c in free:
+                    if c in [p[1] for p in pivots]:
+                        continue
+                    if best is None or abs(row[c]) > abs(rows_m[best[0]][0][best[1]]):
+                        best = (r, c)
+            if best is None or abs(rows_m[best[0]][0][best[1]]) < 1e-7:
+                break
+            r, c = best
+            row = rows_m[r][0]
+            pivot = row[c]
+            rows_m[r] = ([v / pivot for v in row], rows_m[r][1])
+            for k, (other, src) in enumerate(rows_m):
+                if k != r and abs(other[c]) > 0.0:
+                    factor = other[c]
+                    rows_m[k] = ([o - factor * p for o, p in zip(other, rows_m[r][0])], src)
+            used.add(r)
+            pivots.append((r, c))
+        for r, (row, source) in enumerate(rows_m):
+            if r in used:
+                continue
+            # nothing free left in it: either already true or impossible with these values
+            rest = sum(row[d] * fixed[d] for d in fixed)
+            if abs(rest) > 1e-7 * max(1.0, max(abs(v) for v in fixed.values() or [1.0])):
+                conflicts.append(
+                    (node, source, fixed_by.get(max(fixed, key=lambda d: abs(row[d]))))
+                )
+        pivot_cols = [p[1] for p in pivots]
+        for r, c in pivots:
+            row = rows_m[r][0]
+            terms = [(c, 1.0)]
+            others = [(d, row[d]) for d in free if d != c and d not in pivot_cols]
+            others = [(d, v) for d, v in others if abs(v) > 1e-9]
+            known = sum(row[d] * fixed[d] for d in fixed)
+            if not others:
+                # the direction is held completely: a plain displacement value
+                fixed[c] = -known
+                fixed_by[c] = rows_m[r][1]
+                continue
+            terms += others
+            terms += [(d, row[d]) for d in fixed if abs(row[d]) > 1e-9 and abs(fixed[d]) > 0]
+            equations.append((node, terms))
+        if fixed:
+            spc_out[node] = dict(sorted(fixed.items()))
+    return {"spc": spc_out, "equations": equations, "conflicts": conflicts}
+
+
+def _sub(a, b):
+    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+
+
+def _cross(a, b):
+    return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+
+
+def _dot(a, b):
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _norm(a):
+    return math.sqrt(_dot(a, a))
+
+
+def _solve3(m, v):
+    """x with m x = v (3 x 3), or None when m is (nearly) singular."""
+    a, b, c = m
+    det = (
+        a[0] * (b[1] * c[2] - b[2] * c[1])
+        - a[1] * (b[0] * c[2] - b[2] * c[0])
+        + a[2] * (b[0] * c[1] - b[1] * c[0])
+    )
+    scale = max(abs(x) for row in m for x in row) or 1.0
+    if abs(det) <= 1e-12 * scale**3:
+        return None
+    out = []
+    for i in range(3):
+        cols = [list(row) for row in m]
+        for r in range(3):
+            cols[r][i] = v[r]
+        a2, b2, c2 = cols
+        out.append(
+            (
+                a2[0] * (b2[1] * c2[2] - b2[2] * c2[1])
+                - a2[1] * (b2[0] * c2[2] - b2[2] * c2[0])
+                + a2[2] * (b2[0] * c2[1] - b2[1] * c2[0])
+            )
+            / det
+        )
+    return out
+
+
+def weighted_middle(points, weights):
+    total = float(sum(weights))
+    if total <= 0:
+        raise SimulationError("The picked faces have no area to carry the load.")
+    return [sum(w * p[i] for p, w in zip(points, weights)) / total for i in range(3)]
+
+
+def distribute(points, weights, force=(0.0, 0.0, 0.0), moment=(0.0, 0.0, 0.0)):
+    """Forces at `points` (each with its share `weights` of the area) that add up to `force`
+    and to `moment` about their weighted middle: the force shared by area, the moment as
+    forces that grow with the distance from the middle (the faces turn as a whole but stay
+    deformable, as CalculiX's distributing coupling). Returns a list of [fx, fy, fz]."""
+    middle = weighted_middle(points, weights)
+    total = float(sum(weights))
+    arms = [_sub(p, middle) for p in points]
+    omega = [0.0, 0.0, 0.0]
+    if _norm(moment) > 0.0:
+        inertia = [[0.0] * 3 for _ in range(3)]
+        for r, w in zip(arms, weights):
+            rr = _dot(r, r)
+            for i in range(3):
+                for j in range(3):
+                    inertia[i][j] += w * ((rr if i == j else 0.0) - r[i] * r[j])
+        omega = _solve3(inertia, list(moment))
+        if omega is None:
+            raise SimulationError(
+                "The picked faces cannot carry a moment about that axis (they lie on a line): "
+                "pick faces that spread around it."
+            )
+    out = []
+    for r, w in zip(arms, weights):
+        turn = _cross(omega, r)
+        out.append([w * (force[i] / total + turn[i]) for i in range(3)])
+    return out
+
+
+def remote_moment(points, weights, force, point):
+    """The moment (about the weighted middle of `points`) of `force` acting at `point`."""
+    middle = weighted_middle(points, weights)
+    return _cross(_sub(point, middle), force)
+
+
+def bearing_forces(points, weights, inward, direction, magnitude):
+    """A bearing load: `magnitude` N along `direction` pushed onto round faces the way a
+    shaft or pin presses: only where the face looks against the load (inward[i], the unit
+    direction into the material at each point, has a positive share along the load), most in
+    the middle of that half and none at its sides (a parabola over the angle), always pushing
+    into the material. Returns a list of [fx, fy, fz] adding up to the load along its
+    direction."""
+    d = unit_vector(direction)
+    raw = []
+    for w, n in zip(weights, inward):
+        cos = max(-1.0, min(1.0, _dot(n, d)))
+        if cos <= 1e-9:
+            raw.append([0.0, 0.0, 0.0])
+            continue
+        angle = math.acos(cos)
+        share = w * max(0.0, 1.0 - (angle / (math.pi / 2.0)) ** 2)
+        raw.append([share * n[0], share * n[1], share * n[2]])
+    along = sum(_dot(f, d) for f in raw)
+    if along <= 1e-12:
+        raise SimulationError(
+            "A bearing load pushes on the side of a round face that faces the load: none of "
+            "the picked faces faces that direction. Flip the direction."
+        )
+    scale = float(magnitude) / along
+    return [[c * scale for c in f] for f in raw]
+
+
+def three_two_one(nodes):
+    """Rows for node_constraints that hold a free piece without forcing it (Remove rigid
+    body modes): its three nodes farthest apart, the first held in X, Y and Z, the second
+    across the line to it, the third out of their plane. `nodes`: [(id, (x, y, z))]."""
+    if len(nodes) < 3:
+        raise SimulationError("A free piece has too few nodes to hold it still.")
+    pts = {n: p for n, p in nodes}
+    middle = [sum(p[i] for p in pts.values()) / len(pts) for i in range(3)]
+    a = max(pts, key=lambda n: (_norm(_sub(pts[n], middle)), -n))
+    b = max(pts, key=lambda n: (_norm(_sub(pts[n], pts[a])), -n))
+    ab = _sub(pts[b], pts[a])
+
+    def off_line(n):
+        return _norm(_cross(ab, _sub(pts[n], pts[a])))
+
+    c = max(pts, key=lambda n: (off_line(n), -n))
+    normal = _cross(ab, _sub(pts[c], pts[a]))
+    if _norm(normal) <= 1e-9 * max(1.0, _dot(ab, ab)):
+        raise SimulationError("A free piece is too thin (all on a line) to hold it still.")
+    normal = [v / _norm(normal) for v in normal]
+    across = _cross(ab, normal)
+    across = [v / _norm(across) for v in across]
+    rows = [(a, "rigid", "spc", (dof, 0.0)) for dof in range(3)]
+    rows.append((b, "rigid", "eq", tuple(normal)))
+    rows.append((b, "rigid", "eq", tuple(across)))
+    rows.append((c, "rigid", "eq", tuple(normal)))
+    return rows
+
+
+def inp_boundaries(spc):
+    """*BOUNDARY data lines (node, first dof, last dof, value) for node_constraints' "spc"."""
+    lines = []
+    for node in sorted(spc):
+        for dof, value in sorted(spc[node].items()):
+            lines.append("%d,%d,%d,%.13g" % (node, dof + 1, dof + 1, value))
+    return lines
+
+
+def inp_equations(equations):
+    """*EQUATION blocks for node_constraints' "equations"."""
+    lines = []
+    for node, terms in equations:
+        lines.append("*EQUATION")
+        lines.append("%d" % len(terms))
+        fields = []
+        for dof, coef in terms:
+            fields.append("%d,%d,%.13g" % (node, dof + 1, coef))
+        for i in range(0, len(fields), 4):
+            lines.append(",".join(fields[i : i + 4]))
+    return lines
+
+
+def inp_loads(forces):
+    """*CLOAD data lines for {node: [fx, fy, fz]} (zeros left out)."""
+    lines = []
+    for node in sorted(forces):
+        for dof, value in enumerate(forces[node]):
+            if abs(value) > 1e-14:
+                lines.append("%d,%d,%.13g" % (node, dof + 1, value))
+    return lines
+
+
+def reactions_from_dat(text):
+    """{set name (upper case): [fx, fy, fz]} of CalculiX's "total force" lines in a .dat
+    file (the last time printed)."""
+    out = {}
+    lines = (text or "").splitlines()
+    for i, line in enumerate(lines):
+        low = line.strip().lower()
+        if not low.startswith("total force (fx,fy,fz) for set"):
+            continue
+        name = low.split("for set", 1)[1].split("and time")[0].strip().upper()
+        for follow in lines[i + 1 : i + 4]:
+            parts = follow.split()
+            if len(parts) == 3:
+                try:
+                    out[name] = [float(v) for v in parts]
+                    break
+                except ValueError:
+                    continue
+    return out
+
+
+# -- reactions: the loads that act right at the held nodes -----------------------------------------
+# CalculiX's reaction output (RF) is the whole external force at a node: the support's reaction
+# plus any load that acts right at that node. A held face's nodes also carry a share of the
+# loads next to them: the weight of the elements that touch the face (gravity), the pressure on
+# a face that meets it along an edge, a force on such a face. RF leaves those shares out of the
+# reaction, so the reaction CalculiX prints was short: a bracket held at its 6 mm wall plate
+# carried 7.4 % less than its weight, a clamped plate under pressure 9 % less than p A. SciForge
+# adds them back: reaction = RF - (the loads at the node), worked out from the solver input the
+# way CalculiX applies them (consistent nodal loads of each element), node by node, each node's
+# reaction shared among the constraints that hold it (split_reactions).
+
+# the faces of CalculiX's tetrahedra (its manual: C3D4 and C3D10): corners, then the mid-side
+# nodes between them (positions in the element, from 1), and the corner across from the face
+TET_FACES = {
+    1: ((1, 2, 3), (5, 6, 7), 4),
+    2: ((1, 4, 2), (8, 9, 5), 3),
+    3: ((2, 4, 3), (9, 10, 6), 1),
+    4: ((3, 4, 1), (10, 8, 7), 2),
+}
+_R15 = math.sqrt(15.0)
+TRI_POINTS = (  # a 7-point rule on a triangle (exact to degree 5): (xi, eta, weight)
+    (1.0 / 3.0, 1.0 / 3.0, 9.0 / 40.0),
+    ((6 - _R15) / 21, (6 - _R15) / 21, (155 - _R15) / 1200),
+    ((9 + 2 * _R15) / 21, (6 - _R15) / 21, (155 - _R15) / 1200),
+    ((6 - _R15) / 21, (9 + 2 * _R15) / 21, (155 - _R15) / 1200),
+    ((6 + _R15) / 21, (6 + _R15) / 21, (155 + _R15) / 1200),
+    ((9 - 2 * _R15) / 21, (6 + _R15) / 21, (155 + _R15) / 1200),
+    ((6 + _R15) / 21, (9 - 2 * _R15) / 21, (155 + _R15) / 1200),
+)
+
+
+def tet10_shape(point):
+    """The ten shape functions of a parabolic tetrahedron at `point` (L1..L4), in CalculiX's
+    node order (corners, then the mid-side nodes of TET10_EDGES)."""
+    out = [l * (2.0 * l - 1.0) for l in point]
+    out += [4.0 * point[a] * point[b] for a, b in TET10_EDGES]
+    return out
+
+
+def tet_volume_shares(xyz):
+    """The integral of each shape function over a tetrahedron (mm3): what a body force per
+    volume puts on each node (consistent nodal loads). xyz: the 4 (C3D4) or 10 (C3D10) nodes'
+    coordinates; parabolic elements with CalculiX's 4-point rule (straight ones: the corners
+    -V/20, the mid-side nodes V/5)."""
+    if len(xyz) == 4:
+        a, b, c, d = xyz
+        volume = abs(_dot(_sub(b, a), _cross(_sub(c, a), _sub(d, a)))) / 6.0
+        return [volume / 4.0] * 4
+    out = [0.0] * 10
+    for point in TET10_POINTS[:4]:
+        grads = tet10_gradients(point)
+        jac = [
+            [sum(xyz[i][r] * grads[i][c] for i in range(10)) for c in range(3)] for r in range(3)
+        ]
+        det = (
+            jac[0][0] * (jac[1][1] * jac[2][2] - jac[1][2] * jac[2][1])
+            - jac[0][1] * (jac[1][0] * jac[2][2] - jac[1][2] * jac[2][0])
+            + jac[0][2] * (jac[1][0] * jac[2][1] - jac[1][1] * jac[2][0])
+        )
+        for i, n in enumerate(tet10_shape(point)):
+            out[i] += abs(det) / 24.0 * n
+    return out
+
+
+def tet_face_shares(xyz, face):
+    """[(node position in the element, area vector (mm2) pointing into the element)] of face
+    `face` (1..4) of a tetrahedron: a pressure p on that face puts p x the vector on the node.
+    xyz: the element's 4 or 10 nodes' coordinates."""
+    corners, mids, across = TET_FACES[face]
+    pts = [xyz[i - 1] for i in corners]
+    inward = _sub(xyz[across - 1], [sum(p[k] for p in pts) / 3.0 for k in range(3)])
+    if len(xyz) == 4:
+        area = _cross(_sub(pts[1], pts[0]), _sub(pts[2], pts[0]))
+        sign = 1.0 if _dot(area, inward) >= 0 else -1.0
+        return [(i, [sign * c / 6.0 for c in area]) for i in corners]
+    nodes = list(corners) + list(mids)
+    x = [xyz[i - 1] for i in nodes]
+    shares = [[0.0, 0.0, 0.0] for _ in nodes]
+    total = [0.0, 0.0, 0.0]
+    for xi, eta, weight in TRI_POINTS:
+        l1, l2, l3 = 1.0 - xi - eta, xi, eta
+        n = [
+            l1 * (2 * l1 - 1),
+            l2 * (2 * l2 - 1),
+            l3 * (2 * l3 - 1),
+            4 * l1 * l2,
+            4 * l2 * l3,
+            4 * l3 * l1,
+        ]
+        d_xi = [-(4 * l1 - 1), 4 * l2 - 1, 0.0, 4 * (l1 - l2), 4 * l3, -4 * l3]
+        d_eta = [-(4 * l1 - 1), 0.0, 4 * l3 - 1, -4 * l2, 4 * l2, 4 * (l1 - l3)]
+        t_xi = [sum(d_xi[i] * x[i][k] for i in range(6)) for k in range(3)]
+        t_eta = [sum(d_eta[i] * x[i][k] for i in range(6)) for k in range(3)]
+        da = [c * weight / 2.0 for c in _cross(t_xi, t_eta)]
+        for i in range(6):
+            for k in range(3):
+                shares[i][k] += n[i] * da[k]
+        total = [total[k] + da[k] for k in range(3)]
+    sign = 1.0 if _dot(total, inward) >= 0 else -1.0
+    return [(i, [sign * c for c in share]) for i, share in zip(nodes, shares)]
+
+
+def _keyword(line):
+    """(keyword in upper case, {PARAMETER: value}) of a CalculiX keyword line."""
+    parts = [p.strip() for p in line[1:].split(",")]
+    params = {}
+    for p in parts[1:]:
+        if "=" in p:
+            key, value = p.split("=", 1)
+            params[key.strip().upper()] = value.strip()
+        elif p:
+            params[p.upper()] = ""
+    return parts[0].upper(), params
+
+
+def inp_loads_at(text, wanted):
+    """{node: [fx, fy, fz]} of the loads of a CalculiX input (`text`) that act right at the
+    nodes `wanted`: *CLOAD lines, pressures on element faces (*DLOAD Pn) and gravity (*DLOAD
+    GRAV, each element with its section's *DENSITY), as consistent nodal loads of the C3D4 /
+    C3D10 elements, the way CalculiX applies them."""
+    wanted = set(wanted)
+    nodes, elements, elsets = {}, {}, {}
+    density, sections = {}, []
+    cloads, pressures, gravity = [], [], []
+    keyword, params, pending, material = None, {}, [], None
+    per_element = {"C3D4": 4, "C3D10": 10}
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("**"):
+            continue
+        if line.startswith("*"):
+            keyword, params = _keyword(line)
+            pending = []
+            if keyword == "MATERIAL":
+                material = params.get("NAME", "").upper()
+            elif keyword == "SOLID SECTION":
+                sections.append(
+                    (params.get("ELSET", "").upper(), params.get("MATERIAL", "").upper())
+                )
+            continue
+        fields = [f.strip() for f in line.split(",")]
+        if keyword == "NODE":
+            if len(fields) >= 4:
+                nodes[int(fields[0])] = (float(fields[1]), float(fields[2]), float(fields[3]))
+        elif keyword == "ELEMENT":
+            count = per_element.get(params.get("TYPE", "").upper())
+            if count is None:
+                continue
+            pending += [int(f) for f in fields if f]
+            if len(pending) >= count + 1:
+                elements[pending[0]] = tuple(pending[1 : count + 1])
+                if "ELSET" in params:
+                    elsets.setdefault(params["ELSET"].upper(), []).append(pending[0])
+                pending = []
+        elif keyword == "ELSET":
+            elsets.setdefault(params.get("ELSET", "").upper(), []).extend(f for f in fields if f)
+        elif keyword == "DENSITY" and material is not None and material not in density:
+            density[material] = float(fields[0])
+        elif keyword == "CLOAD" and len(fields) >= 3:
+            cloads.append((fields[0], int(fields[1]), float(fields[2])))
+        elif keyword == "DLOAD" and len(fields) >= 3:
+            kind = fields[1].upper()
+            if kind == "GRAV" and len(fields) >= 6:
+                g = float(fields[2])
+                gravity.append((fields[0], [g * float(c) for c in fields[3:6]]))
+            elif kind.startswith("P") and kind[1:].isdigit():
+                pressures.append((int(fields[0]), int(kind[1:]), float(fields[2])))
+
+    def members(name, seen=None):
+        """Element numbers of an element set (sets may name other sets)."""
+        seen = set() if seen is None else seen
+        out = []
+        key = name.upper()
+        if key in seen:
+            return out
+        seen.add(key)
+        for entry in elsets.get(key, []):
+            if isinstance(entry, int) or entry.isdigit():
+                out.append(int(entry))
+            else:
+                out += members(entry, seen)
+        return out
+
+    out = {}
+
+    def add(node, f):
+        acc = out.setdefault(node, [0.0, 0.0, 0.0])
+        for k in range(3):
+            acc[k] += f[k]
+
+    for node, dof, value in cloads:
+        if node.isdigit() and int(node) in wanted and 1 <= dof <= 3:
+            f = [0.0, 0.0, 0.0]
+            f[dof - 1] = value
+            add(int(node), f)
+    for element, face, p in pressures:
+        conn = elements.get(element)
+        if conn is None or face not in TET_FACES:
+            continue
+        on_face = [conn[i - 1] for i in TET_FACES[face][0]]
+        if len(conn) == 10:
+            on_face += [conn[i - 1] for i in TET_FACES[face][1]]
+        if not wanted.intersection(on_face):
+            continue
+        for position, vector in tet_face_shares([nodes[n] for n in conn], face):
+            node = conn[position - 1]
+            if node in wanted:
+                add(node, [p * c for c in vector])
+    if gravity:
+        rho = {}
+        for elset, mat in sections:
+            for element in members(elset):
+                rho[element] = density.get(mat, 0.0)
+        for elset, accel in gravity:
+            ids = [int(elset)] if elset.isdigit() else members(elset)
+            for element in ids:
+                conn = elements.get(element)
+                if conn is None or not wanted.intersection(conn) or not rho.get(element):
+                    continue
+                shares = tet_volume_shares([nodes[n] for n in conn])
+                for node, share in zip(conn, shares):
+                    if node in wanted:
+                        add(node, [rho[element] * share * a for a in accel])
+    return out
+
+
+def node_forces_from_dat(text, set_name):
+    """{node: [fx, fy, fz]} of CalculiX's table "forces (fx,fy,fz) for set NAME and time ..."
+    in a .dat file (*NODE PRINT ... RF without totals; the last one printed)."""
+    out = {}
+    lines = (text or "").splitlines()
+    for i, line in enumerate(lines):
+        low = line.strip().lower()
+        if not low.startswith("forces (fx,fy,fz) for set "):
+            continue
+        if low.split("for set", 1)[1].split("and time")[0].strip() != set_name.lower():
+            continue
+        out = {}
+        for follow in lines[i + 1 :]:
+            parts = follow.split()
+            if not parts:
+                if out:
+                    break
+                continue
+            try:
+                if len(parts) != 4:
+                    raise ValueError
+                out[int(parts[0])] = [float(v) for v in parts[1:]]
+            except ValueError:
+                break
+    return out
+
+
+def split_reactions(forces, applied, held):
+    """{label: [fx, fy, fz]}: the force each constraint takes. forces: CalculiX's RF at the
+    held nodes (the whole external force at a node: the reaction plus the loads acting right
+    there), applied: the loads acting right at them (inp_loads_at), held: {node: [(label,
+    (dx, dy, dz))]}: the directions each constraint holds at that node. A node held by one
+    constraint gives it all its reaction; a node several hold (the edge where a Fixed face
+    meets a Frictionless plane) is shared along the directions each holds (a direction held
+    by two: half each), so no reaction is counted twice (CalculiX's totals over node sets
+    counted a shared node's whole reaction in every set)."""
+    out = {}
+    for node, owners in held.items():
+        f = forces.get(node)
+        if f is None or not owners:
+            continue
+        a = applied.get(node, (0.0, 0.0, 0.0))
+        r = [f[k] - a[k] for k in range(3)]
+        labels = []
+        for label, _d in owners:
+            if label not in labels:
+                labels.append(label)
+        if len(labels) == 1:
+            acc = out.setdefault(labels[0], [0.0, 0.0, 0.0])
+            for k in range(3):
+                acc[k] += r[k]
+            continue
+        # the held directions, parallel ones merged (with every label that holds them)
+        dirs = []
+        for label, d in owners:
+            length = _norm(d)
+            if length <= EPS:
+                continue
+            u = [c / length for c in d]
+            for entry in dirs:
+                if abs(abs(_dot(entry[0], u)) - 1.0) <= 1e-9:
+                    if label not in entry[1]:
+                        entry[1].append(label)
+                    break
+            else:
+                dirs.append((u, [label]))
+        if not dirs:
+            continue
+        alpha = _least_squares([u for u, _l in dirs], r)
+        for (u, owners_of), amount in zip(dirs, alpha):
+            for label in owners_of:
+                acc = out.setdefault(label, [0.0, 0.0, 0.0])
+                for k in range(3):
+                    acc[k] += amount * u[k] / len(owners_of)
+    return out
+
+
+def _least_squares(directions, vector):
+    """Amounts a_j with sum a_j d_j nearest `vector` (the smallest such amounts when the
+    directions are more than three or depend on each other): the pseudo-inverse."""
+    import numpy as np
+
+    d = np.array(directions, dtype=float).T  # 3 x k
+    amounts = np.linalg.lstsq(d, np.array(vector, dtype=float), rcond=1e-10)[0]
+    return [float(v) for v in amounts]
+
+
+# -- held enough? (rigid body modes) ---------------------------------------------------------------
+# A model must be held so that no piece of it can move or turn as a whole (Fusion: "rigid
+# body motion"; its DOF View). CalculiX does not always notice: a part held only along X can
+# come back "solved" with nonsense displacements, so SciForge checks before solving. Every
+# constraint stops points of the piece moving in some directions; the piece is held when
+# those rows stop all six rigid movements (three slides, three turns).
+RIGID_WORDS = ("slide along X", "slide along Y", "slide along Z")
+
+
+def free_modes(rows, centre, size):
+    """The rigid movements `rows` leave free. rows: [(point (x, y, z), direction (cx, cy,
+    cz))]: that point cannot move along that direction. centre: the middle of the piece,
+    size: its size (mm, to weigh turns against slides). Returns [(kind "slide" / "turn",
+    direction [x, y, z], point on the axis [x, y, z] or None)]."""
+    size = max(float(size), 1e-9)
+    m = [[0.0] * 6 for _ in range(6)]
+    for point, direction in rows:
+        c = list(direction)
+        length = _norm(c)
+        if length <= 1e-12:
+            continue
+        c = [v / length for v in c]
+        r = _sub(point, centre)
+        turn = _cross(r, c)
+        a = c + [v / size for v in turn]
+        for i in range(6):
+            if a[i] == 0.0:
+                continue
+            for j in range(6):
+                m[i][j] += a[i] * a[j]
+    values, vectors = _jacobi(m)
+    top = max(values) if values else 0.0
+    out = []
+    for value, vector in zip(values, vectors):
+        if top > 0 and value > 1e-9 * top:
+            continue
+        slide = vector[:3]
+        turn = [v / size for v in vector[3:]]
+        if _norm(turn) * size <= 1e-6 * max(_norm(slide), 1e-12) or _norm(turn) <= 1e-15:
+            out.append(("slide", _unit_or(slide), None))
+        else:
+            # the movement u(p) = slide + turn x (p - centre): an axis along turn through
+            # centre + (turn x slide) / |turn|^2 (plus a slide along the axis)
+            w = _dot(turn, turn)
+            through = [centre[i] + _cross(turn, slide)[i] / w for i in range(3)]
+            out.append(("turn", _unit_or(turn), through))
+    return out
+
+
+def _unit_or(v):
+    length = _norm(v)
+    if length <= 1e-15:
+        return [0.0, 0.0, 0.0]
+    out = [c / length for c in v]
+    # point the main component the positive way, so the words read naturally
+    big = max(range(3), key=lambda i: abs(out[i]))
+    if out[big] < 0:
+        out = [-c for c in out]
+    return [0.0 if abs(c) < 1e-9 else c for c in out]
+
+
+def _jacobi(a, sweeps=50):
+    """Eigenvalues and eigenvectors of a small symmetric matrix (lists), Jacobi rotations."""
+    n = len(a)
+    a = [list(row) for row in a]
+    v = [[1.0 if i == j else 0.0 for j in range(n)] for i in range(n)]
+    for _sweep in range(sweeps):
+        off = sum(a[i][j] ** 2 for i in range(n) for j in range(n) if i != j)
+        scale = sum(a[i][i] ** 2 for i in range(n)) or 1.0
+        if off <= 1e-30 * scale:
+            break
+        for p in range(n):
+            for q in range(p + 1, n):
+                if abs(a[p][q]) <= 1e-300:
+                    continue
+                theta = (a[q][q] - a[p][p]) / (2.0 * a[p][q])
+                t = (1.0 if theta >= 0 else -1.0) / (abs(theta) + math.sqrt(theta * theta + 1.0))
+                c = 1.0 / math.sqrt(t * t + 1.0)
+                s_ = t * c
+                for k in range(n):
+                    akp, akq = a[k][p], a[k][q]
+                    a[k][p] = c * akp - s_ * akq
+                    a[k][q] = s_ * akp + c * akq
+                for k in range(n):
+                    apk, aqk = a[p][k], a[q][k]
+                    a[p][k] = c * apk - s_ * aqk
+                    a[q][k] = s_ * apk + c * aqk
+                for k in range(n):
+                    vkp, vkq = v[k][p], v[k][q]
+                    v[k][p] = c * vkp - s_ * vkq
+                    v[k][q] = s_ * vkp + c * vkq
+    values = [a[i][i] for i in range(n)]
+    vectors = [[v[k][i] for k in range(n)] for i in range(n)]
+    return values, vectors
+
+
+def describe_free_mode(mode):
+    """A free movement in words: "slide along X", "turn about an axis along Z through (50, 5,
+    5)"."""
+    kind, direction, through = mode
+    names = ("X", "Y", "Z")
+    axis = None
+    for i in range(3):
+        if abs(abs(direction[i]) - 1.0) <= 1e-6:
+            axis = names[i]
+    words = axis or "(%s)" % ", ".join(fmt(c, 3) for c in direction)
+    if kind == "slide":
+        return "slide along %s" % words
+    return "turn about an axis along %s through (%s)" % (
+        words,
+        ", ".join(fmt(c, 4) for c in through),
+    )
+
+
+# -- what the programs say, in sentences -----------------------------------------------------------
+def solver_failure(output):
+    """CalculiX's complaint (its printed output) as a sentence a person can act on."""
+    text = (output or "").lower()
+    if "zero pivot" in text or "singular" in text:
+        return (
+            "The model is not held enough: a part can still move or spin freely. Add constraints "
+            "so every body is held in X, Y and Z (a Fixed face is the simplest), or switch on "
+            "Remove rigid body modes if the loads balance each other."
+        )
+    if "nonpositive jacobian" in text or "negative jacobian" in text:
+        return (
+            "The mesh has distorted elements CalculiX cannot use (large elements at thin walls "
+            "or tight curves): try a smaller Average Element Size, or a Local Mesh Control on "
+            "the thin or curved faces."
+        )
+    if (
+        "dependent dof" in text
+        or "is used as dependent" in text
+        or ("mpc" in text and "error" in text)
+    ):
+        return (
+            "Two constraints hold the same corner or edge in ways that cannot both be true: "
+            "suppress one of them, or move one to a different face."
+        )
+    if "not enough memory" in text or ("allocation" in text and "fail" in text):
+        return (
+            "The computer ran out of memory for this mesh: make the Average Element Size "
+            "larger, or use local mesh controls only where the stress matters."
+        )
+    if "material" in text and ("not defined" in text or "no elastic" in text):
+        return "A body has no usable material: check the study materials."
+    lines = [line.strip() for line in (output or "").splitlines() if line.strip()]
+    return ("CalculiX could not solve the study. %s" % " ".join(lines[-4:])).strip()
+
+
+def gmsh_errors(output):
+    """(Gmsh's error lines, the surface numbers they name): Gmsh numbers the model's faces
+    in order, so surface 12 is the model's Face12."""
+    import re
+
+    # (Gmsh ends with a summary of its errors: "-----", "Mesh generation error summary",
+    # "2 errors", "Check the full log for details": not reasons)
+    generic = ("------", "error summary", "warnings", "errors", "full log")
+    errors = [
+        line.strip()
+        for line in (output or "").splitlines()
+        if "Error" in line and not any(g in line for g in generic)
+    ]
+    numbers = []
+    for line in errors:
+        for match in re.finditer(r"[Ss]urfaces?\s+(\d+)", line):
+            if int(match.group(1)) not in numbers:
+                numbers.append(int(match.group(1)))
+    return errors, numbers
+
+
+# Gmsh's complaints when the surface mesh crosses itself: the triangles of two faces closer
+# than the elements are large (a thin wall, a small gap) cut through each other. Smaller
+# elements mesh it.
+CROSSING_WORDS = ("intersect", "invalid boundary mesh", "overlapping facets", "self-intersect")
+
+
+def mesh_crossed_itself(output):
+    """True when Gmsh's output says the surface mesh crossed itself (see CROSSING_WORDS)."""
+    errors, _numbers = gmsh_errors(output)
+    text = " ".join(errors).lower()
+    return any(word in text for word in CROSSING_WORDS)
+
+
+# -- contacts --------------------------------------------------------------------------------------
+# Fusion's contact types (research 3.6) and what SciForge does with each: bodies that touch or
+# come closer than the contact tolerance are glued (Bonded, made automatically at solve time,
+# Fusion's default); the others make the solve nonlinear (the bodies may open, slide or press
+# harder as the load grows), which a linear Static Stress solve cannot do.
+CONTACT_TYPES = (
+    ("bonded", "Bonded", True),
+    ("offset_bonded", "Offset Bonded", False),
+    ("separation", "Separation", False),
+    ("sliding", "Sliding", False),
+    ("rough", "Rough", False),
+    ("no_contact", "No Contact", False),
+)
+CONTACT_NOT_AVAILABLE = (
+    "Not in SciForge yet: only bonded contacts, found automatically (bodies that touch or are "
+    "closer than the contact tolerance are glued). Separation, sliding and rough contacts make "
+    "the solve nonlinear, which a linear Static Stress study cannot do."
+)
+
+
+def contact_type_available(key):
+    return any(k == key and ok for k, _t, ok in CONTACT_TYPES)
+
+
+# -- mesh statistics -------------------------------------------------------------------------------
+def mesh_quality(edge_lengths, aspect_ratios, limit):
+    """{"smallest", "largest" (mm, element edge lengths), "worst_aspect", "over_limit" (how
+    many elements are stretched more than `limit`)}."""
+    out = {"smallest": None, "largest": None, "worst_aspect": None, "over_limit": 0}
+    lengths = [v for v in edge_lengths if v and v > 0]
+    if lengths:
+        out["smallest"], out["largest"] = min(lengths), max(lengths)
+    ratios = [v for v in aspect_ratios if v and v > 0]
+    if ratios:
+        out["worst_aspect"] = max(ratios)
+        out["over_limit"] = sum(1 for v in ratios if v > limit)
+    return out
+
+
+def mesh_quality_note(info, limit):
+    """A sentence when the mesh has elements stretched far beyond the study's aspect ratio
+    limit (a thin wall or a sliver met by large elements: the results near them are less
+    accurate), else None. `info`: mesh_quality's dict with "elements"."""
+    worst = info.get("worst_aspect")
+    over = int(info.get("over_limit") or 0)
+    count = int(info.get("elements") or 0)
+    # (only far past the limit: a slender rod's 16:1 parabolic elements still bend within 2 %)
+    if not worst or worst <= 3.0 * float(limit):
+        return None
+    return (
+        "%d of the %d mesh elements are stretched more than %s:1 (the worst %s:1): results near "
+        "them are less accurate. A thin wall needs smaller elements (the Average Element Size, "
+        "or a Local Mesh Control on it); a tiny step or sliver face is better removed from the "
+        "model." % (over, count, fmt(limit, 3), fmt(worst, 3))
+    )
+
+
+# Thin walls met by large elements: a wall that bends with fewer than one parabolic element
+# across it comes out too stiff. Measured (QA, 2026-10-27): a clamped 2.5 mm plate bends 10.5 %
+# too little with elements 5.1 times its thickness (the default size), 4.5 % at 3.4 times,
+# 2.4 % at 2.2 times; a 3 mm tube's twist stress reads 6.3 % low at 3.7 times. The wall's
+# thickness is 2 V / A of its body (a plate: its thickness; a solid block reads a third of its
+# size, so it is not taken for a wall), the elements' size their median edge.
+THIN_WALL_RATIO = 3.0
+
+
+def thin_wall_note(rows, ratio=THIN_WALL_RATIO):
+    """A sentence for the bodies whose walls are much thinner than their mesh elements (a
+    thin wall that bends comes out too stiff), else None. rows: [(body label, wall thickness
+    2V/A mm, median element edge mm)]."""
+    thin = [(label, t, size) for label, t, size in rows if t > 0 and size > ratio * t]
+    if not thin:
+        return None
+    parts = [
+        "%s's walls are about %s mm thick but its mesh elements about %s mm"
+        % (label, fmt(t, 2), fmt(size, 2))
+        for label, t, size in thin
+    ]
+    return (
+        "%s: with so few elements across a wall that thin, it comes out too stiff where it "
+        "bends or twists (it moves less, and its stress reads low). Make the Average Element "
+        "Size about as small as the walls are thick (or put a Local Mesh Control on them), "
+        "solve again and compare." % "; ".join(parts)
+    )
+
+
+def tetra_aspect(p0, p1, p2, p3):
+    """Aspect ratio of a tetrahedron from its corners: the longest edge over the smallest
+    height, scaled so a regular tetrahedron gives 1 (sqrt(3/2) * edge / height)."""
+    pts = (p0, p1, p2, p3)
+    edges = [_norm(_sub(pts[i], pts[j])) for i in range(4) for j in range(i + 1, 4)]
+    volume = abs(_dot(_sub(p1, p0), _cross(_sub(p2, p0), _sub(p3, p0)))) / 6.0
+    if volume <= 0:
+        return float("inf")
+    faces = ((0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3))
+    largest_face = max(
+        _norm(_cross(_sub(pts[j], pts[i]), _sub(pts[k], pts[i]))) / 2.0 for i, j, k in faces
+    )
+    height = 3.0 * volume / largest_face
+    return max(edges) / height / math.sqrt(1.5)
+
+
+# -- curved elements turned inside out -------------------------------------------------------------
+# A curved parabolic tetrahedron has its mid-side nodes on the model's curved faces. Where an
+# element is large next to a tight curve (a small hole in a coarse mesh) a curved edge can push
+# through the element's other faces: it turns inside out and CalculiX stops ("nonpositive
+# jacobian"). SciForge checks every curved element where CalculiX integrates it, at its corners
+# and in its middle, and makes the bad ones straight-sided (their mid-side nodes back to the
+# middle of their edges). Gmsh's own repair (HighOrderOptimize) took minutes on a big part.
+TET10_EDGES = ((0, 1), (1, 2), (2, 0), (0, 3), (1, 3), (2, 3))  # CalculiX's C3D10 nodes 5-10
+_GA, _GB = 0.5854101966249685, 0.1381966011250105
+TET10_POINTS = (  # (L1, L2, L3, L4): CalculiX's four integration points, the corners, the middle
+    (_GA, _GB, _GB, _GB),
+    (_GB, _GA, _GB, _GB),
+    (_GB, _GB, _GA, _GB),
+    (_GB, _GB, _GB, _GA),
+    (1.0, 0.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0, 0.0),
+    (0.0, 0.0, 1.0, 0.0),
+    (0.0, 0.0, 0.0, 1.0),
+    (0.25, 0.25, 0.25, 0.25),
+)
+# Only elements inside out or nearly (the Jacobian somewhere below 1 % of the straight-sided
+# element's) are made straight: a low but positive Jacobian solves well, and every straightened
+# element flattens a bit of a curved face (straightening all below Gmsh's own aim of 10 % made
+# a coarse shaft 18 % too soft in torsion; this rule: 1.2 %)
+DISTORTION_LIMIT = 0.01
+
+
+def tet10_gradients(point):
+    """d N / d (xi, eta, zeta) of the ten shape functions of a parabolic tetrahedron at
+    `point` (L1..L4, with L2 = xi, L3 = eta, L4 = zeta), in CalculiX's node order."""
+    l1, l2, l3, l4 = point
+    return [
+        (1.0 - 4.0 * l1, 1.0 - 4.0 * l1, 1.0 - 4.0 * l1),
+        (4.0 * l2 - 1.0, 0.0, 0.0),
+        (0.0, 4.0 * l3 - 1.0, 0.0),
+        (0.0, 0.0, 4.0 * l4 - 1.0),
+        (4.0 * (l1 - l2), -4.0 * l2, -4.0 * l2),
+        (4.0 * l3, 4.0 * l2, 0.0),
+        (-4.0 * l3, 4.0 * (l1 - l3), -4.0 * l3),
+        (-4.0 * l4, -4.0 * l4, 4.0 * (l1 - l4)),
+        (4.0 * l4, 0.0, 4.0 * l2),
+        (0.0, 4.0 * l4, 4.0 * l3),
+    ]
+
+
+def tet10_distortion(xyz, elements, chunk=20000):
+    """For each parabolic tetrahedron, its smallest Jacobian over TET10_POINTS as a fraction
+    of its straight-sided one (1: as good as straight; 0 or less: inside out; -inf: its
+    corners themselves are inside out or flat, which straight sides do not mend). `xyz`:
+    numpy (nodes, 3) array; `elements`: numpy (elements, 10) array of rows of `xyz`, in
+    CalculiX's node order. Worked in chunks (a big mesh would need gigabytes at once)."""
+    import numpy as np
+
+    grads = np.array([tet10_gradients(p) for p in TET10_POINTS], dtype=float)
+    out = np.empty(len(elements))
+    for start in range(0, len(elements), chunk):
+        coords = xyz[elements[start : start + chunk]]
+        det = np.linalg.det(np.einsum("eai,paj->epij", coords, grads))
+        c = coords[:, :4]
+        straight = np.einsum(
+            "ei,ei->e", c[:, 1] - c[:, 0], np.cross(c[:, 2] - c[:, 0], c[:, 3] - c[:, 0])
+        )
+        part = np.full(len(coords), -np.inf)
+        good = straight > 0.0
+        part[good] = (det[good] / straight[good, None]).min(axis=1)
+        out[start : start + chunk] = part
+    return out
+
+
+def straighten_tets(xyz, elements, limit=DISTORTION_LIMIT, rounds=8):
+    """Make the parabolic tetrahedra whose distortion (tet10_distortion) is below `limit`
+    straight-sided, in place: their mid-side nodes moved to the middle of their edges; then
+    the same for the neighbours this changed, until none is left or after `rounds` passes.
+    `xyz`: numpy (nodes, 3) float array; `elements`: numpy (elements, 10) int array of rows
+    of `xyz`. Returns (sorted moved rows of `xyz`, how many elements were made straight, how
+    many are still bad: inside out at their corners, or left after `rounds`)."""
+    import numpy as np
+
+    elements = np.asarray(elements)
+    straight = np.zeros(len(elements), dtype=bool)
+    moved = set()
+    ends_a = [a for a, _b in TET10_EDGES]
+    ends_b = [b for _a, b in TET10_EDGES]
+    worst = tet10_distortion(xyz, elements)
+    check = np.arange(len(elements))
+    for _round in range(rounds):
+        bad = check[(worst[check] < limit) & np.isfinite(worst[check])]
+        if not len(bad):
+            break
+        rows = elements[bad]
+        mids = rows[:, 4:]
+        xyz[mids] = 0.5 * (xyz[rows[:, ends_a]] + xyz[rows[:, ends_b]])
+        straight[bad] = True
+        changed = np.unique(mids)
+        moved.update(int(n) for n in changed)
+        worst[bad] = 1.0
+        check = np.nonzero(np.isin(elements[:, 4:], changed).any(axis=1) & ~straight)[0]
+        if len(check):
+            worst[check] = tet10_distortion(xyz, elements[check])
+    left = int(np.count_nonzero(worst < limit))
+    return sorted(moved), int(np.count_nonzero(straight)), left
+
+
 # -- pre-check -------------------------------------------------------------------------------------
 def precheck(summary):
     """What is missing before a solve, as [(level, sentence)] with level "error" (cannot
@@ -523,14 +1715,25 @@ def precheck(summary):
 
     `summary`: {"bodies": [names], "materials": {body: (material name, props)},
     "constraints": [(kind, picks count, suppressed)], "loads": [...], "gravity": bool,
-    "lost": [item labels whose picks are gone], "loose": [bodies held by nothing]}"""
+    "safety_basis", "lost": [item labels whose picks are gone], "loose": [bodies held by
+    nothing], "overlaps": [(body, body, volume mm3)], "twice": [(item, item)] constrained on
+    the same face, "remove_rigid": bool, "order": "parabolic" | "linear"}"""
     out = []
     bodies = summary.get("bodies") or []
+    remove_rigid = bool(summary.get("remove_rigid"))
     if not bodies:
         out.append(("error", "The study has no solid body to simulate."))
     for body, (name, props) in sorted((summary.get("materials") or {}).items()):
         for text in material_problems(name, props):
             out.append(("error", "%s: %s" % (body, text)))
+        if summary.get("gravity") and not _positive(props.get("density")):
+            out.append(
+                (
+                    "error",
+                    "%s: %s has no density, so gravity cannot act on it: choose another "
+                    "study material or switch gravity off." % (body, name),
+                )
+            )
         basis = summary.get("safety_basis", "yield")
         if strength(props, basis) is None:
             out.append(
@@ -541,21 +1744,70 @@ def precheck(summary):
                 )
             )
     active = [c for c in summary.get("constraints") or [] if not c[2]]
-    if bodies and not active:
+    if bodies and not active and not remove_rigid:
         out.append(
-            ("error", "Nothing holds the model: add a constraint (Fixed) to keep it in place.")
+            (
+                "error",
+                "Nothing holds the model: add a constraint (Fixed) to keep it in place, or "
+                "switch on Remove rigid body modes if its loads balance each other.",
+            )
+        )
+    if remove_rigid and active:
+        out.append(
+            (
+                "warning",
+                "Remove rigid body modes is on while constraints hold the model: it is meant "
+                "for a model held by nothing whose loads balance; the reactions may be wrong.",
+            )
+        )
+    elif remove_rigid:
+        out.append(
+            (
+                "warning",
+                "Remove rigid body modes is on: the loads must balance each other, or the "
+                "results are wrong.",
+            )
         )
     loads = [c for c in summary.get("loads") or [] if not c[2]]
     if bodies and not loads and not summary.get("gravity"):
         out.append(("warning", "Nothing pushes on the model: add a load or switch gravity on."))
     for label in summary.get("lost") or []:
         out.append(("error", "%s lost what it was on: edit it and pick again." % label))
-    for body in summary.get("loose") or []:
+    if not remove_rigid:
+        for body in summary.get("loose") or []:
+            out.append(
+                (
+                    "error",
+                    "%s is not held by a constraint and does not touch a held body: it would "
+                    "fly away. Add a constraint on it, or leave it out of the study." % body,
+                )
+            )
+    for a, b, volume in summary.get("overlaps") or []:
         out.append(
             (
-                "error",
-                "%s is not held by a constraint and does not touch a held body: it would fly "
-                "away. Add a constraint on it." % body,
+                "warning",
+                "%s and %s overlap (%s mm3): the shared part is simulated once, as part of %s. "
+                "Move them apart or combine them if that is not what you meant."
+                % (a, b, fmt(volume, 3), a),
+            )
+        )
+    for a, b in summary.get("twice") or []:
+        out.append(
+            (
+                "warning",
+                "%s and %s constrain the same face: where they ask for different things, "
+                "%s wins." % (a, b, a),
+            )
+        )
+    if summary.get("order") == "linear" and bodies:
+        # (measured: a cantilever bends 0.082 mm instead of 0.200 at the default size, 0.161
+        # at 3 %; parabolic: 0.1995)
+        out.append(
+            (
+                "warning",
+                "Linear elements are much too stiff where a part bends: a beam bends about half "
+                "as much as it should at the default mesh size. Use Parabolic (the default) "
+                "unless the mesh is very fine.",
             )
         )
     return out

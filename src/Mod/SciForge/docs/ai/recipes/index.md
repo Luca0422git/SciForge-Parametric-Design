@@ -20,6 +20,7 @@ calls, change the sizes, and check with the same tools.
 | [Lofted handle](sciforge://docs/recipes/lofted-handle.md) | loft through three profiles, ellipses, checking the size, diff of a cut |
 | [Curved panel from a surface patch](sciforge://docs/recipes/surface-patch.md) | 3D boundary curves, surface patch, thicken, surface bodies |
 | [Parametric mounting plate](sciforge://docs/recipes/parametric-plate.md) | user parameters, sketch dimensions and model parameters with expressions, a pattern that follows, change and verify |
+| [Is this bracket strong enough? (Static Stress)](sciforge://docs/recipes/static-stress.md) | a simulation study: fixed holes, a force, pre-check, solve, safety factor and reactions, thicken and solve again |
 
 Looking for something else? `examples_search` finds recipes and the golden models (about
 450 small designs with measured results) by words, tool or op, and

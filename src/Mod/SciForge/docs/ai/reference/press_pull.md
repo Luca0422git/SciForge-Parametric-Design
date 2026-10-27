@@ -62,5 +62,6 @@ Done: AI: Press Pull 5 mm. Its id is 'PressPull1'. Bodies now: Body1: 36000 mm3,
 
 ## See also
 
+- Recipe: [is this bracket strong enough? (Static Stress)](sciforge://docs/recipes/static-stress.md)
 - Golden models built with its steps (read one with docs_read golden/<id>): `blend_fillet_presspull_radius`, `direct_history_off_on`, `direct_split_face_then_press_pull`, `fillet2_presspull_set_radius`, `pp_boss_grow`, `pp_edge_fillet`, `pp_edit_distance`, `pp_fillet_face_radius`, `pp_hole_grow`, `pp_hole_shrink`, `pp_multi_face_corner`, `pp_multi_face_push_corner` and 17 more
 - [All tools](sciforge://docs/tools.md), [the handbook](sciforge://docs/handbook.md)

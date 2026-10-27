@@ -67,6 +67,23 @@ COMPONENTS = EMPTY + [
 DRAWING = PLATE_HOLE + [call("create_drawing", base_view="Front", projected=["Top", "Right"])]
 SAVED = PLATE + [call("save_as", path="{tmp}/plate.FCStd")]
 
+# --- sim-core (beta 3): a Static Stress study of the plate, held at one end, pushed at the other
+SIM_STUDY = PLATE + [call("create_study")]
+SIM_HELD = SIM_STUDY + [
+    call("add_constraint", kind="fixed", on=[{"face": {"normal": [-1, 0, 0], "count": 1}}])
+]
+SIM_READY = SIM_HELD + [
+    call(
+        "add_load",
+        kind="force",
+        on=[{"face": {"normal": [1, 0, 0], "count": 1}}],
+        magnitude=2000,
+        direction="vector",
+        vector=[0, 0, -1],
+    )
+]
+SIM_SOLVED = SIM_READY + [call("solve_study")]
+
 SETUPS = {
     "none": [],
     "empty": EMPTY,
@@ -163,6 +180,11 @@ SETUPS = {
     "sphere": EMPTY + [call("primitive", kind="sphere", plane="XY", diameter=20)],
     "two_designs": PLATE + [call("new_design", name="Second")],
     "grouped": PLATE_HOLE + [call("fillet", edges=TOP4, radius=2)],
+    # --- sim-core (beta 3)
+    "sim_study": SIM_STUDY,
+    "sim_held": SIM_HELD,
+    "sim_ready": SIM_READY,
+    "sim_solved": SIM_SOLVED,
 }
 
 EXAMPLES = [
@@ -930,5 +952,57 @@ EXAMPLES = [
         "volatile": True,
         "args": {"query": "bolt circle flange", "limit": 3},
         "note": "examples of a flange with holes around a circle",
+    },
+    # --- sim-core (beta 3): Static Stress simulation --------------------------------------------
+    {"tool": "create_study", "setup": "plate", "args": {}, "note": "a study of the plate"},
+    {
+        "tool": "add_constraint",
+        "setup": "sim_study",
+        "args": {"kind": "fixed", "on": [{"face": {"normal": [-1, 0, 0], "count": 1}}]},
+        "note": "the plate's left end held in place",
+    },
+    {
+        "tool": "add_load",
+        "setup": "sim_held",
+        "args": {
+            "kind": "force",
+            "on": [{"face": {"normal": [1, 0, 0], "count": 1}}],
+            "magnitude": 2000,
+            "direction": "vector",
+            "vector": [0, 0, -1],
+        },
+        "note": "2 kN down on its right end",
+    },
+    {
+        "tool": "local_mesh_control",
+        "setup": "sim_held",
+        "args": {"on": [{"face": {"normal": [-1, 0, 0], "count": 1}}], "size": 2},
+        "note": "2 mm elements on the held end",
+    },
+    {
+        "tool": "set_study_material",
+        "setup": "sim_study",
+        "args": {"body": "Extrude1", "material": "aluminium"},
+        "note": "the study in aluminium (the design stays steel)",
+    },
+    {
+        "tool": "study_settings",
+        "setup": "sim_study",
+        "args": {"mesh_size": 5, "gravity": True},
+        "note": "a finer mesh and gravity on",
+    },
+    {"tool": "precheck_study", "setup": "sim_ready", "args": {}, "note": "ready to solve?"},
+    {"tool": "solve_study", "setup": "sim_ready", "args": {}, "note": "solve it"},
+    {
+        "tool": "study_results",
+        "setup": "sim_solved",
+        "args": {"results": ["safety", "von_mises", "displacement"], "target": 2},
+        "note": "three results and the verdict",
+    },
+    {
+        "tool": "delete_study",
+        "setup": "sim_study",
+        "args": {"study": "Study 1 - Static Stress"},
+        "note": "delete the study",
     },
 ]
