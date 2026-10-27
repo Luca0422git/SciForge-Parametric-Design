@@ -75,3 +75,15 @@ Hold **Shift** to click without the dots (a face's centre).
   (right-click > Isolate).
 - Big robots are slower in SciForge than in Fusion today: see the speed numbers at the end of
   `parity/vex-assembly.md`.
+
+## 8. Stress test a part
+
+VEX metal parts are 5052-H32 aluminium. In **Physical Material** (or the study's **Study
+Materials**) pick **Aluminium AlMg3 (5754)**: the closest alloy in the library (yield strength
+180 MPa against 5052-H32's 193 MPa, so the safety factor comes out a little on the safe side).
+The plain **Aluminium** has a low generic yield strength (95 MPa) and makes VEX parts look
+about half as strong as they are.
+
+A safety factor below 1 right at the corner of a hole that is held **Fixed** is usually not a
+real failure: a sharp corner held completely still gives a stress that grows every time the
+mesh gets finer. Read the stress a little away from that corner (**Surface Probes**).

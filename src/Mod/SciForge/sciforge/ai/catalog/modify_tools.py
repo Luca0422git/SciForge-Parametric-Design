@@ -784,6 +784,7 @@ MATERIALS = (
     "iron",
     "aluminium",
     "aluminium_6061",
+    "aluminium_almg3",
     "copper",
     "titanium",
     "abs",

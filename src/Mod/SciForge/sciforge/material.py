@@ -20,6 +20,9 @@ LIBRARY = [
     ("iron", "Iron", "Iron-Generic", "cast_iron", "Metal"),
     ("aluminium", "Aluminium", "Aluminum-Generic", "aluminium_satin", "Metal"),
     ("aluminium_6061", "Aluminium 6061", "Aluminum-6061-T6", "aluminium_satin", "Metal"),
+    # (the 5000 series VEX metal is made of, 5052-H32: FreeCAD's AlMg3 card is its close
+    # neighbour, yield 180 MPa against 193; Study Materials then has a real yield strength)
+    ("aluminium_almg3", "Aluminium AlMg3 (5754)", "AlMg3F24", "aluminium_satin", "Metal"),
     ("copper", "Copper", "Copper-Generic", "copper", "Metal"),
     ("titanium", "Titanium", "Ti-6Al-4V", "titanium", "Metal"),
     ("abs", "ABS Plastic", "ABS-Generic", "plastic_white", "Plastic"),
