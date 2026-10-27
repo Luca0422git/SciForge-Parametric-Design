@@ -89,6 +89,18 @@ constraint and load, not out of date, RESULTS with the same numbers from the sam
 9. **Reaction forces showed the solver's rounding noise** (d44ce596): "Fixed 1 | 50 | 1.3e-7 |
    -5e-6" in the report, the Reaction Force table and its tags. Unit test
    `test_reactions_without_rounding_noise`.
+10. **FreeCAD's words in the dialogs and the report** (0e36d4a8): Study Materials, its properties
+   line, Results Details and the report showed FreeCAD's card names ("PLA-Generic") where the
+   Physical Material dialog says "PLA", and the report's constraints said "Body: Face10,
+   Face11". `simulation.material_label()`; the report says "Body: 2 faces". The journey checks
+   both (93 checks).
+11. **A design that is only a mesh** (5178c8e1): an imported STL got only "The study has no
+   solid body to simulate."; the pre-check now names the mesh and points to MESH > Convert
+   Mesh. Engine check "a design that is only a mesh".
+12. **`bodies.density` marked the body changed too** (dc6684d4, shared file): the same trap for
+   a material outside SciForge's list (PVC from a FreeCAD file): every mass shown left the
+   design needing a recompute. Read from FreeCAD's library copy; the engine check above covers
+   a PVC body. `bodies_look`, `misc_materials`, `bodies_qa`, `inspect_qa4` run again.
 
 ## What else I tried as a beginner would (scenarios `sim_qa_*.py`)
 
@@ -103,7 +115,24 @@ constraint and load, not out of date, RESULTS with the same numbers from the sam
 - `sim_qa_close`: a design closed with Structural Loads open (no undo step left, the other
   design's New Study its own undo step, its solve ends).
 - `sim_qa_menus`: the right-click ring on RESULTS and SETUP.
-- `sim_qa_speed`: a 306-face plate (100 chamfered holes): times below.
+- `sim_qa_speed`: a 306-face plate (200 x 200 x 6, 100 chamfered holes), every step real input,
+  on this machine (4 CPUs shared with other agents, one CalculiX thread):
+
+  | Action | Time |
+  |---|---|
+  | Workspace > Simulation / Create Study (with the Pre-check light) | 0.41 s / 0.12 s |
+  | Structural Constraints / Structural Loads open | 0.05 s / 0.07 s |
+  | A pick and its preview: the side face / the top face with 100 holes in it | 0.79 s / 1.07 s |
+  | OK (Fixed / Pressure) | 0.11 s / 0.25 s |
+  | Solve: 62 677 nodes, 33 042 elements | 28.4 s |
+  | The window's longest pause while it solved (a 50 ms timer's gaps) | 3.1 s |
+  | RESULTS: Stress drawn / a probe click / Show Mesh on, off | 0.46 / 0.92 / 0.84, 0.87 s |
+  | Slice Plane opens and cuts / Remove Slice | 0.65 / 0.46 s |
+  | Animate starts / its longest pause while playing / stops | 0.04 / 0.31 / 0.40 s |
+  | Report saved (pictures included) | 2.48 s |
+
+  The window stays usable; the one 3.1 s pause is a main-thread step of the solve (writing
+  or reading the solver's files for 62 677 nodes), as sim-core measured (~3-4 s on big parts).
 - Already covered by the builders' scenarios, read and run: Esc / Cancel in every dialog,
   undo / redo of setup changes (never a solve), a second design, components, inch designs, a
   body deleted (before and during a solve), DOF View, Repair, leaving and coming back.
