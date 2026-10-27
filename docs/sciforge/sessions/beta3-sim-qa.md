@@ -116,6 +116,19 @@ constraint and load, not out of date, RESULTS with the same numbers from the sam
    dialog's cancel of a job whose body was deleted became "failed" with a "simulation failed"
    line in the Report view; the engine now leaves a job someone cancelled alone.
 
+## The Fusion parity list
+
+`tools/sciforge/data/fusion-menus.txt` has two new areas, SIMULATION SETUP
+`[in=tab:sim_setup]` and SIMULATION RESULTS `[in=tab:sim_results]`, with Fusion's command names
+from the research file (3.1, 5.13, 9.2, 9.3); INSPECT and SELECT are as in DESIGN (listed once,
+under SOLID) and the RESULTS tab's MANAGE repeats SETUP's. Manual Contacts is
+`[out=...]` (contact types other than bonded need nonlinear analysis: outline 7.18 and 8).
+`parity.py`: SETUP 16 / 24 present (greyed: Simplify, Linear / Angular Global Load, Point Mass
+Auto / Manual, Bolt / Rigid Body Connector), RESULTS 20 / 21 (no Wireframe: Undeformed Model
+draws a see-through ghost instead); all of Fusion 515 / 677 (76.1 %). The greyed and missing
+ones are row G-93 of `remaining-gaps.md` (test_parity's work-list check). `make_ai_docs.py`
+run after each doc change.
+
 ## What else I tried as a beginner would (scenarios `sim_qa_*.py`)
 
 - `sim_qa_beginner`: a study with no load (Pre-check yellow, "Nothing pushes"; solved anyway:
@@ -176,3 +189,37 @@ constraint and load, not out of date, RESULTS with the same numbers from the sam
 - `--only sim`: the builder's benchmarks 138 checks and the QA's hand calculations and engine
   checks 230 (205 before + my 25: free motions, bearing default, a body deleted mid-solve, the
   material read, a mesh-only design), 0 failed.
+
+## Not fixed (with the evidence)
+
+- **The window's longest pause while a big part solves is about 3 s** (2.98 / 3.10 s on the
+  62 677-node plate): one main-thread turn of writing the solver's input or reading its results
+  with FreeCAD's FEM tools; sim-core measured the same (~3-4 s on 131 000 nodes). Splitting it
+  further needs FreeCAD's writer and reader in pieces.
+- **FreeCAD's PLA card gives an ultimate tensile strength (26.4 MPa) below its yield strength
+  (35.9 MPa)**: with the Ultimate basis PLA's safety factor is lower than with Yield. FreeCAD's
+  data, not SciForge's; Study Materials shows both values.
+- **"50 N down on the top of the arm"** (the brief) only squeezes an upright arm; the journey
+  loads it across (the shelf-bracket case M c / I is for) and also, in a cloned study, straight
+  down: 0.231 MPa in the arm (F / A = 0.25), and the base plate at the bolts about as stressed
+  as across (17.09 vs 18.08 MPa), so a thicker arm helps the sideways load only.
+- The RESULTS marking menu's contents are SciForge's choice (sim-results' note; Fusion's own
+  results ring was not documented in the research).
+
+## For Luca
+
+I built an L-bracket from nothing the way you would (sketch, extrude, two bolt holes, a fillet,
+PLA), studied it in SIMULATION and checked every number against hand calculations: the arm's
+tip moves 2.09 mm (I worked out 2.09), the stress up the arm matches the beam formula within 5 %,
+the most stressed spot is the edge of a bolt hole (18 MPa, safety factor 2.0 in PLA), and making
+the arm 7 mm instead of 5 mm from the timeline halves the stress in the arm, as the formula says.
+Saving, closing and opening again keeps the studies and results.
+
+What I fixed: SciForge could crash if you closed a design while Surface Probes was open with
+the mouse over the result (fixed); the design looked "unsaved" right after saving once you had
+used SIMULATION (fixed); right-clicking on the results now offers the result tools; the report
+and Study Materials say "PLA" and "2 faces" instead of FreeCAD's "PLA-Generic" and "Face10";
+reaction forces no longer show tiny numbers like 1.3e-7; an imported STL tells you to use
+MESH > Convert Mesh first; greyed commands say what to use instead; and a few engine details
+(bearing loads in holes, a body deleted during a solve, DOF View's words).
+
