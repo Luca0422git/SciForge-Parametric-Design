@@ -153,6 +153,10 @@ https://github.com/Luca0422git/SciForge
 5. **Open an example:** [docs/sciforge/examples/pi5-case](docs/sciforge/examples/pi5-case/README.md)
    is a Raspberry Pi 5 case built entirely in SciForge (download `pi5_case.FCStd` and open it
    from Home with **Open...**).
+6. **Stress test a part:** click **DESIGN ▾** at the top left and pick **Simulation**, then
+   **New Simulation Study** > Create Study. Add **Structural Constraints** > Fixed where the
+   part is held and **Structural Loads** > Force where it is pushed, press **Solve**, and read
+   the **Safety Factor** (red is weak). The **Pre-check** light says what is still missing.
 
 The [cheat sheet](docs/sciforge/cheat-sheet.md) lists Fusion's keys and mouse habits next to what
 SciForge does. If you want to know exactly where SciForge still differs from Fusion, the
