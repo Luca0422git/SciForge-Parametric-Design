@@ -662,6 +662,27 @@ def check_big_channel_snaps():
     )
 
 
+def check_parts_list_assembly_twice():
+    """A motor that comes in as an assembly (Case, Cartridge, Cap) inserted twice: the parts
+    list counts each part twice (the second motor is an occurrence whose copies are flat; it
+    counted itself once, named after the whole motor, while the first counted its parts)."""
+    from SciForgeTests.fixtures.vex import vex_real as vr
+
+    files = vr.write_all(os.path.join(_folder(), "real"), ["real_motor"])
+    doc = App.newDocument("VexQaMotors")
+    try:
+        _insert(doc, files["real_motor"])
+        second = _insert(doc, files["real_motor"], App.Placement(V(80, 0, 0), App.Rotation()))
+        rows = _parts_list(doc)
+        _out(
+            "parts_list_assembly_twice",
+            second.occurrence and rows == {"Case": 2, "Cartridge": 2, "Cap": 2},
+            "occurrence %s, parts list %s" % (second.occurrence, rows),
+        )
+    finally:
+        _close(doc)
+
+
 # -- the run -------------------------------------------------------------------------------------
 CHECKS = [
     check_duplicate_rigid_group,
@@ -669,6 +690,7 @@ CHECKS = [
     check_duplicate_in_place,
     check_delete_hole_joint,
     check_parts_list_original_deleted,
+    check_parts_list_assembly_twice,
     check_occurrence_names_after_delete,
     check_same_file_again,
     check_real_parts_snaps,

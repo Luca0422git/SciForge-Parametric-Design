@@ -428,8 +428,14 @@ def components_of(sources):
     for body in sources:
         comp = components.component_of(body)
         unit = comp if comp is not None else body
-        if unit.Name in index:
-            index[unit.Name]["bodies"].append(body)
+        key = unit.Name
+        nested = _nested_source(comp, body) if comp is not None else None
+        if nested is not None:
+            # an occurrence of an assembly holds its copies flat: a copy counts as the
+            # component nested in the original that it repeats, once per occurrence
+            unit, key = nested, comp.Name + "/" + nested.Name
+        if key in index:
+            index[key]["bodies"].append(body)
             continue
         try:
             mat = material.effective(body)[0].replace(" (default)", "")
@@ -439,12 +445,34 @@ def components_of(sources):
             "name": _part_name(unit),
             "description": _get(unit, "Label2", "") or "",
             "material": mat,
-            "key": unit.Name,
+            "key": key,
             "bodies": [body],
         }
-        index[unit.Name] = entry
+        index[key] = entry
         found.append(entry)
     return found
+
+
+def _nested_source(occurrence, body):
+    """The component nested in an occurrence's original whose body `body` (a copy body of
+    the occurrence) repeats (a motor's Case in a motor inserted twice), or None. The
+    original lists Case, Cartridge, Cap: the occurrence must count the same parts (it
+    counted itself as one part named after the whole motor; beta 3 VEX QA)."""
+    try:
+        from . import components, instances
+
+        if not instances.is_instance(occurrence):
+            return None
+        source_body = instances.source_body(body)
+        source = instances.source_of(occurrence)
+        if source_body is None or source is None:
+            return None
+        holder = components.component_of(source_body)
+        if holder is None or holder is source:
+            return None
+        return holder
+    except Exception:
+        return None
 
 
 def _part_name(unit):
