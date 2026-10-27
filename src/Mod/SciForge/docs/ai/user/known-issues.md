@@ -37,8 +37,10 @@ time you start it, but treat that as a safety net, not a plan.
   calculations, but they are only as good as the setup and the mesh: thin walls at the default
   mesh come out a little too stiff, and SciForge then says so in a note (a finer mesh in Study
   Settings fixes it). A very fine mesh (over about 150,000 nodes) takes minutes and a lot of
-  memory; the solve's message warns first. *Workaround:* start coarse, then refine where the
-  colours change most (Local Mesh Control) and compare.
+  memory; the solve's message warns first. While a big study is handed to the solver and its
+  results are read back, the window can stop answering for about 3 seconds; the solve itself
+  runs in the background. *Workaround:* start coarse, then refine where the colours change
+  most (Local Mesh Control) and compare.
 - **Auto Timeline needs an AI** (SciForge's chat with your own key, or an AI app connected to
   SciForge), and it reads blocks, plates, turned parts, holes, pockets, bosses, fillets and
   chamfers. Free-form shapes (lofts, sweeps, sculpted surfaces) and threads are listed as "not

@@ -39,7 +39,7 @@ SciForge's own part.
   **Slice Plane**, **Iso-surface**, **Reaction Force**, **Results Details** with a plain verdict
   ("meets the safety factor target", with the weakest body named), **Compare** up to four studies
   side by side, **Convergence Plot**, and a **Report** (a web page with the setup, the numbers and
-  pictures).
+  pictures). Right-click on the results for the results tools.
 - **Out of date**: change the design or the setup after solving (a hole moved, a part turned)
   and the results say so; **Solve Again** brings them up to date.
 - **Checked against hand calculations** (over 300 checks, on Linux and on Windows): beams,
