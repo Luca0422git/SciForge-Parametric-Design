@@ -36,8 +36,14 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   36 checks). VERSION 0.1.0-beta.3.1 + CHANGELOG section. Route: develop green, then a full
   build dry run (Actions > SciForge build on develop, publish off, ~4 h), then **Luca pushes the
   tag `sciforge-v0.1.0-beta.3.1` from a Codespace** (a cloud session cannot push tags) and the
-  tag's build publishes. Status: [x] code [x] local tests [ ] CI green [ ] full build dry run
-  [ ] tag (Luca) [ ] published.
+  tag's build publishes. Status: [x] code [x] local tests [x] CI green (#289, all 14 jobs, on
+  `2aa32dfe`) [x] full build dry run (#13 on 5bde6726: Windows + Linux compiled with patch
+  #18, packaged, golden models, release step green; its GUI parts on the built AppImage:
+  vex_placement_indicator, vex_selectable, vex_robot pass; three failures, all test-robot or
+  known: sim_setup_during and vex_duplicate (fixed in 2fae4231 / 2aa32dfe), sketch_qa_keys R4
+  (the known built-program-only one, below)) [ ] Release moved + tag (Luca: this session's
+  push to Release was refused by the permission system on 2026-10-27, so both are his, from
+  a Codespace, on `2aa32dfe`) [ ] published.
 - **VEX robotics: in beta 3** (above): STEP parts in large numbers, linked occurrences,
   Duplicate With Joints, and Align / Joint snapping to the centre of a square hole.
 - Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
