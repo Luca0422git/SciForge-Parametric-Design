@@ -989,11 +989,12 @@ class _PiecePoints:
         if i not in self.found:
             face = self.faces[i]
             got = _face_points(face, 1)
-            if not got or _on_boundary(face, got[0][0]):
-                # the middle of the parameters can fall on the face's edge (a triangle's
+            if not got or (_is_flat(face) and _on_boundary(face, got[0][0])):
+                # the middle of a flat face's parameters can fall on its edge (a triangle's
                 # long side): such a point also lies on the next face of the other solid,
                 # which then decides wrongly (journey rebuild, beta 3: a missing chamfer's
-                # strip read as common, the volumes only sampled)
+                # strip read as common, the volumes only sampled); a round face's middle is
+                # inside it
                 inner = [x for x in _face_points(face, 3) if not _on_boundary(face, x[0])]
                 got = inner or got or _face_points(face, 3)
             self.found[i] = got[0] if got else None
