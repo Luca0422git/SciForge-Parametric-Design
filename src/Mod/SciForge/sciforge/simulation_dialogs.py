@@ -910,7 +910,7 @@ class MaterialsPanel(_SimPanel):
             self.table.setCellWidget(row, 1, tick)
             self.ticks.append(tick)
             name, _props = sim.model_material(body)
-            model = QtWidgets.QTableWidgetItem(name)
+            model = QtWidgets.QTableWidgetItem(sim.material_label(name))
             model.setFlags(model.flags() & ~QtCore.Qt.ItemIsEditable)
             self.table.setItem(row, 2, model)
             combo = QtWidgets.QComboBox()
@@ -983,7 +983,9 @@ class MaterialsPanel(_SimPanel):
                 name, props = sim.card(material.material_of(material.entry(key)))
             else:
                 name, props = sim.model_material(body)
-            text = _props_text(name, props, self.basis.currentData(), design_units(self.doc))
+            text = _props_text(
+                sim.material_label(name), props, self.basis.currentData(), design_units(self.doc)
+            )
             if not self.ticks[row].isChecked():
                 text = "%s is left out of this study.\n" % body.Label + text
             self.props.setText(text)

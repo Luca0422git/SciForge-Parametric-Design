@@ -494,7 +494,7 @@ def study_steps():
         table = p.table
         h.check("7 one row: the bracket", table.rowCount() == 1, table.rowCount())
         model = table.item(0, 2).text() if table.rowCount() else ""
-        h.check("7 its model material is PLA", "PLA" in model, model)
+        h.check("7 its model material is PLA (not FreeCAD's PLA-Generic)", model == "PLA", model)
         combo = p.combos[0] if p.combos else None
         h.check(
             "7 the study material is Same as Model",
@@ -802,7 +802,17 @@ def results_steps(report_dir):
             return
         with open(path, encoding="utf-8") as handle:
             text = handle.read()
-        h.check("17 it names PLA", "PLA" in text)
+        h.check("17 it names PLA", ">PLA<" in text and "PLA-Generic" not in text)
+        h.check(
+            "17 what the constraint and load are on, in plain words",
+            "2 faces" in text and "1 face" in text and "Face1" not in text,
+        )
+        flat = text.replace(" ", "").replace("\n", "")
+        h.check(
+            "17 the reaction 50 N along X, 0 and 0 (no rounding noise)",
+            "<td>Fixed1</td><td>50</td><td>0</td><td>0</td><td>50</td>" in flat,
+            flat[flat.find("<td>Fixed1</td><td>50") - 10 : flat.find("<td>Fixed1</td><td>50") + 90],
+        )
         from sciforge import simulation_core as core
 
         sf = core.fmt(S["sf_min"], 4)
@@ -925,10 +935,7 @@ def edit_steps():
         study = ss.active_study()
         h.check("20 the study is out of date", ss.sim().out_of_date(study))
         labels = ss.browser_labels()
-        mark = [x for x in labels if "out of date" in x.lower() or "⚠" in x]
-        h.check(
-            "20 the browser marks it", bool(mark) or any("Results" in x for x in labels), labels
-        )
+        h.check("20 the browser's Results row says so", "Results (out of date)" in labels, labels)
         h.ribbon("Solve")
 
     def solve_go():

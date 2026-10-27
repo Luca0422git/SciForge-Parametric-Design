@@ -348,7 +348,7 @@ def body_rows(study):
     found = {b.Label: b for b in simulation.study_bodies(study)}
     for label, entry in per_body.items():
         strength = None
-        material = entry.get("material")
+        material = simulation.material_label(entry.get("material"))
         body = found.get(label)
         if body is not None:
             try:
@@ -441,11 +441,20 @@ def reaction_places(study):
 
 
 def _picks_text(item):
+    """What a constraint or load is on, in plain words: "Bracket: 2 faces", "Beam: 1 edge,
+    1 corner", "Block: whole body" (never FreeCAD's element names such as Face10)."""
+    words = (("Face", "face", "faces"), ("Edge", "edge", "edges"), ("Vertex", "corner", "corners"))
     parts = []
     try:
         for obj, subs in item.References or []:
             subs = [subs] if isinstance(subs, str) else list(subs or [])
-            parts.append("%s: %s" % (obj.Label, ", ".join(subs) if subs else "whole body"))
+            subs = [s.split(".")[-1] for s in subs if s]
+            counts = []
+            for prefix, one, many in words:
+                n = sum(1 for s in subs if s.startswith(prefix))
+                if n:
+                    counts.append("%d %s" % (n, one if n == 1 else many))
+            parts.append("%s: %s" % (obj.Label, ", ".join(counts) if counts else "whole body"))
     except Exception:
         pass
     return "; ".join(parts) or "-"
@@ -482,7 +491,7 @@ def report_data(study, title=None, author="", images=(), lower=None, upper=None,
             name, props, source = simulation.study_material(study, body)
         except Exception:
             continue
-        label = name + (" (study only)" if source == "study" else "")
+        label = simulation.material_label(name) + (" (study only)" if source == "study" else "")
         materials.append(
             (
                 body.Label,

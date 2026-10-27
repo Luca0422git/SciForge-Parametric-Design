@@ -863,6 +863,20 @@ def _material_object(body):
     return material.material_of(row)
 
 
+def material_label(name):
+    """The name SciForge shows for a material: its library's own ("PLA", "Steel") for one of
+    FreeCAD's cards ("PLA-Generic", "Steel-Generic"), any other name as it is."""
+    from . import material
+
+    try:
+        for row in material.LIBRARY:
+            if row[2] == name:
+                return row[1]
+    except Exception:
+        pass
+    return name
+
+
 def model_material(body):
     """The body's own physical material as a card (Fusion's "Same as Model")."""
     was = _touched(body)
