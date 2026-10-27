@@ -167,6 +167,15 @@ class DropTests(unittest.TestCase):
         self.assertFalse(dp.insertable(os.path.join(self.root, "gone.FCStd")))
         self.assertFalse(dp.insertable(os.path.join(self.root, "robot.step")))
 
+    def test_step_cards_can_be_dragged_into_a_design(self):
+        step = os.path.join(self.root, "screw.step")
+        with open(step, "w") as handle:
+            handle.write("ISO-10303-21;")
+        self.assertTrue(dp.draggable(step))  # (VEX parts come as STEP files)
+        self.assertTrue(dp.draggable(self.arm))
+        self.assertFalse(dp.draggable(os.path.join(self.root, "gone.step")))
+        self.assertFalse(dp.draggable(os.path.join(self.root, "notes.txt")))
+
     def test_upload(self):
         self.assertEqual(dp.upload_kind("a/B.FCStd"), "design")
         self.assertEqual(dp.upload_kind("a/robot.STP"), "cad")

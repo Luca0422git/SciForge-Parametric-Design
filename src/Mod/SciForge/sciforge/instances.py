@@ -82,7 +82,9 @@ def instances_of(source):
     if source is None:
         return []
     doc = source.Document
-    found = [o for o in doc.Objects if is_instance(o) and source_of(o) is source]
+    found = [
+        o for o in components.of_type(doc, "App::Part") if is_instance(o) and source_of(o) is source
+    ]
     return sorted(found, key=lambda o: o.ID)
 
 
@@ -137,12 +139,23 @@ def is_copy_body(body):
 def source_bodies(source):
     """The bodies an instance repeats: every body in the source component, nested ones
     included (Fusion shows the nested occurrences; SciForge flattens them into the
-    instance), that is not itself a copy."""
+    instance). The copies inside a nested occurrence count too (a STEP assembly's second
+    wheel, "Wheel:2", is a copy of the first: an occurrence of the whole assembly needs
+    it); the source's own bodies are never copies (an instance's source is no instance)."""
     if source is None:
         return []
     doc = source.Document
     found = components.bodies_in(doc, source, recursive=True)
-    return [b for b in found if not is_copy_body(b)]
+    return [b for b in found if not is_copy_body(b) or _nested_copy(b, source)]
+
+
+def _nested_copy(body, source):
+    """A copy body that belongs to an occurrence nested inside `source`."""
+    try:
+        holder = components.container_of(body)
+        return holder is not None and holder is not source and is_instance(holder)
+    except Exception:
+        return False
 
 
 # -- the copy feature ------------------------------------------------------------------------------
@@ -305,7 +318,7 @@ def sync(doc):
     changed = False
     if doc is None:
         return False
-    for part in [o for o in doc.Objects if is_instance(o)]:
+    for part in [o for o in components.of_type(doc, "App::Part") if is_instance(o)]:
         try:
             changed = _sync_one(part) or changed
         except Exception as exc:
@@ -444,7 +457,7 @@ class _Watch:
 
 def _any_instance(doc):
     try:
-        return any(is_instance(o) for o in doc.Objects)
+        return any(is_instance(o) for o in components.of_type(doc, "App::Part"))
     except Exception:
         return False
 

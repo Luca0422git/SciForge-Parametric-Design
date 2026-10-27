@@ -722,6 +722,8 @@ class _Watch:
         if prop not in ("Placement", "Group", "Visibility", "Moves", "Shape"):
             return
         try:
+            if getattr(obj.Document, "Restoring", False):
+                return  # a file being opened: its decals are placed once it is open
             if prop == "Shape":
                 if bodies.kind(obj) != "InstanceCopy":
                     return

@@ -151,6 +151,7 @@ Community "Can't modify from existing radius with press pull"
 | A8 | Hovering a face or an edge offers its snap points: face centre, edge middles, corners, circle centres; the click takes the one under the pointer. | Autodesk (15: snap points of Point At Vertex / Point to Point), Guess (that Align shows the same dots) |
 | A9 | Ctrl held keeps the face under the pointer, so a point on its boundary can be reached without the edge or corner taking over. | Autodesk (15: Move Point to Point); Guess for Align |
 | A10 | Luca (2026-10-16): "the align tool should have the option to select what part of the face you should align to. there should be a middle point, edge point, etc." | Luca |
+| A11 | **(SciForge, beta 3 vex)** the centre of a square (any non-round) hole is a dot too (Fusion has none); taken on the hole's edge or wall it brings the hole's direction; Shift held turns the dots off (Fusion: snapping off in Align). See parity/vex-assembly.md. | Autodesk ([1][2] in research/fusion-vex-assembly.md); Luca (2026-10-26: "we will need center points on squares and such") |
 
 ### Remove (SOLID > MODIFY)
 

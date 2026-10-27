@@ -127,10 +127,14 @@ def assembly(doc, create=False):
     """The design's hidden assembly root (made when `create`), or None."""
     if doc is None:
         return None
-    for obj in doc.Objects:
-        if obj.TypeId == _ASSEMBLY_TYPE and obj.Name == ASSEMBLY_NAME:
-            return obj
-    for obj in doc.Objects:  # a file whose assembly got another name
+    obj = doc.getObject(ASSEMBLY_NAME)  # (by name first: a robot has 6000 objects)
+    if obj is not None and obj.TypeId == _ASSEMBLY_TYPE:
+        return obj
+    try:
+        found = doc.findObjects(_ASSEMBLY_TYPE)
+    except Exception:
+        found = doc.Objects
+    for obj in found:  # a file whose assembly got another name
         if obj.TypeId == _ASSEMBLY_TYPE and getattr(obj, TYPE_PROP, "") == "Assembly":
             return obj
     if not create:
@@ -452,23 +456,6 @@ def planar_face_ref(pick):
 
 
 # -- snap points -----------------------------------------------------------------------------------
-def _vertex_name(shape, point, tol=1e-7):
-    for i, v in enumerate(shape.Vertexes):
-        if (v.Point - point).Length <= tol:
-            return "Vertex%d" % (i + 1)
-    return ""
-
-
-def _edge_name(shape, edge):
-    for i, e in enumerate(shape.Edges):
-        try:
-            if e.isSame(edge):
-                return "Edge%d" % (i + 1)
-        except Exception:
-            continue
-    return ""
-
-
 def _face_frame(face):
     """(point, Z, X hint) of a face's centre snap in shape coordinates."""
     surface = face.Surface
@@ -500,8 +487,28 @@ def _face_frame(face):
 
 
 def _longest_edge_direction(face):
+    """The direction of a face's longest straight edge (the X hint of its snaps). A face
+    with many holes (VEX metal: hundreds of edges) is not walked edge by edge: an inner
+    outline whose box is shorter than the longest outer edge cannot hold a longer one."""
+    wires = []
+    try:
+        outer = face.OuterWire
+        wires = [outer] + [w for w in face.Wires if not w.isSame(outer)]
+    except Exception:
+        wires = []
+    if len(wires) < 2:
+        edges = face.Edges
+    else:
+        edges = list(wires[0].Edges)
+        best = max((e.Length for e in edges if e.Curve.TypeId == "Part::GeomLine"), default=0.0)
+        for wire in wires[1:]:
+            try:
+                if wire.BoundBox.DiagonalLength >= best - 1e-9:
+                    edges.extend(wire.Edges)
+            except Exception:
+                edges.extend(wire.Edges)
     best = None
-    for edge in face.Edges:
+    for edge in edges:
         if edge.Curve.TypeId == "Part::GeomLine" and (best is None or edge.Length > best.Length):
             best = edge
     if best is None:
@@ -533,42 +540,51 @@ def _snap(kind, at, point, z, hint):
 
 def _shape_snaps(shape, element):
     """Snap points of an element in the shape's coordinates: dicts with kind, at (the shape
-    element the snap sits on), point, z (the joint origin's Z), hint (its X)."""
-    out = []
-    if element.startswith("Face"):
-        face = shape.getElement(element)
-        if face is None:
-            return out
-        centre, z, hint = _face_frame(face)
-        out.append(_snap("centre", element, centre, z, hint))
-        for v in face.Vertexes:
-            out.append(_snap("vertex", _vertex_name(shape, v.Point), v.Point, z, hint))
-        for edge in face.Edges:
-            name = _edge_name(shape, edge)
-            if _is_circle(edge):
-                axis = _circle_axis(edge)
-                if axis.dot(z) < 0:
-                    axis = axis * -1  # a face's round edge turns with the face's normal
-                out.append(_snap("circle", name, App.Vector(edge.Curve.Center), axis, hint))
-            elif edge.Curve.TypeId == "Part::GeomLine":
-                mid = edge.valueAt((edge.FirstParameter + edge.LastParameter) / 2.0)
-                out.append(_snap("midpoint", name, mid, z, hint))
-    elif element.startswith("Edge"):
-        edge = shape.getElement(element)
-        if edge is None:
-            return out
-        z, hint = _edge_frame(edge)
-        if _is_circle(edge):
-            out.append(_snap("circle", element, App.Vector(edge.Curve.Center), z, hint))
-        mid = edge.valueAt((edge.FirstParameter + edge.LastParameter) / 2.0)
-        out.append(_snap("midpoint", element, mid, z, hint))
-        for v in edge.Vertexes:
-            out.append(_snap("vertex", _vertex_name(shape, v.Point), v.Point, z, hint))
-    elif element.startswith("Vertex"):
-        vertex = shape.getElement(element)
-        if vertex is not None:
-            out.append(_snap("vertex", element, vertex.Point, None, None))
-    return [s for s in out if s["at"] or s["kind"] in ("centre", "midpoint", "circle")]
+    element the snap sits on), point, z (the joint origin's Z), hint (its X); a hole's
+    centre also carries "loop" (what finds the hole again). Worked out once per shape and
+    element (hole_snaps: an index of the shape, SciForge's hole centres)."""
+    from . import hole_snaps
+
+    return hole_snaps.snaps(shape, element)
+
+
+HOLE_KINDS = ("loop", "hole_top", "hole_mid", "hole_bottom")
+NEAR = 48  # a face with more snaps than this (VEX metal) offers those around the pointer
+
+
+class Candidates(list):
+    """snap_candidates' result: `partial` when only the snaps around `anchor` (a global
+    point) were kept, `reach` how far from it they go."""
+
+    partial = False
+    anchor = None
+    reach = 0.0
+
+
+def _find_snap(shape, element, kind, at, record=None):
+    """The snap of `kind` sitting on `at` among the element's snaps; a hole's centre is
+    checked against the hole the record remembers and, when the element's names moved on
+    (an edit renumbered the faces and edges), found again by where it is, its size and
+    its direction. None when there is no such snap."""
+    snaps = _shape_snaps(shape, element) if element else []
+    chosen = None
+    for s in snaps:
+        if s["kind"] == kind and s["at"] == at:
+            chosen = s
+            break
+    if kind in HOLE_KINDS and record and record.get("loop"):
+        from . import hole_snaps, hole_snaps_core
+
+        if chosen is None or not hole_snaps_core.same_loop(
+            record["loop"], chosen.get("loop") or {}
+        ):
+            found = hole_snaps.refind(shape, record)
+            if found is None:
+                found = hole_snaps.stored_snap(record, shape)
+                if found is not None:
+                    log("a joint's hole is gone: it stays where the hole was")
+            chosen = found
+    return chosen
 
 
 def _frame_from(point, z, hint):
@@ -586,35 +602,51 @@ def _frame_from(point, z, hint):
 def snap_candidates(pick):
     """Fusion's snap points for the element under the mouse, in global coordinates:
     [{"kind", "at", "point" (App.Vector), "frame" (App.Placement)}], the first the one a
-    joint origin takes when the mouse is on none in particular (the centre)."""
+    joint origin takes when the mouse is on none in particular (the centre). A face with
+    very many (a VEX plate: thousands of corners and edge middles) gives its centre and the
+    NEAR ones nearest the picked point (`partial`)."""
     if pick.is_datum():
         plc = global_of(pick.ref)
-        return [{"kind": "origin", "at": "", "point": App.Vector(plc.Base), "frame": plc}]
+        return Candidates(
+            [{"kind": "origin", "at": "", "point": App.Vector(plc.Base), "frame": plc}]
+        )
     if not pick.element:
-        return []
+        return Candidates()
     try:
         shape, to_local = geometry(pick.obj)
     except Exception:
-        return []
+        return Candidates()
     G = global_of(pick.ref)
-    found = []
-    for snap in _shape_snaps(shape, pick.element):
-        local = to_local * from_frame(_frame_from(snap["point"], snap["z"], snap["hint"]))
-        plc = G * local
-        found.append(
-            {
-                "kind": snap["kind"],
-                "at": snap["at"],
-                "point": App.Vector(plc.Base),
-                "frame": plc,
-                "oriented": snap["z"] is not None,  # a bare corner has no direction
-            }
-        )
-    unique = []
-    for s in found:
-        if all((s["point"] - u["point"]).Length > 1e-7 for u in unique):
-            unique.append(s)
-    return unique
+    to_global = G * to_local
+    snaps = _shape_snaps(shape, pick.element)
+    out = Candidates()
+    if len(snaps) > NEAR and pick.point is not None:
+        target = to_global.inverse().multVec(pick.point)
+        order = sorted(range(1, len(snaps)), key=lambda i: (snaps[i]["point"] - target).Length)
+        kept = order[: NEAR - 1]
+        out.partial = True
+        out.anchor = App.Vector(pick.point)
+        out.reach = (snaps[kept[-1]]["point"] - target).Length if kept else 0.0
+        snaps = [snaps[0]] + [snaps[i] for i in sorted(kept)]
+    from . import hole_snaps_core
+
+    keep = hole_snaps_core.dedupe_points([_tuple(s["point"]) for s in snaps], 1e-7)
+    for i in keep:
+        snap = snaps[i]
+        plc = to_global * from_frame(_frame_from(snap["point"], snap["z"], snap["hint"]))
+        found = {
+            "kind": snap["kind"],
+            "at": snap["at"],
+            "point": App.Vector(plc.Base),
+            "frame": plc,
+            "oriented": snap["z"] is not None,  # a bare corner has no direction
+        }
+        if snap.get("loop"):
+            found["loop"] = snap["loop"]
+            # how far the hole reaches around its centre (the hover takes it from there)
+            found["radius"] = float(snap["loop"].get("r", 0.0))
+        out.append(found)
+    return out
 
 
 def nearest_snap(candidates, point):
@@ -632,7 +664,21 @@ def snap_record(pick, snap):
     Faces and Two Edge Intersection modes, the faces / edges as well)."""
     if snap.get("record"):
         return dict(snap["record"])
-    return {"kind": snap["kind"], "element": pick.element, "at": snap.get("at", "")}
+    record = {"kind": snap["kind"], "element": pick.element, "at": snap.get("at", "")}
+    if snap.get("loop") and snap["kind"] in HOLE_KINDS:
+        record["loop"] = _json_ready(snap["loop"])  # finds the same hole after an edit
+    return record
+
+
+def _json_ready(value):
+    """A JSON-ready copy (tuples and vectors as lists)."""
+    if isinstance(value, dict):
+        return {k: _json_ready(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(v) for v in value]
+    if isinstance(value, App.Vector):
+        return [value.x, value.y, value.z]
+    return value
 
 
 # -- references that follow the geometry -------------------------------------------------------
@@ -931,11 +977,11 @@ def _shared_face_normal(shape, e1, e2):
     return None
 
 
-def _chosen_snap(shape, element, kind, at):
+def _chosen_snap(shape, element, kind, at, record=None):
+    chosen = _find_snap(shape, element, kind, at, record)
+    if chosen is not None:
+        return chosen
     snaps = _shape_snaps(shape, element) if element else []
-    for s in snaps:
-        if s["kind"] == kind and s["at"] == at:
-            return s
     return snaps[0] if snaps else None
 
 
@@ -950,7 +996,13 @@ def mode_frame(shape, record):
         p1, n1 = _plane_of(shape, faces[0])
         p2, n2 = _plane_of(shape, faces[1])
         point, normal = core.midplane(_tuple(p1), _tuple(n1), _tuple(p2), _tuple(n2))
-        snap = _chosen_snap(shape, record.get("element", ""), record.get("snap"), record.get("at"))
+        snap = _chosen_snap(
+            shape,
+            record.get("element", ""),
+            record.get("snap"),
+            record.get("at"),
+            {"kind": record.get("snap"), "loop": record.get("loop")},
+        )
         where = _tuple(snap["point"]) if snap is not None else point
         on_plane = core.project_to_plane(where, point, normal)
         hint = snap["hint"] if snap is not None else None
@@ -998,6 +1050,8 @@ def mode_snap(mode, picks, snap_pick=None, snap=None):
             "snap": snap.get("kind"),
             "at": snap.get("at", ""),
         }
+        if snap.get("loop"):
+            record["loop"] = _json_ready(snap["loop"])
     else:
         record = {"kind": "twoedges", "edges": [first.element, second.element], "element": ""}
     shape, to_local = geometry(first.obj)
@@ -1063,13 +1117,9 @@ def local_placement(ref, record):
             hint = to_local.inverse().Rotation.multVec(App.Vector(*record["x"]))
         return to_local * from_frame(_frame_from(point, z, hint))
     element = record.get("element") or element_name(ref[1][0])
-    snaps = _shape_snaps(shape, element)
-    chosen = None
-    for s in snaps:
-        if s["kind"] == kind and s["at"] == record.get("at", ""):
-            chosen = s
-            break
+    chosen = _find_snap(shape, element, kind, record.get("at", ""), record)
     if chosen is None:  # the element changed: fall back to its centre
+        snaps = _shape_snaps(shape, element)
         chosen = snaps[0] if snaps else None
     if chosen is None:
         return App.Placement()
@@ -1241,16 +1291,26 @@ def is_helper(obj):
         return False
 
 
+def _python_objects(doc):
+    """The App::FeaturePython objects of a design (joints, their helpers and grounds are),
+    from FreeCAD's own filter instead of every object: a VEX robot of 300 parts has 6000
+    objects, and a drive step looked at all of them a dozen times (speed, beta 3)."""
+    try:
+        return doc.findObjects("App::FeaturePython")
+    except Exception:
+        return doc.Objects
+
+
 def joints(doc):
     """The joints a person made, oldest first."""
-    return sorted((o for o in doc.Objects if is_joint(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_joint(o)), key=lambda o: o.ID)
 
 
 def helpers_of(parent):
     try:
         return [
             o
-            for o in parent.Document.Objects
+            for o in _python_objects(parent.Document)
             if is_helper(o) and getattr(o, PROPS["parent"], None) is parent
         ]
     except Exception:
@@ -1460,11 +1520,11 @@ def is_auto_ground(o):
 
 def grounds(doc):
     """The grounds a person made (Ground on a component's menu)."""
-    return [o for o in doc.Objects if _is_ground_object(o) and not is_auto_ground(o)]
+    return [o for o in _python_objects(doc) if _is_ground_object(o) and not is_auto_ground(o)]
 
 
 def auto_grounds(doc):
-    return sorted((o for o in doc.Objects if is_auto_ground(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_auto_ground(o)), key=lambda o: o.ID)
 
 
 def ground_of(part):
@@ -1531,7 +1591,7 @@ def _joints_between(doc, excluding=None):
     and its helpers."""
     pairs = []
     skipped = _with_helpers(excluding)
-    for obj in doc.Objects:
+    for obj in _python_objects(doc):
         if any(obj is s for s in skipped) or not (is_joint(obj) or is_helper(obj)):
             continue
         if getattr(obj, "Suppressed", False):
@@ -1708,7 +1768,7 @@ def satisfied(joint, tol=1e-4):
 def active_links(doc):
     """The joints and helpers the solver works on (not suppressed, both sides there)."""
     out = []
-    for obj in doc.Objects:
+    for obj in _python_objects(doc):
         if not (is_joint(obj) or is_helper(obj)) or getattr(obj, "Suppressed", False):
             continue
         p1, p2 = part1(obj), part2(obj)
@@ -1953,7 +2013,7 @@ def _nested_solver_parts(doc):
         for p in (part1(j), part2(j)):
             if p is not None and container_of(p) is not None:
                 found[p.Name] = p
-    for g in doc.Objects:
+    for g in _python_objects(doc):
         if _is_ground_object(g):
             target = getattr(g, "ObjectToGround", None)
             if target is not None and container_of(target) is not None:
@@ -2272,7 +2332,8 @@ def is_motion_link(obj):
 
 
 def motion_links(doc):
-    return sorted((o for o in doc.Objects if is_motion_link(o)), key=lambda o: o.ID)
+    # (App::FeaturePython only: a drive step asks this, and a robot has 6000 objects)
+    return sorted((o for o in _python_objects(doc) if is_motion_link(o)), key=lambda o: o.ID)
 
 
 def motions_of(joint):
@@ -2509,7 +2570,7 @@ def is_contact_set(obj):
 
 
 def contact_sets(doc):
-    return sorted((o for o in doc.Objects if is_contact_set(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_contact_set(o)), key=lambda o: o.ID)
 
 
 def contact_mode(doc):
@@ -2682,7 +2743,7 @@ def is_motion_study(obj):
 
 
 def motion_studies(doc):
-    return sorted((o for o in doc.Objects if is_motion_study(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_motion_study(o)), key=lambda o: o.ID)
 
 
 def study_data(study):
@@ -2789,7 +2850,8 @@ def baseline(doc):
 def positions(doc):
     """Captured Position steps, oldest first."""
     return sorted(
-        (o for o in doc.Objects if getattr(o, TYPE_PROP, "") == "Position"), key=lambda o: o.ID
+        (o for o in _python_objects(doc) if getattr(o, TYPE_PROP, "") == "Position"),
+        key=lambda o: o.ID,
     )
 
 
@@ -2924,7 +2986,7 @@ def is_rigid_group(obj):
 
 
 def rigid_groups(doc):
-    return sorted((o for o in doc.Objects if is_rigid_group(o)), key=lambda o: o.ID)
+    return sorted((o for o in _python_objects(doc) if is_rigid_group(o)), key=lambda o: o.ID)
 
 
 def create_rigid_group(doc, members, include_children=True):
@@ -3003,6 +3065,12 @@ def _snap_frame(pick, snap):
     for c in candidates:
         if c["kind"] == snap.get("kind") and c.get("at", "") == snap.get("at", ""):
             return App.Placement(c["frame"])
+    if snap.get("kind") in HOLE_KINDS and pick.element:
+        shape, to_local = geometry(pick.obj)
+        found = _find_snap(shape, pick.element, snap["kind"], snap.get("at", ""), snap)
+        if found is not None:
+            frame = _frame_from(found["point"], found["z"], found["hint"])
+            return global_of(pick.ref) * to_local * from_frame(frame)
     if candidates:
         return App.Placement(candidates[0]["frame"])
     raise JointError("The joint's position is gone from %s. Pick it again." % pick.part.Label)

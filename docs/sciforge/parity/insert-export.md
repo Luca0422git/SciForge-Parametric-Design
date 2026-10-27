@@ -234,7 +234,8 @@ says nothing, and the Fusion API reference for defaults:
 |---|---|
 | Upload the STEP to the Data Panel, then Insert into Current Design (the Initial Position dialog opens) | pick the file (STEP or IGES; or the Data Panel's uploaded file); the file comes in as one component named after it, in the active component; the Move dialog opens on it (Part 2) |
 | The STEP's component structure, the parts' names, colours | same: nested components named after the products, Body1 ... in each, per-face colours kept; a part used twice comes in once plus a linked copy ("Wheel:2"); the timeline shows the components and "Insert STEP N" per body |
-| A second insert of the same file | "two_parts (2)" with its own components |
+| A second insert of the same file | **(beta 3, vex)** the same file (same path, size and date) again: another occurrence of the first insert, linked ("two_parts:2"; parity/vex-assembly.md, section 3); a changed file or a copy elsewhere: "two_parts (2)" with its own components |
+| Several files at once | **(SciForge, beta 3 vex)** Insert STEP picks several files: one component per file, side by side, one undo step, then the Move dialog on all of them (parity/vex-assembly.md) |
 | Ctrl+Z | the Move first, then the whole insert; Ctrl+Y brings them back with their colours |
 | File > Open of a STEP / IGES file | a new design of the file (Part 2) |
 

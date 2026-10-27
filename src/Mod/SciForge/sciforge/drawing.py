@@ -436,7 +436,7 @@ def components_of(sources):
         except Exception:
             mat = ""
         entry = {
-            "name": unit.Label,
+            "name": _part_name(unit),
             "description": _get(unit, "Label2", "") or "",
             "material": mat,
             "key": unit.Name,
@@ -445,6 +445,22 @@ def components_of(sources):
         index[unit.Name] = entry
         found.append(entry)
     return found
+
+
+def _part_name(unit):
+    """A parts-list row's part number: the component's name. An occurrence of a component
+    ("Screw:2", instances.py: Paste, a pattern, a STEP file inserted again, Duplicate With
+    Joints) is the same part as its original (Fusion: one row, the count in Qty)."""
+    try:
+        from . import instances
+
+        if instances.is_instance(unit):
+            source = instances.source_of(unit)
+            if source is not None:
+                return source.Label
+    except Exception:
+        pass
+    return unit.Label
 
 
 # ------------------------------------------------------------------ the sheet

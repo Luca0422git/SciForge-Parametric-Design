@@ -52,7 +52,10 @@ def list_bodies(doc):
     """Every PartDesign body of the design, in the order they were made."""
     if doc is None:
         return []
-    found = [o for o in doc.Objects if o.TypeId == BODY]
+    try:  # (FreeCAD's type filter: a robot of 300 parts has 6000 objects)
+        found = [o for o in doc.findObjects(BODY) if o.TypeId == BODY]
+    except Exception:
+        found = [o for o in doc.Objects if o.TypeId == BODY]
     return sorted(found, key=lambda o: o.ID)
 
 

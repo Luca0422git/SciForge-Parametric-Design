@@ -9,6 +9,8 @@ that kind of row. Structure: browser_core.py; deleting goes through
 timeline_ops.py (one undo step, later steps kept working where possible).
 """
 
+import time
+
 import FreeCAD as App
 import FreeCADGui as Gui
 
@@ -223,12 +225,18 @@ def _objects(doc):
     used_up = _used_up_bodies(doc)
     grounded = _grounded_names(doc)
     marker_hidden = _marker_hidden(doc)
+    origins = _origin_index(doc)  # (vex: each Origin looked at once, not per plane)
     for obj in doc.Objects:
         if obj.Name in used_up:
             continue
         try:
+            if _never_a_row(obj, origins):
+                continue
             if marker_hidden and _in_hidden(obj, marker_hidden):
                 continue  # a component made after the history marker does not exist yet
+            if obj.TypeId in ORIGIN_FEATURE_TYPES:
+                rows.append(_origin_row(obj, origins))  # (thousands in a robot: the short way)
+                continue
             parent = obj.getParentGeoFeatureGroup()
             visible = obj.ViewObject.Visibility if obj.ViewObject is not None else None
             if visible is not None and getattr(obj, "Role", None) in core.ORIGIN_ROLES:
@@ -298,6 +306,120 @@ def _objects(doc):
     return rows
 
 
+ORIGIN_FEATURE_TYPES = ("App::Origin", "App::Line", "App::Plane", "App::Point")
+# The timer's read of the design waits this many times as long as the last read took: on a
+# design whose read takes a second (a VEX robot of 300 parts) dragging or driving a joint is
+# not stopped by a read every half second; small designs (a read of 30 ms) are read as often
+# as before. Commands still refresh the browser at once (refresh()).
+POLL_PAUSE = 4.0
+
+
+def _never_a_row(obj, origins=None):
+    """Objects the browser never lists, passed over before their row is read (speed: a VEX
+    robot of 300 parts has 6000 objects, most of them its occurrences' origins and copy
+    steps; browser_core drops these rows anyway): a body's first step (FeatureBase), an
+    occurrence's copy step, the origin planes / axes of a body inside a component (the
+    component's own origin is listed, the root's shows a body's). `origins`:
+    _origin_index (the answer for origin planes without asking FreeCAD for each)."""
+    tid = obj.TypeId
+    if tid == "PartDesign::FeatureBase":
+        return True
+    if tid == "Part::FeaturePython":
+        return getattr(obj, "SciForgeType", "") == "InstanceCopy"
+    if tid in ORIGIN_FEATURE_TYPES:
+        known = origins.get(obj.Name) if origins else None
+        if known is not None:
+            return known[3]
+        owner = obj.getParentGeoFeatureGroup()
+        return (
+            owner is not None
+            and owner.TypeId == "PartDesign::Body"
+            and owner.getParentGeoFeatureGroup() is not None
+        )
+    return False
+
+
+def _row_data(node):
+    """What a row's item keeps of its node: all but its children (the child items hold
+    those). Qt copies an item's data in and out on every read, and the design's row held the
+    whole tree: a robot's 3300 rows spent 0.25 s a refresh on that (speed, beta 3). What needs
+    the children asks _with_children."""
+    return {k: v for k, v in node.items() if k != "children"}
+
+
+def _with_children(tree, node):
+    """A row's node as the tree holds it, with its children (its item keeps none)."""
+    if node is None or "children" in node:
+        return node
+    found = core.find(tree, node.get("key")) if tree is not None else None
+    return found if found is not None else dict(node, children=[])
+
+
+def _origin_index(doc):
+    """{an Origin's or its plane / axis / point's name: (the Origin, the Origin's parent, the
+    component it is in, never a row)}, worked out once per Origin for _never_a_row and
+    _origin_row (a robot of 300 parts has 600 Origins and 4200 planes, axes and points)."""
+    index = {}
+    try:
+        origins = doc.findObjects("App::Origin")
+    except Exception:
+        return index
+    for origin in origins:
+        try:
+            parent = origin.getParentGeoFeatureGroup()
+            container = parent
+            while container is not None and container.TypeId != "App::Part":
+                container = container.getParentGeoFeatureGroup()
+            # a body's origin inside a component: not listed (the component's own is)
+            hidden = (
+                parent is not None
+                and parent.TypeId == "PartDesign::Body"
+                and parent.getParentGeoFeatureGroup() is not None
+            )
+            known = (origin, parent, container, hidden)
+            index[origin.Name] = known
+            for feature in origin.OriginFeatures:
+                index[feature.Name] = known
+        except Exception:
+            continue
+    return index
+
+
+def _origin_row(obj, origins=None):
+    """The row of an origin plane / axis / point (or of the Origin): what _objects reads for
+    any object, without the questions that never apply to one (joints, sketches, meshes,
+    sheet metal...): a robot of 300 parts lists 2400 of them. `origins`: _origin_index."""
+    known = origins.get(obj.Name) if origins else None
+    vobj = obj.ViewObject
+    visible = vobj.Visibility if vobj is not None else None
+    role = getattr(obj, "Role", None)
+    if known is not None:
+        origin, parent, container, _hidden = known
+        if visible is not None and role in core.ORIGIN_ROLES:
+            shown = origin.ViewObject
+            visible = bool(visible and (shown is None or shown.Visibility))
+    else:
+        parent = obj.getParentGeoFeatureGroup()
+        if visible is not None and role in core.ORIGIN_ROLES:
+            visible = _origin_visible(obj)
+        container = parent
+        while container is not None and container.TypeId != "App::Part":
+            container = container.getParentGeoFeatureGroup()
+    return {
+        "name": obj.Name,
+        "label": obj.Label,
+        "type_id": obj.TypeId,
+        "visible": visible,
+        "body": (
+            parent.Name if parent is not None and parent.TypeId == "PartDesign::Body" else None
+        ),
+        "role": role,
+        "sciforge_type": getattr(obj, "SciForgeType", ""),
+        "component": container.Name if container is not None else None,
+        "grounded": False,
+    }
+
+
 def _component_rename(obj, text):
     """Renaming an occurrence renames the component (Fusion: all its occurrences take the
     new name); the ":n" after the name is the occurrence number, not part of the name."""
@@ -346,17 +468,28 @@ def _instance_names(doc, rows):
         from . import instances
     except Exception:
         return
+    # one pass over the occurrences (not one per component: hundreds of occurrences)
+    named = set()
+    for part in doc.Objects:
+        try:
+            if part.TypeId != "App::Part" or not instances.is_instance(part):
+                continue
+            # copies the history marker hides do not exist at the marker (a pattern after it)
+            if ops.hidden_by_marker(part):
+                continue
+            source = instances.source_of(part)
+            if source is not None:
+                named.add(source.Name)
+        except Exception:
+            continue
     for row in rows:
-        if row["type_id"] != "App::Part":
+        if row["type_id"] != "App::Part" or row["name"] not in named:
             continue
         obj = doc.getObject(row["name"])
         try:
             if obj is None or instances.is_instance(obj):
                 continue
-            # copies the history marker hides do not exist at the marker (a pattern after it)
-            shown = [p for p in instances.instances_of(obj) if not ops.hidden_by_marker(p)]
-            if shown:
-                row["display"] = "%s:1" % obj.Label
+            row["display"] = "%s:1" % obj.Label
         except Exception:
             continue
 
@@ -781,6 +914,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
         self._timer.timeout.connect(self._poll)
         self._gate = doc_epoch.Gate()  # the poll reads the design only after a change
         self._observer = None
+        self._read_cost = 0.0  # how long the last read took (s), and when it ended
+        self._read_end = 0.0
 
     def start(self):
         doc_epoch.install()
@@ -867,6 +1002,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             if key is not None and not self._gate.ready(key):
                 self._sync_selection()
                 return
+            if time.monotonic() - self._read_end < POLL_PAUSE * self._read_cost:
+                return  # a big design (a robot: a read takes a second): not on every tick
             self.refresh()
         except Exception as exc:
             _remember("info", "browser poll: %s" % exc)
@@ -878,6 +1015,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             if self._renaming is not None:
                 return  # do not rebuild under the user's typing
             key = doc_epoch.key()  # (before reading: a change during the read is read again)
+            started = time.monotonic()
             tree = self.tree()
             _follow_active(self._doc)
             sig = core.signature(tree)
@@ -888,6 +1026,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
                 self._tree = tree
                 self._rebuild(tree)
             self._sync_selection()
+            self._read_end = time.monotonic()
+            self._read_cost = self._read_end - started
         except Exception as exc:
             _remember("info", "browser refresh skipped: %s" % exc)
 
@@ -910,7 +1050,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
 
     def _add(self, parent, node):
         item = QtWidgets.QTreeWidgetItem(parent if parent is not None else self)
-        item.setData(1, ROLE_NODE, node)
+        item.setData(1, ROLE_NODE, _row_data(node))  # (vex: without its children)
         self._rows[node["key"]] = item
         item.setIcon(1, ui_icon(node["icon"]))
         item.setText(1, node["label"])
@@ -932,7 +1072,8 @@ class BrowserWidget(QtWidgets.QTreeWidget):
             item.setToolTip(1, "\n".join(tips))
         for child in node["children"]:
             self._add(item, child)
-        item.setExpanded(self._starts_open(node["key"]))
+        if self._starts_open(node["key"]):  # (vex: a new item is closed already)
+            item.setExpanded(True)
         return item
 
     def _items(self):
@@ -1188,6 +1329,7 @@ class BrowserWidget(QtWidgets.QTreeWidget):
         return self._doc.getObject(node["object"]) if self._doc and node["object"] else None
 
     def _set_visible(self, node, visible):
+        node = _with_children(self._tree, node)  # (vex: a row's item keeps no children)
         targets = [n for n in core.walk(node) if n["object"] and n["visible"] is not None]
         if node["kind"] == "component":
             targets = self._component_eye(node, targets, visible)

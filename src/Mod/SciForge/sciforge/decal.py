@@ -1008,7 +1008,17 @@ def is_decal(obj):
 
 
 def decals(doc):
-    return [o for o in doc.Objects if is_decal(o)] if doc is not None else []
+    """The decals of `doc`. Asked on every move of a body or component (decal_ui's watch):
+    only the App::FeaturePython objects are looked at (a decal is one), FreeCAD's own
+    filter, not every object of the design (a VEX robot of 300 parts has 6000 objects:
+    opening it asked 3500 times, two minutes of the opening; speed, beta 3)."""
+    if doc is None:
+        return []
+    try:
+        candidates = doc.findObjects("App::FeaturePython")
+    except Exception:
+        candidates = doc.Objects
+    return [o for o in candidates if is_decal(o)]
 
 
 def summary(obj):
