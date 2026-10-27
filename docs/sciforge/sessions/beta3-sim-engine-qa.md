@@ -174,7 +174,8 @@ word. GUI scenario `sim_qa_engine.py` for what only shows with the window up.
 ## Final results (00:15)
 
 - `run_tests.sh --only sim`: builder's benchmarks 138 checks, QA's `sim_accuracy_qa` 197
-  checks (154 accuracy rows, 43 engine checks): 0 failed. The QA table is in the parity doc,
+  checks (154 accuracy rows, 43 engine checks): 0 failed; with the pinned link case added
+  after it (00:20), the QA suite alone: 205 checks, 0 failed. The QA table is in the parity doc,
   Benchmarks, "QA's own hand calculations".
 - `--only unit`: 2513 tests OK (9 skipped). `--only headless`: 306 calls, docs 152 items /
   1002 calls, agent 81 checks: pass.

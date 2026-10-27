@@ -193,7 +193,7 @@ The engine's QA wrote its own cases, independent of the builder's: every formula
 source next to it in `SciForgeTests/headless/sim_accuracy_qa.py` (run by `run_tests.sh --only
 sim` after the builder's benchmarks), at the default and a finer mesh, a few through the AI
 tools (their answers only), and engine checks for numbers that would be wrong without a word.
-Run of 2026-10-27 (`sim-accuracy-qa.json`): 197 checks (154 accuracy rows, 43 engine checks), 0 failed. A row marked "warned" is outside its
+Run of 2026-10-27 (`sim-accuracy-qa.json`): 205 checks (162 accuracy rows, 43 engine checks), 0 failed. A row marked "warned" is outside its
 tolerance at the default mesh and the solve says why (a thin wall met by large elements); the
 finer mesh is within it. Steel is Steel-Generic, aluminium Aluminum-Generic (E read from the
 study material).
@@ -238,6 +238,10 @@ study material).
 | **shaft_bearing**: Shaft 20 mm across, 120 mm long, held at one end, 500 N bearing load on its last 20 mm | free end deflection (mm), distributed load on the journal | 0.1631 | 0.1599 (1.967 %) | 0.1613 (1.128 %) | 3 % | PASS |
 |  | the held end takes the load (N, z) | 500 | 500 (0 %) | 500 (0 %) | 0.5 % | PASS |
 |  | nothing sideways (N) | 0 | 0.000316 (0 %) | 0.08346 (0.083 %) | 0.5 % | PASS |
+| **pinned_link**: Link 100 x 20 x 5 mm with two 8 mm holes 80 mm apart: one on a Pin (tangential held too), a 2 kN bearing load pulling the other along the link | stress in the middle (MPa) = F / (w t) | 20 | 20 (0.019 %) | 20 (0.005 %) | 2 % | PASS |
+|  | x 30..70 mm stretches (mm) = F 40 / (E w t) | 0.004 | 0.004003 (0.069 %) | 0.003991 (0.227 %) | 3 % | PASS |
+|  | the pin takes the pull (N, -x) | -2000 | -2000 (0 %) | -2000 (0 %) | 0.5 % | PASS |
+|  | nothing across (N) | 0 | 1.292e-05 (0 %) | 4.721e-06 (0 %) | 0.5 % | PASS |
 | **inch_cantilever**: Cantilever 1 x 1 x 12 in, 100 lbf at its end (an inch-sized part; numbers in mm, N, MPa) | tip deflection (mm) = 25.4 x F L^3 / 3EI [in] | 0.6052 | 0.6023 (0.481 %) | 0.6054 (0.023 %) | 3 % | PASS |
 |  | top stress / (0.00689 x M c / I [psi]), 20-80 % of the length (24.82 MPa at mid) | 1 | 1 (0.004 %) | 1 (0.001 %) | 3 % | PASS |
 |  | reaction (N) = 100 lbf | 444.8 | 444.8 (0 %) | 444.8 (0 %) | 0.5 % | PASS |
