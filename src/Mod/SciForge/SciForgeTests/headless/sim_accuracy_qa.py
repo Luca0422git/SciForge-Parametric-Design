@@ -2739,6 +2739,20 @@ def material_read_untouched(doc, out):
     out.append(("the pre-check: nothing to recompute", not touched(), touched()))
     sim.solve(study, timeout=600)
     out.append(("a solve: nothing to recompute", not touched(), touched()))
+    # a FreeCAD material SciForge's list does not have (PVC, from a file made elsewhere): the
+    # mass the Physical Material dialog and Inspect show read it from the body
+    import Materials
+
+    pvc = [m for m in Materials.MaterialManager().Materials.values() if m.Name == "PVC-Generic"]
+    if pvc:
+        body.ShapeMaterial = pvc[0]
+        doc.recompute()
+        kg = material.mass(body)
+        out.append(("PVC's mass read (1.38-ish g/cm3)", kg is not None and kg > 0, kg))
+        out.append(("reading PVC's density: nothing to recompute", not touched(), touched()))
+        name, props = sim.model_material(body)
+        out.append(("Same as Model reads PVC", name == "PVC-Generic", name))
+        out.append(("and nothing to recompute", not touched(), touched()))
 
 
 @engine_check("a design that is only a mesh")

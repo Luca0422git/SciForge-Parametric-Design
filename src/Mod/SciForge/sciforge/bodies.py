@@ -431,9 +431,17 @@ def remove_body(body):
 
 # -- physical material -------------------------------------------------------------------------
 def density(body):
-    """Density of the body's Physical Material in kg/mm^3, or None if it has none."""
+    """Density of the body's Physical Material in kg/mm^3, or None if it has none. Read from
+    FreeCAD's library copy of the material: a value read from the body's own material object
+    marks the body as changed (the design then asked to be recomputed and looked unsaved)."""
     try:
         material = body.ShapeMaterial
+        try:
+            import Materials
+
+            material = Materials.MaterialManager().getMaterial(material.UUID)
+        except Exception:
+            pass  # (a material only this file has: the body's own)
         value = material.getPhysicalValue("Density")
     except Exception:
         return None
