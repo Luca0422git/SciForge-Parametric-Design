@@ -1036,6 +1036,8 @@ def screw_places():
         out.append((grid(i, j).x, grid(i, j).y, 0.0, 1))
     for dx in (-PITCH, PITCH):  # the top bearing's mounting holes: heads on it
         out.append((t.x + dx, t.y, t.z + BEARING_T, -1))
+    i, j = STANDOFF_HOLES[0]  # the seventh (step 6): through rail 2 into the first standoff
+    out.append((grid(i, j).x, grid(i, j).y, 2 * T + GAP, -1))
     return out
 
 
@@ -1611,9 +1613,8 @@ def reopen_steps():
         answer_file_dialog([S["file"]], S["dialog4"])
         keys_to_window()
         t0 = time.perf_counter()
-        # (no design open: no 3D view; the key goes to the window)
-        QtTest.QTest.keyClick(Gui.getMainWindow(), QtCore.Qt.Key_O, QtCore.Qt.ControlModifier)
-        QtWidgets.QApplication.processEvents()
+        # the application bar's Open (no design open: Home is in front)
+        h.check("the application bar's Open", di.quick_access("Open"))
         S["open_s"] = time.perf_counter() - t0
 
     def reopened():
