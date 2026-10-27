@@ -432,6 +432,18 @@ class Distributions(unittest.TestCase):
         with self.assertRaises(core.SimulationError):
             core.bearing_forces(pts[:1], [1.0], [(0.0, -1.0, 0.0)], (0.0, 1.0, 0.0), 1.0)
 
+    def test_bearing_along_its_hole_says_so(self):
+        # (sim QA: a direction along the hole's axis was told "Flip the direction", which
+        # cannot help: no side of the hole faces it either way)
+        pts = [(math.cos(i * 0.5), math.sin(i * 0.5), 0.0) for i in range(12)]
+        with self.assertRaises(core.SimulationError) as caught:
+            core.bearing_forces(pts, [1.0] * 12, pts, (0.0, 0.0, -1.0), 100.0)
+        self.assertIn("along the hole's axis", str(caught.exception))
+        self.assertEqual(core.across_axis((0, 0, 1)), [0.0, -1.0, 0.0])
+        self.assertEqual(core.across_axis((1, 0, 0)), [0.0, 0.0, -1.0])
+        self.assertTrue(core.runs_along((0, 0, -1), (0, 0, 1)))
+        self.assertFalse(core.runs_along((0, -1, 0), (0, 0, 1)))
+
     def test_three_two_one(self):
         nodes = [(1, (0.0, 0.0, 0.0)), (2, (10.0, 0.0, 0.0)), (3, (0.0, 5.0, 0.0)), (4, (5, 2, 1))]
         rows = core.three_two_one(nodes)

@@ -942,6 +942,8 @@ def bearing_forces(points, weights, inward, direction, magnitude):
         raw.append([share * n[0], share * n[1], share * n[2]])
     along = sum(_dot(f, d) for f in raw)
     if along <= 1e-12:
+        if all(abs(_dot(n, d)) <= 1e-6 for n in inward):
+            raise SimulationError(BEARING_ALONG)  # (flipping it would not help)
         raise SimulationError(
             "A bearing load pushes on the side of a round face that faces the load: none of "
             "the picked faces faces that direction. Flip the direction."
