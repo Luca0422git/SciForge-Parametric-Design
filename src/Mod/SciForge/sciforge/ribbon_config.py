@@ -1521,6 +1521,42 @@ SIM_MARKING_LIST = [
     item("Set Orbit Center", "SciForge_SetOrbitCenter", "orbit_center"),
     item("Reset Orbit Center", "SciForge_ResetOrbitCenter", "orbit_center"),
 ]
+# The right-click ring while the RESULTS tab shows (sim QA): the result tools Fusion offers
+# there instead of SETUP's (simulation_ui.open_marking_menu picks it by the tab)
+SIMR_MARKING_MENU = [
+    item("Repeat", "__repeat__", "compute"),
+    item("Surface Probes", "SciForge_SimResultsProbes", "simr_probe"),
+    item(
+        "Show Min/Max",
+        "SciForge_SimResultsMinMax",
+        "simr_minmax",
+        toggle="simulation_results_ui:minmax_on",
+    ),
+    item("Undo", "Std_Undo", "qa_undo", "Ctrl+Z"),
+    item(
+        "Animate",
+        "SciForge_SimResultsAnimate",
+        "simr_animate",
+        toggle="simulation_results_ui:animation_on",
+    ),
+    item("Results Details", "SciForge_SimResultsDetails", "simr_details"),
+    item("Finish Results", "SciForge_SimResultsFinish", "simr_finish"),
+    item("Report", "SciForge_SimResultsReport", "simr_report"),
+]
+SIMR_MARKING_LIST = [
+    item("Redo", "Std_Redo", "qa_redo", "Ctrl+Y"),
+    item("Slice Plane", "SciForge_SimResultsSlice", "simr_slice"),
+    item("Reaction Force", "SciForge_SimResultsReactions", "simr_reaction"),
+    item(
+        "Show Mesh", "SciForge_SimResultsMesh", "simr_mesh", toggle="simulation_results_ui:mesh_on"
+    ),
+    SEP,
+    item("Fit", "Std_ViewFitAll", "nav_fit", "F6"),
+    item("Look At", "Std_AlignToSelection", "nav_lookat"),
+    SEP,
+    item("Set Orbit Center", "SciForge_SetOrbitCenter", "orbit_center"),
+    item("Reset Orbit Center", "SciForge_ResetOrbitCenter", "orbit_center"),
+]
 SIMR_TOOLS = group(
     "simr_tools",
     "RESULT TOOLS",

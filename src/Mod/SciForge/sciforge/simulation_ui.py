@@ -331,19 +331,41 @@ def _hold_design_keys(on):
         warn("simulation workspace: keys: %s" % exc)
 
 
+def _results_tab():
+    """True while the RESULTS tab is the one shown."""
+    try:
+        from . import shell
+
+        return shell.ribbon().current_tab() == "sim_results"
+    except Exception:
+        return False
+
+
 def open_marking_menu(global_pos):
     """The right-click marking menu with the SETUP commands (ribbon_config.SIM_MARKING_MENU
-    and SIM_MARKING_LIST) instead of the design's."""
+    and SIM_MARKING_LIST) instead of the design's; on the RESULTS tab the result tools
+    (SIMR_MARKING_MENU / SIMR_MARKING_LIST: Surface Probes, Show Min/Max, Animate, Results
+    Details, Finish Results...)."""
     from . import marking_menu, recent, ribbon_config as cfg
 
     ring, listing, last = cfg.MARKING_MENU, cfg.MARKING_LIST, recent.last
+    results = _results_tab()
 
     def simulation_last():
-        # Repeat offers the last SETUP command only (not a design command run before)
+        # Repeat offers the last command of the tab shown only (not a design command run
+        # before, nor a RESULTS tool in SETUP or a SETUP command in RESULTS)
         found = last()
-        return found if found and str(found[0]).startswith("SciForge_Sim") else None
+        name = str(found[0]) if found else ""
+        if results:
+            return found if name.startswith("SciForge_SimResults") else None
+        if name.startswith("SciForge_Sim") and not name.startswith("SciForge_SimResults"):
+            return found
+        return None
 
-    cfg.MARKING_MENU, cfg.MARKING_LIST = cfg.SIM_MARKING_MENU, cfg.SIM_MARKING_LIST
+    if results:
+        cfg.MARKING_MENU, cfg.MARKING_LIST = cfg.SIMR_MARKING_MENU, cfg.SIMR_MARKING_LIST
+    else:
+        cfg.MARKING_MENU, cfg.MARKING_LIST = cfg.SIM_MARKING_MENU, cfg.SIM_MARKING_LIST
     recent.last = simulation_last
     try:
         return marking_menu.open_at(global_pos)
