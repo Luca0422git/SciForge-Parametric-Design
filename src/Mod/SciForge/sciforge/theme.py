@@ -234,10 +234,28 @@ class OwnBackground:
     boxes."""
 
     def paintEvent(self, event):
-        if getattr(self, "_sf_opaque", None) is None:
+        from PySide import QtCore
+
+        if not getattr(self, "_sf_opaque", None):
             # only inside FreeCAD's overlay (a floating box, the sketch's dimension box,
-            # sets its own window attributes and must keep them)
+            # sets its own window attributes and must keep them); looked at again on later
+            # paints, as a panel can be painted once before it is in the overlay
             self._sf_opaque = keep_opaque(self) if in_overlay(self) else False
+        elif self.testAttribute(QtCore.Qt.WA_TranslucentBackground):
+            # the overlay made it see-through again without re-parenting it (its hover and
+            # transparency changes): opaque again once this paint is done (the Text panel's
+            # boxes were see-through, Luca 2026-10-27)
+            if not getattr(self, "_sf_reopaque", False):
+                self._sf_reopaque = True
+
+                def again(widget=self):
+                    try:
+                        widget._sf_reopaque = False
+                    except RuntimeError:
+                        return
+                    _make_opaque(widget)
+
+                QtCore.QTimer.singleShot(0, again)
         colour = own_background(self)
         if colour:
             from PySide import QtGui

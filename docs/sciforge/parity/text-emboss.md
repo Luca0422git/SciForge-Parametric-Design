@@ -41,6 +41,8 @@ Only behaviour is copied: no Autodesk text, icon or code.
 | T22 | single-line ("stick") fonts cannot be extruded | Autodesk (Emboss help) | a font with open outlines makes no closed area; Emboss says so and asks for another font |
 | T23 | a design opened where its font is missing | Forum (other font used) | the text keeps its saved letters until it is rebuilt, then uses the default font; a message next to the mouse and in the Text dialog says which font is missing and which is used **(message wording: Guess)** |
 | T24 | text on the front plane may read mirrored (sketch seen from the back) | Forum | the text follows the sketch's own axes as Fusion does; Flip Horizontal fixes it |
+| T25 | words that run past the frame's right edge | **Luca (2026-10-27): "the text just goes past the box i make"**; Fusion's documentation does not say (an archived Autodesk idea asked for the frame's width to set where lines break) | words wrap: a line breaks at the last space that fits, a word wider than the frame breaks between letters, lines typed with Enter stay; the frame does not grow (T17): when the lines need more height than the frame has, the dialog says so. A frame made as wide as its text (the AI's `sketch_text` without a width; two clicks on one spot, for the text typed so far) keeps it on one line. Texts made before 0.1.0-beta.3.1 keep their one line when a design opens (`WrapLines` off) and wrap once edited in the Text dialog (`sketch_text_wrap`) |
+| T26 | the TEXT dialog sits in the panel like Fusion's | Autodesk | it paints its own background and keeps its boxes opaque (`theme.OwnBackground`): in FreeCAD's floating Tasks panel it was see-through and a click on the Text box went through to the sketch (Luca, 2026-10-27; `sketch_text_wrap` W2 clicks with the real pointer) |
 
 ## Behaviour spec: Emboss (SOLID > CREATE > Emboss)
 
@@ -78,7 +80,7 @@ No FreeCAD core file was changed.
 - Unit (no FreeCAD): `SciForgeTests/unit/test_fonts.py`, `test_text_core.py`, `test_emboss_core.py`.
 - Golden models (hand-worked numbers): `emboss_flat_rect`, `emboss_flat_deboss`, `emboss_cylinder_rect`, `emboss_cylinder_deboss`.
 - Scenarios (real mouse and keys): `sketch_text_basic`, `sketch_text_edit`, `sketch_text_path`,
-  `sketch_text_cut`, `sketch_text_more`, `emboss_cylinder`, `emboss_flat`.
+  `sketch_text_cut`, `sketch_text_more`, `sketch_text_wrap`, `emboss_cylinder`, `emboss_flat`.
 
 ## Not built (yet), and why
 

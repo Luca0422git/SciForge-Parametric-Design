@@ -27,7 +27,7 @@ import math
 import FreeCAD as App
 import FreeCADGui as Gui
 
-from . import commands, log, text, ui_icon_path, warn
+from . import commands, log, text, theme, ui_icon_path, warn
 from . import text_core as core
 from .compat import QtCore, QtWidgets
 
@@ -922,9 +922,11 @@ STYLE = """
 """
 
 
-class TextDialog(QtWidgets.QFrame):
+class TextDialog(theme.OwnBackground, QtWidgets.QFrame):
     """Fusion's Text dialog, at the top of the sketch panel. `target`: the text being
-    edited, or None for a new one."""
+    edited, or None for a new one. It paints its own background and keeps its boxes
+    opaque (theme.OwnBackground): in FreeCAD's floating Tasks panel it was see-through and
+    a click on the Text box went through to the sketch (Luca, 2026-10-27)."""
 
     last = None  # the newest dialog (tests and diagnostics)
 
@@ -943,6 +945,9 @@ class TextDialog(QtWidgets.QFrame):
         self.spec = text.spec_of(target) if target is not None else remembered_spec()
         if target is None:
             self.spec["type"] = "text"
+        # words past the frame's edge go on the next line (Luca, 2026-10-27: "the text just
+        # goes past the box i make"); a text made before that wraps once it is edited here
+        self.spec["wrap"] = True
         self.frame_placed = target is not None and self.spec["type"] == "text"
         self.corner1 = None  # first corner clicked (new text)
         self.hover = None  # the mouse in sketch coordinates (rubber band)

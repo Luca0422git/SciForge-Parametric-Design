@@ -22,6 +22,16 @@ downloads and runs it (the AppImage: download the new one).
   Placement) for every part and origin plane when a design opened, about 8 seconds of a
   300-part robot; it is now made only when someone turns Show Placement on.
 
+### Fixed
+
+- **Sketch Text: the TEXT panel was see-through.** In the floating panel on the right, a click
+  on the Text box went through to the sketch behind it, so typing stopped working. The panel
+  (and Measure's box in a sketch) now has its own background and takes the click.
+- **Sketch Text: words stay inside the box you drew.** A word that runs past the frame's right
+  edge goes on the next line (a word longer than the whole frame is broken). If the lines need
+  more height than the frame has, the dialog says so. Texts in designs made before this keep
+  their single line until you edit them.
+
 ## 0.1.0-beta.3
 
 **The third beta.** Three new things: **stress simulation** (Fusion's Simulation workspace with

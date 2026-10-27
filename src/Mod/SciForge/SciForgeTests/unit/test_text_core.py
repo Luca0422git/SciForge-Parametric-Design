@@ -151,6 +151,55 @@ class BlockTests(unittest.TestCase):
         self.assertTrue(close(y0, -1.5))
 
 
+class WrapTests(unittest.TestCase):
+    """Words past the frame's width go on the next line (Luca, 2026-10-27: "the text just
+    goes past the box i make"). FakeFont at 10 mm: a letter is 5 mm, a space 2.5 mm."""
+
+    def rows(self, text, width):
+        return core.wrapped_rows(text, FakeFont(), 10.0, width)
+
+    def test_words_go_on_the_next_line(self):
+        self.assertEqual(self.rows("hello world", 30.0), ["hello", "world"])
+        self.assertEqual(self.rows("hi you all", 30.0), ["hi you", "all"])
+
+    def test_a_line_as_wide_as_its_frame_stays_whole(self):
+        # "hello world" is 25 + 2.5 + 25 = 52.5 mm (a frame sized to the text)
+        self.assertEqual(self.rows("hello world", 52.5), ["hello world"])
+        self.assertEqual(self.rows("hello world", 52.4), ["hello", "world"])
+
+    def test_typed_lines_stay_and_no_width_wraps_nothing(self):
+        self.assertEqual(self.rows("a\nb", 100.0), ["a", "b"])
+        self.assertEqual(self.rows("hello world", 0.0), ["hello world"])
+
+    def test_spaces_at_the_break_are_dropped(self):
+        self.assertEqual(self.rows("aa   bb", 12.0), ["aa", "bb"])
+        self.assertEqual(self.rows("  aa", 100.0), ["  aa"])
+
+    def test_a_word_wider_than_the_frame_is_broken_between_letters(self):
+        self.assertEqual(self.rows("abcdefgh", 12.0), ["ab", "cd", "ef", "gh"])
+        self.assertEqual(self.rows("x abcdefgh y", 12.0), ["x", "ab", "cd", "ef", "gh", "y"])
+        self.assertEqual(self.rows("abcde f", 17.5), ["abc", "de f"])
+        # a frame narrower than one letter still ends: a letter a line
+        self.assertEqual(self.rows("abc", 1.0), ["a", "b", "c"])
+
+    def test_block_wraps_and_extent_follows(self):
+        font = FakeFont()
+        glyphs, lines = core.block(
+            "hello world", font, 10.0, width=30.0, frame_height=40.0, v_align="top", wrap=True
+        )
+        self.assertEqual(len(lines), 2)
+        second = [g for g in glyphs if g.line == 1]
+        self.assertEqual("".join(g.char for g in second), "world")
+        self.assertTrue(close(second[0].x, 0.0))
+        self.assertTrue(close(lines[0][2] - lines[1][2], font.line_height * 0.01))
+        width, height = core.text_extent("hello world", font, 10.0, wrap_width=30.0)
+        self.assertTrue(close(width, 25.0))
+        self.assertTrue(close(height, 10.0 + 11.0))
+        # without wrap the old one line
+        _glyphs, lines = core.block("hello world", font, 10.0, width=30.0, frame_height=40.0)
+        self.assertEqual(len(lines), 1)
+
+
 class AffineTests(unittest.TestCase):
     def test_compose_and_inverse(self):
         t = core.chain(core.scaling(2.0), core.rotation(math.radians(90)), core.translation(1, 2))

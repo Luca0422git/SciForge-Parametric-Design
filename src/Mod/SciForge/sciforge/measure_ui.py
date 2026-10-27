@@ -18,7 +18,7 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 from . import commands, handles3d, hole_common, log, measure, preview, taskui, ui_icon, warn
-from . import ui_icon_path
+from . import theme, ui_icon_path
 from .compat import QtCore, QtGui, QtWidgets
 
 FILTERS = [
@@ -44,6 +44,11 @@ IN_SKETCH_STYLE = """
 #SciForgeMeasureInSketch QLabel[role="title"] { color: #f5f5f5; font-weight: bold;
     letter-spacing: 0.5px; padding: 6px 8px; background: #2f3643; }
 """
+
+
+class _InSketchFrame(theme.OwnBackground, QtWidgets.QFrame):
+    """Measure's box in the sketch's panel: paints its own background and stays opaque
+    (in FreeCAD's floating Tasks panel a plain frame was see-through and click-through)."""
 
 
 def editing_sketch():
@@ -250,7 +255,7 @@ class MeasurePanel:
         if host is None:
             self.cleanup()
             raise RuntimeError("the sketch's panel is not there")
-        frame = QtWidgets.QFrame()
+        frame = _InSketchFrame()  # opaque in FreeCAD's floating Tasks panel
         frame.setObjectName("SciForgeMeasureInSketch")
         frame.setStyleSheet(IN_SKETCH_STYLE)
         box = QtWidgets.QVBoxLayout(frame)

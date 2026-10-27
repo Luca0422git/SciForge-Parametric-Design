@@ -298,6 +298,72 @@ def lines_of(text):
     return (text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
 
 
+WRAP_TOL = 1e-6  # mm: a line exactly as wide as its frame (a frame sized to it) stays whole
+
+
+def wrapped_rows(text, font, height, width, spacing=0.0, bold_extra=0.0):
+    """The text's lines with the words that run past `width` (mm) put on the next line,
+    as in a text box: a line breaks at the last space that fits (the space itself is
+    dropped); a word wider than the whole frame is broken between letters. Lines typed
+    with Enter stay lines; a width of 0 wraps nothing (Text On Path, a frameless text)."""
+    rows = lines_of(text)
+    if width <= WRAP_TOL:
+        return rows
+    limit = width / em_scale(font, height) + WRAP_TOL / em_scale(font, height)
+
+    def fits(candidate):
+        return line_pens(candidate, font, spacing, bold_extra)[1] <= limit
+
+    out = []
+    for row in rows:
+        if fits(row):
+            out.append(row)
+            continue
+        start = len(out)
+        line = ""
+        for word in _words(row):
+            if line and not fits((line + word).rstrip(" ")):
+                out.append(line.rstrip(" "))
+                line = word.lstrip(" ")
+            else:
+                line += word
+            line = _break_word(line, fits, out)
+        if line.strip(" ") or len(out) == start:
+            out.append(line.rstrip(" "))
+    return out
+
+
+def _break_word(line, fits, out):
+    """A line still wider than the frame (one word longer than the frame is wide): as
+    many letters as fit go on lines of their own (at least one, so it ends); the rest is
+    returned."""
+    while line and not fits(line.rstrip(" ")):
+        cut = 1
+        while cut < len(line) and fits(line[: cut + 1]):
+            cut += 1
+        out.append(line[:cut])
+        line = line[cut:]
+    return line
+
+
+def _words(row):
+    """`row` cut before each word: ["hello", " world", "  again"] (the spaces stay with
+    the word after them, so a line put back together is the row)."""
+    words, current, in_space = [], "", False
+    for char in row:
+        if char == " ":
+            if current and not in_space:
+                words.append(current)
+                current = ""
+            in_space = True
+        else:
+            in_space = False
+        current += char
+    if current:
+        words.append(current)
+    return words
+
+
 def em_scale(font, height):
     return float(height) / float(font.units_per_em or 1000)
 
@@ -312,11 +378,13 @@ def block(
     width=0.0,
     frame_height=0.0,
     bold=False,
+    wrap=False,
 ):
     """Glyphs of a multi-line text set inside a frame of `width` x `frame_height` (mm,
     frame axes). Lines are spaced by the font's line height; each line is aligned
     left / centre / right inside the width; the block top / middle / bottom inside the
-    frame height (the font's ascender to descender). Returns (glyphs, lines) where
+    frame height (the font's ascender to descender). With `wrap` the words that run past
+    the width go on the next line (wrapped_rows). Returns (glyphs, lines) where
     lines = [(x0, x1, baseline y)] per line (for the underline)."""
     if h_align not in H_ALIGNS:
         raise TextError("Unknown horizontal alignment %r." % h_align)
@@ -324,7 +392,10 @@ def block(
         raise TextError("Unknown vertical alignment %r." % v_align)
     scale = em_scale(font, height)
     extra = BOLD_EXTRA * font.units_per_em if bold else 0.0
-    rows = lines_of(text)
+    if wrap:
+        rows = wrapped_rows(text, font, height, width, spacing, extra)
+    else:
+        rows = lines_of(text)
     ascent = font.ascender * scale
     descent = -font.descender * scale  # positive
     step = max(font.line_height * scale, 1e-9)
@@ -355,11 +426,15 @@ def block(
     return glyphs, lines
 
 
-def text_extent(text, font, height, spacing=0.0, bold=False):
-    """(width, height) mm of the text's lines (the frame a text needs)."""
+def text_extent(text, font, height, spacing=0.0, bold=False, wrap_width=0.0):
+    """(width, height) mm of the text's lines (the frame a text needs); with `wrap_width`
+    the lines as wrapped at that width."""
     scale = em_scale(font, height)
     extra = BOLD_EXTRA * font.units_per_em if bold else 0.0
-    rows = lines_of(text)
+    if wrap_width > 0.0:
+        rows = wrapped_rows(text, font, height, wrap_width, spacing, extra)
+    else:
+        rows = lines_of(text)
     width = max((line_pens(r, font, spacing, extra)[1] for r in rows), default=0.0) * scale
     ascent = font.ascender * scale
     descent = -font.descender * scale

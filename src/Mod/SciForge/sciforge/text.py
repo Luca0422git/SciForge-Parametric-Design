@@ -502,6 +502,7 @@ def default_spec():
         "path_id": 0,
         "above": True,
         "fit": False,
+        "wrap": True,  # words past the frame's right edge go on the next line
     }
 
 
@@ -574,7 +575,16 @@ def _plan_frame(result, spec, sketch, text, info, make_bold, glyphs, local):
         width,
         height,
         bold=make_bold,
+        wrap=bool(spec.get("wrap", False)),
     )
+    if spec.get("wrap") and lines and len(lines) > len(core.lines_of(text)):
+        scale = core.em_scale(info, spec["height"])
+        needed = lines[0][2] - lines[-1][2] + (info.ascender - info.descender) * scale
+        if needed > height + 0.05 * spec["height"]:
+            result.notes.append(
+                "The words need %d lines in this frame and run past its edge: make the "
+                "frame taller or the letters smaller." % len(lines)
+            )
     frame = core.frame_transform(corner, angle, width, height, spec["flip_h"], spec["flip_v"])
     for g in placed:
         shape = glyphs.get(g.char)
@@ -918,6 +928,9 @@ class TextFeature:
         if _add(obj, "App::PropertyBool", "AbovePath", "Letters above the path (else below)"):
             obj.AbovePath = True
         _add(obj, "App::PropertyBool", "FitToPath", "Spread the letters over the whole path")
+        # off for texts made before 0.1.0-beta.3.1 (added off when such a design opens, so
+        # it looks as it did); new texts and texts edited in the Text dialog wrap
+        _add(obj, "App::PropertyBool", "WrapLines", "Words past the frame go on the next line")
         if _add(obj, "App::PropertyString", "ResolvedText", "The text as drawn"):
             obj.setEditorMode("ResolvedText", 1)
         _add(obj, "App::PropertyString", "FontUsed", "The font family drawn", hidden=True)
@@ -1047,6 +1060,7 @@ def spec_of(obj):
             "path_id": int(obj.PathId),
             "above": bool(obj.AbovePath),
             "fit": bool(obj.FitToPath),
+            "wrap": bool(getattr(obj, "WrapLines", False)),
         }
     )
     return spec
@@ -1094,6 +1108,8 @@ def apply_spec(obj, spec):
     _set(obj, "PathId", int(spec["path_id"] or 0))
     _set(obj, "AbovePath", bool(spec["above"]))
     _set(obj, "FitToPath", bool(spec["fit"]))
+    if "WrapLines" in obj.PropertiesList:
+        _set(obj, "WrapLines", bool(spec.get("wrap", False)))
     _link_parameters(obj, spec["text"])
 
 
