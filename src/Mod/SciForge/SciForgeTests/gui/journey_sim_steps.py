@@ -643,9 +643,9 @@ def node_near(point):
     return best[1] if best else None
 
 
-def probe_steps(tag):
-    """Surface Probes on the arm's inner face (it faces the holes and the default view) 10 mm
-    above the base, half way across: von Mises read there."""
+def probe_steps(tag, z=15.0):
+    """Surface Probes on the arm's inner face (it faces the holes and the default view) at
+    height z (10 mm above the base by default), half way across: von Mises read there."""
 
     def stress():
         rs.choose_result("Stress")
@@ -658,7 +658,7 @@ def probe_steps(tag):
         sess = rs.session()
         t = arm_thickness() or 5.0
         S["%s_t" % tag] = t
-        node = node_near((t, ymid(), 15.0))
+        node = node_near((t, ymid(), z))
         S["%s_aim" % tag] = node
         h.click(V(*sess.display.node_place(node)))
 
@@ -1100,3 +1100,108 @@ def reopen_steps(folder):
         step(results_back, "results_back", 800),
         step(same_numbers, "same_numbers", 800),
     ]
+
+
+# -- 6. the same 50 N straight down (as asked), in a cloned study ----------------------------------
+def down_steps():
+    """Clone Study, the clone's force turned to Normal (into the arm's top face: down), solved.
+    Down on an upright arm squeezes it: F / A = 50 / (5 x 40) = 0.25 MPa in the arm (band 0.15 ..
+    0.40: the probe's node and the load entering the base); the base plate still bends between
+    the arm and the bolts with the same moment as across (50 N x 37.5 mm: its highest von Mises
+    within 0.75 .. 1.25 of the across case); the reaction 50 N straight up."""
+
+    def finish():
+        S["vm_across"] = rs.summary().get("stats", {}).get("von_mises", {}).get("max", 0.0)
+        S["first"] = ss.active_study().Name
+        rs.big("Finish Results")
+
+    def clone():
+        h.check("24 back in SETUP", ss.current_tab() == "sim_setup", ss.current_tab())
+        ss.right_click_row(ss.active_study().Label, "Clone Study")
+
+    def cloned():
+        found = ss.studies()
+        h.check("24 Clone Study made a second study", len(found) == 2, [x.Label for x in found])
+        clones = [x for x in found if x.Name != S["first"]]
+        if not clones:
+            return
+        S["clone"] = clones[0].Name
+        if ss.active_study().Name != S["clone"]:
+            ss.right_click_row(clones[0].Label, "Activate")
+
+    def edit():
+        clone = doc().getObject(S.get("clone", ""))
+        loads = ss.sim().items(clone, "load") if clone is not None else []
+        if h.check("24 the clone has its own force", len(loads) == 1):
+            ss.double_click_row(loads[0].Label)
+
+    def normal():
+        p = ss.item_panel()
+        if h.check("24 its dialog opens", p is not None and p.editing):
+            ss.choose("SciForgeSim_direction", "Normal")
+
+    def magnitude():
+        ss.type_in("SciForgeSim_magnitude", "50 N")
+
+    def ok():
+        ss.ok()
+
+    def solve():
+        clone = doc().getObject(S["clone"])
+        data = ss.sim().item_data(ss.sim().items(clone, "load")[0])["options"]
+        h.check(
+            "24 Normal, 50 N",
+            data.get("direction") == "normal" and near(data.get("magnitude", 0), 50, 1e-9),
+            data,
+        )
+        h.ribbon("Solve")
+
+    def go():
+        dialog = ss.solve_dialog()
+        if h.check("24 the Solve dialog", dialog is not None):
+            ss.click_widget(dialog.go)
+
+    def solved():
+        clone = doc().getObject(S["clone"])
+        done = ss.sim().summary(clone)
+        h.check("24 the clone solved", bool(done) and not ss.sim().out_of_date(clone))
+        reactions = done.get("reactions") or {}
+        total = [r for r in reactions.values()]
+        up = sum(r.get("z", 0.0) for r in total)
+        h.check("24 the holes push back 50 N straight up", near(up, 50.0, 1e-3), reactions)
+        vm = done.get("stats", {}).get("von_mises", {}).get("max", 0.0)
+        S["vm_down"] = vm
+        ratio = vm / S["vm_across"] if S.get("vm_across") else 0
+        h.check(
+            "24 the base plate's highest stress like across (%.2f vs %.2f MPa: the same moment "
+            "at the bolts)" % (vm, S.get("vm_across", 0)),
+            0.75 <= ratio <= 1.25,
+            (vm, S.get("vm_across")),
+        )
+
+    def probe_check():
+        z, value = S.get("p3_z"), S.get("p3_value")
+        h.check(
+            "24 the arm is only squeezed: %.3f MPa at z %.1f vs F / A = 0.25 MPa (band 0.15 .. "
+            "0.40)" % (value or 0, z or 0),
+            value is not None and 0.15 <= value <= 0.40,
+            (value, z),
+        )
+
+    return (
+        [
+            step(finish, "down_finish"),
+            step(clone, "down_clone"),
+            step(cloned, "down_cloned"),
+            step(edit, "down_edit"),
+            step(normal, "down_normal"),
+            step(magnitude, "down_magnitude"),
+            step(ok, "down_ok"),
+            step(solve, "down_solve"),
+            step(go, "down_go"),
+            ss.wait_solved("wait_solved_down"),
+            step(solved, "down_solved"),
+        ]
+        + probe_steps("p3", z=22.0)
+        + [step(probe_check, "down_probe_check")]
+    )

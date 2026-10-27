@@ -13,8 +13,12 @@ SciForgeTests/gui/journey_sim_steps.py).
 12-18 RESULTS: safety factor = 35.9 / the highest von Mises; the highest von Mises in the
      base plate at the bolts (12 .. 60 MPa); the largest movement at the arm's top (1.0 .. 3.2
      mm, hand estimate 2.1); Min/Max tags; Deformation Actual (x1) and Adjusted (5 % of the
-     part); a Surface Probe on the arm's outer face 10 mm above the base reads M c / I (band
+     part); a Surface Probe on the arm's inner face 10 mm above the base reads M c / I (band
      0.80 .. 1.10, why in the steps file); Report saved with the numbers.
+24   The 50 N straight down, as first asked: Finish Results, Clone Study (right-click), the
+     clone's force double-clicked, Direction Type Normal (into the arm's top: down), solved:
+     the holes push back 50 N up, the arm is only squeezed (F / A = 0.25 MPa at mid-height),
+     the base plate's highest stress like the sideways case (the same moment at the bolts).
 """
 
 from SciForgeTests.gui import harness as h
@@ -22,5 +26,8 @@ from SciForgeTests.gui import journey_sim_steps as j
 
 h.run(
     "journey_sim_bracket",
-    j.design_steps("SimJourney") + j.study_steps() + j.results_steps(j.report_folder()),
+    j.design_steps("SimJourney")
+    + j.study_steps()
+    + j.results_steps(j.report_folder())
+    + j.down_steps(),
 )
