@@ -7,7 +7,7 @@
 
 **Parametric CAD that works the way Fusion users expect. Free and open source, based on FreeCAD.**
 
-![version](https://img.shields.io/badge/version-0.1.0--beta.2-3fa9f5) ![platforms](https://img.shields.io/badge/Windows%20%7C%20Linux-lightgrey) ![licence](https://img.shields.io/badge/licence-LGPL--2.1--or--later-lightgrey)
+![version](https://img.shields.io/badge/version-0.1.0--beta.3-3fa9f5) ![platforms](https://img.shields.io/badge/Windows%20%7C%20Linux-lightgrey) ![licence](https://img.shields.io/badge/licence-LGPL--2.1--or--later-lightgrey)
 
 [**Download**](https://github.com/Luca0422git/SciForge/releases) ·
 [What works](#what-works-and-what-does-not-yet) ·
@@ -22,12 +22,12 @@
 
 SciForge is a free CAD program for 3D design: sketches with dimensions and constraints, solid
 modeling with a timeline you can edit afterwards, Press Pull, components and joints, surfaces,
-sheet metal, plastic parts, meshes, drawings and 3D printing. If you know Fusion, you know SciForge: the ribbon, the browser,
+sheet metal, plastic parts, meshes, stress simulation, drawings and 3D printing. If you know Fusion, you know SciForge: the ribbon, the browser,
 the timeline, the navigation bar, `S` for command search and Fusion's keys and mouse are all
 there. It is built on [FreeCAD](https://www.freecad.org), which does the heavy geometry work, and
 adds its own interface and tools on top.
 
-**This is a beta (0.1.0-beta.2.2).** Every feature is tested automatically by driving the real
+**This is a beta (0.1.0-beta.3).** Every feature is tested automatically by driving the real
 program with clicks and keys, but SciForge has had little use by anyone except the person
 building it, so expect rough edges. Save often, and read the
 [known issues](docs/sciforge/known-issues.md) before you start. Your feedback is what makes the
@@ -167,15 +167,20 @@ components and joints, surfaces, sheet metal (flanges, bends, hems, flat pattern
 plastic parts (bosses, snap fits, lips, rests, design advice), mesh tools, 2D drawings, 3D printing
 (3MF / STL / send to your slicer), a hardware library (screws, nuts, washers), measuring and
 analysis, parameters, version history for each design, STEP / DXF / SVG / mesh import and export,
-and **AI connectors** (a chat panel that uses your own key from Claude, ChatGPT, Gemini or a local
-model; and a connector so AI apps like Claude Desktop can build in SciForge, off until you switch
-it on).
+**stress simulation** (Fusion's Simulation workspace with the Static Stress study: supports,
+loads, mesh, solved on your own computer; safety factor, stresses and displacements, probes,
+compare and a report), robotics assemblies (snaps at the centre of square holes for VEX parts,
+many STEP files at once), and **AI connectors** (a chat panel that uses your own key from Claude,
+ChatGPT, Gemini or a local model; and a connector so AI apps like Claude Desktop can build in
+SciForge, off until you switch it on). With an AI connected, **Auto Timeline** rebuilds a part
+that has no timeline (an imported STEP or a simple mesh) as timeline steps you can edit.
 
-**Does not (yet):** sculpting, simulation, rendering and animation, CAM, electronics, cloud
-collaboration, macOS, other languages than English, Fusion's `.f3d` files (export STEP from Fusion
-instead), and some options inside tools that exist (shown greyed out, with the reason). Press Pull
-is still rough on complex curved shapes. The full, honest list with workarounds is
-in **[Known issues](docs/sciforge/known-issues.md)**.
+**Does not (yet):** sculpting, simulation other than Static Stress (no thermal, vibration
+modes, buckling, nonlinear, event or shape optimization studies), rendering and animation, CAM,
+electronics, cloud collaboration, macOS, other languages than English, Fusion's `.f3d` files
+(export STEP from Fusion instead), and some options inside tools that exist (shown greyed out,
+with the reason). Press Pull is still rough on complex curved shapes. The full, honest list with
+workarounds is in **[Known issues](docs/sciforge/known-issues.md)**.
 
 ## Updating
 
@@ -230,9 +235,11 @@ licence.
 
 SciForge is built on **[FreeCAD](https://www.freecad.org)** (version 1.1.4 is inside), and owes
 almost everything under the hood to the FreeCAD community and to OpenCASCADE, the geometry
-kernel: thank you. SciForge **is not FreeCAD and is not endorsed by the FreeCAD project**; please
-do not report SciForge problems to FreeCAD. FreeCAD's original README is kept as
-[README.FreeCAD.md](README.FreeCAD.md), and FreeCAD's credits are in SciForge's Help > About.
+kernel: thank you. Simulation meshes with **[Gmsh](https://gmsh.info)** and solves with
+**[CalculiX](http://www.calculix.de)**, which come with FreeCAD. SciForge **is not FreeCAD and is
+not endorsed by the FreeCAD project**; please do not report SciForge problems to FreeCAD.
+FreeCAD's original README is kept as [README.FreeCAD.md](README.FreeCAD.md), and FreeCAD's
+credits are in SciForge's Help > About.
 The anvil logo, SciForge's interface icons and the splash picture are original SciForge artwork.
 
 SciForge is not affiliated with or endorsed by Autodesk. Autodesk and Fusion are trademarks of
