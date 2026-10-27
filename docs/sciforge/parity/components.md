@@ -187,6 +187,7 @@ Create Copy of a component makes a linked instance; the dimmed transparency (75 
 | Create Copy | The component stays; a linked instance ("Name:2") is moved instead |
 | Ctrl+C / Ctrl+V on a component (also the browser's Copy / Paste) | A linked instance "Name:2" in the active component (or in the component whose row was right-clicked; never inside itself). The browser then names the original "Name:1". It is no timeline step. Move/Copy opens on it; Esc leaves it on the original |
 | Editing one occurrence changes all | The instance's bodies are copies of the original's (`InstanceCopy`): every change to the original (an extrude made longer, a fillet, a new body in it) shows in every instance. Activating an instance (its ring) activates the original, with a note; renaming one renames the component (all occurrences) |
+| Deleting one occurrence keeps the component while another occurrence remains | Same for the occurrences: Delete on the original (or on a component around it) hands over to its first occurrence that stays (`instances.hand_over`; beta 3 VEX QA): it takes the original's name, place and file (Insert STEP of that file is another occurrence of it), its bodies keep the solids they showed, the other occurrences repeat it, it can be copied, duplicated and edited again. One undo step. The original's features go with the original (known gaps) |
 | Paste New | An independent component "Name (1)" with copies of every feature (its steps join the timeline, the component step first); Move opens on it |
 | Ctrl+C / Ctrl+V on a body | Move/Copy opens on the body with Create Copy ticked (a copy body) |
 | Pattern Type Components | Rectangular, Circular and Pattern on Path (`parity/patterns.md`): one pattern step; its copies are instances "Name:2" ... placed by the pattern, following edits of the component; Quantity, Distance, Angle, Suppression; edited from the timeline; deleting the step (or undo) takes the copies with it; the marker before it hides them |
@@ -225,8 +226,11 @@ Create Copy of a component makes a linked instance; the dimmed transparency (75 
   bodies are there, the nested component rows are not); editing happens through the
   original (activating an instance activates the original; a sketch put directly on an
   instance's face goes into the instance's copy body only, Fusion would edit the component);
-  deleting the original leaves its instances frozen as they were (Fusion keeps the component
-  while an occurrence remains); a body deleted from an instance comes back at the next sync.
+  deleting the original hands over to an occurrence, but the original's features (its
+  timeline steps) and decals go with the original: the occurrence that takes over keeps
+  the solids as frozen bases (Fusion keeps the features in the component; Undo brings
+  them back), and a pattern's copies of the original stay frozen; a body deleted from an
+  instance comes back at the next sync.
 - A pattern's copies cannot be moved on their own (refused with the reason); Mirror of
   components is not built (greyed in Mirror's Pattern Type).
 - A component move that is not captured, in a design without joints, cannot be reverted

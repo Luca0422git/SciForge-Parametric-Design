@@ -54,10 +54,12 @@ def write_step(name="plate", shape=None):
 
 
 def insert_step(doc, path):
-    """Insert STEP's own code (step_import): a component with a body without timeline."""
+    """Insert STEP's own code (step_import): a component with a body without timeline, its
+    own each time (the same file inserted again would be another occurrence of the first,
+    beta 3's VEX rule: reuse=False)."""
     from sciforge import exchange_core, step_import
 
-    made = step_import.import_file(doc, path, exchange_core.INSERT)
+    made = step_import.import_file(doc, path, exchange_core.INSERT, reuse=False)
     doc.recompute()
     step_import.apply_looks(made)
     return made.bodies[0]

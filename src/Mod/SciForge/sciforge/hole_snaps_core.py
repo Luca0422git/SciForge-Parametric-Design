@@ -253,34 +253,60 @@ def best_loop(stored, loops):
 def dedupe_points(points, tol=1e-7):
     """Indices of the points to keep: the first of every group closer than `tol` (a grid of
     `tol`-sized cells, so a face with thousands of dots is not compared pair by pair)."""
+    return _dedupe(points, tol)[0]
+
+
+def _dedupe(points, tol):
+    """(kept indices, {dropped index: the kept index it repeats})."""
     if tol <= 0:
-        return list(range(len(points)))
+        return list(range(len(points))), {}
     cells = {}
     kept = []
+    same = {}
     for i, p in enumerate(points):
         key = (
             int(math.floor(p[0] / tol)),
             int(math.floor(p[1] / tol)),
             int(math.floor(p[2] / tol)),
         )
-        clash = False
+        clash = None
         for dx in (-1, 0, 1):
             for dy in (-1, 0, 1):
                 for dz in (-1, 0, 1):
                     for j in cells.get((key[0] + dx, key[1] + dy, key[2] + dz), ()):
                         if distance(points[j], p) <= tol:
-                            clash = True
+                            clash = j
                             break
-                    if clash:
+                    if clash is not None:
                         break
-                if clash:
+                if clash is not None:
                     break
-            if clash:
+            if clash is not None:
                 break
-        if not clash:
+        if clash is None:
             cells.setdefault(key, []).append(i)
             kept.append(i)
-    return kept
+        else:
+            same[i] = clash
+    return kept, same
+
+
+def dedupe_with_reach(points, radii, tol=1e-7):
+    """dedupe_points, and how far each kept dot reaches as a hole's centre: {kept index:
+    radius} (`radii`: a hole centre's radius, 0 for any other dot). A hole centred on its face
+    (a gear's or a wheel's square bore, a motor's socket) has the same point as the face's
+    centre of area, which comes first and is kept: it takes the hole's reach, so that hole is
+    lit from around it and while the pointer is in it, like any other hole (it was only lit
+    with the pointer right on it, and the bore's corners took the click; beta 3 VEX QA)."""
+    kept, same = _dedupe(points, tol)
+    reach = {}
+    for i in kept:
+        if radii[i] > 0:
+            reach[i] = float(radii[i])
+    for j, i in same.items():
+        if radii[j] > 0 and radii[j] > reach.get(i, 0.0):
+            reach[i] = float(radii[j])
+    return kept, reach
 
 
 def nearest_indices(points, target, count):

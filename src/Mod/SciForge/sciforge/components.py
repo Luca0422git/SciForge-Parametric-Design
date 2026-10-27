@@ -29,7 +29,8 @@ The model (a contract other features rely on, see docs/sciforge/parity/component
     new_body_in(doc, container)         an empty body in a component ("Body1" per component)
     from_bodies(doc, bodies)            Create Components from Bodies: one per body
     place(obj, component)               move a body / component into another (None: root)
-    remove(doc, component)              delete a component with everything inside it
+    remove(doc, component)              delete a component with everything inside it (an
+                                        original's occurrence takes over: instances)
     active_component(doc) / set_active(component) / activate_body(body)   (GUI)
 """
 
@@ -369,18 +370,23 @@ def from_bodies(doc, bodies, parent=KEEP, label=None):
     return made
 
 
-def remove(doc, component, _top=True):
+def remove(doc, component, _top=True, _leaving=None):
     """Delete a component with everything inside it, as one undo step (Fusion: Delete on a
-    component takes its bodies and nested components with it)."""
+    component takes its bodies and nested components with it). Fusion keeps a component
+    while one of its occurrences remains: an original the user deletes (or one inside it)
+    first hands over to an occurrence that stays (instances.hand_over). SciForge's own
+    clean-ups (_top False: a pattern's copies, a cancelled copy) only delete."""
     from . import timeline_ops as ops
 
     if not is_component(component):
         return False
     if _top:
         ops._transaction(doc, "Delete %s" % component.Label)
+    leaving = component if _top else _leaving
     try:
+        handed = _hand_over(component, leaving) if leaving is not None else None
         for child in components_in(doc, component):
-            remove(doc, child, _top=False)
+            remove(doc, child, _top=False, _leaving=leaving)
         try:  # its captured moves (timeline Move steps) go with it
             from . import component_move
 
@@ -397,6 +403,10 @@ def remove(doc, component, _top=True):
         name, label = component.Name, component.Label
         doc.removeObject(name)
         log("component %s deleted" % label)
+        if handed is not None:
+            from . import instances
+
+            instances.crown(handed)
     except Exception:
         if _top:
             doc.abortTransaction()
@@ -406,6 +416,18 @@ def remove(doc, component, _top=True):
         ops.recompute(doc)
         doc.commitTransaction()
     return True
+
+
+def _hand_over(component, leaving):
+    """instances.hand_over, never in the way of the delete (when it fails, the occurrences
+    stay as they were: frozen, their original gone)."""
+    try:
+        from . import instances
+
+        return instances.hand_over(component, leaving)
+    except Exception as exc:
+        warn("the occurrences of %s stay as they are: %s" % (component.Label, exc))
+        return None
 
 
 def rename(doc, component, text):

@@ -2,8 +2,8 @@
 # SciForge: tests on every push and pull request (about 40 minutes).
 # Runs SciForge's unit tests, the golden models and the GUI tests against
 # the official FreeCAD release the fork is based on, with SciForge added as an
-# add-on, on Linux; the golden models also on FreeCAD for Windows. No C++ build,
-# so it stays cheap. Full builds: sciforge-build.yml.
+# add-on, on Linux; the golden models and the Static Stress checks also on FreeCAD for
+# Windows. No C++ build, so it stays cheap. Full builds: sciforge-build.yml.
 
 name: SciForge tests
 
@@ -23,11 +23,12 @@ env:
   FREECAD_VERSION: "1.1.4"
 
 jobs:
-  # The tests run side by side on 7 machines (one machine took about 2 hours): "base" runs
-  # the unit tests, golden models, smoke test and journey; "1/6".."6/6" each run a sixth
+  # The tests run side by side on 10 machines (one machine took about 2 hours): "base" runs
+  # the unit tests, golden models, smoke test and journey; "1/9".."9/9" each run a ninth
   # of the GUI scenarios (tools/sciforge/run_tests.sh --shard). Four parts of 481 scenarios
   # took 83-91 minutes (one hit the 90-minute limit, run #258); the merge of experimental
-  # (0.1.0-beta.2) made 519.
+  # (0.1.0-beta.2) made 519, six parts of 560 took over 80 minutes (beta 3: the simulation
+  # scenarios solve), so nine parts.
   tests:
     name: tests (${{ matrix.part }})
     runs-on: ubuntu-24.04
@@ -39,24 +40,33 @@ jobs:
           - part: base
             args: --only base
             id: base
-          - part: scenarios 1/6
-            args: --only scenarios --shard 1/6
+          - part: scenarios 1/9
+            args: --only scenarios --shard 1/9
             id: scenarios-1
-          - part: scenarios 2/6
-            args: --only scenarios --shard 2/6
+          - part: scenarios 2/9
+            args: --only scenarios --shard 2/9
             id: scenarios-2
-          - part: scenarios 3/6
-            args: --only scenarios --shard 3/6
+          - part: scenarios 3/9
+            args: --only scenarios --shard 3/9
             id: scenarios-3
-          - part: scenarios 4/6
-            args: --only scenarios --shard 4/6
+          - part: scenarios 4/9
+            args: --only scenarios --shard 4/9
             id: scenarios-4
-          - part: scenarios 5/6
-            args: --only scenarios --shard 5/6
+          - part: scenarios 5/9
+            args: --only scenarios --shard 5/9
             id: scenarios-5
-          - part: scenarios 6/6
-            args: --only scenarios --shard 6/6
+          - part: scenarios 6/9
+            args: --only scenarios --shard 6/9
             id: scenarios-6
+          - part: scenarios 7/9
+            args: --only scenarios --shard 7/9
+            id: scenarios-7
+          - part: scenarios 8/9
+            args: --only scenarios --shard 8/9
+            id: scenarios-8
+          - part: scenarios 9/9
+            args: --only scenarios --shard 9/9
+            id: scenarios-9
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -64,10 +74,12 @@ jobs:
           fetch-depth: 1
           submodules: false
 
-      - name: Install virtual screen for the GUI test
+      # (numpy: the unit tests of the simulation's results run on plain Python, without it
+      # they were skipped here)
+      - name: Install virtual screen for the GUI test, numpy for the unit tests
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri python3-numpy
 
       - name: Cache FreeCAD ${{ env.FREECAD_VERSION }}
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -136,6 +148,46 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: sciforge-test-output-windows
+          path: test-output/
+          retention-days: 14
+
+  # The Static Stress checks (hand calculations: run_tests.sh's "sim") on the official FreeCAD
+  # for Windows, meshed by the gmsh.exe and solved by the ccx.exe it ships, as on Luca's PC.
+  windows-sim:
+    name: tests (Windows simulation)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Cache FreeCAD ${{ env.FREECAD_VERSION }} for Windows
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .sciforge-cache/freecad-windows
+          key: freecad-windows-${{ env.FREECAD_VERSION }}
+
+      - name: Static Stress on FreeCAD for Windows
+        run: bash tools/sciforge/windows_sim.sh --stock .sciforge-cache/freecad-windows test-output
+
+      - name: Add the simulation report to the run summary
+        if: always()
+        run: |
+          for f in test-output/sim-benchmarks.md test-output/sim-accuracy-qa.md; do
+            if [ -f "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: sciforge-test-output-windows-sim
           path: test-output/
           retention-days: 14
 

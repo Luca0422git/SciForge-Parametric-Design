@@ -1311,12 +1311,46 @@ def split_reactions(forces, applied, held):
 
 def _least_squares(directions, vector):
     """Amounts a_j with sum a_j d_j nearest `vector` (the smallest such amounts when the
-    directions are more than three or depend on each other): the pseudo-inverse."""
-    import numpy as np
-
-    d = np.array(directions, dtype=float).T  # 3 x k
-    amounts = np.linalg.lstsq(d, np.array(vector, dtype=float), rcond=1e-10)[0]
-    return [float(v) for v in amounts]
+    directions are more than three or depend on each other): the pseudo-inverse, from a
+    one-sided Jacobi SVD in plain Python (this module runs without numpy: the CI's unit
+    tests have none)."""
+    k = len(directions)
+    # A = the directions as rows (k x 3), turned until its three columns are at right angles:
+    # A V = B, so the pseudo-inverse of A's transpose is sum_j B_j (V^T vector)_j / |B_j|^2
+    cols = [[float(directions[i][c]) for i in range(k)] for c in range(3)]
+    v = [[1.0 if r == c else 0.0 for c in range(3)] for r in range(3)]
+    for _sweep in range(60):
+        turned = False
+        for p in range(2):
+            for q in range(p + 1, 3):
+                alpha = sum(x * x for x in cols[p])
+                beta = sum(x * x for x in cols[q])
+                gamma = sum(x * y for x, y in zip(cols[p], cols[q]))
+                if abs(gamma) <= 1e-15 * math.sqrt(alpha * beta):
+                    continue
+                turned = True
+                zeta = (beta - alpha) / (2.0 * gamma)
+                t = math.copysign(1.0, zeta) / (abs(zeta) + math.sqrt(1.0 + zeta * zeta))
+                c = 1.0 / math.sqrt(1.0 + t * t)
+                s = c * t
+                for i in range(k):
+                    x, y = cols[p][i], cols[q][i]
+                    cols[p][i], cols[q][i] = c * x - s * y, s * x + c * y
+                for r in range(3):
+                    x, y = v[r][p], v[r][q]
+                    v[r][p], v[r][q] = c * x - s * y, s * x + c * y
+        if not turned:
+            break
+    sigma = [math.sqrt(sum(x * x for x in col)) for col in cols]
+    top = max(sigma)
+    amounts = [0.0] * k
+    for j in range(3):
+        if sigma[j] <= 1e-10 * top or sigma[j] == 0.0:
+            continue
+        scale = sum(v[r][j] * float(vector[r]) for r in range(3)) / (sigma[j] * sigma[j])
+        for i in range(k):
+            amounts[i] += scale * cols[j][i]
+    return amounts
 
 
 # -- held enough? (rigid body modes) ---------------------------------------------------------------
