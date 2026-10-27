@@ -2,8 +2,8 @@
 # SciForge: tests on every push and pull request (about 40 minutes).
 # Runs SciForge's unit tests, the golden models and the GUI tests against
 # the official FreeCAD release the fork is based on, with SciForge added as an
-# add-on, on Linux; the golden models also on FreeCAD for Windows. No C++ build,
-# so it stays cheap. Full builds: sciforge-build.yml.
+# add-on, on Linux; the golden models and the Static Stress checks also on FreeCAD for
+# Windows. No C++ build, so it stays cheap. Full builds: sciforge-build.yml.
 
 name: SciForge tests
 
@@ -64,10 +64,12 @@ jobs:
           fetch-depth: 1
           submodules: false
 
-      - name: Install virtual screen for the GUI test
+      # (numpy: the unit tests of the simulation's results run on plain Python, without it
+      # they were skipped here)
+      - name: Install virtual screen for the GUI test, numpy for the unit tests
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri
+          sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri python3-numpy
 
       - name: Cache FreeCAD ${{ env.FREECAD_VERSION }}
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -136,6 +138,46 @@ jobs:
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: sciforge-test-output-windows
+          path: test-output/
+          retention-days: 14
+
+  # The Static Stress checks (hand calculations: run_tests.sh's "sim") on the official FreeCAD
+  # for Windows, meshed by the gmsh.exe and solved by the ccx.exe it ships, as on Luca's PC.
+  windows-sim:
+    name: tests (Windows simulation)
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 1
+          submodules: false
+
+      - name: Cache FreeCAD ${{ env.FREECAD_VERSION }} for Windows
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .sciforge-cache/freecad-windows
+          key: freecad-windows-${{ env.FREECAD_VERSION }}
+
+      - name: Static Stress on FreeCAD for Windows
+        run: bash tools/sciforge/windows_sim.sh --stock .sciforge-cache/freecad-windows test-output
+
+      - name: Add the simulation report to the run summary
+        if: always()
+        run: |
+          for f in test-output/sim-benchmarks.md test-output/sim-accuracy-qa.md; do
+            if [ -f "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: sciforge-test-output-windows-sim
           path: test-output/
           retention-days: 14
 
