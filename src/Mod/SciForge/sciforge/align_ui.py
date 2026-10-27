@@ -418,6 +418,11 @@ class AlignPanel(BodyPanel):
 
     def before_close(self, ok):
         self._ok = ok
+        if ok:
+            try:  # (inside the dialog's undo step: Undo takes it back with the Align)
+                align.settle(self.steps)
+            except Exception as exc:
+                warn("Align: %s" % exc)
 
     def restore_view(self):
         mc.restore_adopted(self, getattr(self, "_ok", False))
