@@ -1155,10 +1155,10 @@ def _pieces(study, touching=None):
     return list(groups.values())
 
 
-def not_held(study, touching=None):
-    """[(bodies, [free movement in words])] of the pieces of the study that its constraints
-    hold (at least one constraint on them) but not completely: they could still slide or turn
-    as a whole, and the solve would fail or give nonsense (Fusion's rigid body motion)."""
+def _piece_motions(study, touching=None):
+    """[(bodies, centre, size, held, modes)] of every piece of the study (glued bodies move as
+    one): `held` is True when a constraint is on the piece, `modes` the movements its
+    constraints leave free (every one for a piece nothing holds)."""
     rows = []
     for item in items(study, "constraint"):
         if not item.Suppressed:
@@ -1167,8 +1167,6 @@ def not_held(study, touching=None):
     for piece in _pieces(study, touching):
         names = set(b.Name for b in piece)
         mine = [(p, d) for body, p, d in rows if body.Name in names]
-        if not mine:
-            continue  # (held by nothing: loose_bodies / Remove rigid body modes)
         box = None
         for b in piece:
             bb = bodies.global_shape(b, copy=False).BoundBox
@@ -1176,11 +1174,35 @@ def not_held(study, touching=None):
                 box = bb
             else:
                 box.add(bb)
+        if box is None:
+            continue
         centre = (box.Center.x, box.Center.y, box.Center.z)
-        free = core.free_modes(mine, centre, max(box.DiagonalLength, 1.0))
-        if free:
-            out.append((piece, [core.describe_free_mode(m) for m in free]))
+        size = max(box.DiagonalLength, 1.0)
+        out.append((piece, centre, size, bool(mine), core.free_modes(mine, centre, size)))
     return out
+
+
+def free_motions(study, touching=None):
+    """[(bodies, centre (x, y, z), [(kind "slide" / "turn", direction, point on the axis or
+    None)])] of the study's pieces (bodies glued together move as one) that can still move:
+    every way for a piece nothing holds, the ways its constraints leave free for a piece held
+    in part (Fusion's DOF View draws these). [] when the study is held completely."""
+    return [
+        (piece, centre, modes)
+        for piece, centre, _size, _held, modes in _piece_motions(study, touching)
+        if modes
+    ]
+
+
+def not_held(study, touching=None):
+    """[(bodies, [free movement in words])] of the pieces of the study that its constraints
+    hold (at least one constraint on them) but not completely: they could still slide or turn
+    as a whole, and the solve would fail or give nonsense (Fusion's rigid body motion)."""
+    return [
+        (piece, [core.describe_free_mode(m, size) for m in modes])
+        for piece, _centre, size, held, modes in _piece_motions(study, touching)
+        if held and modes  # (held by nothing: loose_bodies / Remove rigid body modes)
+    ]
 
 
 # -- pre-check -------------------------------------------------------------------------------------

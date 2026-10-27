@@ -2586,6 +2586,53 @@ def _print_row(App, r):
     )
 
 
+# -- sim QA (whole workspace): the builders' open items ------------------------------------
+def _plain(motions):
+    """free_motions' rows with body labels (a detail must outlive the closed document)."""
+    return [([b.Label for b in piece], centre, modes) for piece, centre, modes in motions]
+
+
+@engine_check("free motions, public (DOF View)")
+def free_motions_public(doc, out):
+    """simulation.free_motions(study) (DOF View used the engine's private _held_rows and
+    _pieces): a block held by nothing can move every way; held by a Frictionless face it can
+    slide two ways and turn about the face's normal, the words without rounding noise; Fixed:
+    nothing."""
+    import Part
+
+    from sciforge import simulation as sim
+
+    block = sb.make_body(doc, Part.makeBox(30, 20, 10), "Block")
+    study = sim.create_study(doc, study_bodies=[block])
+    found = sim.free_motions(study)
+    ok = len(found) == 1 and len(found[0][2]) == 6
+    out.append(("held by nothing: every way", ok, str(_plain(found))))
+    bottom = sb.one_face(block, lambda f: sb.near(f.CenterOfMass.z, 0.0, 1e-9))
+    item = sim.add_item(study, "constraint", "frictionless", [(block, bottom)])
+    found = sim.free_motions(study)
+    kinds = sorted(m[0] for m in found[0][2]) if found else []
+    out.append(
+        (
+            "frictionless bottom: two slides and a turn",
+            kinds == ["slide", "slide", "turn"],
+            str(_plain(found)),
+        )
+    )
+    words = [w for _piece, ws in sim.not_held(study) for w in ws]
+    out.append(
+        (
+            "its words: about Z through the middle, no noise",
+            "turn about an axis along Z through (15, 10, 5)" in words
+            and not any("e-" in w for w in words),
+            words,
+        )
+    )
+    sim.delete_item(item)
+    sim.add_item(study, "constraint", "fixed", [(block, bottom)])
+    left = sim.free_motions(study)
+    out.append(("fixed: nothing moves", left == [], str(_plain(left))))
+
+
 def main():
     import FreeCAD as App
 

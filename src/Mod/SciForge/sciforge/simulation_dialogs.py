@@ -1435,23 +1435,7 @@ def free_motions(study):
     engine's not-held analysis)."""
     sim = _sim()
     try:
-        found = sim.study_bodies(study)
-        touching = sim.contacts(study) if len(found) > 1 else []
-        rows = []
-        for item in sim.items(study, "constraint"):
-            if not item.Suppressed:
-                rows += sim._held_rows(item)
-        out = []
-        for piece in sim._pieces(study, touching):
-            names = {b.Name for b in piece}
-            centre, size = _box_centre(piece)
-            if centre is None:
-                continue
-            mine = [(p, d) for body, p, d in rows if body.Name in names]
-            modes = core.free_modes(mine, centre, size)
-            if modes:
-                out.append((piece, centre, modes))
-        return out
+        return sim.free_motions(study)
     except Exception as exc:
         log("DOF View: the bodies held by nothing only (%s)" % exc)
     out = []
