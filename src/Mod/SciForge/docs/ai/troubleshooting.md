@@ -330,10 +330,14 @@ rebuilt; a body already being rebuilt is not started twice (carry on in its rebu
   part fits and list the faces that do not), then the plan, then compare.
 - **A fillet or chamfer of the plan is "too big here"** (the largest that fits is much
   smaller) and compare then shows small pieces of material along those edges: the original
-  rounded the edges before a later cut trimmed the round (the plan rounds last). Do not take
-  the smaller value: make it with the plan's value before that cut (`roll_timeline` with
-  `before` the cut, the fillet, `roll_timeline` to `end`), then compare again; if it still does
-  not fit, finish with `even_if_different` and say why.
+  rounded the edges before a later cut trimmed the round (the plan rounds last, and may have
+  put that cut into an earlier sketch: an opening in the base's profile). Do not take the
+  smaller value; make the round before the cut. A cut that is a step of its own:
+  `roll_timeline` with `before` it, the fillet, `roll_timeline` to `end`. An opening in an
+  earlier sketch: build that sketch without the opening, make the rounds, then cut the
+  opening with an extrude of its own (`operation: cut`). Compare again (a 3D-printer part's
+  uprights came out at match 1 this way); a sliver face or two left over is fine to finish
+  with `even_if_different`.
 - **A plan step's selector picks more edges than it expects** ("picked 5 edges, expected 1"):
   the rebuild differs a little from the original there (an earlier step came out slightly
   different: compare says where). `query_geometry` with the selector lists what it picks:
