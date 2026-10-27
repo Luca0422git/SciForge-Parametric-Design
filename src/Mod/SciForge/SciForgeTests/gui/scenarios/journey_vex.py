@@ -9,8 +9,9 @@ square-hole centre dots and moved 5 in up (parallel, 5 in apart, on the 0.5 in h
 into five more holes), four Keps nuts, the 6 in shaft through bearing, rail, rail, bearing on a
 revolute joint, the wheel rigidly on it between the rails; Drive Joints (only the shaft and the
 wheel turn), a Rigid Group for the frame and the drive again; the screw's file inserted again
-(an occurrence: the parts list counts 7 screws); Ctrl+S, close, Ctrl+O: everything where it
-was, and the joint drives."""
+(an occurrence: the parts list counts 7 screws); Ctrl+S, close, Open: everything where it
+was, the joint drives, its Offset edited (the wheel follows); the screw's file again is still
+an occurrence; File > New Drawing with a parts list (TABLES > Table): 8 screws in one row."""
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import journey_vex_steps as j
@@ -31,5 +32,6 @@ h.run(
     + j.rigid_group_steps()
     + j.drive_steps("j5_drive_grouped", 90.0)
     + j.again_steps()
-    + j.reopen_steps(),
+    + j.reopen_steps()
+    + j.drawing_steps(),
 )

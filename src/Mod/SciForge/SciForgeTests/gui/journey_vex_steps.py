@@ -18,6 +18,19 @@ The design (inches; hole (i, j) of a 1x2x1x25 rail: i along it, j across; all by
       same footprint (turned half a turn about the rail's length: its row 1 over row 0); then
       Move 5 in up: its web's inside face at z = t + 5, every hole (i, 1 - j) of it over rail
       1's hole (i, j): x = 0.25 + 0.5 i, the webs' inside faces 5 in apart.
+  (The brief's rails 5 in apart with standoffs between them and a shaft through bearing, rail,
+  rail, bearing need a 5 in standoff and a shaft longer than 5.33 in: the generator's 1 in
+  standoff and 3 in shaft cannot.)
+  Standoffs: on rail 1's holes (2, 1) and (22, 1), from z = t up 5 in to rail 2.
+  Bearing flats: under rail 1 and on rail 2, bores on the shaft hole (12, 1) (rail 2's (12, 0)),
+      mounting holes on (11, 1) and (13, 1).
+  Screws (6, then a 7th): in the bearings' mounting holes (heads on the bearings' outer faces),
+      under rail 1 into the standoffs; the 7th through rail 2 into the first standoff.
+  Keps nuts (4): on the bearing screws' ends, against the rails' inside faces.
+  Shaft: from the top bearing's face (z = 2t + 5 + 0.1 in) pushed 5.5 in down: -0.272 to
+      5.728 in, on a revolute joint about the holes' axis.
+  Wheel: on the shaft's top end, 3.5 in down: 2.228 to 2.728 in, rigid on the shaft.
+  Section 8 (further down) holds the simulation's hand numbers.
 """
 
 import math
@@ -2284,4 +2297,62 @@ def results_steps():
         step(report, "j8_report", 1500),
         step(fill, "j8_report_save", 3000),
         step(written, "j8_report_written"),
+    ]
+
+
+# == 7b. a drawing with a parts list (the team's build sheet) ====================================
+TABLE_AT = (300.0, 120.0)
+
+
+def drawing_steps():
+    """File > New Drawing (Full Assembly), a Front base view at 1:4 by a click, then TABLES >
+    Table placed by a click: the parts list counts every part, the screws in one row."""
+    from SciForgeTests.gui import drawing_input as dr
+
+    def table():
+        h.ribbon("Table")
+
+    def follow():
+        p = dr.panel_of("TablePanel")
+        if h.check("j7: the Table dialog", p is not None, dr.panel()):
+            dr.move_to(TABLE_AT[0] + 5, TABLE_AT[1] - 5)
+
+    def place():
+        dr.click_at(*TABLE_AT)
+
+    def made():
+        from sciforge import drawing
+
+        t = drawing.parts_list_of(dr.page())
+        if not h.check("j7: a parts list on the drawing", t is not None):
+            return
+        rows = {r["PartNumber"]: r["Qty"] for r in drawing.table_rows(t)}
+        want = {
+            SCREW: 8,
+            NUT: 4,
+            STANDOFF: 2,
+            BEARING: 2,
+            RAIL1: 1,
+            RAIL2: 1,
+            SHAFT: 1,
+            WHEEL: 1,
+        }
+        h.check(
+            "j7: the drawing's parts list: 8 screws in one row, 4 nuts, 2 standoffs, 2 bearings"
+            " and one of each other part",
+            rows == want,
+            rows,
+        )
+        h.shot("7-parts-list")
+        dr.ok()
+
+    def done():
+        h.check("j7: the Table dialog closed", dr.panel() is None, dr.panel())
+
+    return dr.drawing_steps("j7_drawing", base_at=(150.0, 180.0), scale="1:4") + [
+        step(table, "j7_table", 1200),
+        step(follow, "j7_table_follow", 800),
+        step(place, "j7_table_place", 1500),
+        step(made, "j7_parts_list", 1500),
+        step(done, "j7_drawing_done"),
     ]
