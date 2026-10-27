@@ -833,6 +833,71 @@ def shaft_bearing(doc):
     return study, checks
 
 
+@case(
+    "pinned_link",
+    "Link 100 x 20 x 5 mm with two 8 mm holes 80 mm apart: one on a Pin (tangential held "
+    "too), a 2 kN bearing load pulling the other along the link",
+    {"size_pct": 3.0},
+)
+def pinned_link(doc):
+    import FreeCAD as App
+    import Part
+
+    from sciforge import simulation as sim
+
+    L, w, t, r, F = 100.0, 20.0, 5.0, 4.0, 2000.0
+    shape = Part.makeBox(L, w, t)
+    for x in (10.0, 90.0):
+        shape = shape.cut(Part.makeCylinder(r, t, App.Vector(x, w / 2, 0)))
+    body = sb.make_body(doc, shape, "Link")
+    study = sim.create_study(doc)
+
+    def hole(x):
+        return sb.one_face(
+            body,
+            lambda f: f.Surface.TypeId == "Part::GeomCylinder" and sb.near(f.Surface.Center.x, x),
+        )
+
+    sim.add_item(
+        study,
+        "constraint",
+        "pin",
+        [(body, hole(10.0))],
+        {"radial": True, "axial": True, "tangential": True},
+    )
+    sim.add_item(
+        study, "load", "bearing", [(body, hole(90.0))], {"vector": [1, 0, 0], "magnitude": F}
+    )
+    E = sb.material(study, body)["youngs_mpa"]
+    # the link between its holes is a bar in tension: sigma = F / (w t) in the middle
+    # (Gere & Goodno 2.2), and the part between the holes' edges (x 14..86) stretches
+    # F L' / (E w t); the pin takes the whole pull (statics)
+
+    def middle_stress(study, summary):
+        return node_mean(study, "sxx", lambda p: 40.0 <= p[0] <= 60.0)
+
+    def stretch(study, summary):
+        def mean_dx(x):
+            return disp_mean(
+                study, "x", lambda p: sb.near(p[0], x, 0.6) and abs(p[1] - w / 2) > r + 1
+            )
+
+        return mean_dx(70.0) - mean_dx(30.0)
+
+    checks = [
+        ("stress in the middle (MPa) = F / (w t)", F / (w * t), middle_stress, 2.0),
+        ("x 30..70 mm stretches (mm) = F 40 / (E w t)", F * 40.0 / (E * w * t), stretch, 3.0),
+        ("the pin takes the pull (N, -x)", -F, lambda s, m: reaction(m, "Pin 1", "x"), 0.5),
+        (
+            "nothing across (N)",
+            0.0,
+            lambda s, m: abs(reaction(m, "Pin 1", "y")) + abs(reaction(m, "Pin 1", "z")),
+            0.5,
+        ),
+    ]
+    return study, checks
+
+
 def _cantilever_study(doc, scale=1.0, label="Body", force=100.0, extra=None):
     """A steel cantilever L x a x a (100 x 10 x 10 mm times scale) fixed at x = 0, a force on
     its end face along -Z."""
