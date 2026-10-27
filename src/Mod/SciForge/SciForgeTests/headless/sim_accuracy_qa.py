@@ -2741,6 +2741,31 @@ def material_read_untouched(doc, out):
     out.append(("a solve: nothing to recompute", not touched(), touched()))
 
 
+@engine_check("a design that is only a mesh")
+def mesh_only_design(doc, out):
+    """A design whose only body is a mesh (an imported STL: Luca's usual start for a printed
+    part): the pre-check said only "The study has no solid body to simulate."; it names the
+    mesh and says MESH > Convert Mesh makes a solid body of it."""
+    import Mesh
+
+    from sciforge import simulation as sim
+
+    part = doc.addObject("Mesh::Feature", "Bracket")
+    part.Mesh = Mesh.createBox(20.0, 10.0, 5.0)
+    part.Label = "Bracket"
+    doc.recompute()
+    study = sim.create_study(doc)
+    texts = [text for level, text in sim.precheck(study) if level == "error"]
+    out.append(("no solid body: red", any("no solid body" in x for x in texts), texts))
+    out.append(
+        (
+            "the mesh named, Convert Mesh offered",
+            any("Bracket is a mesh" in x and "Convert Mesh" in x for x in texts),
+            texts,
+        )
+    )
+
+
 def main():
     import FreeCAD as App
 

@@ -1276,6 +1276,16 @@ def not_held(study, touching=None):
 
 
 # -- pre-check -------------------------------------------------------------------------------------
+def _mesh_bodies(doc):
+    """The design's mesh bodies (imported STL / OBJ), which a study cannot use."""
+    try:
+        from . import mesh
+
+        return mesh.mesh_bodies(doc)
+    except Exception:
+        return []
+
+
 def precheck(study):
     """[(level, sentence)] of simulation_core.precheck for this study as it is now."""
     data = study_data(study)
@@ -1322,6 +1332,18 @@ def precheck(study):
     if found and any(not c[2] for c in summary["constraints"]):
         summary["loose"] = [b.Label for b in loose_bodies(study, touching)]
     checks = core.precheck(summary)
+    if not found:
+        meshes = _mesh_bodies(study.Document)
+        if meshes:
+            # (an imported STL is a mesh: a beginner sees "no solid body" and his part)
+            checks.append(
+                (
+                    "error",
+                    "%s %s a mesh (an imported STL or OBJ, made of triangles): a study needs a "
+                    "solid body. MESH > Convert Mesh makes a solid body of it."
+                    % (", ".join(m.Label for m in meshes), "is" if len(meshes) == 1 else "are"),
+                )
+            )
     names = set(b.Name for b in found)
     for item in items(study):
         if item.Suppressed:
