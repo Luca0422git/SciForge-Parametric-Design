@@ -46,8 +46,9 @@ time you start it, but treat that as a safety net, not a plan.
   *Workaround:* MESH > Reduce, or export the mesh coarser, and build the free-form parts
   yourself; Stop Rebuild (UTILITIES > AI) gives a rebuild up.
 - **Big robots open slowly.** A 300-part VEX robot takes about half a minute to open on the
-  test machine (three times faster than in beta 2). Most of what is left is FreeCAD building
-  a small axis marker for every body, which needs a change to the compiled program.
+  test machine (it took over two minutes in beta 2). Much of what is left is FreeCAD building
+  a small axis marker for every body, which needs a change to the compiled program. On such a
+  robot the browser can take a second or so to catch up after Ctrl+Z.
   *Workaround:* none needed; once open, hovering, joints and Drive Joints are quick.
 - **The AI cannot use the SHEET METAL and PLASTIC tabs yet**, nor the SURFACE tab's Fillet,
   Chamfer, Press Pull, Delete and Merge on surface bodies. Everything else you can do, it
