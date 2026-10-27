@@ -43,6 +43,7 @@ up to bc1bf483); `sf/at-recognize` merged again as it went on (see "Merges").
 | check_design after a Finish that kept the original | **Bug, fixed**: "NOT OK: Body and Body (original) overlap" |
 | 60 free-form bumps on a plate | **Bug, fixed**: 60 unrecognized entries (38,000 characters); now one |
 | A body of a component linked to another design (a VEX part inserted from the Data Panel) | **Bug, fixed**: rebuilt in place, its link deleted at Finish (Break Link then refused); now refused at start with what to do |
+| A part rebuilt in its own design while a robot design links it | **Bug, fixed**: the robot said "not found" and kept the old part; now it follows the rebuild |
 
 ## Fixes (each with a check that fails on the code before it)
 
@@ -109,6 +110,10 @@ Commits on `sf/autotimeline-qa` (oldest first):
     characters). Check `bumps`.
 28. A body linked from another design is not rebuilt in place (Finish deleted its link, the
     component still said linked and Break Link then refused). Check `linked_copy`.
+29. A part rebuilt in its own design while another design links it: the other design said
+    the part's design was not found and kept the old shape; a linked copy now finds its body
+    again by name (design_insert, another area's file: its scenarios versions_link,
+    exchange2_link, data_panel_fusion, polish2_data_panel pass). Check `linked_source`.
 
 `SciForgeTests/headless/rebuild_qa.py` is run by `rebuild_e2e.main()` (so by
 `run_tests.sh --only headless / base`); `SCIFORGE_REBUILD_FILTER=qa` runs only it. On the code

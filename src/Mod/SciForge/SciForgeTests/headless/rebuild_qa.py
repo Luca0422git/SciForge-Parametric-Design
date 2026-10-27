@@ -46,6 +46,9 @@ tools/sciforge/run_tests.sh --only headless / base), after the six parts:
 * bumps: 60 free-form bumps on a plate were said in 60 entries (38,000 characters); now one.
 * linked copy: a body of a component linked to another design was rebuilt in place; Finish
   deleted its link while the component still said linked. Now refused, with what to do.
+* linked source: a part rebuilt in its own design while another design links it: the other
+  design said the part's design was not found and kept the old shape (the rebuilt body is
+  another object); now the link finds the body again by its name.
 * threaded: a plate with a modeled M6 thread: describe_reference took 210 s (OpenCASCADE's
   defeaturing on the thread's faces) and read no base; now the plate and the hole are read in
   seconds and the thread is listed as not read.
@@ -1195,6 +1198,71 @@ def linked_copy(agent, folder):
     )
 
 
+# -- a part another design links, rebuilt in its own design ----------------------------------------
+def linked_source(agent, folder):
+    import FreeCAD as App
+    import Part
+
+    from sciforge import components, design_insert
+
+    V = App.Vector
+    step = os.path.join(folder, "qa_linked_part.step")
+    Part.makeBox(60, 40, 8).cut(Part.makeCylinder(3, 8, V(15, 20, 0))).exportStep(step)
+    part_file = os.path.join(folder, "QaLinkedPart.FCStd")
+    robot_file = os.path.join(folder, "QaLinkedRobot2.FCStd")
+    for path in (part_file, robot_file):
+        if os.path.exists(path):
+            os.remove(path)
+    agent.call("new_design", {"name": "QaLinkedPart"})
+    agent.call("import_file", {"path": step})
+    agent.call("save_as", {"path": part_file})
+    part_doc = App.ActiveDocument
+    agent.call("new_design", {"name": "QaLinkedRobot2"})
+    agent.call("save_as", {"path": robot_file})
+    agent.call("import_file", {"path": part_file})
+    agent.call("save", {})
+    agent.call("close_design", {})
+    # the part rebuilt in its own design, then changed (a second hole) and saved
+    App.setActiveDocument(part_doc.Name)
+    result = rebuild_through_tools(agent, "Body001")
+    text, error = agent.call("finish_rebuild", {"even_if_different": True})
+    sketch = agent.call(
+        "create_sketch", {"plane": "XY", "offset": 8, "geometry": [{"circle": [45, 20, 3]}]}
+    )[0]
+    from . import rebuild_e2e as e2e
+
+    agent.call("hole", {"sketch": e2e.made_id(sketch), "diameter": 6, "through_all": True})
+    agent.call("save", {})
+    rebuilt = [
+        b for b in part_doc.Objects if b.TypeId == "PartDesign::Body" and b.Label == "Body001"
+    ]
+    wanted = rebuilt[0].Shape.Volume if rebuilt else None
+    agent.call("close_design", {})
+    agent.call("open_design", {"path": robot_file})
+    robot = App.ActiveDocument
+    design_insert.refresh(robot)  # (what the window does once a design is open)
+    robot.recompute()
+    comps = [c for c in components.list_components(robot) if design_insert.is_linked(c)]
+    copies = design_insert.copy_features(comps[0]) if comps else []
+    source = copies[0].Source if copies else None
+    agent.check(
+        "linked source: a design linking the part follows its rebuild (it said the part's "
+        "design was not found and kept the old shape)",
+        result.get("done")
+        and not error
+        and source is not None
+        and not design_insert.broken(robot)
+        and wanted is not None
+        and abs(copies[0].Shape.Volume - wanted) < 1e-3,
+        (
+            getattr(source, "Name", None),
+            design_insert.broken(robot),
+            copies[0].Shape.Volume if copies else None,
+            wanted,
+        ),
+    )
+
+
 CHECKS = (
     jointed,
     dependents,
@@ -1216,6 +1284,7 @@ CHECKS = (
     renamed,
     bumps,
     linked_copy,
+    linked_source,
 )
 
 
