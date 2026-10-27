@@ -18,15 +18,20 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   the workflow). Newest session log "Patch 0.1.0-beta.2.2".
 - **Beta 3 (`0.1.0-beta.3`, this line of sessions): Auto Timeline, Static Stress simulation
   and VEX assemblies** (Luca 2026-10-26: "put the vex stuff in beta 3 ... one shot for beta 3").
-  **IN PROGRESS (2026-10-27 00:40 UTC): integration on `develop`.** The six builders' work
-  (plan `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`, session
-  logs `docs/sciforge/sessions/beta3-*.md`) is merged with patch 0.1.0-beta.2.2 and pushed so
-  CI runs and the work is safe (the sandbox restarted twice); QA fixes, the SETUP tab's last
-  commits and journey tests follow in later pushes; then docs, CHANGELOG and the version.
-  **Not released; not ready for a quick update yet.** Status: [x] Static Stress engine (9
-  silent-wrong-result bugs fixed by its QA, 205 hand-calculation checks) [x] RESULTS tab
-  [~] SETUP tab (finishing) [x] Auto Timeline recognition + tools [~] Auto Timeline QA [x] VEX
-  [~] VEX QA [ ] journeys [ ] docs / version [ ] released.
+  **IN PROGRESS (2026-10-27 01:55 UTC): integration on `develop` (22b20f3b).** The six
+  builders' work (plan `docs/sciforge/plan-beta3.md`, briefs `docs/sciforge/dev/briefs/beta3-*.md`,
+  session logs `docs/sciforge/sessions/beta3-*.md`), the engine QA, the Auto Timeline QA and the
+  VEX QA are merged with patch 0.1.0-beta.2.2 and pushed; README and known issues say beta 3;
+  CI now also runs the Static Stress hand calculations on FreeCAD for Windows
+  (`tools/sciforge/windows_sim.sh`) and the GUI scenarios in nine parts. Still running: the
+  simulation QA (`sf/sim-qa`), the VEX and Auto Timeline journeys (`sf/journey-vex`,
+  `sf/journey-rebuild`), and a check of "a design closed with a dialog open leaves its undo
+  step open" (`sf/undo-leftover`). Then: CHANGELOG final, VERSION 0.1.0-beta.3, CI green.
+  **Not released.** Nothing compiled changed since 0.1.0-beta.2 (core id the same), so it can
+  go out with Actions > SciForge patch release (its notes then say "Built on 0.1.0-beta.2's
+  program") once Luca says go. Status: [x] Static Stress engine + QA [x] SETUP tab [x] RESULTS
+  tab [x] Auto Timeline + QA [x] VEX + QA [~] simulation QA [~] journeys [~] docs / version
+  [ ] released.
 - **VEX robotics: in beta 3** (above): STEP parts in large numbers, linked occurrences,
   Duplicate With Joints, and Align / Joint snapping to the centre of a square hole.
 - Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
