@@ -44,6 +44,13 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   (the known built-program-only one, below)) [ ] Release moved + tag (Luca: this session's
   push to Release was refused by the permission system on 2026-10-27, so both are his, from
   a Codespace, on `2aa32dfe`) [ ] published.
+  **Update (patch session, later on 2026-10-27):** the sketch Text fixes Luca reported (the TEXT
+  panel see-through and click-through; words running past the frame) went onto develop after
+  `2aa32dfe`, with their CHANGELOG lines in 0.1.0-beta.3.1's "### Fixed": tag the newest
+  develop commit once "SciForge tests" is green on it, so 3.1 includes them (module files
+  only: the core id and the dry run's compiled part are unchanged). Tagging `2aa32dfe` instead
+  still works but leaves them out (then move those CHANGELOG lines to a patch after 3.1).
+  Session log "Sketch Text panel and wrapping".
 - **VEX robotics: in beta 3** (above): STEP parts in large numbers, linked occurrences,
   Duplicate With Joints, and Align / Joint snapping to the centre of a square hole.
 - Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
@@ -1653,6 +1660,34 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
   default; Ruled's default type. Each guess is marked G in the parity docs.
 
 ## Session log
+
+### Session log: Sketch Text panel and wrapping (`develop`, 2026-10-27)
+
+Luca (screenshot of the TEXT panel): "the text tool doesnt work the best. the text just goes
+past the box i make. and the text box on the side where the tool info is is just non existent.
+so if i try to click on it, it clicks past the side tool box and typing no longer works".
+
+- **Click-through, root cause:** FreeCAD's overlay (Gui/OverlayManager.cpp) passes a click on
+  its floating panel to the 3D view where the panel's rendered pixel is transparent
+  (`OverlayTabWidget::testAlpha` at `QCursor::pos()`), and `_setOverlayMode` makes every widget
+  in it translucent. `text_ui.TextDialog` was a plain QFrame: its style-sheet background was not
+  painted there, so the Text box was see-through and clicks went to the sketch. Now
+  `TextDialog(theme.OwnBackground, QFrame)` (as the sketch palette since 2026-10-19), and
+  Measure's in-sketch box too (`measure_ui._InSketchFrame`). `theme.OwnBackground.paintEvent`
+  also (a) looks for the overlay again on later paints (a panel painted once before it is in
+  the overlay never got `keep_opaque`) and (b) undoes translucency the overlay set again
+  without re-parenting (hover / transparency changes), on a 0 ms timer.
+- **Wrapping:** `text_core.wrapped_rows` (break at the last space that fits, a word wider than
+  the frame between letters, typed lines kept, `WRAP_TOL` so a frame sized to its text stays
+  one line), `block(..., wrap=)`, `text_extent(..., wrap_width=)`; `text._plan_frame` wraps when
+  the spec says so and notes when the lines need more height than the frame. Stored as the
+  text's `WrapLines` property: new texts and texts edited in the Text dialog wrap; a design
+  made before opens unchanged (the property is added off). Fusion's own behaviour is
+  undocumented (parity/text-emboss.md T25, T26).
+- Tests: unit `WrapTests` (test_text_core); scenario `sketch_text_wrap` (26 checks: the real
+  pointer clicks the Text box, which failed before the fix exactly as Luca saw it; typing;
+  wrapped preview; OK; an old text unchanged until edited). Text, emboss, palette, measure,
+  sketch-panel scenarios (18) and `--only base` all green. Commit c3c46d75.
 
 ### Session log: Beta 3, Static Stress + Auto Timeline + VEX (`develop`, 2026-10-26/27)
 
