@@ -5,6 +5,21 @@ its own section of this file (the release notes are made from it), so every rele
 section here whose heading is exactly its version number, like `## 0.1.0-beta` below. Known
 problems are in [docs/sciforge/known-issues.md](docs/sciforge/known-issues.md).
 
+## 0.1.0-beta.3.1.2
+
+### Fixed
+
+- **Updating to a new full version could leave you with no SciForge (Windows).** If you had
+  connected SciForge to Claude Desktop (or Gemini CLI, Claude Code), that app keeps SciForge's
+  AI connector running, a program from SciForge's own folder. The installer deleted every file
+  it could, stopped at the connector's files ("Failed to remove ... no files are in use") and
+  gave up, with half of SciForge gone. Now the installer first stops the AI connector (it asks;
+  the AI app starts it again the next time it opens), says which other program is still using
+  the folder and lets you close it and click Retry, and only then replaces the old SciForge, in
+  one step: if anything still holds a file, nothing has been removed and your SciForge keeps
+  working. Uninstalling stops the connector too. This version's installer has the fix; it is
+  what **Update now** runs when you come from 0.1.0-beta.3 or older.
+
 ## 0.1.0-beta.3.1.1
 
 ### Fixed

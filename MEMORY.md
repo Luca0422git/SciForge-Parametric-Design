@@ -233,6 +233,7 @@ Quick updates come from green "SciForge tests" runs on `develop`.
   Autodesk's closed format (reverse engineering it is forbidden, outline 2.5). STEP open /
   insert already exists (exchange-2); it brings the shapes, not the timeline. Outline 12 Q6
   closed.
+| 2026-10-28 | The core id no longer counts `package/WindowsInstaller` (`tools/sciforge/core_id.sh`, its unit test, brief beta-release.md) | The installer's scripts change how the program is put on a computer, not the program; counting them would have refused every patch release until the next full build after the installer fix (core patch #19). A patch release makes its installer from its own commit's scripts, so new downloads and Update now from an older core get the fix at once. The value for today's develop stays `5bde6726` |
 
 ## Status by phase (outline section 10)
 
@@ -611,6 +612,7 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
 
 ## Known issues / findings
 
+- **The Windows installer left NO SciForge when updating over a SciForge whose AI connector ran (Luca, 2026-10-28; fixed in 0.1.0-beta.3.1.2, core patch #19).** Claude Desktop (Gemini CLI, Claude Code) keeps SciForge's AI connector running: SciForge's own `bin\python.exe`. FreeCAD's installer checks only for `SciForge.exe` / `SciForgeCmd.exe`, then `RMDir /r` deleted file after file, stopped at the connector's open files ("Failed to remove ... no files are in use") and aborted. Now (`include/utils.nsh`): programs running from the folder are found by path (`Get-CimInstance Win32_Process`); the connector is stopped after asking, others get Retry / Cancel; the folder is moved aside to `<folder>.old` in ONE step (refused while a file is open: Retry / Cancel, nothing changed) and only then deleted; the uninstaller stops the connector too. Windows test `tools/sciforge/test_installer.ps1` (installs over a running connector, with a file held open, uninstall) in the patch release and the full build. The quick update (`install_update.ps1`) already stopped the connector. Lesson: never delete in place what cannot be put back; move first, delete after.
 - **Open: `sim_qa_results_close` crashed FreeCAD once in CI (tests run #296, shard 8/9,
   2026-10-28)** right after Slice Plane opened on the third beam (15 checks: "Slice Plane:
   results shown" was the last; the close step never ran). 8 of 8 local runs pass (alone, after
@@ -1705,6 +1707,10 @@ develop: "you do it" (release them as patch 3.1.1).
   (Known issues, first entry), fixed and added to 3.1.1's CHANGELOG, with the regression
   scenario `joints_ok_during_preview`. (After it, tests run #296 crashed once in
   `sim_qa_results_close`, see Known issues; #297 on `ba0377bd` green, the patch released.)
+  **0.1.0-beta.3.1.2 (2026-10-28, prepared):** the installer fix above (Luca: every update to a new
+  full build said "Failed to remove" and left no SciForge). VERSION, `_FALLBACK_VERSION`, CHANGELOG.
+  Status: [x] prepared [ ] trial patch release with the Windows installer test green [ ] tests green
+  [ ] published (Luca's go).
 
 ### Session log: Sketch Text panel and wrapping (`develop`, 2026-10-27)
 

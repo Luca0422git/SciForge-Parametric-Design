@@ -353,6 +353,15 @@ jobs:
         shell: bash
         run: bash tools/sciforge/windows_golden.sh --built package/rattler-build/windows test-output
 
+      # SciForge: the installer over a running AI connector and over a file in use, and the
+      # uninstaller: never half a SciForge (docs/sciforge/core-patches.md #19)
+      - name: Test the Windows installer (install over a running AI connector)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem package/rattler-build/windows/*-installer.exe | Select-Object -First 1
+          tools/sciforge/test_installer.ps1 -Installer $exe.FullName
+
       - name: Add golden report to the run summary
         if: always()
         shell: bash

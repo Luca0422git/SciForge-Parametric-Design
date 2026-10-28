@@ -311,3 +311,113 @@ FunctionEnd
   Pop ${result}
 !macroend
 !define FindProc `!insertmacro _FindProc`
+
+# SCIFORGE: programs still running from the install folder, and replacing that folder without
+# ever leaving half of it (docs/sciforge/core-patches.md #19). SciForge's AI connector is
+# SciForge's own bin\python.exe: Claude Desktop (or Gemini CLI, Claude Code) starts it and keeps
+# it running, SciForge closed or not. The check above only knows SciForge.exe and
+# SciForgeCmd.exe, so an update deleted every file it could, stopped at the connector's open
+# files ("Failed to remove") and left no working SciForge. Get-CimInstance gives the path of
+# 64-bit processes from this 32-bit installer too.
+
+# What runs from $INSTDIR: "" (nothing), "connector" (only python: the AI connector), or the
+# programs' names ("SciForge.exe, python.exe").
+!macro _SciForgeInFolder result
+  ${DisableX64FSRedirection}
+  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$d = '$INSTDIR\'; $$p = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$d, [StringComparison]::OrdinalIgnoreCase) }); if ($$p.Count -eq 0) { $$r = '' } elseif (@($$p | Where-Object { $$_.Name -notlike 'python*' }).Count -eq 0) { $$r = 'connector' } else { $$r = (@($$p | ForEach-Object { $$_.Name } | Sort-Object -Unique) -join ', ') }; [Console]::Out.Write($$r) } catch { }"`
+  ${EnableX64FSRedirection}
+  Pop ${result} # the exit code
+  Pop ${result} # what it wrote
+!macroend
+!define SciForgeInFolder `!insertmacro _SciForgeInFolder`
+
+# Stops the python processes started from $INSTDIR (the AI connector: harmless, the AI app
+# starts it again the next time it opens).
+!macro _SciForgeStopConnector
+  Push $R9
+  ${DisableX64FSRedirection}
+  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$$d = '$INSTDIR\'; Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $$_.Name -like 'python*' -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$d, [StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $$_.ProcessId -Force -ErrorAction SilentlyContinue }"`
+  ${EnableX64FSRedirection}
+  Pop $R9
+  Pop $R9
+  Pop $R9
+  Sleep 1000 # Windows lets go of the files a moment after
+!macroend
+!define SciForgeStopConnector `!insertmacro _SciForgeStopConnector`
+
+# Leaves "ok" on the stack when no program runs from $INSTDIR any more (the connector is
+# stopped after asking), "stop" when the person chose to stop: nothing was changed then.
+!macro SCIFORGE_FOLDER_FREE UN
+Function ${UN}SciForgeFolderFree
+  Push $R0
+  Push $R1
+  StrCpy $R1 ""
+  retry:
+  ${SciForgeInFolder} $R0
+  ${If} $R0 == "connector"
+  ${AndIf} $R1 == ""
+    MessageBox MB_OKCANCEL|MB_ICONINFORMATION "SciForge's AI connector is running: an AI app you connected to SciForge (Claude Desktop, Gemini CLI or Claude Code) keeps SciForge's python.exe open, so its files cannot be replaced.$\r$\n$\r$\nClick OK to stop the connector and go on (the AI app starts it again the next time it opens), or Cancel to stop here.$\r$\n$\r$\nNothing has been changed yet." /SD IDOK IDOK stopconnector
+    StrCpy $R0 "stop"
+    Goto done
+    stopconnector:
+    ${SciForgeStopConnector}
+    StrCpy $R1 "tried"
+    Goto retry
+  ${ElseIf} $R0 != ""
+    ${If} $R0 == "connector"
+      StrCpy $R0 "python.exe (SciForge's AI connector: quit Claude Desktop from its icon by the clock, or close Gemini CLI or Claude Code)"
+    ${EndIf}
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Still running from '$INSTDIR': $R0.$\r$\n$\r$\nClose it (save your work first), then click Retry.$\r$\n$\r$\nNothing has been changed yet: the ${APP_NAME} you have still works." /SD IDCANCEL IDRETRY retry
+    StrCpy $R0 "stop"
+    Goto done
+  ${EndIf}
+  StrCpy $R0 "ok"
+  done:
+  Pop $R1
+  Exch $R0
+FunctionEnd
+!macroend
+!insertmacro SCIFORGE_FOLDER_FREE ""
+!insertmacro SCIFORGE_FOLDER_FREE "un."
+
+# Installing over an existing folder: once nothing runs from it, the old folder is moved aside
+# in ONE step (Windows refuses while any file in it is open, and then nothing is lost) and only
+# then deleted. Before, RMDir /r deleted file after file and gave up at the first one in use.
+# Aborts the installation (nothing changed) when the person stops.
+Function SciForgeReplaceInstDir
+  Push $R0
+  Push $R1
+  SetOutPath "$TEMP" # (the installer's own working folder must not be inside the one it moves)
+  retry:
+  Call SciForgeFolderFree
+  Pop $R0
+  ${If} $R0 != "ok"
+    Pop $R1
+    Pop $R0
+    Abort
+  ${EndIf}
+  StrCpy $R1 "$INSTDIR.old"
+  ${If} ${FileExists} "$R1\*.*"
+    RMDir /r "$R1" # what an earlier update could not delete
+  ${EndIf}
+  ${If} ${FileExists} "$R1\*.*"
+    System::Call "kernel32::GetTickCount()i.R0"
+    StrCpy $R1 "$INSTDIR.old-$R0"
+  ${EndIf}
+  ClearErrors
+  Rename "$INSTDIR" "$R1"
+  ${If} ${Errors}
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "A file in '$INSTDIR' is still open (an Explorer window or a command prompt in that folder, a program started from it, or a virus scan), so Windows does not let the old ${APP_NAME} be replaced.$\r$\n$\r$\nClose it, then click Retry.$\r$\n$\r$\nNothing has been changed yet: the ${APP_NAME} you have still works." /SD IDCANCEL IDRETRY retry
+    Pop $R1
+    Pop $R0
+    Abort
+  ${EndIf}
+  ${DetailPrintToBoth} "Removing the old version (moved to '$R1')"
+  ClearErrors
+  RMDir /r "$R1"
+  ${If} ${Errors}
+    DetailPrint "Some files of the old version stay in '$R1' (in use); the next update removes them."
+  ${EndIf}
+  Pop $R1
+  Pop $R0
+FunctionEnd

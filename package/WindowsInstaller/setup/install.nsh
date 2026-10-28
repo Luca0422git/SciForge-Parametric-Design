@@ -17,12 +17,10 @@ Section -ProgramFiles SecProgramFiles
   SetDetailsPrint textonly
   ${If} $RemoveInstDir == "true"
     ${DetailPrintToBoth} "Cleaning install folder '$INSTDIR'"
-    ClearErrors
-    RMDir /r "$INSTDIR"
-    ${If} ${Errors}
-      MessageBox MB_OK|MB_ICONSTOP "$(RMInstDirFailed)" /SD IDOK
-      Abort
-    ${EndIf}
+    # SCIFORGE: RMDir /r deleted file after file and gave up at the first one in use (SciForge's
+    # AI connector), leaving no working SciForge; the folder is now moved aside in one step
+    # first, after stopping the connector (include/utils.nsh, docs/sciforge/core-patches.md #19)
+    Call SciForgeReplaceInstDir
   ${EndIf}
 
   # turn on logging

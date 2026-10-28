@@ -17,8 +17,12 @@ if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
     exit 2
 fi
 # VERSION is left out on purpose: a new version number alone must not force the full installer.
+# So are the Windows installer's scripts (package/WindowsInstaller): they change how the program
+# is put on a computer, not the program, and a patch release makes its installer from the scripts
+# of its own commit (sciforge-patch-release.yml); counting them would refuse every patch release
+# until the next full build (2026-10-28, core-patches.md #19).
 id="$(git log -1 --format=%h "${commit}" -- src ':!src/Mod/SciForge' \
-    cMake CMakeLists.txt CMakePresets.json package pixi.toml pixi.lock)"
+    cMake CMakeLists.txt CMakePresets.json package ':!package/WindowsInstaller' pixi.toml pixi.lock)"
 if [ -z "${id}" ]; then
     echo "core_id.sh: no commit found for the compiled part" >&2
     exit 1

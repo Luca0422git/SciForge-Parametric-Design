@@ -184,6 +184,14 @@ Function un.onInit
   Pop $R1
   Pop $R0
 
+  # SCIFORGE: SciForge's AI connector (its own python.exe, kept running by Claude Desktop) is
+  # stopped first, or the uninstall leaves its files behind (docs/sciforge/core-patches.md #19)
+  Call un.SciForgeFolderFree
+  Pop $R0
+  ${if} $R0 != "ok"
+   Abort
+  ${endif}
+
   # check if it is a 64bit system
   ${if} ${RunningX64}
    SetRegView 64

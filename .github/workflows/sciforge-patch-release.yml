@@ -206,6 +206,14 @@ jobs:
       - name: Golden models on it
         run: bash tools/sciforge/windows_golden.sh --built package/rattler-build/windows test-output
 
+      # the installer over a running AI connector and over a file in use, and the uninstaller:
+      # never half a SciForge (docs/sciforge/core-patches.md #19)
+      - name: The installer over a running AI connector
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem package/rattler-build/windows/*-installer.exe | Select-Object -First 1
+          tools/sciforge/test_installer.ps1 -Installer $exe.FullName
+
       - name: Upload the Windows files
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
