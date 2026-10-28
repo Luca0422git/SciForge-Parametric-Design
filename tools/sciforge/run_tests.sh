@@ -352,6 +352,13 @@ for path in sorted(glob.glob(os.path.join(out, "*-result.json"))):
             print("  FAIL %s: %s %s" % (result["name"], c["name"], c["detail"][:600]))
     if not result.get("finished"):
         print("  %s did not finish (crash or hang? see %s)" % (result["name"], log))
+        # its last lines in the job's own log: a CI artifact cannot always be fetched
+        try:
+            tail = open(log, encoding="utf-8", errors="replace").read().splitlines()[-40:]
+        except OSError:
+            tail = []
+        for line in tail:
+            print("    | %s" % line[:300])
     ok = ok and bool(result.get("passed"))
     print("  %s: %s (%d checks)" % (
         result["name"], "PASS" if result.get("passed") else "FAIL", len(result["checks"])))
@@ -373,6 +380,10 @@ EOF
             mv "${marker}" "${left}/"
             marker="$(basename "${marker}" .json)"
             mv "${PROFILE}/SciForge/crash/session-${marker#running-}.log" "${left}/" 2>/dev/null || true
+            # what Python's faulthandler wrote (the stack at a crash), in the job's own log
+            if [ -s "${left}/session-${marker#running-}.log" ]; then
+                head -n 80 "${left}/session-${marker#running-}.log" | cut -c1-300 | sed 's/^/    ! /'
+            fi
             # and SciForge's recovery copies of the designs it had open: the next scenario's
             # SciForge offered them back, and with one in the way 20 scenarios after a
             # killed journey_vex failed (CI #283)

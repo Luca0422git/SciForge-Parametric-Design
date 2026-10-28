@@ -607,6 +607,13 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
 
 ## Known issues / findings
 
+- **Open: `sim_qa_results_close` crashed FreeCAD once in CI (tests run #296, shard 8/9,
+  2026-10-28)** right after Slice Plane opened on the third beam (15 checks: "Slice Plane:
+  results shown" was the last; the close step never ran). 8 of 8 local runs pass (alone, after
+  its CI neighbours, four at once). The artifact could not be fetched from this sandbox (blob
+  storage is not allowed), so `run_tests.sh` now prints, for a scenario that did not finish,
+  the last 40 lines of its log (FreeCAD's own backtrace is there) and the faulthandler stack
+  from SciForge's crash log, into the job log itself: the next occurrence names the line.
 - **Work a dialog posts for later (`QTimer.singleShot(0, ...)`) can run after OK / Cancel
   (2026-10-28, patch 0.1.0-beta.3.1.1).** A dialog's debounce timer and a click (or the test
   robot's step timer) can be due in the same event-loop pass: the update runs, posts its
