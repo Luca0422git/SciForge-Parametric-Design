@@ -1559,6 +1559,10 @@ class JointPanel(_JointsPanel):
     def _start_animation(self, loop=False):
         # the playing one stops; the Animate button keeps the state the person gave it
         _JointsPanel.stop_animation(self)
+        if self._closed:
+            # the preview a new type asked for, due after OK / Cancel came: it would play
+            # outside the joint's undo step and leave the part turned (CI #295)
+            return
         if self.joint is None or joints.fusion_type(self.joint) == "rigid":
             return
         self.animator = Animator(self.joint, on_done=self._animation_done, loop=loop)
@@ -1695,6 +1699,7 @@ class JointPanel(_JointsPanel):
         return ""
 
     def before_close(self, ok):
+        self._pending_animation = False
         self.stop_animation()
         if ok and self.joint is not None:
             try:

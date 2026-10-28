@@ -16,6 +16,11 @@ problems are in [docs/sciforge/known-issues.md](docs/sciforge/known-issues.md).
   edge goes on the next line (a word longer than the whole frame is broken). If the lines need
   more height than the frame has, the dialog says so. Texts in designs made before this keep
   their single line until you edit them.
+- **Joint: OK right after picking a Type left the part moving.** The Joint dialog plays the
+  new motion once when you pick a type (Revolute, Slider...). If OK came at the very moment
+  that preview was about to start (easiest on a busy computer), it started after the dialog
+  had closed: the part swung on its own, could stay a little turned, and Ctrl+Z no longer
+  put it back. The preview now never starts once the dialog is closed.
 
 ## 0.1.0-beta.3.1
 

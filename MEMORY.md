@@ -52,6 +52,13 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   their own CHANGELOG section; Luca: "you do it"), released with Actions > SciForge patch
   release once 3.1 is published and "SciForge tests" is green on develop (module files only:
   the same core id as 3.1). Status: [x] prepared [ ] 3.1 published [ ] 3.1.1 published.
+  3.1.1 also carries a **Joint fix** found when tests run #295 (on the 3.1.1 prep commit)
+  failed `vex_qa_real` (the shaft 0.03 deg turned after OK, after Undo, after reopening): OK
+  pressed in the instant after a new Type was picked started the type's motion preview AFTER
+  the dialog closed (the posted `_start_animation`), outside the undo step; the part swung,
+  could stay turned, and Ctrl+Z no longer put it back. Fix: `JointPanel._start_animation`
+  returns once `_closed`; `before_close` clears `_pending_animation`. Regression scenario
+  `joints_ok_during_preview` (fails 6 checks without the fix, passes with it).
 - **VEX robotics: in beta 3** (above): STEP parts in large numbers, linked occurrences,
   Duplicate With Joints, and Align / Joint snapping to the centre of a square hole.
 - Still open from before: the AI tools for wave 6's 26 steps (next paragraph).
@@ -600,6 +607,17 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
 
 ## Known issues / findings
 
+- **Work a dialog posts for later (`QTimer.singleShot(0, ...)`) can run after OK / Cancel
+  (2026-10-28, patch 0.1.0-beta.3.1.1).** A dialog's debounce timer and a click (or the test
+  robot's step timer) can be due in the same event-loop pass: the update runs, posts its
+  follow-up, then OK closes the dialog, then the follow-up runs on a closed dialog. The Joint
+  dialog's type preview did that (animated the part outside the undo step, broke Ctrl+Z).
+  Every posted follow-up must check `self._closed` first. To reproduce such a race in a test:
+  call the dialog's `_recompute()` (what its timer does) and click OK in the same step
+  (`joints_ok_during_preview`). How it showed in CI: one rare red check with an odd tiny value
+  (vex_qa_real, 0.03 deg), the same value after OK, after Undo of the next command and after
+  reopening; 9 of 9 local runs passed, even four at once; a trace of every animation tick
+  (start, each frame, stop, OK) found it.
 - **Speed of live previews (2026-10-20/21, branch `experimental`, Luca: "efficiency. make
   things run fast and smooth")**. Measure first (GUI probes under xvfb with cProfile around
   the panel's `_recompute()`), then fix:
@@ -1661,6 +1679,20 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
   default; Ruled's default type. Each guess is marked G in the parity docs.
 
 ## Session log
+
+### Session log: releases 0.1.0-beta.3.1 and 3.1.1 (`develop`, 2026-10-27/28)
+
+Luca: "Do both the quick route and the complex one" (beta 3 by patch release, then a full build
+3.1 with the held VEX items); after tagging 3.1, another session's sketch Text fixes landed on
+develop: "you do it" (release them as patch 3.1.1).
+
+- 0.1.0-beta.3 published by the patch release (2026-10-27 14:29 UTC). 3.1: dry run #13, then
+  Luca moved Release and pushed the tag on `2aa32dfe` (this session's push to Release was
+  refused by the permission system); its build is run #14.
+- 3.1.1 prepared on develop (`e8f7dfba`: VERSION, `_FALLBACK_VERSION`, CHANGELOG). Its tests
+  run #295 failed `vex_qa_real` only (shaft 0.03 deg turned): the Joint preview-after-OK bug
+  (Known issues, first entry), fixed and added to 3.1.1's CHANGELOG, with the regression
+  scenario `joints_ok_during_preview`.
 
 ### Session log: Sketch Text panel and wrapping (`develop`, 2026-10-27)
 
