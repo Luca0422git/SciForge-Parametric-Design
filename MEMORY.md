@@ -41,9 +41,9 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   #18, packaged, golden models, release step green; its GUI parts on the built AppImage:
   vex_placement_indicator, vex_selectable, vex_robot pass; three failures, all test-robot or
   known: sim_setup_during and vex_duplicate (fixed in 2fae4231 / 2aa32dfe), sketch_qa_keys R4
-  (the known built-program-only one, below)) [ ] Release moved + tag (Luca: this session's
-  push to Release was refused by the permission system on 2026-10-27, so both are his, from
-  a Codespace, on `2aa32dfe`) [ ] published.
+  (the known built-program-only one, below)) [x] Release moved + tag (Luca: this session's
+  push to Release was refused by the permission system on 2026-10-27, so both were his, from
+  a Codespace, on `2aa32dfe`) [x] published (build #14, 2026-10-28 01:12 UTC).
   **Update (patch session, later on 2026-10-27):** the sketch Text fixes Luca reported (the TEXT
   panel see-through and click-through; words running past the frame) went onto develop after
   `2aa32dfe` (session log "Sketch Text panel and wrapping"). **Luca tagged `2aa32dfe`
@@ -51,7 +51,8 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   does NOT hold them:** they are the patch **0.1.0-beta.3.1.1** (VERSION, `_FALLBACK_VERSION`,
   their own CHANGELOG section; Luca: "you do it"), released with Actions > SciForge patch
   release once 3.1 is published and "SciForge tests" is green on develop (module files only:
-  the same core id as 3.1). Status: [x] prepared [ ] 3.1 published [ ] 3.1.1 published.
+  the same core id as 3.1). Status: [x] prepared [x] 3.1 published (build #14, 2026-10-28
+  01:12 UTC: installer, 7z, AppImage, quick update, json, SHA256SUMS) [ ] 3.1.1 published.
   3.1.1 also carries a **Joint fix** found when tests run #295 (on the 3.1.1 prep commit)
   failed `vex_qa_real` (the shaft 0.03 deg turned after OK, after Undo, after reopening): OK
   pressed in the instant after a new Type was picked started the type's motion preview AFTER
