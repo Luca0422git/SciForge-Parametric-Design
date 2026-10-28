@@ -52,7 +52,10 @@ done, what was learned, what is next. Newest session goes at the top of the log.
   their own CHANGELOG section; Luca: "you do it"), released with Actions > SciForge patch
   release once 3.1 is published and "SciForge tests" is green on develop (module files only:
   the same core id as 3.1). Status: [x] prepared [x] 3.1 published (build #14, 2026-10-28
-  01:12 UTC: installer, 7z, AppImage, quick update, json, SHA256SUMS) [ ] 3.1.1 published.
+  01:12 UTC: installer, 7z, AppImage, quick update, json, SHA256SUMS; build #14's AppImage
+  scenario parts: only sketch_qa_keys R4, the known built-program-only one) [x] 3.1.1
+  published (patch release run #6, 2026-10-28 03:28 UTC, on `ba0377bd`: Release and the tag
+  there, notes with the two Text fixes and the Joint fix, six files).
   3.1.1 also carries a **Joint fix** found when tests run #295 (on the 3.1.1 prep commit)
   failed `vex_qa_real` (the shaft 0.03 deg turned after OK, after Undo, after reopening): OK
   pressed in the instant after a new Type was picked started the type's motion preview AFTER
@@ -1700,7 +1703,8 @@ develop: "you do it" (release them as patch 3.1.1).
 - 3.1.1 prepared on develop (`e8f7dfba`: VERSION, `_FALLBACK_VERSION`, CHANGELOG). Its tests
   run #295 failed `vex_qa_real` only (shaft 0.03 deg turned): the Joint preview-after-OK bug
   (Known issues, first entry), fixed and added to 3.1.1's CHANGELOG, with the regression
-  scenario `joints_ok_during_preview`.
+  scenario `joints_ok_during_preview`. (After it, tests run #296 crashed once in
+  `sim_qa_results_close`, see Known issues; #297 on `ba0377bd` green, the patch released.)
 
 ### Session log: Sketch Text panel and wrapping (`develop`, 2026-10-27)
 
