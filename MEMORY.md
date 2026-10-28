@@ -1711,7 +1711,9 @@ develop: "you do it" (release them as patch 3.1.1).
   full build said "Failed to remove" and left no SciForge). VERSION, `_FALLBACK_VERSION`, CHANGELOG.
   Status: [x] prepared [x] trial patch release with the Windows installer test green (dry run #8
   on `13287b61`: A over a running connector, B a file held open (stopped, 32905 of 32905 files
-  untouched), C uninstall in place: all pass) [ ] tests green [ ] published (Luca's go).
+  untouched), C uninstall in place: all pass) [x] tests green (#300) [x] published (Luca: "publish
+  it"; patch release run #9, 2026-10-28 20:47 UTC, on `13287b61`, its Windows installer test green
+  again; Release and the tag there; six files).
 
 - After 3.1.1 (03:28 UTC): Luca's screenshot of the installer's "Failed to remove" (every update to a
   new full build left no SciForge; he suspected the Claude connector, rightly): installer fix, core id
