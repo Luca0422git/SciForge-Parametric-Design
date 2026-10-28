@@ -1712,6 +1712,13 @@ develop: "you do it" (release them as patch 3.1.1).
   Status: [x] prepared [ ] trial patch release with the Windows installer test green [ ] tests green
   [ ] published (Luca's go).
 
+- After 3.1.1 (03:28 UTC): Luca's screenshot of the installer's "Failed to remove" (every update to a
+  new full build left no SciForge; he suspected the Claude connector, rightly): installer fix, core id
+  without the installer scripts, Windows test `test_installer.ps1`, patch 0.1.0-beta.3.1.2 prepared.
+  Dry run #7 on Windows: A (over a running connector) and B (a file held open: stopped, old
+  untouched, 32905 of 32905 files) pass; C (uninstall in place, `_?=`) refused because the
+  uninstaller itself runs from the folder: the check now skips its own parent process.
+
 ### Session log: Sketch Text panel and wrapping (`develop`, 2026-10-27)
 
 Luca (screenshot of the TEXT panel): "the text tool doesnt work the best. the text just goes

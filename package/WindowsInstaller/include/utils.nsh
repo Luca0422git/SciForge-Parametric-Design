@@ -321,10 +321,11 @@ FunctionEnd
 # 64-bit processes from this 32-bit installer too.
 
 # What runs from $INSTDIR: "" (nothing), "connector" (only python: the AI connector), or the
-# programs' names ("SciForge.exe, python.exe").
+# programs' names ("SciForge.exe, python.exe"). Never this installer or uninstaller itself (the
+# PowerShell's parent): an uninstaller run in place (_?=) runs from $INSTDIR.
 !macro _SciForgeInFolder result
   ${DisableX64FSRedirection}
-  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$d = '$INSTDIR\'; $$p = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$d, [StringComparison]::OrdinalIgnoreCase) }); if ($$p.Count -eq 0) { $$r = '' } elseif (@($$p | Where-Object { $$_.Name -notlike 'python*' }).Count -eq 0) { $$r = 'connector' } else { $$r = (@($$p | ForEach-Object { $$_.Name } | Sort-Object -Unique) -join ', ') }; [Console]::Out.Write($$r) } catch { }"`
+  nsExec::ExecToStack `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "try { $$d = '$INSTDIR\'; $$me = (Get-CimInstance Win32_Process -Filter ('ProcessId=' + $$PID)).ParentProcessId; $$p = @(Get-CimInstance Win32_Process -ErrorAction Stop | Where-Object { $$_.ProcessId -ne $$me -and $$_.ExecutablePath -and $$_.ExecutablePath.StartsWith($$d, [StringComparison]::OrdinalIgnoreCase) }); if ($$p.Count -eq 0) { $$r = '' } elseif (@($$p | Where-Object { $$_.Name -notlike 'python*' }).Count -eq 0) { $$r = 'connector' } else { $$r = (@($$p | ForEach-Object { $$_.Name } | Sort-Object -Unique) -join ', ') }; [Console]::Out.Write($$r) } catch { }"`
   ${EnableX64FSRedirection}
   Pop ${result} # the exit code
   Pop ${result} # what it wrote
