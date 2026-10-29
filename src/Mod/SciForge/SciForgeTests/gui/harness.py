@@ -322,23 +322,51 @@ def _install_pointer_tap():
         state["pointer_tap"] = True
 
 
-def pointer_to(widget, pos):
+def pointer_to(widget, pos, fresh=False):
     """Move the real pointer to `pos` (widget pixels) and wait until Qt has been told
     (rule 4: input reaches the app before the next input). A pointer already on that pixel
-    makes no move at all, so it first steps one pixel aside. Returns the global position."""
+    makes no move at all, so it first steps one pixel aside. fresh: also when Qt already
+    knows the pointer is there (a hand comes onto what it clicks: FreeCAD's sketch finds what
+    is under the pointer on a move; a second double-click on the same dimension found
+    nothing). Returns the global position."""
     _install_pointer_tap()
     target = widget.mapToGlobal(pos)
-    if QtGui.QCursor.pos() == target:
-        if _pointer.last == target:
-            return target
-        aside = QtCore.QPoint(pos.x() + (1 if pos.x() + 1 < widget.width() else -1), pos.y())
-        _pointer_step(widget, aside)
+    if QtGui.QGuiApplication.screenAt(target) is None or QtWidgets.QApplication.topLevelAt(target) is None:
+        # Off the screen or off every window of SciForge (a point of the model outside the
+        # view): Qt is never told of a pointer there. The input that follows goes straight to
+        # the widget, as it always has.
+        if not state.get("offscreen_told"):
+            state["offscreen_told"] = True
+            print(
+                "[SciForge] %s: %d, %d is outside SciForge's windows; the input goes to %s"
+                % (state["name"], target.x(), target.y(), describe(widget)),
+                flush=True,
+            )
+        return target
+    if not fresh and QtGui.QCursor.pos() == target and _pointer.last == target:
+        return target  # there already, and Qt knows
     _pointer_step(widget, pos)
     return target
 
 
 def _pointer_step(widget, pos):
     target = widget.mapToGlobal(pos)
+    now = QtGui.QCursor.pos()
+    if now == target or _pointer.last == target:
+        # A pointer sent to where it already is makes no move at all; and Qt folds moves told
+        # together into the last one and drops it when that is where it last saw the pointer
+        # (sketch_infer_tools: the scenario's own move one pixel off, then this one: nothing
+        # came). So first a neighbouring pixel, seen by Qt.
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            aside = QtCore.QPoint(target.x() + dx, target.y() + dy)
+            if aside != now and aside != _pointer.last:
+                _warp(aside, widget)
+                break
+    _warp(target, widget)
+
+
+def _warp(target, widget):
+    """The real pointer to global `target`, then wait until Qt has been told."""
     _pointer.last = None
     _pointer.expected = target
     # The real pointer, always. (QTest.mouseMove only moves it while QTest thinks no button
@@ -752,8 +780,9 @@ def screen_point(point):
 
 
 def move(pos):
-    """The pointer to widget pixel `pos` of the 3D view, seen by Qt before anything else."""
-    pointer_to(gl_widget(), pos)
+    """The pointer onto widget pixel `pos` of the 3D view (always a move, as a hand comes
+    onto what it clicks), seen by Qt before anything else."""
+    pointer_to(gl_widget(), pos, fresh=True)
 
 
 def view_drawn(what="the 3D view to draw what is under the pointer"):
