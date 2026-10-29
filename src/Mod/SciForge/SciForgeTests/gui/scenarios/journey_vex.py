@@ -34,4 +34,5 @@ h.run(
     + j.again_steps()
     + j.reopen_steps()
     + j.drawing_steps(),
+    paced_by="state",
 )

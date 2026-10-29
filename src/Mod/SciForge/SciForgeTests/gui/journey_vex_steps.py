@@ -178,23 +178,32 @@ def errors_free(where):
 # -- the file dialog ---------------------------------------------------------------------------
 def answer_file_dialog(paths, report):
     """When the file dialog opens (Qt's own dialog, as under xvfb): go to the parts folder,
-    then type the file names in quotes (several files at once, as Ctrl-clicking them does)
-    and Enter. The folder is set on the dialog, not typed: typing its path let the name box's
-    completer take the Enter on a busy machine (CI #283: the dialog stayed in the home
-    folder, a "file not found" box waited, and the scenario hung until it was killed). A
-    file dialog still open 20 s later is closed (with a message box on it), so a problem
-    fails the step instead of hanging FreeCAD."""
+    and once it lists the files there, type their names in quotes (several files at once, as
+    Ctrl-clicking them does) and Enter. The folder is set on the dialog, not typed: typing its
+    path let the name box's completer take the Enter on a busy machine (CI #283: the dialog
+    stayed in the home folder, a "file not found" box waited, and the scenario hung until it
+    was killed). A file dialog that does not close after the Enter fails the step within
+    h.WAIT_S, with the dialog and any message box on it closed."""
     folder = os.path.dirname(paths[0])
     names = " ".join('"%s"' % os.path.basename(p) for p in paths)
+    wanted = {os.path.basename(p) for p in paths}
 
-    def look(tries=0):
+    def dialog():
         dlg = QtWidgets.QApplication.activeModalWidget()
-        if not isinstance(dlg, QtWidgets.QFileDialog):
-            if tries < 100:
-                QtCore.QTimer.singleShot(100, lambda: look(tries + 1))
-            else:
-                report["error"] = "no file dialog came (%r)" % (dlg,)
-            return
+        return dlg if isinstance(dlg, QtWidgets.QFileDialog) else None
+
+    def listed(dlg):
+        """The dialog shows the folder with the files in it (it lists a folder a moment
+        after it is set)."""
+        view = dlg.findChild(QtWidgets.QListView, "listView")
+        if view is None or view.model() is None:
+            return False
+        model, root = view.model(), view.rootIndex()
+        shown = {model.data(model.index(r, 0, root)) for r in range(model.rowCount(root))}
+        return wanted <= shown
+
+    def opened():
+        dlg = dialog()
         report["title"] = dlg.windowTitle()
         report["mode"] = int(dlg.fileMode().value) if hasattr(dlg.fileMode(), "value") else 0
         edit = dlg.findChild(QtWidgets.QLineEdit, "fileNameEdit")
@@ -203,8 +212,7 @@ def answer_file_dialog(paths, report):
             dlg.reject()
             return
         dlg.setDirectory(folder)
-        QtCore.QTimer.singleShot(600, lambda: type_names(dlg, edit))
-        QtCore.QTimer.singleShot(20000, lambda: watchdog(dlg))
+        h.when(lambda: listed(dlg), lambda: type_names(dlg, edit), "the file dialog to list the parts")
 
     def type_names(dlg, edit):
         try:
@@ -219,22 +227,14 @@ def answer_file_dialog(paths, report):
         except Exception as exc:  # never leave the dialog open
             report["error"] = str(exc)
             dlg.reject()
+            return
+        h.when(
+            lambda: not h._alive(dlg) or not dlg.isVisible(),
+            lambda: None,
+            "the file dialog to close after Enter",
+        )
 
-    def watchdog(dlg):
-        try:
-            if not dlg.isVisible():  # it closed as it should (a later step's boxes are theirs)
-                return
-            box = QtWidgets.QApplication.activeModalWidget()
-            if isinstance(box, QtWidgets.QMessageBox):
-                report["error"] = "a message box stayed open: %s" % box.text()
-                box.reject()
-            report["error"] = report.get("error") or "the file dialog stayed open"
-            report["done"] = False
-            dlg.reject()
-        except Exception:  # (the dialog is gone: it closed as it should)
-            pass
-
-    QtCore.QTimer.singleShot(300, look)
+    h.when(lambda: dialog() is not None, opened, "the file dialog to open")
 
 
 def insert_step(names, report):
@@ -291,9 +291,9 @@ def start_steps(name):
         h.check("the browser says so", ti.tree().row("Units: in") is not None, ti.labels()[:6])
 
     return [
-        step(new, "j1_new_design", 1500),
-        step(units, "j1_units_row", 800),
-        step(inch, "j1_inch", 800),
+        step(new, "j1_new_design"),
+        step(units, "j1_units_row"),
+        step(inch, "j1_inch"),
         step(inches, "j1_inches"),
     ]
 
@@ -352,8 +352,8 @@ def insert_steps():
                 )
 
     return [
-        step(insert, "j1_insert_step", 3000),
-        step(inserted, "j1_inserted", 1200),
+        step(insert, "j1_insert_step"),
+        step(inserted, "j1_inserted"),
         step(placed, "j1_placed"),
     ]
 
@@ -507,20 +507,20 @@ def align_steps():
         h.shot("2-rails")
 
     return [
-        step(open_align, "j2_align", 1000),
+        step(open_align, "j2_align"),
         step(components, "j2_components"),
         step(hover_from, "j2_hover_from"),
-        step(click_from, "j2_click_from", 500),
+        step(click_from, "j2_click_from"),
         step(hover_to, "j2_hover_to"),
-        step(click_to, "j2_click_to", 1500),
-        step(reversed_first, "j2_reversed_first", 1200),
-        step(angle_again, "j2_angle_again", 1200),
-        step(preview, "j2_preview", 1200),
-        step(aligned, "j2_aligned", 800),
-        step(select_rail2, "j2_select_rail2", 600),
-        step(press_m, "j2_press_m", 1200),
-        step(type_up, "j2_type_up", 1500),
-        step(moved, "j2_moved", 1500),
+        step(click_to, "j2_click_to"),
+        step(reversed_first, "j2_reversed_first"),
+        step(angle_again, "j2_angle_again"),
+        step(preview, "j2_preview"),
+        step(aligned, "j2_aligned"),
+        step(select_rail2, "j2_select_rail2"),
+        step(press_m, "j2_press_m"),
+        step(type_up, "j2_type_up"),
+        step(moved, "j2_moved"),
         step(apart, "j2_apart"),
     ]
 
@@ -649,7 +649,7 @@ def timed_hover(point, dot, limit=2.0):
         hot = getattr(hov, "hot", None) if hov is not None else None
         if hot is not None and (hot["point"] - dot).Length < 1e-5:
             return time.perf_counter() - t0
-        time.sleep(0.002)
+        time.sleep(0.002)  # wait primitive: measures how long the hover takes to light
     return limit
 
 
@@ -737,14 +737,14 @@ def joint_steps(prefix, first, second, offset=None, revolute=False, check=None):
         h.check("%s: J opened the Joint dialog" % prefix, False, diag)
         js.menu("Joint")  # a person then takes ASSEMBLE > Joint
 
-    out = [step(press_j(), prefix + "_j", 900), step(opened, prefix + "_opened", 900)]
+    out = [step(press_j(), prefix + "_j"), step(opened, prefix + "_opened")]
     names = ("first", "second")
     for n, (where, point_fn, dot_fn, kinds, view, size) in enumerate((first, second)):
         hover, click = aim(prefix, point_fn, dot_fn, kinds, view, size, where)
         out.append(step(hover, "%s_hover_%s" % (prefix, names[n])))
-        out.append(step(click, "%s_click_%s" % (prefix, names[n]), 500 if n == 0 else 1500))
+        out.append(step(click, "%s_click_%s" % (prefix, names[n])))
     if offset is not None:
-        out.append(step(type_offset(offset), prefix + "_offset", 1500))
+        out.append(step(type_offset(offset), prefix + "_offset"))
     if revolute:
 
         def motion():
@@ -753,7 +753,7 @@ def joint_steps(prefix, first, second, offset=None, revolute=False, check=None):
                 js.click_tab(p, "Motion")
                 js.choose_type(p, "Revolute")
 
-        out.append(step(motion, prefix + "_revolute", 2600))
+        out.append(step(motion, prefix + "_revolute"))
 
     def preview():
         if check is not None:
@@ -770,8 +770,8 @@ def joint_steps(prefix, first, second, offset=None, revolute=False, check=None):
         if check is not None:
             check(prefix)
 
-    out.append(step(preview, prefix + "_preview", 1500))
-    out.append(step(made, prefix + "_made", 800))
+    out.append(step(preview, prefix + "_preview"))
+    out.append(step(made, prefix + "_made"))
     return out
 
 
@@ -809,14 +809,14 @@ def duplicate_steps(prefix, key, targets, check=None):
         S["copies0"] = len(copies(key))
 
     out = [
-        step(pick, prefix + "_pick", 600),
-        step(open_dialog, prefix + "_open", 1200),
+        step(pick, prefix + "_pick"),
+        step(open_dialog, prefix + "_open"),
         step(ready, prefix + "_ready"),
     ]
     for n, (where, point_fn, dot_fn, kinds, view, size) in enumerate(targets):
         hover, click = aim(prefix, point_fn, dot_fn, kinds, view, size, where)
         out.append(step(hover, "%s_hover_%d" % (prefix, n + 1)))
-        out.append(step(click, "%s_click_%d" % (prefix, n + 1), 1500))
+        out.append(step(click, "%s_click_%d" % (prefix, n + 1)))
 
     def counted():
         p = dup_panel()
@@ -839,8 +839,8 @@ def duplicate_steps(prefix, key, targets, check=None):
         if check is not None:
             check(prefix)
 
-    out.append(step(counted, prefix + "_counted", 1000))
-    out.append(step(kept, prefix + "_kept", 800))
+    out.append(step(counted, prefix + "_counted"))
+    out.append(step(kept, prefix + "_kept"))
     return out
 
 
@@ -948,11 +948,11 @@ def align_part_steps(prefix, first, second, check=None, angle=0):
             if p.objects.currentText() != "Components":
                 d.choose("objects", "Components")
 
-    out = [step(open_align, prefix + "_align", 1000), step(components, prefix + "_components")]
+    out = [step(open_align, prefix + "_align"), step(components, prefix + "_components")]
     for n, (where, point_fn, dot_fn, kinds, view, size) in enumerate((first, second)):
         hover, click = aim(prefix, point_fn, dot_fn, kinds, view, size, where)
         out.append(step(hover, "%s_hover_%d" % (prefix, n + 1)))
-        out.append(step(click, "%s_click_%d" % (prefix, n + 1), 500 if n == 0 else 1500))
+        out.append(step(click, "%s_click_%d" % (prefix, n + 1)))
     for k in range(angle):
 
         def turn():
@@ -962,7 +962,7 @@ def align_part_steps(prefix, first, second, check=None, angle=0):
             if p is not None:
                 wi.click(p.angle_button)
 
-        out.append(step(turn, "%s_angle_%d" % (prefix, k + 1), 1200))
+        out.append(step(turn, "%s_angle_%d" % (prefix, k + 1)))
 
     def preview():
         if check is not None:
@@ -974,8 +974,8 @@ def align_part_steps(prefix, first, second, check=None, angle=0):
         if check is not None:
             check(prefix)
 
-    out.append(step(preview, prefix + "_preview", 1200))
-    out.append(step(done, prefix + "_done", 800))
+    out.append(step(preview, prefix + "_preview"))
+    out.append(step(done, prefix + "_done"))
     return out
 
 
@@ -1081,8 +1081,8 @@ def bearing2_steps():
         40.0,
     )
     return [
-        step(insert, "j4_insert_bearing_again", 2500),
-        step(occurrence, "j4_occurrence", 1200),
+        step(insert, "j4_insert_bearing_again"),
+        step(occurrence, "j4_occurrence"),
     ] + align_part_steps(
         "j4_bearing2",
         first,
@@ -1466,9 +1466,9 @@ def drive_steps(prefix, degrees, undo=True):
         js.ok()
 
     out = [
-        step(drive, prefix + "_drive", 1500),
-        step(type_angle, prefix + "_type", 2500),
-        step(turned, prefix + "_turned", 1200),
+        step(drive, prefix + "_drive"),
+        step(type_angle, prefix + "_type"),
+        step(turned, prefix + "_turned"),
     ]
     if undo:
 
@@ -1481,7 +1481,7 @@ def drive_steps(prefix, degrees, undo=True):
             moved = moved_since(S["before_drive"])
             h.check("%s: Undo: everything where it was" % prefix, not moved, moved)
 
-        out += [step(back, prefix + "_undo", 1500), step(square, prefix + "_square")]
+        out += [step(back, prefix + "_undo"), step(square, prefix + "_square")]
     return out
 
 
@@ -1523,9 +1523,9 @@ def rigid_group_steps():
         js.no_dialog("Rigid Group OK")
 
     return [
-        step(pick, "j5_pick_frame", 800),
-        step(open_group, "j5_rigid_group", 1200),
-        step(members, "j5_members", 1200),
+        step(pick, "j5_pick_frame"),
+        step(open_group, "j5_rigid_group"),
+        step(members, "j5_members"),
         step(made, "j5_group_made"),
     ]
 
@@ -1619,9 +1619,9 @@ def again_steps():
         )
 
     return [
-        step(insert, "j6_insert_screw_again", 2500),
-        step(occurrence, "j6_occurrence", 1500),
-        step(placed, "j6_placed", 1200),
+        step(insert, "j6_insert_screw_again"),
+        step(occurrence, "j6_occurrence"),
+        step(placed, "j6_placed"),
         step(counted, "j6_parts_list"),
     ] + joint_steps("j6_screw7", first, second, check=on_standoff)
 
@@ -1801,21 +1801,21 @@ def reopen_steps():
 
     return (
         [
-            step(save, "j7_ctrl_s", 1500),
-            step(save_dialog, "j7_save", 3000),
-            step(saved, "j7_close", 2000),
-            step(closed, "j7_ctrl_o", 6000),
-            step(reopened, "j7_reopened", 1500),
+            step(save, "j7_ctrl_s"),
+            step(save_dialog, "j7_save"),
+            step(saved, "j7_close"),
+            step(closed, "j7_ctrl_o"),
+            step(reopened, "j7_reopened"),
         ]
         + drive_steps("j7_drive_reopened", 30.0)
         + [
-            step(edit_joint, "j7_edit_joint", 2000),
-            step(edit_offset, "j7_edit_offset", 1500),
-            step(edited, "j7_edited", 1200),
-            step(edit_undo, "j7_edit_undo", 1500),
+            step(edit_joint, "j7_edit_joint"),
+            step(edit_offset, "j7_edit_offset"),
+            step(edited, "j7_edited"),
+            step(edit_undo, "j7_edit_undo"),
             step(edit_undone, "j7_edit_undone"),
-            step(insert_again, "j7_insert_screw_again", 2500),
-            step(still_linked, "j7_still_linked", 1200),
+            step(insert_again, "j7_insert_screw_again"),
+            step(still_linked, "j7_still_linked"),
             step(esc_kept, "j7_esc"),
         ]
     )
@@ -2159,28 +2159,28 @@ def sim_steps():
             ss.click_widget(status.close_button)
 
     return [
-        step(enter, "j8_simulation", 2500),
-        step(create, "j8_create_study", 2500),
-        step(materials, "j8_study_materials", 1500),
-        step(leave_out, "j8_leave_out", 1500),
-        step(studied, "j8_constraints", 1500),
-        step(fixed_walls, "j8_fixed_walls", 1200),
-        step(fixed_ok, "j8_fixed_ok", 1500),
-        step(loads, "j8_loads", 1500),
-        step(load_walls, "j8_load_walls", 1200),
-        step(load_down, "j8_load_down", 1000),
-        step(load_ok, "j8_load_ok", 1500),
-        step(load_made, "j8_precheck", 2000),
-        step(precheck, "j8_solve", 1500),
-        step(solve, "j8_go", 3000),
+        step(enter, "j8_simulation"),
+        step(create, "j8_create_study"),
+        step(materials, "j8_study_materials"),
+        step(leave_out, "j8_leave_out"),
+        step(studied, "j8_constraints"),
+        step(fixed_walls, "j8_fixed_walls"),
+        step(fixed_ok, "j8_fixed_ok"),
+        step(loads, "j8_loads"),
+        step(load_walls, "j8_load_walls"),
+        step(load_down, "j8_load_down"),
+        step(load_ok, "j8_load_ok"),
+        step(load_made, "j8_precheck"),
+        step(precheck, "j8_solve"),
+        step(solve, "j8_go"),
         ss.wait_solved("j8_wait_solved", 600),
-        step(solved, "j8_solved", 1500),
-        step(settings, "j8_settings", 1500),
-        step(finer, "j8_finer_mesh", 1500),
-        step(again, "j8_solve_again", 1500),
-        step(again_go, "j8_go_again", 3000),
+        step(solved, "j8_solved"),
+        step(settings, "j8_settings"),
+        step(finer, "j8_finer_mesh"),
+        step(again, "j8_solve_again"),
+        step(again_go, "j8_go_again"),
         ss.wait_solved("j8_wait_solved_again", 900),
-        step(compared, "j8_compared", 1500),
+        step(compared, "j8_compared"),
     ]
 
 
@@ -2308,11 +2308,11 @@ def results_steps():
             h.check("j8: the report has %s" % name, needle in text, needle)
 
     return [
-        step(probes, "j8_surface_probes", 1500),
-        step(probe, "j8_probe", 1200),
-        step(probed, "j8_probed", 1000),
-        step(report, "j8_report", 1500),
-        step(fill, "j8_report_save", 3000),
+        step(probes, "j8_surface_probes"),
+        step(probe, "j8_probe"),
+        step(probed, "j8_probed"),
+        step(report, "j8_report"),
+        step(fill, "j8_report_save"),
         step(written, "j8_report_written"),
     ]
 
@@ -2367,9 +2367,9 @@ def drawing_steps():
         h.check("j7: the Table dialog closed", dr.panel() is None, dr.panel())
 
     return dr.drawing_steps("j7_drawing", base_at=(150.0, 180.0), scale="1:4") + [
-        step(table, "j7_table", 1200),
-        step(follow, "j7_table_follow", 800),
-        step(place, "j7_table_place", 1500),
-        step(made, "j7_parts_list", 1500),
+        step(table, "j7_table"),
+        step(follow, "j7_table_follow"),
+        step(place, "j7_table_place"),
+        step(made, "j7_parts_list"),
         step(done, "j7_drawing_done"),
     ]

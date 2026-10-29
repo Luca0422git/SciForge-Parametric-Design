@@ -52,7 +52,6 @@ def hover(tag):
         h.move(h.screen_point(App.Vector(*sess.display.node_place(node))))
 
     move.__name__ = "hover_" + tag
-    move.wait_ms = 500
     return move
 
 
@@ -73,16 +72,12 @@ def closed(tag):
         h.check("%s: no results left" % tag, s.session() is None)
 
     check.__name__ = "closed_" + tag
-    check.wait_ms = 800
     return check
 
 
 def d_animate():
     h.check("D: results shown", s.session() is not None)
     s.big("Animate")
-
-
-d_animate.wait_ms = 1500
 
 
 def d_close():
@@ -96,9 +91,6 @@ def d_close():
 def d_closed():
     h.check("D: the design closed (no crash)", state["D"] not in App.listDocuments())
     h.check("D: no results left", s.session() is None)
-
-
-d_closed.wait_ms = 800
 
 
 def e_solved():
@@ -138,4 +130,5 @@ h.run(
         s.new_solved_beam("SimQAClosedE"),
         e_solved,
     ],
+    paced_by="state",
 )

@@ -42,9 +42,6 @@ def joined():
         j.ok()
 
 
-joined.wait_ms = 300
-
-
 def closed():
     j.no_dialog("OK")
     h.check("no preview plays after OK", not playing(), playing())
@@ -58,9 +55,6 @@ def closed():
     state["plc"] = App.Placement(j.block().Placement)
 
 
-closed.wait_ms = 1000
-
-
 def still():
     h.check("a second later: no preview plays", not playing(), playing())
     h.check(
@@ -71,9 +65,6 @@ def still():
     s.undo()
 
 
-still.wait_ms = 800
-
-
 def undone():
     h.check("Ctrl+Z: the joint is gone", not j.joint_list(), [x.Label for x in j.joint_list()])
     j.block_box("Ctrl+Z: the block back where it was made", j.HOME)
@@ -81,4 +72,4 @@ def undone():
 
 steps = [s.new_design("OkDuringPreview")] + j.two_boxes() + j.pick_pair("pair")
 steps += [joined, closed, still, undone]
-h.run("joints_ok_during_preview", steps)
+h.run("joints_ok_during_preview", steps, paced_by="state")

@@ -25,4 +25,5 @@ h.run(
     + j.wheel_steps()
     + j.sim_steps()
     + j.results_steps(),
+    paced_by="state",
 )

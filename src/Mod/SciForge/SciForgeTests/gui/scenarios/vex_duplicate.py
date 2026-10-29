@@ -135,9 +135,6 @@ def setup():
     )
 
 
-setup.wait_ms = 1500
-
-
 # -- A ---------------------------------------------------------------------------------------------
 def a_pick():
     from SciForgeTests.gui import bodies_steps as bs
@@ -151,7 +148,8 @@ def a_open():
     vx.menu("ASSEMBLE", "Duplicate With Joints")
 
 
-a_open.wait_ms = 1200
+a_open.done = lambda: panel() is not None
+a_open.done_what = "Duplicate With Joints is open"
 
 
 def a_ready():
@@ -186,7 +184,6 @@ def make_hole_steps():
             )
             h.click(web_point(i, j))
 
-        click.wait_ms = 1500
         hover.__name__ = "a_hover_%d_%d" % (i, j)
         click.__name__ = "a_click_%d_%d" % (i, j)
         steps += [hover, click]
@@ -223,9 +220,6 @@ def a_copies():
     vx.ok()
 
 
-a_copies.wait_ms = 800
-
-
 def a_ok():
     h.check("OK closed the dialog", panel() is None)
     h.check("the copies stay", len(copies_of(S["screw"])) == 6)
@@ -249,9 +243,6 @@ def b_undo():
     vx.undo()
 
 
-b_undo.wait_ms = 1500
-
-
 def b_undone():
     from sciforge import joints
 
@@ -262,9 +253,6 @@ def b_undone():
     )
     h.check("one Ctrl+Z: the copies' joints gone", len(joints.joints(App.ActiveDocument)) == 2)
     vx.redo()
-
-
-b_undone.wait_ms = 1500
 
 
 def b_redone():
@@ -286,7 +274,8 @@ def c_open():
     vx.menu("ASSEMBLE", "Duplicate With Joints")
 
 
-c_open.wait_ms = 1200
+c_open.done = lambda: panel() is not None
+c_open.done_what = "Duplicate With Joints is open again"
 
 
 def c_position_box():
@@ -317,9 +306,6 @@ def c_click():
     h.click(web_point(4, 0))
 
 
-c_click.wait_ms = 1500
-
-
 def c_one():
     h.check("one more screw", len(comps()) == S["count"] + 1, len(comps()))
     h.press(QtCore.Qt.Key_Escape)
@@ -337,7 +323,8 @@ def d_open():
     vx.menu("ASSEMBLE", "Duplicate With Joints")
 
 
-d_open.wait_ms = 1200
+d_open.done = lambda: panel() is not None
+d_open.done_what = "Duplicate With Joints is open (nothing picked)"
 
 
 def d_pick_lone():
@@ -362,4 +349,5 @@ h.run(
     + [a_copies, a_ok, b_undo, b_undone, b_redone, c_open, c_position_box, c_hover]
     + [c_click, c_one, c_cancelled]
     + [d_open, d_pick_lone, d_refused],
+    paced_by="state",
 )

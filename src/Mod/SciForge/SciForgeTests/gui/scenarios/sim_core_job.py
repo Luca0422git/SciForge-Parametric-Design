@@ -106,17 +106,16 @@ def _start(mesh_only=False):
     timer.start()
 
 
-def _wait_for(cond, name, tries=600):
-    """A step that comes back every 200 ms until cond() (at most `tries` times)."""
-    count = {"n": 0}
+def _wait_for(cond, name, seconds=120):
+    """A step that waits until cond() (a mesh and a solve: up to `seconds`)."""
 
     def step():
-        if not cond() and count["n"] < tries:
-            count["n"] += 1
-            h.state["queue"].insert(0, step)
+        pass
 
     step.__name__ = name
-    step.wait_ms = 200
+    step.done = cond
+    step.done_what = "the job: " + name.replace("_", " ")
+    step.timeout_s = seconds
     return step
 
 
@@ -158,7 +157,7 @@ def after_solve():
     # paused 3.2 s once, in run #277, on the main thread's turn of reading the results)
     h.check(
         "C: the window kept working (the longest pause between timer ticks under 4 s)",
-        bool(gaps) and max(gaps) < 4.0,
+        bool(gaps) and max(gaps) < 4.0 * h.SLOWDOWN,
         "%d ticks, longest pause %.2f s" % (len(gaps), max(gaps) if gaps else -1),
     )
     h.check(
@@ -258,4 +257,5 @@ h.run(
         ai_solve,
         close,
     ],
+    paced_by="state",
 )

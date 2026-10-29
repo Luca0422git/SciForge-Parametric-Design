@@ -65,6 +65,12 @@ def a_go():
         s.click_widget(dialog.go)
 
 
+# Undo comes once the solve has taken the study (300 N) as it solves it: the job reads it in
+# its first stage, a moment after Go (the fixed 700 ms of old covered it on most machines)
+a_go.done = s.solve_took_setup
+a_go.done_what = "the solve to have taken the study as it solves it"
+
+
 def a_undo():
     h.check("solving", s.solving())
     s.close_popup("SciForgeSimJobStatus")
@@ -186,4 +192,5 @@ h.run(
         c_check,
         c_red,
     ],
+    paced_by="state",
 )

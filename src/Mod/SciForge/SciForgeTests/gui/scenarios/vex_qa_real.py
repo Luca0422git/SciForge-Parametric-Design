@@ -172,9 +172,6 @@ def setup():
     S["motor_box"] = gbox(S["motor"])
 
 
-setup.wait_ms = 2000
-
-
 # -- A: the hover on real-looking holes ----------------------------------------------------------
 def a_press_j():
     h.click_empty()
@@ -262,9 +259,6 @@ def b_click_underside():
     h.click(S["under"])
 
 
-b_click_underside.wait_ms = 400
-
-
 def b_hover_hole():
     p = vx.joint_panel()
     h.check("component 1 taken", p is not None and p.picks["comp1"] is not None, p and p.picks)
@@ -277,15 +271,9 @@ def b_click_hole():
     h.click(web_point(vx.hole_centre(*HOLE)))
 
 
-b_click_hole.wait_ms = 1500
-
-
 def b_ok():
     in_hole("joined", S["screw"], vx.hole_centre(*HOLE))
     vx.ok()
-
-
-b_ok.wait_ms = 1200
 
 
 def b_made():
@@ -311,9 +299,6 @@ def c_open():
     vx.menu("ASSEMBLE", "Duplicate With Joints")
 
 
-c_open.wait_ms = 1200
-
-
 def c_hover():
     p = dup_panel()
     if not h.check("Duplicate With Joints open", p is not None):
@@ -335,9 +320,6 @@ def c_click():
     h.click(web_point(split_centre(*SPLIT_HOLE)))
 
 
-c_click.wait_ms = 2000
-
-
 def c_copy():
     from sciforge import instances
 
@@ -355,9 +337,6 @@ def c_copy():
             "the copy's head on the split channel's web", abs(box.ZMax - (vx.T + HEAD)) < 1e-3, box
         )
     vx.ok()
-
-
-c_copy.wait_ms = 1200
 
 
 # -- D: the shaft into the motor's socket, revolute ------------------------------------------------
@@ -387,9 +366,6 @@ def d_click_top():
     h.click(S["shaft_hover"])
 
 
-d_click_top.wait_ms = 400
-
-
 def d_hover_socket():
     c = socket_top()
     vx.look_at(c, 30.0)
@@ -416,9 +392,6 @@ def d_click_socket():
     h.click(S["boss_point"])
 
 
-d_click_socket.wait_ms = 1500
-
-
 def d_offset():
     box = gbox(S["shaft"])
     c = socket_top()
@@ -432,9 +405,6 @@ def d_offset():
         s.type_value(p.offset_fields["z"].widget, "-0.2 in")
 
 
-d_offset.wait_ms = 1500
-
-
 def d_revolute():
     shaft_in_socket("Offset Z -0.2 in")
     p = vx.joint_panel()
@@ -442,14 +412,8 @@ def d_revolute():
     j.choose_type(p, "Revolute")
 
 
-d_revolute.wait_ms = 2600
-
-
 def d_ok():
     vx.ok()
-
-
-d_ok.wait_ms = 1200
 
 
 def d_made():
@@ -468,9 +432,6 @@ def e_drive():
         j.browser_menu(S["revolute"].Label, "Drive Joints")
 
 
-e_drive.wait_ms = 1500
-
-
 def e_type():
     p = j.panel()
     h.check(
@@ -482,24 +443,15 @@ def e_type():
         s.type_value(p.angle.widget, "30")
 
 
-e_type.wait_ms = 2500
-
-
 def e_turned():
     shaft_in_socket("driven 30 degrees", 30.0)
     motor_still()
     j.ok()
 
 
-e_turned.wait_ms = 1200
-
-
 def e_undo():
     j.no_dialog("Drive OK")
     s.undo()
-
-
-e_undo.wait_ms = 1500
 
 
 def e_undone():
@@ -514,15 +466,9 @@ def f_save():
     App.closeDocument(App.ActiveDocument.Name)
 
 
-f_save.wait_ms = 1000
-
-
 def f_open():
     App.openDocument(S["path"])
     Gui.activateWorkbench("SciForgeWorkbench")
-
-
-f_open.wait_ms = 2500
 
 
 def f_reopened():
@@ -549,9 +495,6 @@ def f_reopened():
         )
     shaft_in_socket("reopened")
     doc.recompute()
-
-
-f_reopened.wait_ms = 2000
 
 
 def f_recomputed():
@@ -606,4 +549,5 @@ h.run(
         f_reopened,
         f_recomputed,
     ],
+    paced_by="state",
 )

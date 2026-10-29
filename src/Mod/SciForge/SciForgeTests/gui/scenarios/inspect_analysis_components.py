@@ -271,4 +271,5 @@ h.run(
         from_menu,
         menu_off,
     ],
+    paced_by="state",
 )

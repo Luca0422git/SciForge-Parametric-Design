@@ -93,18 +93,12 @@ def p1_open():
     si.menu_item("INSERT", "Insert Derive")
 
 
-p1_open.wait_ms = 1500
-
-
 def p1_save_first():
     d = vi.save_dialog()
     h.check("P1 an unsaved design is saved first", d is not None, h.popups())
     h.check("P1 the reason is said", "Save the design first" in m.told(), m.told())
     vi.fill_save_dialog(name="Assembly")
     vi.click_save()
-
-
-p1_save_first.wait_ms = 2500
 
 
 def p1_dialog():
@@ -131,9 +125,6 @@ def p1_ok():
     p = m.derive_panel()
     h.check("P1 the dialog says what comes in", p is not None and "Brings in" in p.info.text())
     h.task_button("OK")
-
-
-p1_ok.wait_ms = 1500
 
 
 def p1_check():
@@ -225,9 +216,6 @@ def p3_change_source():
     Gui.setActiveDocument(s["doc"])
 
 
-p3_change_source.wait_ms = 2000
-
-
 def p3_out_of_date():
     from sciforge import derive, derive_core
 
@@ -255,9 +243,6 @@ def p4_update():
     t.menu(m.timeline_title(master()), "Update Derive")
 
 
-p4_update.wait_ms = 2000
-
-
 def p4_check():
     from sciforge import derive, derive_core
 
@@ -276,18 +261,12 @@ def p5_undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-p5_undo.wait_ms = 1200
-
-
 def p5_undone():
     from sciforge import derive, derive_core
 
     h.check("P5 Ctrl+Z: 1000 + cylinder again", m.near(body_volume(), 1000 + CYL), body_volume())
     h.check("P5 out of date again", derive.state(master()) == derive_core.NEWER)
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-p5_undone.wait_ms = 1200
 
 
 def p5_redone():
@@ -297,9 +276,6 @@ def p5_redone():
 # -- P6 ----------------------------------------------------------------------------------------
 def p6_edit():
     t.double_click(m.timeline_title(master()))
-
-
-p6_edit.wait_ms = 1500
 
 
 def p6_change():
@@ -317,9 +293,6 @@ def p6_change():
 
 def p6_ok():
     h.task_button("OK")
-
-
-p6_ok.wait_ms = 1500
 
 
 def p6_check():
@@ -345,9 +318,6 @@ def p7_accept():
     h.check("P7 the version dialog", vi.accept_save())
 
 
-p7_accept.wait_ms = 1500
-
-
 def p7_reopen():
     path = doc().FileName
     s["path"] = path
@@ -360,9 +330,6 @@ def p7_reopen():
     m.close_all()
     d = App.openDocument(path)
     s["doc"] = d.Name
-
-
-p7_reopen.wait_ms = 2500
 
 
 def p7_check():
@@ -386,16 +353,10 @@ def p8_open():
     si.menu_item("INSERT", "Insert Derive")
 
 
-p8_open.wait_ms = 1500
-
-
 def p8_cancel():
     p = m.derive_panel()
     h.check("P8 the dialog opened", p is not None)
     h.task_button("Cancel")
-
-
-p8_cancel.wait_ms = 1000
 
 
 def p8_self():
@@ -403,9 +364,6 @@ def p8_self():
     h.check("P8 still one Derive", len(t.titles()) == 2, t.titles())  # Derive + Cylinder
     s["pick"] = s["path"]
     si.menu_item("INSERT", "Insert Derive")
-
-
-p8_self.wait_ms = 1500
 
 
 def p8_refused():
@@ -453,4 +411,5 @@ h.run(
         p8_refused,
         cleanup,
     ],
+    paced_by="state",
 )
