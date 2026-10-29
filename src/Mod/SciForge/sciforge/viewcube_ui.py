@@ -495,6 +495,11 @@ class ViewCube(QtWidgets.QWidget):
     def mouseMoveEvent(self, event):
         try:
             pos = event.position()
+            if self.press is not None and not (event.buttons() & QtCore.Qt.LeftButton):
+                # the release went to another widget (the window lost the mouse, a popup):
+                # the button is up, so the drag is over and nothing is clicked (Luca,
+                # 2026-10-29: the cube stayed stuck on the mouse with no button held)
+                self.press, self.dragging = None, False
             if self.press is not None:
                 start = self.press[0]
                 moved = ((pos.x() - start.x()) ** 2 + (pos.y() - start.y()) ** 2) ** 0.5

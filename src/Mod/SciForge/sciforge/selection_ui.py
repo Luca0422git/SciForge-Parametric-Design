@@ -1746,10 +1746,13 @@ class _ViewFilter(QtCore.QObject):
             return False
         if press.dragging is not None:
             _safely(press.dragging.finish)  # Component Drag: kept, one undo step
+            self._release_for_freecad(obj, event)
             return True  # FreeCAD must not select on this release
         if press.cancelled or press.listed:
+            self._release_for_freecad(obj, event)
             return True  # FreeCAD must not select on this release
         if press.boxing:
+            self._release_for_freecad(obj, event)
             if press.mode == "paint":
                 log("paint selection: %d picked" % len(press.painted))
                 return True
@@ -1864,6 +1867,36 @@ class _ViewFilter(QtCore.QObject):
         if not str(info.get("Component", "")).startswith(("Edge", "Face")):
             return
         self._take_instead(view, gl, pos, info, shift, ctrl, True, other=_element_of(info))
+
+    def _release_for_freecad(self, gl, event):
+        """FreeCAD's navigation got this press (every drag starts as one: a click, a box or
+        a Component Drag cannot be told apart yet) but not the release SciForge keeps. It
+        would go on thinking the left button is held, and in the Revit style SciForge uses a
+        middle-drag (pan) and Shift + middle-drag (orbit) did nothing until the next left
+        click (Luca, 2026-10-29). It gets a release that selects nothing: FreeCAD's selection
+        node switched off for that one event, and Ctrl, so a "click on nothing" does not
+        clear the selection either."""
+        field = mode = None
+        try:
+            view = _view_for(gl)
+            root = view.getSceneGraph() if view is not None else None
+            field = root.getField("selectionMode") if root is not None else None
+            if field is not None:
+                mode = field.getValue()
+                field.setValue(2)  # SoFCUnifiedSelection::OFF (AUTO 0, ON 1, OFF 2)
+        except Exception as exc:
+            field = None
+            warn("selection: %s" % exc)
+        try:
+            self._forward_release(gl, event, CTRL)
+        except Exception as exc:
+            warn("selection: %s" % exc)
+        finally:
+            if field is not None and mode is not None:
+                try:
+                    field.setValue(mode)
+                except Exception as exc:
+                    warn("selection: %s" % exc)
 
     def _forward_release(self, gl, event, modifiers):
         copy = QtGui.QMouseEvent(

@@ -5,6 +5,20 @@ its own section of this file (the release notes are made from it), so every rele
 section here whose heading is exactly its version number, like `## 0.1.0-beta` below. Known
 problems are in [docs/sciforge/known-issues.md](docs/sciforge/known-issues.md).
 
+## 0.1.0-beta.3.1.3
+
+### Fixed
+
+- **Pan and orbit stopped working after dragging a component.** After you moved a component by
+  dragging it in the 3D view (Component Drag), a middle-drag no longer panned and Shift +
+  middle-drag no longer orbited, until you clicked an empty part of the view. FreeCAD's
+  navigation saw the drag's mouse press but not its release, so it thought the left button was
+  still held. It now gets the release too (without selecting anything), and panning and
+  orbiting work right away.
+- **The ViewCube could stay stuck to the mouse.** If the mouse button was let go somewhere the
+  cube did not notice (for example as the window lost the mouse), the cube went on turning the
+  view as the mouse moved, with no button held. A move without the button now ends the drag.
+
 ## 0.1.0-beta.3.1.2
 
 ### Fixed

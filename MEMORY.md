@@ -612,6 +612,7 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
 
 ## Known issues / findings
 
+- **A left release SciForge keeps from FreeCAD left its navigation thinking the button was held (Luca, 2026-10-29; fixed in 0.1.0-beta.3.1.3).** `selection_ui._ViewFilter` lets FreeCAD see every left press (a click, a box or a Component Drag cannot be told apart yet) but kept the Component Drag's moves and release: FreeCAD's `NavigationStyle.button1down` stayed true, and in the Revit style a middle-drag (pan: BUTTON3 alone) and Shift + middle-drag (orbit) matched no case until the next real left click. Now `_release_for_freecad` hands FreeCAD a release with the selection node's `selectionMode` OFF (the scene graph root IS the SoFCUnifiedSelection; AUTO 0, ON 1, OFF 2) and Ctrl (no "click on nothing clears the selection"), on every release the filter keeps (drag, box, cancelled, Select Other). FreeCAD fixed the same class itself for its ClarifySelection (gh #29090, `resetButtonState()`, not reachable from Python; a navigation-style switch would reset it but loses ZoomAtCursor and the like). Same day: the ViewCube kept turning after a release that went to another widget; a move without the left button now ends its press. Scenario `navigation_stuck_buttons` (4 checks fail on the old code).
 - **The Windows installer left NO SciForge when updating over a SciForge whose AI connector ran (Luca, 2026-10-28; fixed in 0.1.0-beta.3.1.2, core patch #19).** Claude Desktop (Gemini CLI, Claude Code) keeps SciForge's AI connector running: SciForge's own `bin\python.exe`. FreeCAD's installer checks only for `SciForge.exe` / `SciForgeCmd.exe`, then `RMDir /r` deleted file after file, stopped at the connector's open files ("Failed to remove ... no files are in use") and aborted. Now (`include/utils.nsh`): programs running from the folder are found by path (`Get-CimInstance Win32_Process`); the connector is stopped after asking, others get Retry / Cancel; the folder is moved aside to `<folder>.old` in ONE step (refused while a file is open: Retry / Cancel, nothing changed) and only then deleted; the uninstaller stops the connector too. Windows test `tools/sciforge/test_installer.ps1` (installs over a running connector, with a file held open, uninstall) in the patch release and the full build. The quick update (`install_update.ps1`) already stopped the connector. Lesson: never delete in place what cannot be put back; move first, delete after.
 - **Open: `sim_qa_results_close` crashed FreeCAD once in CI (tests run #296, shard 8/9,
   2026-10-28)** right after Slice Plane opened on the third beam (15 checks: "Slice Plane:
@@ -1692,6 +1693,10 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
   default; Ruled's default type. Each guess is marked G in the parity docs.
 
 ## Session log
+
+### Session log: quick patch 0.1.0-beta.3.1.3, stuck buttons (`develop`, 2026-10-29)
+
+Luca: "bug/quickpatch time. Sometimes the view cube gets stuck on the mouse even when im not clicking. and freemoving components makes panning and rotating not work until you click an empty part of the build area". Both reproduced with real input (`navigation_stuck_buttons`: after a Component Drag a middle-drag moved the camera 0.0, the cube turned 37 deg with no button held), both fixed (Known issues, first entry). VERSION 0.1.0-beta.3.1.3, `_FALLBACK_VERSION`, CHANGELOG. Status: [x] fixed + scenario [ ] tests green [ ] published.
 
 ### Session log: releases 0.1.0-beta.3.1 and 3.1.1 (`develop`, 2026-10-27/28)
 
