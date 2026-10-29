@@ -79,6 +79,10 @@ case "${MODE}" in
         (cd "${work}" && "${ARCHIVE}" --appimage-extract >/dev/null)
         [ -x "${work}/squashfs-root/AppRun" ] || fail "${ARCHIVE} did not unpack (no AppRun)"
         replace_module "${work}/squashfs-root"
+        # appimagetool's continuous build (2026-10-29, build 333) refuses an AppDir with files
+        # other users cannot read ("has mode 0700": 3330 folders of the bundled conda
+        # environment): everything readable, and folders and programs usable, by all users
+        chmod -R a+rX "${work}/squashfs-root"
         tool="${work}/appimagetool-$(uname -m).AppImage"
         curl -fsSL -o "${tool}" \
             "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$(uname -m).AppImage"
