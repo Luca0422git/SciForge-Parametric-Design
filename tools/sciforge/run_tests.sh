@@ -14,8 +14,10 @@
 #   tools/sciforge/run_tests.sh [--freecad DIR] [--out DIR]
 #                               [--only unit|golden|headless|sim|recognize|gui|scenarios|base]
 #                               [--scenario NAME[,NAME...]]   (files of SciForgeTests/gui/
-#                                                   scenarios; several share one profile)
+#                                                   scenarios, each in a fresh profile)
 #                               [--shard K/N]       (every N-th scenario, from the K-th)
+#                               [--repeat N]        (the scenarios N times each)
+#                               [--stress]          (on a slow machine on purpose)
 #
 # --freecad  folder from tools/sciforge/get_freecad.sh (default .sciforge-cache/freecad),
 #            an unpacked SciForge AppImage, or a SciForge install prefix containing
@@ -24,6 +26,12 @@
 # --only     base = everything but the scenarios (unit, golden, headless, sim, smoke, journey)
 # --shard    splits the scenarios over N runs (CI runs them side by side): 1/4 runs the
 #            1st, 5th, 9th... scenario in name order, 2/4 the 2nd, 6th... (N runs cover all)
+# --repeat   runs each scenario N times in a row (a fresh profile each time) and prints how
+#            often each passed: a race shows up as a scenario that passes only sometimes
+# --stress   the GUI tests on a slow machine on purpose: FreeCAD and its X server pinned to
+#            one CPU core that SCIFORGE_STRESS_LOAD busy loops (default 2) share with them.
+#            A scenario that waits for the app's state passes just as well when slow; one
+#            that waits a fixed time shows its race here first.
 #
 # FreeCAD runs with a throw-away user profile, so your own FreeCAD settings are untouched.
 set -uo pipefail
@@ -35,12 +43,21 @@ OUT="${REPO}/.sciforge-cache/test-output"
 ONLY=""
 SHARD_INDEX=1
 SHARD_COUNT=1
+REPEAT=1
+STRESS=0
 while [ $# -gt 0 ]; do
     case "$1" in
         --freecad) FREECAD_DIR="$2"; shift 2 ;;
         --out) OUT="$2"; shift 2 ;;
         --only) ONLY="$2"; shift 2 ;;
         --scenario) SCENARIO="$2"; ONLY="scenarios"; shift 2 ;;
+        --repeat)
+            REPEAT="$2"
+            if ! [[ "${REPEAT}" =~ ^[0-9]+$ ]] || [ "${REPEAT}" -lt 1 ]; then
+                echo "--repeat must be a number of runs, e.g. 3" >&2; exit 2
+            fi
+            shift 2 ;;
+        --stress) STRESS=1; shift ;;
         --shard)
             SHARD_INDEX="${2%/*}"; SHARD_COUNT="${2#*/}"
             if ! [[ "${SHARD_INDEX}" =~ ^[0-9]+$ && "${SHARD_COUNT}" =~ ^[0-9]+$ ]] \
@@ -83,15 +100,31 @@ else
     FC_CMD=()
 fi
 
-# Throw-away FreeCAD profile; with stock FreeCAD, SciForge is linked in as an add-on.
+# Throw-away FreeCAD profiles; with stock FreeCAD, SciForge is linked in as an add-on.
+# TEMPLATE is a clean one: every GUI scenario starts from its own fresh copy of it, so
+# nothing one scenario leaves behind (window layout, a recovery copy after a kill, a
+# selection mode, a preference) can change another (CI #135, #283). PROFILE is the one the
+# other tests share (the restart test needs two starts with one profile).
+TEMPLATE="$(mktemp -d)"
 PROFILE="$(mktemp -d)"
-trap 'rm -rf "${PROFILE}"' EXIT
-mkdir -p "${PROFILE}/Mod"
-if [ "${ADDON:-0}" = 1 ]; then
-    ln -s "${MODULE}" "${PROFILE}/Mod/SciForge"
-fi
+STRESS_PIDS=()
+PIN=()
+cleanup() {
+    rm -rf "${PROFILE}" "${TEMPLATE}"
+    [ ${#STRESS_PIDS[@]} -gt 0 ] && kill "${STRESS_PIDS[@]}" 2>/dev/null
+    return 0
+}
+trap cleanup EXIT
+for dir in "${TEMPLATE}" "${PROFILE}"; do
+    mkdir -p "${dir}/Mod"
+    if [ "${ADDON:-0}" = 1 ]; then
+        ln -s "${MODULE}" "${dir}/Mod/SciForge"
+    fi
+done
 export FREECAD_USER_HOME="${PROFILE}"
-export LANG=C.UTF-8
+# The same virtual screen, fonts and Qt settings as on CI (tools/sciforge/gui_env.sh)
+# shellcheck source=gui_env.sh
+source "${REPO}/tools/sciforge/gui_env.sh"
 # No test goes online: the update check (sciforge/update_core.py) refuses every address but
 # this computer's own (the tests' fake GitHub), and does not even start by itself.
 export SCIFORGE_NO_INTERNET=1
@@ -251,7 +284,7 @@ EOF5
 run_gui_script() {
     local name="$1" script="$2" log="$3" result="$4"
     rm -f "${OUT}/${result}"
-    SCIFORGE_SMOKE_OUT="${OUT}" timeout 300 xvfb-run -a -s "-screen 0 1920x1200x24" \
+    SCIFORGE_SMOKE_OUT="${OUT}" timeout 300 xvfb-run -a -s "${SCIFORGE_XVFB_ARGS}" \
         "${FC_GUI[@]}" "${MODULE}/SciForgeTests/gui/${script}" > "${OUT}/${log}" 2>&1
     grep -aoE "\[SciForge\] ${name} .*" "${OUT}/${log}"
     # A Python error that FreeCAD only printed (e.g. inside a Qt callback) is still a failure.
@@ -298,103 +331,147 @@ run_gui_base() {
 
 # Scenario tests (SciForgeTests/gui/scenarios/*.py, see harness.py): each one a
 # person's workflow with real input; any error FreeCAD prints fails it.
+#
+# run_one_scenario FILE NAME OUTDIR LABEL: one run in a fresh profile; 0 when it passed.
+run_one_scenario() {
+    local file="$1" name="$2" out="$3" label="$4" profile rc=0 marker left
+    mkdir -p "${out}"
+    profile="$(mktemp -d)"
+    cp -a "${TEMPLATE}/." "${profile}/"
+    # Through the launcher: a scenario that does not even load fails at once instead of
+    # leaving FreeCAD open until the timeout. The harness ends a stuck step itself (with
+    # what was on screen) long before this 15-minute kill.
+    FREECAD_USER_HOME="${profile}" SCIFORGE_SCENARIO="${name}" SCIFORGE_SCENARIO_FILE="${file}" \
+        SCIFORGE_SMOKE_OUT="${out}" \
+        timeout 900 "${PIN[@]}" xvfb-run -a -s "${SCIFORGE_XVFB_ARGS}" \
+        "${FC_GUI[@]}" "${MODULE}/SciForgeTests/gui/scenario_launcher.py" \
+        > "${out}/scenario-${name}.log" 2>&1
+    # what failed, step by step, in the job log; on CI also as ::error:: lines and in the
+    # job summary, so the run page names the broken scenario without an artifact download
+    python3 "${REPO}/tools/sciforge/scenario_result.py" "${out}" "${name}" \
+        ${label:+--attempt "${label}"} || rc=1
+    # A FreeCAD that did not end cleanly (a crash at exit after the checks passed, or a
+    # kill) leaves SciForge's crash marker in its profile: name the scenario and keep the
+    # marker, its crash log and SciForge's recovery copies with the reports.
+    for marker in "${profile}"/SciForge/crash/running-*.json; do
+        [ -e "${marker}" ] || continue
+        left="${out}/crash-left-by-${name}"
+        mkdir -p "${left}"
+        mv "${marker}" "${left}/"
+        marker="$(basename "${marker}" .json)"
+        mv "${profile}/SciForge/crash/session-${marker#running-}.log" "${left}/" 2>/dev/null || true
+        # what Python's faulthandler wrote (the stack at a crash), in the job's own log
+        if [ -s "${left}/session-${marker#running-}.log" ]; then
+            head -n 80 "${left}/session-${marker#running-}.log" | cut -c1-300 | sed 's/^/    ! /'
+        fi
+        if compgen -G "${profile}/SciForge/recovery/*" > /dev/null; then
+            mkdir -p "${left}/recovery"
+            mv "${profile}"/SciForge/recovery/* "${left}/recovery/" 2>/dev/null || true
+        fi
+        echo "  FAIL ${name}: FreeCAD did not end cleanly (SciForge's crash marker was left; see ${left})"
+        if [ -n "${GITHUB_ACTIONS:-}" ]; then
+            echo "::error title=Scenario ${name}::FreeCAD did not end cleanly (crash marker left; see ${left#"${OUT}"/} in the test-output artifact)"
+        fi
+        rc=2
+    done
+    rm -rf "${profile}"
+    return "${rc}"
+}
+
+# --stress: FreeCAD and its X server share CPU core 0 with busy loops
+start_stress() {
+    PIN=()
+    [ "${STRESS}" = 1 ] || return 0
+    if ! command -v taskset >/dev/null; then
+        echo "--stress needs taskset (util-linux)" >&2
+        exit 2
+    fi
+    local i
+    for i in $(seq 1 "${SCIFORGE_STRESS_LOAD:-2}"); do
+        taskset -c 0 python3 -c 'while True: pass' &
+        STRESS_PIDS+=($!)
+    done
+    PIN=(taskset -c 0)
+    echo "== [SciForge] stress: FreeCAD pinned to CPU 0 with ${#STRESS_PIDS[@]} busy loops"
+}
+
+stop_stress() {
+    if [ ${#STRESS_PIDS[@]} -gt 0 ]; then
+        kill "${STRESS_PIDS[@]}" 2>/dev/null
+        wait "${STRESS_PIDS[@]}" 2>/dev/null
+        STRESS_PIDS=()
+    fi
+    return 0
+}
+
 run_scenarios() {
     echo "== [SciForge] GUI scenarios"
     need_freecad scenarios || return
-    local dir="${MODULE}/SciForgeTests/gui/scenarios" file name index=0
+    local dir="${MODULE}/SciForgeTests/gui/scenarios" file name index=0 round rc
+    local -a chosen=()
     for file in "${dir}"/*.py; do
         name="$(basename "${file}" .py)"
         [ "${name}" = "__init__" ] && continue
         index=$((index + 1))
         [ $(((index - 1) % SHARD_COUNT + 1)) -ne "${SHARD_INDEX}" ] && continue
-        # --scenario a,b,c: those, in name order, sharing one profile (as a CI shard does)
+        # --scenario a,b,c: those, in name order
         [ -n "${SCENARIO:-}" ] && [[ ",${SCENARIO}," != *",${name},"* ]] && continue
-        # Each scenario starts from FreeCAD's own window layout: one left behind in the shared
-        # profile (CI #135: with the Data Panel docked, the next scenario's browser came out
-        # wider and FreeCAD sent a press on a browser row to the 3D view) is not this one's.
-        # Its window size too: export_report_card shrinks the window to 1100 x 700, and
-        # without a window manager (xvfb) "maximize" does not bring it back, so every later
-        # scenario of the shard ran in a 838 x 470 3D view.
-        if [ -f "${PROFILE}/user.cfg" ]; then
-            python3 - "${PROFILE}/user.cfg" <<'PYEOF' || true
-import re, sys
-path = sys.argv[1]
-text = open(path, encoding="utf-8").read()
-clean = text
-for kind, name in (("FCText", "MainWindowState"), ("FCText", "Geometry"), ("FCBool", "Maximized")):
-    clean = re.sub(r'\s*<%s Name="%s"[^>]*>[^<]*</%s>' % (kind, name, kind), "", clean)
-    clean = re.sub(r'\s*<%s Name="%s"[^>]*/>' % (kind, name), "", clean)
-if clean != text:
-    open(path, "w", encoding="utf-8").write(clean)
-PYEOF
-        fi
-        # Through the launcher: a scenario that does not even load fails at once
-        # instead of leaving FreeCAD open until the timeout.
-        SCIFORGE_SCENARIO="${name}" SCIFORGE_SCENARIO_FILE="${file}" SCIFORGE_SMOKE_OUT="${OUT}" \
-            timeout 900 xvfb-run -a -s "-screen 0 1920x1200x24" \
-            "${FC_GUI[@]}" "${MODULE}/SciForgeTests/gui/scenario_launcher.py" \
-            > "${OUT}/scenario-${name}.log" 2>&1
-        python3 - "${OUT}" "${name}" <<'EOF' || FAILED+=("scenario ${name}")
-import glob, json, os, sys
-out, name = sys.argv[1], sys.argv[2]
-log = os.path.join(out, "scenario-%s.log" % name)
-ok, found = True, False
-for path in sorted(glob.glob(os.path.join(out, "*-result.json"))):
-    try:
-        result = json.load(open(path))
-    except ValueError:
-        continue
-    if result.get("file") != name:
-        continue
-    found = True
-    for c in result["checks"]:
-        if not c["ok"]:
-            print("  FAIL %s: %s %s" % (result["name"], c["name"], c["detail"][:600]))
-    if not result.get("finished"):
-        print("  %s did not finish (crash or hang? see %s)" % (result["name"], log))
-        # its last lines in the job's own log: a CI artifact cannot always be fetched
-        try:
-            tail = open(log, encoding="utf-8", errors="replace").read().splitlines()[-40:]
-        except OSError:
-            tail = []
-        for line in tail:
-            print("    | %s" % line[:300])
-    ok = ok and bool(result.get("passed"))
-    print("  %s: %s (%d checks)" % (
-        result["name"], "PASS" if result.get("passed") else "FAIL", len(result["checks"])))
-if not found:
-    print("  %s: no result (FreeCAD crashed before the first step? see %s)" % (name, log))
-    ok = False
-sys.exit(0 if ok else 1)
-EOF
-        # A FreeCAD that did not end cleanly (a crash at exit after the checks passed, or a
-        # kill) leaves SciForge's crash marker in the shared profile, and the next scenario's
-        # Home shows "SciForge closed unexpectedly" (CI #258: welcome_line failed for an
-        # earlier scenario's exit). Name the scenario it belongs to, keep the marker and its
-        # crash log with the reports, and clear them so the next scenario starts clean.
-        local marker left
-        for marker in "${PROFILE}"/SciForge/crash/running-*.json; do
-            [ -e "${marker}" ] || continue
-            left="${OUT}/crash-left-by-${name}"
-            mkdir -p "${left}"
-            mv "${marker}" "${left}/"
-            marker="$(basename "${marker}" .json)"
-            mv "${PROFILE}/SciForge/crash/session-${marker#running-}.log" "${left}/" 2>/dev/null || true
-            # what Python's faulthandler wrote (the stack at a crash), in the job's own log
-            if [ -s "${left}/session-${marker#running-}.log" ]; then
-                head -n 80 "${left}/session-${marker#running-}.log" | cut -c1-300 | sed 's/^/    ! /'
-            fi
-            # and SciForge's recovery copies of the designs it had open: the next scenario's
-            # SciForge offered them back, and with one in the way 20 scenarios after a
-            # killed journey_vex failed (CI #283)
-            if compgen -G "${PROFILE}/SciForge/recovery/*" > /dev/null; then
-                mkdir -p "${left}/recovery"
-                mv "${PROFILE}"/SciForge/recovery/* "${left}/recovery/" 2>/dev/null || true
-            fi
-            echo "  FAIL ${name}: FreeCAD did not end cleanly (SciForge's crash marker was left; see ${left})"
-            FAILED+=("scenario ${name} (exit)")
-        done
+        chosen+=("${file}")
     done
+    start_stress
+    if [ "${REPEAT}" -gt 1 ]; then
+        # every scenario REPEAT times, round after round (as REPEAT CI runs would), each run
+        # in its own folder; then each scenario's pass count
+        declare -A passes=()
+        for round in $(seq 1 "${REPEAT}"); do
+            echo "== [SciForge] round ${round} of ${REPEAT}"
+            for file in "${chosen[@]}"; do
+                name="$(basename "${file}" .py)"
+                if run_one_scenario "${file}" "${name}" "${OUT}/run-${round}" "run ${round} of ${REPEAT}"; then
+                    passes[${name}]=$(( ${passes[${name}]:-0} + 1 ))
+                else
+                    passes[${name}]=${passes[${name}]:-0}
+                fi
+            done
+        done
+        echo "== [SciForge] passes in ${REPEAT} runs"
+        local table=("| Scenario | Passed |" "|---|---|")
+        for file in "${chosen[@]}"; do
+            name="$(basename "${file}" .py)"
+            echo "  ${name}: ${passes[${name}]} of ${REPEAT}"
+            table+=("| ${name} | ${passes[${name}]} of ${REPEAT} |")
+            [ "${passes[${name}]}" -lt "${REPEAT}" ] && FAILED+=("scenario ${name} (${passes[${name}]} of ${REPEAT})")
+        done
+        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            {
+                echo "#### Scenario passes in ${REPEAT} runs$([ "${STRESS}" = 1 ] && echo ' (under --stress)')"
+                echo
+                printf '%s\n' "${table[@]}"
+                echo
+            } >> "${GITHUB_STEP_SUMMARY}"
+        fi
+    else
+        for file in "${chosen[@]}"; do
+            name="$(basename "${file}" .py)"
+            run_one_scenario "${file}" "${name}" "${OUT}" ""
+            rc=$?
+            [ "${rc}" -eq 0 ] && continue
+            # Once more in a fresh profile, only to say FLAKY (passes the second time: a race
+            # in the test or the app to fix) or FAILED (fails twice). The job stays red
+            # either way: a retry never turns a scenario green.
+            echo "  ${name}: once more in a fresh profile, to tell a flaky test from a failing one"
+            if run_one_scenario "${file}" "${name}" "${OUT}/second-run" "second run"; then
+                echo "  ${name}: FLAKY (failed, then passed)"
+                FAILED+=("scenario ${name} (FLAKY: failed, then passed)")
+                [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "**FLAKY** \`${name}\`: failed, then passed in a fresh profile. A race to fix; the job stays red." >> "${GITHUB_STEP_SUMMARY}"
+            else
+                echo "  ${name}: FAILED (twice)"
+                FAILED+=("scenario ${name} (FAILED twice)")
+                [ -n "${GITHUB_STEP_SUMMARY:-}" ] && echo "**FAILED** \`${name}\`: failed twice." >> "${GITHUB_STEP_SUMMARY}"
+            fi
+        done
+    fi
+    stop_stress
 }
 
 case "${ONLY}" in
@@ -413,6 +490,21 @@ esac
 echo "== [SciForge] reports in ${OUT}"
 if [ ${#FAILED[@]} -gt 0 ]; then
     echo "== [SciForge] FAILED: ${FAILED[*]}"
+    if [ -n "${GITHUB_ACTIONS:-}" ]; then
+        # The parts that are not scenarios (their own ::error:: lines came with them) named
+        # on the run page too; the job summary gets the whole list.
+        for part in "${FAILED[@]}"; do
+            case "${part}" in scenario*) ;; *) echo "::error title=SciForge tests::${part} failed (its log is in the job output above)" ;; esac
+        done
+        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            {
+                echo "#### Failed in this part"
+                echo
+                for part in "${FAILED[@]}"; do echo "- ${part}"; done
+                echo
+            } >> "${GITHUB_STEP_SUMMARY}"
+        fi
+    fi
     exit 1
 fi
 echo "== [SciForge] all passed"

@@ -26,11 +26,29 @@ _state = {
     "hidden": [],
     "menubar": None,
     "panels": [],
+    "due": 0,
 }
 
 
 def is_on():
     return _state["on"]
+
+
+def settling():
+    """True while window work SciForge set for a moment later (at start, after a workbench
+    switch) has not run yet. The GUI tests wait for it instead of for a fixed time."""
+    return _state["due"] > 0
+
+
+def _soon(delay, fn):
+    """fn after `delay` ms, counted until it has run (settling())."""
+    _state["due"] += 1
+
+    def run():
+        _state["due"] -= 1
+        fn()
+
+    QtCore.QTimer.singleShot(delay, run)
 
 
 def ribbon():
@@ -112,10 +130,10 @@ def startup():
             # has the ribbon and the timeline hidden (Luca, 2026-10-17: the second start
             # showed only the browser and an empty view, nothing to click)
             for delay in (0, 150, 600, 1500):
-                QtCore.QTimer.singleShot(delay, _show_own_bars)
+                _soon(delay, _show_own_bars)
             # ... and SciForge's Home tab instead of an empty window (home_ui; Preferences >
             # General > Show Home at start)
-            QtCore.QTimer.singleShot(0, lambda: _safely(_home_at_start))
+            _soon(0, lambda: _safely(_home_at_start))
         if name and name != SCIFORGE_WB and not _state["on"]:
             from . import freecad_tools_ui, shortcuts, sketch_mode, theme, versions_ui
 
@@ -333,7 +351,7 @@ def _hide_toolbars_soon():
     """FreeCAD (re)shows a workbench's toolbars after announcing the switch, partly
     from its own timers, so hide again once it is done."""
     for delay in (0, 150, 600):
-        QtCore.QTimer.singleShot(delay, lambda: _state["on"] and _hide_toolbars())
+        _soon(delay, lambda: _state["on"] and _hide_toolbars())
 
 
 def _hide_toolbars():

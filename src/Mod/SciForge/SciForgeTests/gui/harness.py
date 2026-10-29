@@ -6,10 +6,23 @@ A scenario is a Python file run by the FreeCAD GUI (CI: under xvfb-run) that doe
     from SciForgeTests.gui import harness as h
     h.run("my-scenario", [step_a, step_b, ...])
 
-Each step is a plain function. Steps run one at a time with a pause between
-them (a person also waits to see the screen). Use the helpers below to act:
+Each step is a plain function. Steps run one at a time. Use the helpers below to act:
 click(App.Vector) / drag / press(key) / ribbon(label) / menu_item(group, label).
 Use check(name, ok, detail) to assert.
+
+Pacing: wait for the app's state, never for the clock (docs/sciforge/dev/gui-tests.md).
+A converted scenario runs with h.run(..., paced_by="state"): a step starts once the app
+has settled after the one before (nothing recomputing, no input still being played, no
+work SciForge posted for a moment later, every pointer move seen by Qt) and once its own
+`ready` holds; the next starts once its `done` holds and the app has settled again.
+    step.ready = lambda: ...   what must be true before the step's input
+    step.done = lambda: ...    what proves the step worked
+    step.timeout_s = 120       a longer upper bound for both (a solve); bounds only catch hangs
+Inside a step, wait_for(condition, what) and settle() do the same. A wait that runs into
+its bound fails a check named after what it waited for, with what was seen instead and a
+screenshot, closes any modal dialog or open menu and stops the scenario at once.
+Scenarios not converted yet (paced_by="timer", the default) still wait a fixed wait_ms
+(default STEP_MS) after each step; tools/sciforge/check_waits.py counts them down to zero.
 
 Every error FreeCAD prints (Report view: C++ and Python, SciForge or not), every
 Python traceback and every SciForge warning fails the scenario, because those are
@@ -23,7 +36,9 @@ $SCIFORGE_SMOKE_OUT/<name>-*.png.
 import json
 import os
 import re
+import time
 import traceback
+import weakref
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -32,7 +47,14 @@ from PySide import QtCore, QtGui, QtWidgets
 from PySide6 import QtTest
 
 OUT_DIR = os.environ.get("SCIFORGE_SMOKE_OUT") or App.getUserAppDataDir()
+# the fixed wait after each step of a scenario not converted yet (paced_by="timer")
 STEP_MS = int(os.environ.get("SCIFORGE_STEP_MS", "700"))
+# Upper bounds. They only catch hangs: a wait that reaches one means something is broken,
+# never that the machine was slow. Never lower one to make a run faster, never raise one to
+# make a test pass (a step that needs longer, a solve, says so with step.timeout_s).
+WAIT_S = 30.0
+STEP_LIMIT_S = float(os.environ.get("SCIFORGE_STEP_LIMIT_S", "300"))
+POLL_MS = 15  # how often a wait looks at the app again (the event loop runs in between)
 checks = []
 state = {"name": "scenario", "errors_seen": 0}
 # Report-view lines that are not problems (start-up chatter of stock FreeCAD).
@@ -50,7 +72,9 @@ IGNORED_ERRORS = (
 def check(name, ok, detail=""):
     if not ok and state.get("last_click"):
         detail = "%s [last click: %s]" % (detail, state["last_click"])
-    checks.append({"name": name, "ok": bool(ok), "detail": str(detail)[:4000]})
+    checks.append(
+        {"name": name, "ok": bool(ok), "detail": str(detail)[:4000], "step": state.get("step")}
+    )
     return bool(ok)
 
 
@@ -124,6 +148,385 @@ def expect_no_errors(where):
     return check("No errors after %s" % where, not fresh, fresh)
 
 
+# -- work the app has posted for a moment later -----------------------------------
+# SciForge's dialogs debounce their previews and post follow-ups (QTimer.singleShot(0, ...),
+# a single-shot QTimer restarted on every change). Until they have run, what the screen
+# shows is not the effect of the last input yet. Every such timer started from Python is
+# tracked here, so "the app has settled" can be a state instead of a guessed wait.
+_ORIGINAL = getattr(QtCore.QTimer, "_sciforge_original", None)
+if _ORIGINAL is None:  # (the harness imported a second time must not wrap its own wrappers)
+    _ORIGINAL = QtCore.QTimer._sciforge_original = (
+        QtCore.QTimer.singleShot,
+        QtCore.QTimer.start,
+    )
+_SINGLE_SHOT, _START = _ORIGINAL
+HORIZON_MS = 3000  # a longer delay is not "about to happen" (an update check, a safety net)
+
+
+def _alive(obj):
+    try:
+        import shiboken6
+
+        return shiboken6.isValid(obj)
+    except Exception:
+        return True
+
+
+def _label(fn):
+    owner = getattr(fn, "__self__", None)
+    name = getattr(fn, "__qualname__", None) or getattr(fn, "__name__", None) or repr(fn)
+    module = getattr(fn, "__module__", None) or ""
+    if owner is not None and not isinstance(owner, type) and "." not in name:
+        name = "%s.%s" % (type(owner).__name__, name)
+    return "%s.%s" % (module.rsplit(".", 1)[-1], name) if module else name
+
+
+class _Posted:
+    """QTimer.singleShot calls and single-shot QTimers started from Python, still due."""
+
+    def __init__(self):
+        self.calls = {}  # token -> (due, label, context)
+        self.timers = weakref.WeakValueDictionary()  # id -> QTimer started from Python
+        self.own = set()  # ids of the harness's own timers (pacing, watchdog)
+
+    def single_shot(self, *args, **kwargs):
+        fn = args[-1] if args else None
+        try:
+            msec = int(args[0])
+        except Exception:
+            msec = None
+        if (
+            kwargs
+            or msec is None
+            or msec > HORIZON_MS
+            or not callable(fn)
+            or type(fn).__name__ in ("SignalInstance", "Signal")
+        ):
+            return _SINGLE_SHOT(*args, **kwargs)
+        token = object()
+        context = args[1] if len(args) == 3 and isinstance(args[1], QtCore.QObject) else None
+        self.calls[token] = (time.monotonic() + msec / 1000.0, _label(fn), context)
+
+        def fire(*a):
+            self.calls.pop(token, None)
+            owner = getattr(fn, "__self__", None)
+            if isinstance(owner, QtCore.QObject) and not _alive(owner):
+                return None  # what Qt does when the receiver is gone
+            return fn(*a)
+
+        return _SINGLE_SHOT(*(args[:-1] + (fire,)))
+
+    def start(self, timer, *args):
+        try:
+            if id(timer) not in self.own:
+                self.timers[id(timer)] = timer
+        except Exception:
+            pass
+        return _START(timer, *args)
+
+    def due(self):
+        """What is still due, as labels for a failure message; empty when nothing is."""
+        now = time.monotonic()
+        found = []
+        for token, (due, label, context) in list(self.calls.items()):
+            # a call whose context object died never runs; one long overdue was dropped by Qt
+            if (context is not None and not _alive(context)) or now > due + 10.0:
+                self.calls.pop(token, None)
+                continue
+            found.append(label)
+        for timer in list(self.timers.values()):
+            try:
+                if (
+                    id(timer) not in self.own
+                    and _alive(timer)
+                    and timer.isActive()
+                    and timer.isSingleShot()
+                    and timer.interval() <= HORIZON_MS
+                ):
+                    parent = timer.parent()
+                    found.append(
+                        "a %d ms timer of %s"
+                        % (timer.interval(), type(parent).__name__ if parent else "Python")
+                    )
+            except RuntimeError:
+                pass
+        return found
+
+
+_posted = _Posted()
+QtCore.QTimer.singleShot = staticmethod(_posted.single_shot)
+QtCore.QTimer.start = lambda timer, *args: _posted.start(timer, *args)
+
+
+def _later(ms, fn):
+    """The harness's own scheduling (pacing, polling): never counted as the app's work."""
+    _SINGLE_SHOT(ms, fn)
+
+
+# -- the pointer as Qt knows it ---------------------------------------------------
+class _PointerTap(QtCore.QObject):
+    """The global position of the last mouse move Qt delivered to one of its windows. QTest
+    moves the real (X) pointer and the X server tells Qt a moment later: a click sent
+    before that lands where Qt still thinks the pointer is, and two moves told together are
+    folded into one (CI #285 - #287: ribbon menu entries clicked and nothing ran)."""
+
+    def __init__(self):
+        super().__init__()
+        self.last = None
+        self.expected = None
+
+    def eventFilter(self, obj, event):
+        try:
+            if event.type() == QtCore.QEvent.MouseMove and isinstance(obj, QtGui.QWindow):
+                self.last = event.globalPosition().toPoint()
+        except Exception:
+            pass
+        return False
+
+
+_pointer = _PointerTap()
+
+
+def _install_pointer_tap():
+    app = QtWidgets.QApplication.instance()
+    if app is not None and not state.get("pointer_tap"):
+        app.installEventFilter(_pointer)
+        state["pointer_tap"] = True
+
+
+def pointer_to(widget, pos):
+    """Move the real pointer to `pos` (widget pixels) and wait until Qt has been told
+    (rule 4: input reaches the app before the next input). A pointer already on that pixel
+    makes no move at all, so it first steps one pixel aside. Returns the global position."""
+    _install_pointer_tap()
+    target = widget.mapToGlobal(pos)
+    if QtGui.QCursor.pos() == target:
+        if _pointer.last == target:
+            return target
+        aside = QtCore.QPoint(pos.x() + (1 if pos.x() + 1 < widget.width() else -1), pos.y())
+        _pointer_step(widget, aside)
+    _pointer_step(widget, pos)
+    return target
+
+
+def _pointer_step(widget, pos):
+    target = widget.mapToGlobal(pos)
+    _pointer.last = None
+    _pointer.expected = target
+    QtTest.QTest.mouseMove(widget, pos)
+    try:
+        wait_for(
+            lambda: _pointer.last == target,
+            "Qt to see the pointer at %d, %d (%s)" % (target.x(), target.y(), describe(widget)),
+        )
+    finally:
+        _pointer.expected = None
+
+
+# -- waiting for a state ------------------------------------------------------------
+class WaitTimeout(Exception):
+    """A wait ran into its upper bound. The failed check is already recorded and the
+    scenario stops after this step."""
+
+
+def describe(widget):
+    """A widget in a few words, for failure messages."""
+    if widget is None:
+        return "nothing"
+    try:
+        if not _alive(widget):
+            return "a deleted widget"
+        words = [widget.metaObject().className()]
+        if widget.objectName():
+            words.append("'%s'" % widget.objectName())
+        for getter in ("windowTitle", "title", "text"):
+            try:
+                text = getattr(widget, getter)()
+            except Exception:
+                continue
+            if isinstance(text, str) and text.strip():
+                words.append('"%s"' % text.strip().replace("&", "")[:60])
+                break
+        return " ".join(words)
+    except Exception as exc:
+        return "a widget (%s)" % exc
+
+
+def busy():
+    """Why the app has not settled yet (empty when it has): what the last input set going
+    and the screen does not show yet."""
+    reasons = []
+    try:
+        for doc in App.listDocuments().values():
+            if getattr(doc, "Recomputing", False):
+                reasons.append("%s is recomputing" % doc.Name)
+    except Exception:
+        pass
+    if BUSY:
+        reasons.append("input still being played (%d)" % len(BUSY))
+    if _searching():
+        reasons.append("a dialog is still looking for the largest value that fits")
+    due = _posted.due()
+    if due:
+        reasons.append("work posted for a moment later: %s" % ", ".join(due[:6]))
+    if _pointer.expected is not None:
+        reasons.append("a pointer move Qt has not been told about")
+    try:
+        from sciforge import shell
+
+        if shell.settling():
+            reasons.append("SciForge is still arranging its window")
+    except Exception:
+        pass
+    return reasons
+
+
+def seen_now():
+    """What the app shows now, for a failure message (rule 5)."""
+    app = QtWidgets.QApplication
+    parts = []
+    try:
+        pos = QtGui.QCursor.pos()
+        told = _pointer.last
+        parts.append(
+            "pointer at %d, %d over %s (Qt was last told %s)"
+            % (
+                pos.x(),
+                pos.y(),
+                describe(app.widgetAt(pos)),
+                "%d, %d" % (told.x(), told.y()) if told is not None else "nothing",
+            )
+        )
+        parts.append("open menu: %s" % describe(app.activePopupWidget()))
+        parts.append("modal: %s" % describe(app.activeModalWidget()))
+        parts.append("dialogs: %s" % (popups() or "none"))
+        parts.append("focus: %s" % describe(app.focusWidget()))
+    except Exception as exc:
+        parts.append("widgets: %s" % exc)
+    try:
+        task = Gui.Control.activeDialog()
+        parts.append("task panel: %s" % ("open" if task else "none"))
+    except Exception:
+        pass
+    try:
+        docs = [
+            "%s%s" % (d.Name, " (recomputing)" if getattr(d, "Recomputing", False) else "")
+            for d in App.listDocuments().values()
+        ]
+        parts.append("designs: %s" % (", ".join(docs) or "none"))
+        edit = Gui.ActiveDocument.getInEdit() if Gui.ActiveDocument else None
+        if edit is not None:
+            parts.append("editing %s" % edit.Object.Name)
+    except Exception:
+        pass
+    parts.append("busy: %s" % ("; ".join(busy()) or "no"))
+    return "; ".join(parts)
+
+
+def close_modals():
+    """Close open menus and modal dialogs, so a scenario that failed ends in seconds instead of
+    waiting in a dialog for the 15-minute kill (CI #283)."""
+    app = QtWidgets.QApplication
+    for _ in range(10):
+        popup = app.activePopupWidget()
+        if popup is None:
+            break
+        popup.close()
+    for _ in range(10):
+        modal = app.activeModalWidget()
+        if modal is None:
+            break
+        if isinstance(modal, QtWidgets.QDialog):
+            modal.reject()
+        else:
+            modal.close()
+        app.processEvents()
+    close_popups()
+
+
+def _timed_out(what, limit, error=None):
+    detail = "not after %.0f s; seen: %s" % (limit, seen_now())
+    if error is not None:
+        detail += "; reading the condition raised %r" % (error,)
+    check("Waited for %s" % what, False, detail)
+    print("[SciForge] %s: waited %.0f s for %s" % (state["name"], limit, what), flush=True)
+    try:
+        shot("timeout-" + what[:40])
+    except Exception:
+        pass
+    state["stop"] = state.get("stop") or "waited for %s" % what
+    close_modals()
+
+
+def wait_for(condition, what, timeout_s=None):
+    """Keep the app running until condition() is true; True then (rule 1: wait for state,
+    never for time). `what` names the state, as a person would ("the Offset dialog is
+    open"). A condition that raises is not true yet. After timeout_s (default WAIT_S; only a
+    hang gets there) the check "Waited for <what>" fails with what was seen instead and a
+    screenshot, open menus and modal dialogs are closed, and WaitTimeout is raised: the
+    scenario stops after this step."""
+    limit = WAIT_S if timeout_s is None else timeout_s
+    end = time.monotonic() + limit
+    error = None
+    while True:
+        try:
+            if condition():
+                return True
+        except Exception as exc:
+            error = exc
+        if time.monotonic() >= end:
+            break
+        QtTest.QTest.qWait(POLL_MS)  # wait primitive: the event loop runs while it polls
+    _timed_out(what, limit, error)
+    raise WaitTimeout(what)
+
+
+def _calm():
+    """A condition that is true once the app has been quiet twice in a row (work that runs
+    can post more)."""
+    quiet = {"n": 0}
+
+    def calm():
+        quiet["n"] = 0 if busy() else quiet["n"] + 1
+        return quiet["n"] >= 2
+
+    return calm
+
+
+def settle(what="the app to settle", timeout_s=None):
+    """Wait until the app has finished what the last input set going (see busy())."""
+    return wait_for(_calm(), what, timeout_s)
+
+
+def when(condition, action, what, timeout_s=None):
+    """Run action() once condition() holds, without blocking: for input into something
+    that opens and runs its own loop (a menu, a modal dialog), set up before the call that
+    opens it. After timeout_s: the failure as in wait_for, the menu or dialog closed."""
+    limit = WAIT_S if timeout_s is None else timeout_s
+    end = time.monotonic() + limit
+    box = {"error": None}
+
+    def look():
+        try:
+            ok = condition()
+        except Exception as exc:
+            ok, box["error"] = False, exc
+        if ok:
+            try:
+                action()
+            except WaitTimeout:
+                pass
+            except Exception:
+                check("No exception in the action after %s" % what, False, traceback.format_exc())
+                close_modals()
+        elif time.monotonic() >= end:
+            _timed_out(what, limit, box["error"])
+        else:
+            _later(POLL_MS, look)
+
+    _later(0, look)
+
+
 # -- the 3D view ------------------------------------------------------------------
 def gl_widget():
     area = Gui.getMainWindow().findChild(QtWidgets.QMdiArea)
@@ -148,8 +551,8 @@ def screen_point(point):
 
 
 def move(pos):
-    QtTest.QTest.mouseMove(gl_widget(), pos)
-    QtWidgets.QApplication.processEvents()
+    """The pointer to widget pixel `pos` of the 3D view, seen by Qt before anything else."""
+    pointer_to(gl_widget(), pos)
 
 
 AIM = 6  # click_edge looks this many pixels around the point for the edge
@@ -336,6 +739,7 @@ def click_empty():
     """Click on empty background (clears the selection, like in Fusion)."""
     widget = gl_widget()
     pos = _empty_spot(widget)
+    move(pos)
     QtTest.QTest.mouseClick(widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
     QtWidgets.QApplication.processEvents()
 
@@ -544,14 +948,20 @@ def _write(partial):
         "file": os.environ.get("SCIFORGE_SCENARIO", name),
         "passed": (not partial) and all(c["ok"] for c in checks),
         "finished": not partial,
+        "paced_by": state.get("paced_by"),
+        "step": state.get("step"),
         "checks": checks,
     }
+    if state.get("stop"):
+        result["stopped"] = state["stop"]
+        result["not_run"] = state.get("not_run", [])
     with open(os.path.join(OUT_DIR, "%s-result.json" % name), "w", encoding="utf-8") as handle:
         json.dump(result, handle, indent=2)
 
 
 def _finish():
     name = state["name"]
+    state["finished"] = True
     leftovers = new_errors()
     check("No errors at the end", not leftovers, leftovers)
     _write(partial=False)
@@ -568,27 +978,68 @@ def _finish():
         pass
     for doc in list(App.listDocuments()):
         App.closeDocument(doc)
-    QtCore.QTimer.singleShot(200, QtWidgets.QApplication.instance().quit)
+    # quit once what closing the designs set going has run (at most 10 s: the result is
+    # written already)
+    calm, end = _calm(), time.monotonic() + 10
+
+    def quit_when_calm():
+        if calm() or time.monotonic() > end:
+            QtWidgets.QApplication.instance().quit()
+        else:
+            _later(POLL_MS, quit_when_calm)
+
+    _later(0, quit_when_calm)
+
+
+def _last_resort():
+    """A thread that ends FreeCAD when the event loop itself is stuck (a step that never
+    returns to Qt, so _watchdog's timer cannot run): the stacks of every thread go to the
+    log and the result is written, instead of the runner's kill 15 minutes later."""
+    import faulthandler
+    import sys
+    import threading
+
+    def watch():
+        while not state.get("finished"):
+            time.sleep(5)  # wait primitive: a thread of its own, it delays nothing in the app
+            started = state.get("in_step")
+            limit = state.get("step_limit", STEP_LIMIT_S) + 60
+            idle = time.monotonic() - state.get("alive", time.monotonic())
+            if (started is not None and time.monotonic() - started > limit) or idle > limit:
+                print(
+                    "[SciForge] %s: the app has not come back to the test for %.0f s (step %s);"
+                    " every thread's stack:" % (state["name"], limit, state.get("step")),
+                    flush=True,
+                )
+                faulthandler.dump_traceback(file=sys.stdout, all_threads=True)
+                checks.append(
+                    {
+                        "name": "Step %s returned to the app within %.0f s" % (state.get("step"), limit),
+                        "ok": False,
+                        "detail": "the event loop was stuck; stacks in the log",
+                        "step": state.get("step"),
+                    }
+                )
+                state["stop"] = state.get("stop") or "the app was stuck in %s" % state.get("step")
+                try:
+                    _write(partial=False)
+                finally:
+                    os._exit(4)
+
+    threading.Thread(target=watch, name="SciForge test watchdog", daemon=True).start()
 
 
 def idle_step(name="wait_idle", tries=40):
-    """A step that comes back every 250 ms (at most `tries` times) while the document is
-    still recomputing. A long recompute (an Undo that brings bodies and analyses back)
-    lets Qt run the next step from inside it, where a menu click or a key is lost."""
-    count = {"n": 0}
+    """A step that waits until no design is recomputing. A long recompute (an Undo that
+    brings bodies and analyses back) lets Qt run the next step from inside it, where a menu
+    click or a key is lost."""
 
     def step():
-        try:
-            doc = App.ActiveDocument
-            busy = bool(doc is not None and doc.Recomputing)
-        except Exception:
-            busy = False
-        if busy and count["n"] < tries:
-            count["n"] += 1
-            state["queue"].insert(0, step)
+        pass
 
     step.__name__ = name
-    step.wait_ms = 250
+    step.done = lambda: not _recomputing()
+    step.done_what = "no design recomputing"
     return step
 
 
@@ -616,119 +1067,244 @@ def add_steps(steps):
     state["queue"].extend(steps)
 
 
-def run(name, steps, check_errors_each_step=True, start_ms=2500):
-    """Run the steps one after another; errors are checked after every step."""
+def _condition_name(condition):
+    doc = (getattr(condition, "__doc__", None) or "").strip()
+    if doc and not doc.startswith("lambda"):
+        return doc.splitlines()[0]
+    name = getattr(condition, "__name__", "") or ""
+    return "" if name == "<lambda>" else name.replace("_", " ")
+
+
+def _wait_name(step, kind, condition):
+    said = getattr(step, kind + "_what", None) or _condition_name(condition)
+    return "%s (%s of %s)" % (said, kind, step.__name__) if said else "%s of %s" % (kind, step.__name__)
+
+
+def _watchdog():
+    """Ends a scenario whose step has not returned within STEP_LIMIT_S (a dialog waiting
+    for an answer that never comes, a loop that never ends): the check says which step and
+    what was on screen, the dialogs are closed so the step can return, and if it still has
+    not after 20 s FreeCAD quits with the result written, well before the runner's kill."""
+    started = state.get("in_step")
+    if started is None or state.get("finished"):
+        return
+    step = state.get("step") or "?"
+    limit = state.get("step_limit", STEP_LIMIT_S)
+    now = time.monotonic()
+    if not state.get("hung") and now - started > limit:
+        state["hung"] = now
+        check(
+            "Step %s ended within %.0f s" % (step, limit),
+            False,
+            "still running (a hang?); seen: %s" % seen_now(),
+        )
+        print("[SciForge] %s: step %s still running after %.0f s" % (state["name"], step, limit), flush=True)
+        try:
+            shot("hang-" + step)
+        except Exception:
+            pass
+        state["stop"] = state.get("stop") or "step %s did not end" % step
+        state["not_run"] = [s.__name__ for s in state.get("queue", [])]
+        close_modals()
+    elif state.get("hung") and now - state["hung"] > 20:
+        print("[SciForge] %s: step %s did not end after its dialogs were closed; quitting" % (state["name"], step), flush=True)
+        state["finished"] = True
+        _write(partial=False)
+        os._exit(3)
+
+
+def run(name, steps, check_errors_each_step=True, start_ms=2500, paced_by="timer"):
+    """Run the steps one after another; errors are checked after every step.
+
+    paced_by="state" (converted scenarios): no fixed waits. Each step's input waits for its
+    `ready` and for the app to have settled; after it, the next step waits for its `done`
+    and for the app to settle again. paced_by="timer" (not converted yet): a fixed
+    `wait_ms` (default STEP_MS) after each step, then until nothing is recomputing, as
+    before; a step of such a scenario that declares `done` is paced by state already."""
     global _tap
     state["name"] = name
+    # SCIFORGE_PACED_BY=state tries a scenario not converted yet without its fixed waits
+    # (converting one: which of its steps need a `done`?)
+    paced_by = os.environ.get("SCIFORGE_PACED_BY") or paced_by
+    state["paced_by"] = paced_by
+    by_state = paced_by == "state"
     queue = state["queue"] = list(steps)
 
     def prepare():
         global _tap
         BUSY.clear()
+        _install_pointer_tap()
         # FreeCAD animates camera moves; a click computed mid-animation misses.
         App.ParamGet("User parameter:BaseApp/Preferences/View").SetBool(
             "UseNavigationAnimations", False
         )
-        # A CI shard shares one profile: an earlier scenario's selection mode or filter
-        # (remembered between sessions, like Fusion) must not change how this one picks.
-        try:
-            from sciforge import selection_ui
-
-            selection_ui.reset()
-        except Exception as exc:
-            print("[SciForge] selection reset failed: %s" % exc, flush=True)
-        # ... nor its visual style, camera, environment, layout grid or increments
-        # (the navigation bar's choices are remembered too)
-        try:
-            from sciforge import display_ui, grid_ui
-
-            display_ui.reset()
-            grid_ui.reset()
-        except Exception as exc:
-            print("[SciForge] display settings reset failed: %s" % exc, flush=True)
-        try:  # the mouse preset, zoom direction, units / history of new designs (Preferences)
-            from sciforge import preferences_ui
-
-            preferences_ui.reset_for_tests()
-        except Exception as exc:
-            print("[SciForge] preferences reset failed: %s" % exc, flush=True)
-        try:  # SELECT > Component Drag (a drag on a component moves it) back on
-            from sciforge import joints_drag
-
-            joints_drag.reset()
-        except Exception as exc:
-            print("[SciForge] component drag reset failed: %s" % exc, flush=True)
-        try:  # the default keys and no pinned commands (Change Keyboard Shortcut, Pin)
-            from sciforge import command_options
-
-            command_options.reset_for_tests()
-        except Exception as exc:
-            print("[SciForge] shortcuts / pins reset failed: %s" % exc, flush=True)
-        try:  # the first-start welcome line on Home shows once per profile: not in the others
+        # Each scenario starts in a fresh FreeCAD profile (run_tests.sh), so the choices
+        # SciForge remembers between sessions (selection mode, display style, preferences,
+        # keys, pins) are the defaults already: no reset needed for them.
+        try:  # the first-start welcome line on Home shows once per profile: a fresh profile
+            # would show it in every scenario (the welcome_line scenario asks for it)
             from sciforge import home_notices_ui
 
             home_notices_ui.reset_for_tests(True)
         except Exception as exc:
             print("[SciForge] welcome line reset failed: %s" % exc, flush=True)
-        try:  # the user's plastic library and default rule (they size new plastic features)
-            from sciforge import plastic
-
-            plastic.reset_for_tests()
-        except Exception as exc:
-            print("[SciForge] plastic library reset failed: %s" % exc, flush=True)
         _tap = _ConsoleTap()
         new_errors()  # start-up messages are not the scenario's
+        watchdog = state["watchdog"] = QtCore.QTimer()
+        _posted.own.add(id(watchdog))
+        watchdog.setInterval(1000)
+        watchdog.timeout.connect(_watchdog)
+        _START(watchdog)
+
+    def poll_until(condition, what, timeout_s, then):
+        """then() once condition() holds; after timeout_s the failure (rule 5), the scenario
+        stopped, then() all the same (it sees state["stop"])."""
+        end = time.monotonic() + timeout_s
+        box = {"error": None}
+
+        def look():
+            state["alive"] = time.monotonic()
+            try:
+                ok = condition()
+            except Exception as exc:
+                ok, box["error"] = False, exc
+            if ok:
+                then()
+            elif time.monotonic() >= end:
+                _timed_out(what, timeout_s, box["error"])
+                then()
+            else:
+                _later(POLL_MS, look)
+
+        look()
+
+    def stopped():
+        left = [s.__name__ for s in queue]
+        queue.clear()
+        state["not_run"] = state.get("not_run") or left
+        print(
+            "[SciForge] %s stopped (%s); %d steps not run"
+            % (state["name"], state["stop"], len(state["not_run"])),
+            flush=True,
+        )
+        _finish()
 
     def next_step():
+        if state.get("stop"):
+            stopped()
+            return
         if not queue:
             _finish()
             return
-        # A long recompute keeps the GUI alive by running Qt's event loop from inside it,
-        # so this timer can fire in the middle of it; FreeCAD's progress handling then
-        # throws away every click and key the step sends (a drop-down that would not open,
-        # a typed value lost). Wait until the document is done (at most 20 s), and until
-        # input still being played (a held drag, BUSY) has ended: on a slow machine it can
-        # outlast the step's wait_ms.
-        if (_recomputing() or BUSY or _searching()) and state.get("waited", 0) < 200:
-            state["waited"] = state.get("waited", 0) + 1
-            state["held"] = state.get("held") or bool(BUSY)
-            QtCore.QTimer.singleShot(100, next_step)
-            return
-        state["waited"] = 0
-        BUSY.clear()  # ended, or given up on after 20 s
-        if state.pop("held", False):
-            # a drag that outlasted its step: what follows the release (the dialog's own
-            # timers) gets the second the step's wait_ms would have given it
-            QtCore.QTimer.singleShot(1000, next_step)
-            return
+        if not by_state:
+            # A long recompute keeps the GUI alive by running Qt's event loop from inside
+            # it, so this timer can fire in the middle of it; FreeCAD's progress handling
+            # then throws away every click and key the step sends (a drop-down that would
+            # not open, a typed value lost). Wait until the document is done (at most 20 s),
+            # and until input still being played (a held drag, BUSY) has ended: on a slow
+            # machine it can outlast the step's wait_ms.
+            if (_recomputing() or BUSY or _searching() or _posted.due()) and state.get(
+                "waited", 0
+            ) < 200:
+                state["waited"] = state.get("waited", 0) + 1
+                state["held"] = state.get("held") or bool(BUSY)
+                _later(100, next_step)
+                return
+            state["waited"] = 0
+            BUSY.clear()  # ended, or given up on after 20 s
+            if state.pop("held", False):
+                # a drag that outlasted its step: what follows the release (the dialog's
+                # own timers) gets the second the step's wait_ms would have given it
+                _later(1000, next_step)
+                return
         step = queue.pop(0)
+        state["step"] = step.__name__
+        limit = getattr(step, "timeout_s", WAIT_S)
+        ready = getattr(step, "ready", None)
+        if by_state or ready is not None:
+            # the app settled after the step before, then the step's own precondition
+            calm = _calm()
+            first = (lambda: calm() and ready()) if ready is not None else calm
+            poll_until(first, _wait_name(step, "ready", ready) if ready else
+                       "the app to settle before %s" % step.__name__, limit,
+                       lambda: perform(step))
+        else:
+            perform(step)
+
+    def perform(step):
+        if state.get("stop"):
+            stopped()
+            return
         # Progress on stdout and a partial result: a crash still shows where it happened.
-        print("[SciForge] %s step: %s" % (state["name"], step.__name__), flush=True)
+        print(
+            "[SciForge] %s step: %s (%.1f s)"
+            % (state["name"], step.__name__, time.monotonic() - state["t0"]),
+            flush=True,
+        )
         _write(partial=True)
+        state["in_step"] = state["alive"] = time.monotonic()
+        state["step_limit"] = max(STEP_LIMIT_S, getattr(step, "timeout_s", 0) * 2)
         try:
             step()
+        except WaitTimeout:
+            pass  # (the failed check is recorded; the scenario stops)
         except Exception:
             check("No exception in %s" % step.__name__, False, traceback.format_exc())
-        if check_errors_each_step:
-
-            def after():
-                fresh = new_errors()
-                if fresh and getattr(step, "known", False):
-                    # A known problem being fixed elsewhere: report it, do not fail. (The note
-                    # goes to the Report view too, so it must not look like an error line.)
-                    print(
-                        "[SciForge] %s: known issue after %s (%d lines, see KNOWN)"
-                        % (state["name"], step.__name__, len(fresh)),
-                        flush=True,
-                    )
-                    new_errors()
-                elif fresh:
-                    check("No errors after %s" % step.__name__, False, fresh)
-                    shot("error-" + step.__name__)
-                next_step()
-
-            QtCore.QTimer.singleShot(getattr(step, "wait_ms", STEP_MS), after)
+        finally:
+            state["in_step"] = None
+            state["alive"] = time.monotonic()
+        if state.get("stop"):
+            errors_then_next(step)
+            return
+        done = getattr(step, "done", None)
+        limit = getattr(step, "timeout_s", WAIT_S)
+        if done is not None:
+            poll_until(done, _wait_name(step, "done", done), limit, lambda: settled(step))
+        elif by_state:
+            settled(step)
         else:
-            QtCore.QTimer.singleShot(getattr(step, "wait_ms", STEP_MS), next_step)
+            _later(getattr(step, "wait_ms", STEP_MS), lambda: errors_then_next(step))
 
-    QtCore.QTimer.singleShot(start_ms, lambda: (prepare(), next_step()))
+    def settled(step):
+        if state.get("stop"):
+            errors_then_next(step)
+            return
+        poll_until(
+            _calm(),
+            "the app to settle after %s" % step.__name__,
+            getattr(step, "timeout_s", WAIT_S),
+            lambda: errors_then_next(step),
+        )
+
+    def errors_then_next(step):
+        if check_errors_each_step:
+            fresh = new_errors()
+            if fresh and getattr(step, "known", False):
+                # A known problem being fixed elsewhere: report it, do not fail. (The note
+                # goes to the Report view too, so it must not look like an error line.)
+                print(
+                    "[SciForge] %s: known issue after %s (%d lines, see KNOWN)"
+                    % (state["name"], step.__name__, len(fresh)),
+                    flush=True,
+                )
+                new_errors()
+            elif fresh:
+                check("No errors after %s" % step.__name__, False, fresh)
+                shot("error-" + step.__name__)
+        next_step()
+
+    def started():
+        """FreeCAD's window is up and SciForge's start-up has run."""
+        main = Gui.getMainWindow()
+        return main is not None and main.isVisible() and not busy()
+
+    def begin():
+        state["t0"] = state["alive"] = time.monotonic()
+        prepare()
+        _last_resort()
+        next_step()
+
+    if by_state:
+        _later(0, lambda: poll_until(started, "FreeCAD to start", 120, begin))
+    else:
+        _later(start_ms, begin)
