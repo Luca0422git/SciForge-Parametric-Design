@@ -4,6 +4,19 @@ This file is the project's memory across work sessions. **Read it first, every s
 `docs/sciforge/feature-outline.md` (the spec). Update it at the end of every session: what was
 done, what was learned, what is next. Newest session goes at the top of the log.
 
+**2026-10-29: GUI test rework, on branch `sf/gui-tests-rework` (not `develop`).** Luca's brief
+"SciForge GUI tests: rework brief for Claude Code" (claude.ai artifact; its rules are copied in
+`docs/sciforge/dev/gui-tests.md`): make the GUI scenarios pass when SciForge works and fail only
+when it is broken, the same on every machine; scenarios wait for the app's state, never for
+time. The brief said to work on a branch off develop (another session was releasing patch
+0.1.0-beta.3.1.3 from develop at the time: a patch release ships develop's newest commit).
+Status: [x] 1 failures on the run page [x] 2 harness.wait_for / settle / ready / done
+[x] 3 input helpers on it [x] 4 fresh profile per scenario [x] 5 hang watchdog [x] 6 gui_env.sh,
+both workflows on ubuntu-24.04 [x] 7 check_waits.py ratchet [x] stress mode + CI repeat input
+[ ] scenarios converted (batch 1 done: the CI #277 - #287 ones; see the session log for the
+count left) [ ] five green full runs in a row [ ] build dry run [ ] merged into develop (Luca).
+Newest session log "GUI test rework".
+
 **2026-10-26: Luca's beta 3 list, split in two** (newest session log "Beta 3 list"):
 
 - **Patch `0.1.0-beta.2.2` (a separate Claude session that does patches; Luca hands it over):**
@@ -615,13 +628,16 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
 - **BEFORE THE NEXT FULL BUILD: appimagetool's "continuous" build changed (2026-10-29, build 333) and now refuses an AppDir whose files other users cannot read** ("has mode 0700 ... found 3330 problem(s)": folders of the bundled conda environment such as usr/ssl, usr/var/cache/fontconfig, usr/cmake). It broke the 0.1.0-beta.3.1.3 patch release (run #10, linux job, nothing published). `tools/sciforge/repack_module.sh` now runs `chmod -R a+rX` on the unpacked AppImage before packing (reproduced locally: a 0700 folder is refused, after the chmod it packs). `package/rattler-build/linux/create_bundle.sh` (the full build) downloads the same continuous tool and needs the same `chmod -R a+rX AppDir` before its appimagetool call, with a SCIFORGE comment and a core-patches.md entry: not done yet because that file counts in the core id (it would have refused the patch release). Do it as the first commit of the next full build.
 - **A left release SciForge keeps from FreeCAD left its navigation thinking the button was held (Luca, 2026-10-29; fixed in 0.1.0-beta.3.1.3).** `selection_ui._ViewFilter` lets FreeCAD see every left press (a click, a box or a Component Drag cannot be told apart yet) but kept the Component Drag's moves and release: FreeCAD's `NavigationStyle.button1down` stayed true, and in the Revit style a middle-drag (pan: BUTTON3 alone) and Shift + middle-drag (orbit) matched no case until the next real left click. Now `_release_for_freecad` hands FreeCAD a release with the selection node's `selectionMode` OFF (the scene graph root IS the SoFCUnifiedSelection; AUTO 0, ON 1, OFF 2) and Ctrl (no "click on nothing clears the selection"), on every release the filter keeps (drag, box, cancelled, Select Other). FreeCAD fixed the same class itself for its ClarifySelection (gh #29090, `resetButtonState()`, not reachable from Python; a navigation-style switch would reset it but loses ZoomAtCursor and the like). Same day: the ViewCube kept turning after a release that went to another widget; a move without the left button now ends its press. Scenario `navigation_stuck_buttons` (4 checks fail on the old code).
 - **The Windows installer left NO SciForge when updating over a SciForge whose AI connector ran (Luca, 2026-10-28; fixed in 0.1.0-beta.3.1.2, core patch #19).** Claude Desktop (Gemini CLI, Claude Code) keeps SciForge's AI connector running: SciForge's own `bin\python.exe`. FreeCAD's installer checks only for `SciForge.exe` / `SciForgeCmd.exe`, then `RMDir /r` deleted file after file, stopped at the connector's open files ("Failed to remove ... no files are in use") and aborted. Now (`include/utils.nsh`): programs running from the folder are found by path (`Get-CimInstance Win32_Process`); the connector is stopped after asking, others get Retry / Cancel; the folder is moved aside to `<folder>.old` in ONE step (refused while a file is open: Retry / Cancel, nothing changed) and only then deleted; the uninstaller stops the connector too. Windows test `tools/sciforge/test_installer.ps1` (installs over a running connector, with a file held open, uninstall) in the patch release and the full build. The quick update (`install_update.ps1`) already stopped the connector. Lesson: never delete in place what cannot be put back; move first, delete after.
-- **Open: `sim_qa_results_close` crashed FreeCAD once in CI (tests run #296, shard 8/9,
-  2026-10-28)** right after Slice Plane opened on the third beam (15 checks: "Slice Plane:
-  results shown" was the last; the close step never ran). 8 of 8 local runs pass (alone, after
-  its CI neighbours, four at once). The artifact could not be fetched from this sandbox (blob
-  storage is not allowed), so `run_tests.sh` now prints, for a scenario that did not finish,
-  the last 40 lines of its log (FreeCAD's own backtrace is there) and the faulthandler stack
-  from SciForge's crash log, into the job log itself: the next occurrence names the line.
+- **A drag arrow kept polling a closed design's 3D view and crashed FreeCAD (fixed 2026-10-29 on
+  `sf/gui-tests-rework`, commit "Fix: a drag arrow kept polling..."; not released yet).** This was
+  `sim_qa_results_close`'s crash in CI #296 (8 of 8 local runs passed then). On a deliberately
+  slow machine (`run_tests.sh --stress`) it crashed 2 of 2: Point Probes' three grip arrows
+  (`taskui.ArrowDragger`) outlived the design closed with the dialog open, their 15 ms poll asked
+  the closed design's view for its camera until FreeCAD deleted the view, then
+  `View3DInventorPy::getCameraNode` segfaulted. An ArrowDragger now remembers its design and stops
+  for good, touching nothing of the view, once that design is closed (5 of 5 under stress after).
+  Other polled handles (handles3d, move_ui's Triad, revolve_ui, hole_ui ...) may have the same
+  weakness; none was seen crashing. Needs a CHANGELOG line in the next patch after the merge.
 - **Work a dialog posts for later (`QTimer.singleShot(0, ...)`) can run after OK / Cancel
   (2026-10-28, patch 0.1.0-beta.3.1.1).** A dialog's debounce timer and a click (or the test
   robot's step timer) can be due in the same event-loop pass: the update runs, posts its
@@ -1694,6 +1710,38 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
   default; Ruled's default type. Each guess is marked G in the parity docs.
 
 ## Session log
+
+### Session log: GUI test rework (`sf/gui-tests-rework`, 2026-10-29)
+
+Luca's brief (a claude.ai doc, "SciForge GUI tests: rework brief for Claude Code"): make the
+GUI scenarios trustworthy, paced by the app's state instead of fixed waits; done = five green
+full runs in a row on one commit, no helper that clicks or types on a timer, failures that name
+the step and the state, Luca never asking again for a test fixed because CI was slow. Work on a
+branch off develop (a patch release was going out from develop). How it all works now:
+`docs/sciforge/dev/gui-tests.md` (rules, API, converting, proving, facts found).
+
+- Steps 1-8 of the brief's plan are in (see the status block at the top). Commits on the
+  branch: c02de905 (harness, runner, fresh profiles, gui_env, stress/repeat), a3b5f921 (input
+  helpers, workflows, check_waits, docs), a5deca42 (the drag-arrow crash fix, Known issues),
+  b1e7788d (batch 1), 9765e462 (pointer moves Qt cannot drop, off-window targets).
+- Batch 1 converted (the CI #277 - #287 scenarios: journey_vex, journey_vex_sim, vex_duplicate,
+  vex_qa_real, misc_derive, surface3_offset_patch, inspect_analysis_components, sim_core_job,
+  sim_setup_during, sim_qa_results_close, joints_ok_during_preview, sketch_qa_keys): 3 of 3 each
+  under `--stress` on the committed tree. Real problems the state pacing found: a race in
+  sim_setup_during (Undo before the solve had read the study; the old 700 ms hid it) and the
+  drag-arrow crash (sim_qa_results_close, CI #296's crash, 2 of 2 under stress before the fix).
+- CI #304 (the first commit alone) was red in 47 scenarios: display timers of 1.5-2.5 s counted
+  as work (the timeline's refusal hint vanished before the check), targets outside the window
+  (y -57), and two pointer cases (Qt folding moves, a second double-click on one pixel). All 47
+  pass here on 9765e462.
+- "A real bug still fails" checked with throwaway breakages (not pushed): Duplicate With Joints
+  doing nothing failed vex_duplicate in 35 s with "Waited for Duplicate With Joints is open (done
+  of a_open)" and stopped (27 steps not run); a command hanging in a question box was ended by
+  the watchdog (SCIFORGE_STEP_LIMIT_S=20 for the check) naming the step and the dialog.
+- Lessons: never edit run_tests.sh while it runs (bash reads it as it goes: a "syntax error"
+  at the end); `pkill -f <pattern>` kills the shell running it when the pattern is in its own
+  command line (use the PIDs); no `git stash` games with a dirty tree (a conflict in harness.py
+  had to be restored from the stash).
 
 ### Session log: quick patch 0.1.0-beta.3.1.3, stuck buttons (`develop`, 2026-10-29)
 

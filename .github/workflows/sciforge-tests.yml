@@ -127,16 +127,21 @@ jobs:
           STRESS: ${{ inputs.stress && '--stress' || '' }}
           SCIFORGE_PACED_BY: ${{ inputs.paced_by || '' }}
         run: |
+          # (GitHub runs this with bash -e: no command whose failure is an answer, like a
+          # test in $(...), may stand alone)
           extra=()
-          trial=$([ "${REPEAT}" != 1 ] || [ -n "${ONLY_SCENARIOS}${STRESS}${SCIFORGE_PACED_BY}" ] && echo 1)
+          trial=""
+          if [ "${REPEAT}" != 1 ] || [ -n "${ONLY_SCENARIOS}${STRESS}${SCIFORGE_PACED_BY}" ]; then
+            trial=1
+          fi
           if [ "${{ matrix.id }}" = base ] && [ -n "${trial}" ]; then
             echo "A repeat run is about the GUI scenarios: the base tests are skipped."
             exit 0
           fi
           if [ "${{ matrix.id }}" != base ]; then
-            [ "${REPEAT}" != 1 ] && extra+=(--repeat "${REPEAT}")
-            [ -n "${ONLY_SCENARIOS}" ] && extra+=(--scenario "${ONLY_SCENARIOS}")
-            [ -n "${STRESS}" ] && extra+=("${STRESS}")
+            if [ "${REPEAT}" != 1 ]; then extra+=(--repeat "${REPEAT}"); fi
+            if [ -n "${ONLY_SCENARIOS}" ]; then extra+=(--scenario "${ONLY_SCENARIOS}"); fi
+            if [ -n "${STRESS}" ]; then extra+=("${STRESS}"); fi
           fi
           tools/sciforge/run_tests.sh --freecad .sciforge-cache/freecad --out test-output ${{ matrix.args }} "${extra[@]}"
 

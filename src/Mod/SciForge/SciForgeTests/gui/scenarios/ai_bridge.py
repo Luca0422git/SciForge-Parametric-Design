@@ -135,6 +135,17 @@ def question():
     return vi.dialog("SciForgeAIQuestion")
 
 
+def answered(*keys):
+    """A done: the MCP server has answered the requests sent as s[key] (it answers from its
+    own process, which the app settling cannot see)."""
+
+    def done():
+        return all(s.get(k) is not None and mcp().answers.get(s[k]) is not None for k in keys)
+
+    done.__doc__ = "the MCP server answered " + ", ".join(keys)
+    return done
+
+
 # -- Path 1 -------------------------------------------------------------------------------------
 def start_server():
     from sciforge import ai_ui
@@ -153,7 +164,8 @@ def start_server():
     )
 
 
-start_server.wait_ms = 2500
+start_server.done = answered("init")
+start_server.timeout_s = 60  # (the server process starts)
 
 
 def initialized():
@@ -163,6 +175,9 @@ def initialized():
         h.check("... by SciForge", res["serverInfo"]["name"] == "sciforge", res["serverInfo"])
     mcp().send("notifications/initialized", notify=True)
     s["list"] = mcp().send("tools/list", {})
+
+
+initialized.done = answered("list")
 
 
 def tools_listed():
@@ -183,7 +198,7 @@ def tools_listed():
     s["off"] = mcp().call("get_design", {})
 
 
-tools_listed.wait_ms = 2000
+tools_listed.done = answered("off")
 
 
 # -- Path 2 -------------------------------------------------------------------------------------
@@ -215,7 +230,8 @@ def switch_on():
     )
 
 
-switch_on.wait_ms = 2000
+switch_on.done = lambda: question() is not None
+switch_on.done_what = "the first call asks the person"
 
 
 def allow():
@@ -228,7 +244,7 @@ def allow():
     wi.click(vi.child(box, "SciForgeAIAllow"))
 
 
-allow.wait_ms = 2500
+allow.done = answered("sketch")
 
 
 # -- Path 4 -------------------------------------------------------------------------------------
@@ -239,7 +255,7 @@ def sketch_made():
     s["extrude"] = mcp().call("extrude", {"profile": "Sketch1", "distance": 10})
 
 
-sketch_made.wait_ms = 3000
+sketch_made.done = answered("extrude")
 
 
 def extruded():
@@ -257,7 +273,7 @@ def extruded():
     )
 
 
-extruded.wait_ms = 3000
+extruded.done = answered("fillet")
 
 
 def filleted():
@@ -274,7 +290,7 @@ def filleted():
     s["shot"] = mcp().call("screenshot", {"view": "iso", "width": 320, "height": 240})
 
 
-filleted.wait_ms = 4000
+filleted.done = answered("design", "shot")
 
 
 # -- Path 5 -------------------------------------------------------------------------------------
@@ -301,7 +317,7 @@ def looked_at():
     s["busy"] = mcp().call("extrude", {"profile": "Sketch1", "distance": 5})
 
 
-looked_at.wait_ms = 3000
+looked_at.done = answered("busy")
 
 
 # -- Path 6 -------------------------------------------------------------------------------------
@@ -331,7 +347,6 @@ def activity_listed():
     wi.click(p.undo_button)
 
 
-activity_listed.wait_ms = 1500
 
 
 def fillet_undone():
@@ -351,6 +366,16 @@ def stop_control():
     wi.click(page.toggle)
 
 
+def _bridge_stopped():
+    from sciforge.ai import bridge
+
+    return not bridge.running()
+
+
+stop_control.done = _bridge_stopped
+stop_control.done_what = "the bridge stopped"
+
+
 def stopped():
     from sciforge.ai import bridge
 
@@ -358,7 +383,7 @@ def stopped():
     s["after"] = mcp().call("get_design", {})
 
 
-stopped.wait_ms = 2000
+stopped.done = answered("after")
 
 
 def refused_after_stop():
@@ -463,4 +488,5 @@ h.run(
         gemini_set_up,
         gemini_removed,
     ],
+    paced_by="state",
 )

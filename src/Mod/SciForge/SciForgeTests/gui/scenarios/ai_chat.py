@@ -155,7 +155,9 @@ def choose_local():
     wi.click(p.models_button)
 
 
-choose_local.wait_ms = 1500
+# (the models come from the server, asked from another thread)
+choose_local.done = lambda: panel() is not None and panel().model.count() > 0
+choose_local.done_what = "the model list filled from the server"
 
 
 def models_listed():
@@ -179,7 +181,10 @@ def ask_for_a_box():
     wi.click(p.send_button)
 
 
-ask_for_a_box.wait_ms = 6000
+# (the model answers from the fake server's thread; the tools run here)
+ask_for_a_box.done = lambda: "Done: a 40 x 30 x 10 mm box." in transcript() and not panel().busy()
+ask_for_a_box.done_what = "the AI's answer shown and the chat done"
+ask_for_a_box.timeout_s = 120
 
 
 def box_built():
@@ -220,7 +225,8 @@ def endless_model():
     wi.click(p.send_button)
 
 
-endless_model.wait_ms = 1500
+endless_model.done = lambda: panel().busy() and panel().stop_button.isEnabled()
+endless_model.done_what = "the chat running (Stop offered)"
 
 
 def press_stop():
@@ -229,7 +235,8 @@ def press_stop():
     wi.click(p.stop_button)
 
 
-press_stop.wait_ms = 4000
+press_stop.done = lambda: not panel().busy()
+press_stop.done_what = "the chat stopped"
 
 
 def stopped():
@@ -291,4 +298,5 @@ h.run(
         key_kept,
         key_removed,
     ],
+    paced_by="state",
 )
