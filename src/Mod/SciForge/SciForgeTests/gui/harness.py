@@ -55,6 +55,10 @@ STEP_MS = int(os.environ.get("SCIFORGE_STEP_MS", "700"))
 WAIT_S = 30.0
 STEP_LIMIT_S = float(os.environ.get("SCIFORGE_STEP_LIMIT_S", "300"))
 POLL_MS = 15  # how often a wait looks at the app again (the event loop runs in between)
+# A speed limit in a check (the window never froze longer than 4 s) is multiplied by this:
+# 1, except under run_tests.sh --stress, which slows the machine down on purpose by about
+# this much. It never changes a wait.
+SLOWDOWN = float(os.environ.get("SCIFORGE_SLOWDOWN") or 1)
 checks = []
 state = {"name": "scenario", "errors_seen": 0}
 # Report-view lines that are not problems (start-up chatter of stock FreeCAD).
@@ -160,7 +164,10 @@ if _ORIGINAL is None:  # (the harness imported a second time must not wrap its o
         QtCore.QTimer.start,
     )
 _SINGLE_SHOT, _START = _ORIGINAL
-HORIZON_MS = 3000  # a longer delay is not "about to happen" (an update check, a safety net)
+# A longer delay is not work about to happen but a display time or a decision: a refusal
+# shown for 2.5 s, a long press, an update check. Waiting for it would undo the very state a
+# step checks (the timeline's refusal hint is gone after 2.5 s).
+HORIZON_MS = 1000
 
 
 def _alive(obj):
@@ -188,6 +195,7 @@ class _Posted:
         self.calls = {}  # token -> (due, label, context)
         self.timers = weakref.WeakValueDictionary()  # id -> QTimer started from Python
         self.own = set()  # ids of the harness's own timers (pacing, watchdog)
+        self.running = []  # labels of the posted calls running now
 
     def single_shot(self, *args, **kwargs):
         fn = args[-1] if args else None
@@ -203,16 +211,26 @@ class _Posted:
             or type(fn).__name__ in ("SignalInstance", "Signal")
         ):
             return _SINGLE_SHOT(*args, **kwargs)
+        label = _label(fn)
+        if label in self.running:
+            # posted again from its own run: a poll waiting for something (the scratch design
+            # to close, a sketch to be left), not work about to finish; a step that needs what
+            # it waits for says so with a `done`
+            return _SINGLE_SHOT(*args, **kwargs)
         token = object()
         context = args[1] if len(args) == 3 and isinstance(args[1], QtCore.QObject) else None
-        self.calls[token] = (time.monotonic() + msec / 1000.0, _label(fn), context)
+        self.calls[token] = (time.monotonic() + msec / 1000.0, label, context)
 
         def fire(*a):
             self.calls.pop(token, None)
             owner = getattr(fn, "__self__", None)
             if isinstance(owner, QtCore.QObject) and not _alive(owner):
                 return None  # what Qt does when the receiver is gone
-            return fn(*a)
+            self.running.append(label)
+            try:
+                return fn(*a)
+            finally:
+                self.running.remove(label)
 
         return _SINGLE_SHOT(*(args[:-1] + (fire,)))
 
@@ -274,14 +292,24 @@ class _PointerTap(QtCore.QObject):
         super().__init__()
         self.last = None
         self.expected = None
+        self.menus_shown = 0  # menus that appeared (a right-click's may come and go at once)
 
     def eventFilter(self, obj, event):
         try:
-            if event.type() == QtCore.QEvent.MouseMove and isinstance(obj, QtGui.QWindow):
+            kind = event.type()
+            if kind == QtCore.QEvent.MouseMove and isinstance(obj, QtGui.QWindow):
                 self.last = event.globalPosition().toPoint()
+            elif kind == QtCore.QEvent.Show and isinstance(obj, QtWidgets.QMenu):
+                self.menus_shown += 1
         except Exception:
             pass
         return False
+
+
+def menus_shown():
+    """How many menus have appeared so far (compare before and after an input)."""
+    _install_pointer_tap()
+    return _pointer.menus_shown
 
 
 _pointer = _PointerTap()
@@ -313,7 +341,10 @@ def _pointer_step(widget, pos):
     target = widget.mapToGlobal(pos)
     _pointer.last = None
     _pointer.expected = target
-    QtTest.QTest.mouseMove(widget, pos)
+    # The real pointer, always. (QTest.mouseMove only moves it while QTest thinks no button
+    # is down; inside a menu that opened on a press, before that press's release, it sends
+    # the widget a made-up move instead and the pointer stays where it was.)
+    QtGui.QCursor.setPos(target)
     try:
         wait_for(
             lambda: _pointer.last == target,
@@ -352,10 +383,21 @@ def describe(widget):
         return "a widget (%s)" % exc
 
 
-def busy():
+def busy(since=None):
     """Why the app has not settled yet (empty when it has): what the last input set going
-    and the screen does not show yet."""
+    and the screen does not show yet. since (a time.monotonic()): also a drag handle that
+    has not polled since then (a handle keeps what Coin picks of it at the view's scale on
+    its poll: a press right after a fit or a zoom missed the arrow, bodies_qa)."""
     reasons = []
+    if since is not None:
+        try:
+            from sciforge import taskui
+
+            stale = [x for x in taskui.live_handles() if getattr(x, "_polled_at", 0.0) < since]
+            if stale:
+                reasons.append("%d drag handles have not followed the view yet" % len(stale))
+        except Exception:
+            pass
     try:
         for doc in App.listDocuments().values():
             if getattr(doc, "Recomputing", False):
@@ -481,13 +523,18 @@ def wait_for(condition, what, timeout_s=None):
     raise WaitTimeout(what)
 
 
-def _calm():
+def _calm(ignore_input=False):
     """A condition that is true once the app has been quiet twice in a row (work that runs
-    can post more)."""
+    can post more). ignore_input: input still being played (a held drag asking whether the
+    app has caught up with it) does not count."""
     quiet = {"n": 0}
+    since = time.monotonic()
 
     def calm():
-        quiet["n"] = 0 if busy() else quiet["n"] + 1
+        reasons = busy(since)
+        if ignore_input:
+            reasons = [r for r in reasons if not r.startswith("input still being played")]
+        quiet["n"] = 0 if reasons else quiet["n"] + 1
         return quiet["n"] >= 2
 
     return calm
@@ -498,15 +545,40 @@ def settle(what="the app to settle", timeout_s=None):
     return wait_for(_calm(), what, timeout_s)
 
 
+def caught_up(panel=None, what="the dialog's preview to catch up", extra=None):
+    """Wait until a dialog's preview has caught up with the last input: its own preview timer
+    done, nothing pending, no design recomputing (and extra() false: a dialog's own "still
+    computing"), then the app settled. A closed dialog or none: only the settling."""
+
+    def ready():
+        if panel is not None and not getattr(panel, "_closed", False):
+            timer = getattr(panel, "_timer", None)
+            try:
+                if timer is not None and timer.isSingleShot() and timer.isActive():
+                    return False
+            except RuntimeError:
+                pass
+            if getattr(panel, "_pending", False):
+                return False
+        if extra is not None and extra():
+            return False
+        return not _recomputing()
+
+    wait_for(ready, what)
+    return settle(what)
+
+
 def when(condition, action, what, timeout_s=None):
     """Run action() once condition() holds, without blocking: for input into something
     that opens and runs its own loop (a menu, a modal dialog), set up before the call that
     opens it. After timeout_s: the failure as in wait_for, the menu or dialog closed."""
     limit = WAIT_S if timeout_s is None else timeout_s
     end = time.monotonic() + limit
-    box = {"error": None}
+    box = {"error": None, "cancelled": False}
 
     def look():
+        if box["cancelled"]:
+            return
         try:
             ok = condition()
         except Exception as exc:
@@ -525,6 +597,135 @@ def when(condition, action, what, timeout_s=None):
             _later(POLL_MS, look)
 
     _later(0, look)
+    return box  # box["cancelled"] = True: never mind
+
+
+# -- menus --------------------------------------------------------------------------
+def entry_text(action):
+    """A menu entry's words (no & mnemonic, no Tab and shortcut)."""
+    return action.text().split("\t")[0].replace("&", "").strip()
+
+
+def entries(menu):
+    return [a for a in menu.actions() if not a.isSeparator()]
+
+
+def find_entry(menu, label):
+    """The entry of `menu` called `label` (a QAction is looked up as itself), or None."""
+    for action in entries(menu):
+        if isinstance(label, QtGui.QAction):
+            if action is label:
+                return action
+        elif entry_text(action) == label or action.text().split("\t")[0] == label:
+            return action
+    return None
+
+
+def submenu(menu, action):
+    """The submenu an entry opens. (PySide's QAction.menu() can hand back a wrapper that
+    deletes the submenu when it is dropped, so it is looked for among the menu's children.)"""
+    subs = menu.findChildren(QtWidgets.QMenu)
+    for sub in subs:
+        try:
+            if sub.menuAction() is action:
+                return sub
+        except RuntimeError:
+            pass
+    for sub in subs:
+        if sub.title().replace("&", "").strip() == entry_text(action):
+            return sub
+    return action.menu()
+
+
+def open_menu():
+    """The innermost menu open on screen, or None."""
+    popup = QtWidgets.QApplication.activePopupWidget()
+    return popup if isinstance(popup, QtWidgets.QMenu) and popup.isVisible() else None
+
+
+def close_menus():
+    """Esc on every open menu, innermost first (as a person backs out)."""
+    for _ in range(6):
+        popup = QtWidgets.QApplication.activePopupWidget()
+        if popup is None:
+            return
+        QtTest.QTest.keyClick(popup, QtCore.Qt.Key_Escape)
+
+
+def light_entry(menu, action):
+    """The pointer onto `action` until the open menu has lit it, every move seen by Qt
+    first. A menu takes a click only on the entry it has lit, lights one only on a move it
+    was told about, and ignores the first six moves near where it opened; so the pointer
+    comes from a neighbouring pixel, and again, at most 8 times, before the wait."""
+    for i in range(8):
+        centre = menu.actionGeometry(action).center()
+        side = 1 if i % 2 else -1
+        pointer_to(menu, QtCore.QPoint(centre.x() + 3 * side, centre.y() - 2 * side))
+        pointer_to(menu, centre)
+        if menu.activeAction() is action:
+            return True
+    return wait_for(lambda: menu.activeAction() is action, "the menu to light %s" % entry_text(action))
+
+
+def choose_path(menu, path, report=True):
+    """With `menu` open, click through `path` (labels or QActions; a submenu opens when its
+    entry is lit). True when the last entry was clicked. An entry missing or greyed out:
+    every menu closed and False (and a failed check, unless report=False)."""
+    for i, label in enumerate(path):
+        action = find_entry(menu, label)
+        if action is None or not action.isEnabled():
+            if report:
+                check(
+                    "Menu entry %s is there and enabled"
+                    % " > ".join(entry_text(p) if isinstance(p, QtGui.QAction) else p for p in path[: i + 1]),
+                    False,
+                    [(entry_text(a), a.isEnabled()) for a in entries(menu)],
+                )
+            close_menus()
+            return False
+        light_entry(menu, action)
+        if i < len(path) - 1:
+            sub = submenu(menu, action)
+            wait_for(lambda: sub is not None and sub.isVisible(), "the submenu %s to open" % entry_text(action))
+            menu = sub
+            continue
+        centre = menu.actionGeometry(action).center()
+        QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, centre)
+        return True
+    return False
+
+
+def choose_from(open_it, path, what, report=True, read=None):
+    """open_it() opens a menu (a button's, a right-click's; usually the menu runs its own
+    loop until it closes), then the entries of `path` are clicked as in choose_path.
+    read(menu), when given, sees the menu first (to list its entries); an empty path then
+    closes the menu with Esc. True when the last entry was clicked. When open_it() opened
+    no menu, once the app has settled: False (a failed check too when report)."""
+    box = {"done": False, "ok": False}
+
+    def pick():
+        menu = open_menu()
+        try:
+            if read is not None:
+                read(menu)
+            if path:
+                box["ok"] = choose_path(menu, path, report)
+            else:
+                close_menus()
+        finally:
+            box["done"] = True
+
+    handle = when(lambda: open_menu() is not None, pick, what)
+    try:
+        open_it()
+        settle("the app to settle after opening %s" % what)
+        if not box["done"] and open_menu() is not None:
+            wait_for(lambda: box["done"] or bool(state.get("stop")), what)
+    finally:
+        handle["cancelled"] = True
+    if not box["done"] and report:
+        check("%s opened" % what, False, seen_now())
+    return box["ok"]
 
 
 # -- the 3D view ------------------------------------------------------------------
@@ -553,6 +754,27 @@ def screen_point(point):
 def move(pos):
     """The pointer to widget pixel `pos` of the 3D view, seen by Qt before anything else."""
     pointer_to(gl_widget(), pos)
+
+
+def view_drawn(what="the 3D view to draw what is under the pointer"):
+    """Wait until the 3D view has drawn a frame from now on (one is asked for). FreeCAD's
+    sketch finds what is under the pointer when it redraws after a move: a press before
+    that frame found nothing (the pause a hand makes before pressing)."""
+    widget = gl_widget()
+    box = {"frames": 0}
+
+    def frame():
+        box["frames"] += 1
+
+    widget.frameSwapped.connect(frame)
+    try:
+        widget.update()
+        wait_for(lambda: box["frames"] > 0, what)
+    finally:
+        try:
+            widget.frameSwapped.disconnect(frame)
+        except Exception:
+            pass
 
 
 AIM = 6  # click_edge looks this many pixels around the point for the edge
@@ -1203,9 +1425,7 @@ def run(name, steps, check_errors_each_step=True, start_ms=2500, paced_by="timer
             # not open, a typed value lost). Wait until the document is done (at most 20 s),
             # and until input still being played (a held drag, BUSY) has ended: on a slow
             # machine it can outlast the step's wait_ms.
-            if (_recomputing() or BUSY or _searching() or _posted.due()) and state.get(
-                "waited", 0
-            ) < 200:
+            if (_recomputing() or BUSY or _searching()) and state.get("waited", 0) < 200:
                 state["waited"] = state.get("waited", 0) + 1
                 state["held"] = state.get("held") or bool(BUSY)
                 _later(100, next_step)

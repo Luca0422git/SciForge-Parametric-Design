@@ -201,30 +201,27 @@ def answer_question(button_text):
     until it was answered (under load the check ran before the answer: Yes never came)."""
     ANSWER["pending"] = True
 
-    def click(tries=0):
-        box = QtWidgets.QApplication.activeModalWidget()
-        if isinstance(box, QtWidgets.QMessageBox):
-            for button in box.buttons():
-                if button.text().replace("&", "") == button_text:
-                    button.click()
-                    ANSWER["pending"] = False
-                    return
-        if tries < 100:
-            QtCore.QTimer.singleShot(150, lambda: click(tries + 1))
-        else:
-            ANSWER["pending"] = False
-            h.check("the question box opened", False)
+    def box():
+        found = QtWidgets.QApplication.activeModalWidget()
+        return found if isinstance(found, QtWidgets.QMessageBox) else None
 
-    QtCore.QTimer.singleShot(300, click)
+    def click():
+        for button in box().buttons():
+            if button.text().replace("&", "") == button_text:
+                button.click()
+                ANSWER["pending"] = False
+                return
+        h.check("the question box has %s" % button_text, False, [b.text() for b in box().buttons()])
+
+    h.when(lambda: box() is not None, click, "the question box to open")
 
 
 def wait_answer():
-    """Comes back every 250 ms until the question box was answered."""
-    if ANSWER["pending"]:
-        h.state["queue"].insert(0, wait_answer)
+    """Holds the next step until the question box was answered."""
 
 
-wait_answer.wait_ms = 250
+wait_answer.done = lambda: not ANSWER["pending"]
+wait_answer.done_what = "the question box answered"
 
 
 def key_dialog():

@@ -17,6 +17,9 @@ on:
       scenarios:
         description: "Scenario names, comma separated"
         default: "version_label"
+      repeat:
+        description: "Run each scenario this many times and report how often it passed"
+        default: "1"
 
 permissions:
   contents: read
@@ -109,8 +112,8 @@ jobs:
 
   debug:
     if: github.event_name == 'workflow_dispatch' && inputs.scenarios != 'rerun-test'
-    runs-on: ubuntu-22.04
-    timeout-minutes: 40
+    runs-on: ubuntu-24.04  # (the image of the build's scenario parts)
+    timeout-minutes: ${{ inputs.repeat != '1' && 360 || 40 }}
     steps:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
@@ -134,13 +137,14 @@ jobs:
         env:
           SCENARIOS: ${{ inputs.scenarios || 'version_label,home_screen' }}
           SHARD: ${{ inputs.shard || '1/9' }}
+          REPEAT: ${{ inputs.repeat || '1' }}
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri
+          tools/sciforge/gui_env.sh --install
           if [ -n "$SHARD" ] && [ "$SHARD" != "none" ]; then
             # exactly what a build's scenario shard runs
-            tools/sciforge/run_tests.sh --freecad .sciforge-cache/sciforge --out test-output --only scenarios --shard "$SHARD" 2>&1 | head -12 || true
+            tools/sciforge/run_tests.sh --freecad .sciforge-cache/sciforge --out test-output --only scenarios --shard "$SHARD" --repeat "$REPEAT" 2>&1 | tail -40 || true
           else
-            tools/sciforge/run_tests.sh --freecad .sciforge-cache/sciforge --out test-output --scenario "$SCENARIOS" || true
+            tools/sciforge/run_tests.sh --freecad .sciforge-cache/sciforge --out test-output --scenario "$SCENARIOS" --repeat "$REPEAT" || true
           fi
           ls test-output | head -20
           for log in $(ls test-output/scenario-*.log | head -3); do

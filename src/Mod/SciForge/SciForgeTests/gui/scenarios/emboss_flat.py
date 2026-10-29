@@ -53,21 +53,9 @@ def computing():
     return cursor is not None and cursor.shape() == QtCore.Qt.WaitCursor
 
 
-def settle(timeout_ms=15000):
-    end = time.time() + timeout_ms / 1000.0
-    while time.time() < end:
-        QtTest.QTest.qWait(60)
-        p = panel()
-        if p is None:
-            return
-        busy = (
-            p._timer.isActive()
-            or getattr(p, "_pending", False)
-            or App.ActiveDocument.Recomputing
-            or computing()
-        )
-        if not busy:
-            return
+def settle(timeout_ms=None):
+    """Let the preview catch up (its timer done, nothing still computing, no recompute)."""
+    h.caught_up(panel(), extra=computing)
 
 
 def volume():
@@ -292,18 +280,21 @@ def f7_depth():
 
 
 def wait_idle():
-    """A step that comes back until FreeCAD is done computing. A long shape operation
-    lets Qt run the next step from inside it, where the keys are ignored and waiting in
-    place would hold the computation up."""
+    """A step that waits until FreeCAD is done computing. A long shape operation lets Qt
+    run the next step from inside it, where the keys are ignored and waiting in place would
+    hold the computation up."""
+
+
+def _idle():
     p = panel()
     busy = App.ActiveDocument.Recomputing or computing()
     if p is not None:
         busy = busy or p._timer.isActive() or getattr(p, "_pending", False)
-    if busy:
-        h.state["queue"].insert(0, wait_idle)
+    return not busy
 
 
-wait_idle.wait_ms = 250
+wait_idle.done = _idle
+wait_idle.done_what = "the emboss to be done computing"
 
 
 def f7_projected():

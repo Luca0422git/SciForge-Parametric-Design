@@ -45,23 +45,9 @@ def menu(group, label):
     return si.menu_item(group, label)
 
 
-def settle(timeout_ms=6000):
+def settle(timeout_ms=None):
     """Let the dialog's preview catch up (its timer done, no recompute running)."""
-    p = panel()
-    end = time.time() + timeout_ms / 1000.0
-    while time.time() < end:
-        QtTest.QTest.qWait(50)
-        if p is None:
-            break
-        timer = getattr(p, "_timer", None)
-        busy = (
-            (timer is not None and timer.isActive())
-            or getattr(p, "_pending", False)
-            or getattr(App.ActiveDocument, "Recomputing", False)
-        )
-        if not busy:
-            break
-    QtTest.QTest.qWait(80)
+    h.caught_up(panel())
 
 
 def type_field(key, text):

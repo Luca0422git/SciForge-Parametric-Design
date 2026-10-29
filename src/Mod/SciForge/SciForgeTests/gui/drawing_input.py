@@ -48,8 +48,7 @@ def move_to(x, y):
     if view is None:
         h.check("a drawing tab is active", False)
         return
-    QtTest.QTest.mouseMove(view.viewport(), widget_point(x, y))
-    _process()
+    h.pointer_to(view.viewport(), widget_point(x, y))
 
 
 def click_at(x, y, modifiers=QtCore.Qt.NoModifier):
@@ -59,8 +58,7 @@ def click_at(x, y, modifiers=QtCore.Qt.NoModifier):
         h.check("a drawing tab is active", False)
         return
     pos = widget_point(x, y)
-    QtTest.QTest.mouseMove(view.viewport(), pos)
-    _process()
+    h.pointer_to(view.viewport(), pos)
     QtTest.QTest.mouseClick(view.viewport(), QtCore.Qt.LeftButton, modifiers, pos)
     _process()
     h.state["last_click"] = "page (%.2f, %.2f) mm -> pixel (%d, %d)" % (x, y, pos.x(), pos.y())
@@ -133,60 +131,11 @@ def set_combo_text(combo, text):
 
 
 # -- menus --------------------------------------------------------------------------------
-def _navigate(labels, done, step=0, tries=0):
-    menu = QtWidgets.QApplication.activePopupWidget()
-    if not isinstance(menu, QtWidgets.QMenu) or (step > 0 and menu is done.get("menu")):
-        if tries < 25:
-            QtCore.QTimer.singleShot(120, lambda: _navigate(labels, done, step, tries + 1))
-        else:
-            _close_popups()
-        return
-    action = None
-    for a in menu.actions():
-        if a.text().replace("&", "").split("\t")[0].strip() == labels[step]:
-            action = a
-            break  # the first one (SciForge's File menu comes before FreeCAD's)
-    if action is None:
-        done["missing"] = [a.text() for a in menu.actions()]
-        _close_popups()
-        return
-    rect = menu.actionGeometry(action)
-    for i in range(6):
-        QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 8 + 6 * i, rect.center().y()))
-    QtTest.QTest.mouseMove(menu, rect.center())
-    if action.menu() is not None and step + 1 < len(labels):
-        done["menu"] = menu
-        menu.setActiveAction(action)
-        QtCore.QTimer.singleShot(400, lambda: _navigate(labels, done, step + 1))
-        return
-    if not action.isEnabled():
-        done["disabled"] = labels[step]
-        _close_popups()
-        return
-    QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center())
-    done["clicked"] = True
-
-
-def _close_popups():
-    popup = QtWidgets.QApplication.activePopupWidget()
-    while popup is not None:
-        popup.close()
-        popup = QtWidgets.QApplication.activePopupWidget()
-
-
 def menu_path(open_button, labels):
-    """Click a button that opens a menu, then the entries `labels` (submenus on the way)."""
-    done = {}
-    QtCore.QTimer.singleShot(300, lambda: _navigate(list(labels), done))
-    guard = QtCore.QTimer()
-    guard.setSingleShot(True)
-    guard.timeout.connect(_close_popups)
-    guard.start(6000)
-    open_button.click()
-    guard.stop()
-    _process()
-    ok = bool(done.get("clicked"))
-    h.check("menu %s" % " > ".join(labels), ok, done)
+    """Click a button that opens a menu, then the entries `labels` (submenus on the way;
+    the first entry of a name: SciForge's File menu comes before FreeCAD's)."""
+    ok = h.choose_from(open_button.click, list(labels), "the menu of %s" % h.describe(open_button))
+    h.check("menu %s" % " > ".join(labels), ok)
     return ok
 
 

@@ -163,23 +163,9 @@ def menu(group, label):
     return si.menu_item(group, label)
 
 
-def settle(panel, timeout_ms=8000):
-    import time
-
-    end = time.time() + timeout_ms / 1000.0
-    while time.time() < end:
-        QtTest.QTest.qWait(50)
-        if panel is None or panel._closed:
-            break
-        timer = getattr(panel, "_timer", None)
-        busy = (
-            (timer is not None and timer.isActive())
-            or getattr(panel, "_pending", False)
-            or getattr(App.ActiveDocument, "Recomputing", False)
-        )
-        if not busy:
-            break
-    QtTest.QTest.qWait(80)
+def settle(panel, timeout_ms=None):
+    """The dialog's preview caught up with the last input (timeout_ms: no longer used)."""
+    h.caught_up(panel)
 
 
 def boss_panel():

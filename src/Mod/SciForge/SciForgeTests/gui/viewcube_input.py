@@ -55,15 +55,15 @@ def point(name):
 
 def hover(name):
     """The mouse moves onto the part or button `name` (through the window system, which
-    also tells the cube the mouse came in). Under xvfb Qt now and then drops that test move
-    (the cube is on top, no mouse grab, no button down, no popup: it just never arrives);
-    then the move is given to the cube directly, and the run log says so."""
+    also tells the cube the mouse came in), and Qt has been told before anything else
+    happens. Should the cube still not have taken it (seen under xvfb when the next input
+    came before the window system's move), the move is given to the cube directly, and the
+    run log says so."""
     pos = point(name)
     if pos is None:
         return None
     widget = cube()
-    QtTest.QTest.mouseMove(widget, pos)
-    _process()
+    h.pointer_to(widget, pos)  # (Qt has been told of the move when this returns)
     if widget.hover != name:
         top = QtWidgets.QApplication.widgetAt(widget.mapToGlobal(pos))
         print(
@@ -92,8 +92,7 @@ def hover(name):
 def move_away():
     """The mouse goes back to the middle of the 3D view."""
     widget = h.gl_widget()
-    QtTest.QTest.mouseMove(widget, QtCore.QPoint(widget.width() // 2, widget.height() // 2))
-    _process()
+    h.pointer_to(widget, QtCore.QPoint(widget.width() // 2, widget.height() // 2))
 
 
 def _send_move(widget, pos, buttons):
@@ -142,31 +141,19 @@ def drag(name, dx, dy, steps=12):
 
 
 def _open_menu(widget, pos):
-    """A right click: press/release, then the context-menu event the window system sends."""
-    QtTest.QTest.mouseMove(widget, pos)
+    """A right click: press/release, then the context-menu event the window system sends
+    (unless the release already opened a menu)."""
+    h.pointer_to(widget, pos)
+    shown = h.menus_shown()
     QtTest.QTest.mousePress(widget, QtCore.Qt.RightButton, NONE, pos)
     QtTest.QTest.mouseRelease(widget, QtCore.Qt.RightButton, NONE, pos)
     _process()
+    if h.menus_shown() > shown:
+        return
     event = QtGui.QContextMenuEvent(
         QtGui.QContextMenuEvent.Mouse, pos, widget.mapToGlobal(pos), NONE
     )
     QtWidgets.QApplication.sendEvent(widget, event)
-
-
-def _action(menu, text):
-    for action in menu.actions():
-        if action.text().replace("&", "").strip() == text:
-            return action
-    return None
-
-
-def _click_action(menu, action):
-    rect = menu.actionGeometry(action)
-    # A person moves onto the entry; QMenu ignores a click without any movement.
-    for i in range(6):
-        QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 10 + 8 * i, rect.center().y()))
-    QtTest.QTest.mouseMove(menu, rect.center())
-    QtTest.QTest.mouseClick(menu, LEFT, NONE, rect.center())
 
 
 def choose(path, on="front"):
@@ -178,40 +165,16 @@ def choose(path, on="front"):
     result = {"ok": False, "texts": [], "checked": []}
     if widget is None or pos is None:
         return result
-    remaining = list(path)
-    seen = []
 
-    def pick(tries=0):
-        menu = QtWidgets.QApplication.activePopupWidget()
-        if not isinstance(menu, QtWidgets.QMenu) or menu in seen:
-            if tries < 40:
-                QtCore.QTimer.singleShot(50, lambda: pick(tries + 1))
-            return
-        seen.append(menu)
-        if len(seen) == 1:
-            result["texts"] = [
-                (a.text().replace("&", "").strip(), a.isEnabled())
-                for a in menu.actions()
-                if not a.isSeparator()
-            ]
-            result["checked"] = [
-                a.text().replace("&", "").strip() for a in menu.actions() if a.isChecked()
-            ]
-        action = _action(menu, remaining[0]) if remaining else None
-        if action is None or not action.isEnabled():
-            for m in reversed(seen):
-                QtTest.QTest.keyClick(m, QtCore.Qt.Key_Escape)
-            return
-        remaining.pop(0)
-        _click_action(menu, action)
-        if remaining:  # the entry opened a submenu: pick from it next
-            QtCore.QTimer.singleShot(50, lambda: pick(0))
-        else:
-            result["ok"] = True
+    def read(menu):
+        result["texts"] = [
+            (a.text().replace("&", "").strip(), a.isEnabled()) for a in menu.actions() if not a.isSeparator()
+        ]
+        result["checked"] = [a.text().replace("&", "").strip() for a in menu.actions() if a.isChecked()]
 
-    QtCore.QTimer.singleShot(50, pick)
-    _open_menu(widget, pos)
-    _process()
+    result["ok"] = h.choose_from(
+        lambda: _open_menu(widget, pos), list(path), "the ViewCube's menu", report=False, read=read
+    )
     return result
 
 

@@ -545,17 +545,19 @@ def ai_calls():
 
 
 def wait_chat(name, seconds=240):
-    """A step that comes back every half second while the chat is still busy."""
-    count = {"n": 0}
+    """A step that waits until the chat is no longer busy (at most `seconds`)."""
 
     def wait():
+        pass
+
+    def idle():
         panel = chat()
-        if panel is not None and panel.busy() and count["n"] < seconds * 2:
-            count["n"] += 1
-            h.state["queue"].insert(0, wait)
+        return panel is None or not panel.busy()
 
     wait.__name__ = name
-    wait.wait_ms = 500
+    wait.done = idle
+    wait.done_what = "the AI chat to finish"
+    wait.timeout_s = seconds
     return wait
 
 

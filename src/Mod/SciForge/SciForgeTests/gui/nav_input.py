@@ -72,44 +72,9 @@ def choose(button_label, label):
     if not path:
         h.check("%s > %s exists" % (button_label, label), False)
         return False
-    done = {"clicked": False}
-
-    def click_step(step, tries=0):
-        try:
-            menu, action = path[step]
-            if not menu.isVisible():
-                if tries == 3 and step > 0:
-                    parent, parent_action = path[step - 1]
-                    parent.setActiveAction(parent_action)
-                    QtTest.QTest.keyClick(parent, QtCore.Qt.Key_Right)
-                if tries < 20:
-                    QtCore.QTimer.singleShot(150, lambda: click_step(step, tries + 1))
-                return
-            rect = menu.actionGeometry(action)
-            QtTest.QTest.mouseMove(menu, rect.center())
-            if action.menu() is not None:
-                QtCore.QTimer.singleShot(400, lambda: click_step(step + 1))
-                return
-            QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center())
-            done["clicked"] = True
-        except Exception as exc:
-            h.check("click %s > %s" % (button_label, label), False, exc)
-            _close_popups()
-
-    QtCore.QTimer.singleShot(300, lambda: click_step(0))
-    guard = QtCore.QTimer()
-    guard.setSingleShot(True)
-    guard.timeout.connect(_close_popups)
-    guard.start(5000)
-    w.click(b)  # the drop-down runs its own loop until it closes
-    guard.stop()
-    QtWidgets.QApplication.processEvents()
-    h.check("clicked %s > %s" % (button_label, label), done["clicked"])
-    return done["clicked"]
-
-
-def _close_popups():
-    popup = QtWidgets.QApplication.activePopupWidget()
-    while popup is not None:
-        popup.close()
-        popup = QtWidgets.QApplication.activePopupWidget()
+    # the drop-down runs its own loop until it closes; its entries are clicked inside it
+    clicked = h.choose_from(
+        lambda: w.click(b), [action for _menu, action in path], "the %s drop-down" % button_label
+    )
+    h.check("clicked %s > %s" % (button_label, label), clicked)
+    return clicked

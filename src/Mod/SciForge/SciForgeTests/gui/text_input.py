@@ -194,7 +194,7 @@ def marking_list_click(label):
         if row.split("    ")[0].strip() == label:
             item = listing.item(i)
             rect = listing.visualItemRect(item)
-            QtTest.QTest.mouseMove(listing.viewport(), rect.center())
+            h.pointer_to(listing.viewport(), rect.center())
             QtTest.QTest.mouseClick(
                 listing.viewport(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center()
             )

@@ -29,7 +29,8 @@
 # --repeat   runs each scenario N times in a row (a fresh profile each time) and prints how
 #            often each passed: a race shows up as a scenario that passes only sometimes
 # --stress   the GUI tests on a slow machine on purpose: FreeCAD and its X server pinned to
-#            one CPU core that SCIFORGE_STRESS_LOAD busy loops (default 2) share with them.
+#            one CPU core (SCIFORGE_STRESS_CPU, default 0) that SCIFORGE_STRESS_LOAD busy
+#            loops (default 2) share with them.
 #            A scenario that waits for the app's state passes just as well when slow; one
 #            that waits a fixed time shows its race here first.
 #
@@ -386,13 +387,15 @@ start_stress() {
         echo "--stress needs taskset (util-linux)" >&2
         exit 2
     fi
-    local i
+    local i cpu="${SCIFORGE_STRESS_CPU:-0}"
     for i in $(seq 1 "${SCIFORGE_STRESS_LOAD:-2}"); do
-        taskset -c 0 python3 -c 'while True: pass' &
+        taskset -c "${cpu}" python3 -c 'while True: pass' &
         STRESS_PIDS+=($!)
     done
-    PIN=(taskset -c 0)
-    echo "== [SciForge] stress: FreeCAD pinned to CPU 0 with ${#STRESS_PIDS[@]} busy loops"
+    PIN=(taskset -c "${cpu}")
+    # FreeCAD gets about 1 / (loops + 1) of the core: speed limits in checks scale by it
+    export SCIFORGE_SLOWDOWN=$(( ${#STRESS_PIDS[@]} + 1 ))
+    echo "== [SciForge] stress: FreeCAD pinned to CPU ${cpu} with ${#STRESS_PIDS[@]} busy loops"
 }
 
 stop_stress() {

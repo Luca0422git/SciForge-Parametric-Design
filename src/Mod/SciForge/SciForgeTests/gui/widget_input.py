@@ -10,6 +10,8 @@ for a person's click, drag or key press.
 from PySide import QtCore, QtGui, QtWidgets
 from PySide6 import QtTest
 
+from SciForgeTests.gui import harness as h
+
 LEFT = QtCore.Qt.LeftButton
 NONE = QtCore.Qt.NoModifier
 
@@ -23,8 +25,8 @@ def center(widget):
 
 
 def move(widget, pos):
-    QtTest.QTest.mouseMove(widget, pos)
-    _process()
+    """The pointer to `pos` of the widget, seen by Qt before the next input."""
+    h.pointer_to(widget, pos)
 
 
 def click(widget, pos=None, modifiers=NONE, button=LEFT):
@@ -52,158 +54,78 @@ def _menu_action(menu, text):
     return None
 
 
+def _texts(menu):
+    return [(a.text().replace("&", "").strip(), a.isEnabled()) for a in menu.actions() if not a.isSeparator()]
+
+
 def menu_texts(widget, pos):
     """The entries of the right-click menu at pos (the menu is closed again with Esc)."""
     found = {}
 
-    def read():
-        menu = QtWidgets.QApplication.activePopupWidget()
-        if isinstance(menu, QtWidgets.QMenu):
-            found["seen"] = True
-            found["texts"] = [
-                (a.text().replace("&", "").strip(), a.isEnabled())
-                for a in menu.actions()
-                if not a.isSeparator()
-            ]
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-        elif found.get("tries", 0) < 20:
-            found["tries"] = found.get("tries", 0) + 1
-            QtCore.QTimer.singleShot(50, read)
+    def read(menu):
+        found["texts"] = _texts(menu)
 
-    QtCore.QTimer.singleShot(50, read)
-    _open_menu(widget, pos, found)
+    h.choose_from(lambda: _open_menu(widget, pos), [], "the right-click menu", report=False, read=read)
     return found.get("texts", [])
 
 
 def right_click(widget, pos, choose):
     """Right-click at pos, then click the menu entry `choose` (like a person). Returns
     True if the entry was there and enabled. Esc closes the menu when choose is None."""
-    result = {"ok": False}
-    QtCore.QTimer.singleShot(50, _picker(result, choose))
-    _open_menu(widget, pos, result)
-    _process()
-    return result["ok"]
+    return h.choose_from(
+        lambda: _open_menu(widget, pos),
+        [choose] if choose else [],
+        "the right-click menu",
+        report=False,
+    )
 
 
 def right_click_sub(widget, pos, top, choose):
-    """Right-click at pos, open the submenu `top` (a person clicks it) and click its entry
+    """Right-click at pos, open the submenu `top` (a person points at it) and click its entry
     `choose`. Returns True if both were there and enabled; result["texts"] lists the
     submenu's entries [(text, checked)] when it opened."""
     result = {"ok": False}
 
-    def find_top():
-        menu = QtWidgets.QApplication.activePopupWidget()
-        if not isinstance(menu, QtWidgets.QMenu):
-            if result.get("tries", 0) < 20:
-                result["tries"] = result.get("tries", 0) + 1
-                QtCore.QTimer.singleShot(50, find_top)
-            return
+    def read(menu):
         result["seen"] = True
         result["top"] = menu
-        action = _menu_action(menu, top)
-        # (the submenu is found by its title: PySide's QAction.menu() can hand back a
-        # wrapper that deletes the submenu when it is dropped)
-        subs = [m for m in menu.findChildren(QtWidgets.QMenu) if m.title().replace("&", "") == top]
-        if action is None or not subs or not action.isEnabled():
-            result["texts"] = [a.text() for a in menu.actions()]
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-            return
-        result["sub"] = subs[0]
-        rect = menu.actionGeometry(action)
-        for i in range(8):
-            QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 10 + 8 * i, rect.center().y()))
-        QtCore.QTimer.singleShot(100, find_sub)  # hovering opens the submenu
-
-    def _escape_all():
-        for _ in range(3):
-            popup = QtWidgets.QApplication.activePopupWidget()
-            if popup is None:
-                return
-            QtTest.QTest.keyClick(popup, QtCore.Qt.Key_Escape)
-
-    def find_sub():
-        sub = result["sub"]
-        try:
-            shown = sub.isVisible()
-        except RuntimeError:
-            _escape_all()
-            return
-        if not shown:
-            if result.get("sub_tries", 0) < 30:
-                result["sub_tries"] = result.get("sub_tries", 0) + 1
-                QtCore.QTimer.singleShot(50, find_sub)
-            else:
-                _escape_all()
-            return
-        result["texts"] = [
-            (a.text().replace("&", "").strip(), a.isChecked())
-            for a in sub.actions()
-            if not a.isSeparator()
-        ]
-        action = _menu_action(sub, choose) if choose else None
+        action = h.find_entry(menu, top)
         if action is None or not action.isEnabled():
-            _escape_all()
+            result["texts"] = [a.text() for a in menu.actions()]
             return
-        rect = sub.actionGeometry(action)
-        for i in range(6):
-            QtTest.QTest.mouseMove(sub, QtCore.QPoint(rect.left() + 6 + 6 * i, rect.center().y()))
-        QtTest.QTest.mouseMove(sub, rect.center())
-        QtTest.QTest.mouseClick(sub, LEFT, NONE, rect.center())
-        result["ok"] = True
+        sub = h.submenu(menu, action)
+        result["sub"] = sub
+        h.light_entry(menu, action)
+        h.wait_for(lambda: sub is not None and sub.isVisible(), "the submenu %s to open" % top)
+        result["texts"] = [
+            (a.text().replace("&", "").strip(), a.isChecked()) for a in sub.actions() if not a.isSeparator()
+        ]
 
-    QtCore.QTimer.singleShot(50, find_top)
-    _open_menu(widget, pos, result)
-    _process()
+    result["ok"] = h.choose_from(
+        lambda: _open_menu(widget, pos),
+        [top, choose] if choose else [],
+        "the right-click menu",
+        report=False,
+        read=read,
+    )
     return result
 
 
 def click_menu(button, choose):
     """Click a button that opens a menu (Home's ... of a place), then the entry `choose`.
     Returns True if the entry was there and enabled."""
-    result = {"ok": False}
-    QtCore.QTimer.singleShot(50, _picker(result, choose))
-    click(button)
-    _process()
-    return result["ok"]
+    return h.choose_from(lambda: click(button), [choose], "the menu of %s" % h.describe(button), report=False)
 
 
-def _picker(result, choose):
-    """Waits for the open menu, then clicks its entry `choose` (Esc when it is not there)."""
-
-    def pick():
-        menu = QtWidgets.QApplication.activePopupWidget()
-        if isinstance(menu, QtWidgets.QMenu):
-            result["seen"] = True
-        else:
-            if result.get("tries", 0) < 20:
-                result["tries"] = result.get("tries", 0) + 1
-                QtCore.QTimer.singleShot(50, pick)
-            return
-        action = _menu_action(menu, choose) if choose else None
-        if action is None or not action.isEnabled():
-            result["texts"] = [a.text() for a in menu.actions()]
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-            return
-        rect = menu.actionGeometry(action)
-        # A person moves the mouse onto the entry; QMenu ignores a click that comes
-        # without any movement since it opened (it could be the opening click).
-        for i in range(8):
-            QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 10 + 8 * i, rect.center().y()))
-        QtTest.QTest.mouseMove(menu, rect.center())
-        QtTest.QTest.mouseClick(menu, LEFT, NONE, rect.center())
-        result["ok"] = True
-
-    return pick
-
-
-def _open_menu(widget, pos, state):
+def _open_menu(widget, pos):
     """A right button press/release, then the context-menu event the window system
     sends for it, unless the release already opened the menu."""
     move(widget, pos)
+    shown = h.menus_shown()
     QtTest.QTest.mousePress(widget, QtCore.Qt.RightButton, NONE, pos)
     QtTest.QTest.mouseRelease(widget, QtCore.Qt.RightButton, NONE, pos)
     _process()
-    if state.get("seen"):
+    if h.menus_shown() > shown:
         return
     event = QtGui.QContextMenuEvent(
         QtGui.QContextMenuEvent.Mouse, pos, widget.mapToGlobal(pos), NONE

@@ -535,18 +535,25 @@ def solving():
     return simulation_solve_dialog.solving()
 
 
+def solve_took_setup():
+    """The running solve has taken the study as it solves it (its first stage, a moment after
+    Go): a change made after this leaves the results out of date."""
+    from sciforge import simulation_solve_dialog
+
+    job = simulation_solve_dialog.RUN["job"]
+    return job is not None and getattr(job, "_fingerprints", None) is not None
+
+
 def wait_solved(name="wait_solved", seconds=180):
-    """A step that comes back every 500 ms while a solve (or mesh) runs."""
-    state = {"start": None}
+    """A step that waits until no solve (or mesh) runs (at most `seconds`)."""
 
     def step():
-        if state["start"] is None:
-            state["start"] = time.time()
-        if solving() and time.time() - state["start"] < seconds:
-            h.state["queue"].insert(0, step)
+        pass
 
     step.__name__ = name
-    step.wait_ms = 500
+    step.done = lambda: not solving()
+    step.done_what = "the solve (or mesh) to end"
+    step.timeout_s = seconds
     return step
 
 

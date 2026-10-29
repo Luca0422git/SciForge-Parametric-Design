@@ -44,19 +44,9 @@ def panel():
     return p if p is not None and not p._closed and Gui.Control.activeDialog() else None
 
 
-def settle(timeout_ms=8000):
+def settle(timeout_ms=None):
     """Let the preview catch up (its timer done, no recompute running)."""
-    end = time.time() + timeout_ms / 1000.0
-    while time.time() < end:
-        QtTest.QTest.qWait(60)
-        p = panel()
-        if p is None:
-            return
-        busy = (
-            p._timer.isActive() or getattr(p, "_pending", False) or App.ActiveDocument.Recomputing
-        )
-        if not busy:
-            return
+    h.caught_up(panel())
 
 
 def volume():

@@ -138,10 +138,7 @@ def look(name):
 
 
 def settle():
-    from PySide6 import QtTest
-
-    QtCore.QCoreApplication.processEvents()
-    QtTest.QTest.qWait(150)
+    h.settle()
 
 
 def look_from(direction):

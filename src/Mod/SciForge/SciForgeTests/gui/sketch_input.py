@@ -40,53 +40,14 @@ def _find(menu, label):
     return []
 
 
-class _MoveSeen(QtCore.QObject):
-    """The last pointer position a widget was told about (a mouse move it received)."""
-
-    def __init__(self):
-        super().__init__()
-        self.last = None
-
-    def eventFilter(self, obj, event):
-        try:
-            if event.type() == QtCore.QEvent.MouseMove:
-                self.last = event.position().toPoint()
-        except Exception:
-            pass
-        return False
-
-
-_SEEN = {}
-
-
-def _move_seen(widget, pos, timeout_ms=150):
-    """The pointer to `pos` of `widget`, then wait until the widget has been told. QTest
-    moves the real pointer and the X server tells Qt a moment later; two moves told together
-    are folded into the last one, and a pointer "moved" to where Qt last saw it is no move."""
-    seen = _SEEN.get(id(widget))
-    if seen is None or seen[1] is not widget:
-        seen = _SEEN[id(widget)] = (_MoveSeen(), widget)
-        widget.installEventFilter(seen[0])
-    seen[0].last = None
-    QtTest.QTest.mouseMove(widget, pos)
-    waited = 0
-    while seen[0].last != pos and waited < timeout_ms:
-        QtTest.QTest.qWait(10)
-        waited += 10
-
-
-def _seen_on(menu, action, timeout_ms=300):
-    """Wait until the open menu has lit `action` under the pointer (at most timeout_ms)."""
-    waited = 0
-    while menu.isVisible() and menu.activeAction() is not action and waited < timeout_ms:
-        QtTest.QTest.qWait(20)
-        waited += 20
-    return menu.activeAction() is action
-
-
 def menu_item(group_title, label):
-    """Click the group's name in the ribbon (opens its menu), then click `label` in
-    the menu with the mouse, opening submenus on the way. True if it was clicked."""
+    """Click the group's name in the ribbon (opens its menu), then click `label` in the menu
+    with the mouse, opening submenus on the way. True if it was clicked.
+
+    Every pointer move is seen by Qt before the next input and the entry is clicked only
+    once the menu has lit it (h.choose_from): CI #285 - #287 lost clicks to a late "moved"
+    from the X server. A menu that does not open or an entry that never lights fails a check
+    naming it within h.WAIT_S, with the menu closed (no safety timer)."""
     group = _group_widget(group_title)
     if group is None:
         h.check("Ribbon group %s is shown" % group_title, False)
@@ -95,63 +56,16 @@ def menu_item(group_title, label):
     if not path:
         h.check("Menu entry %s > %s exists" % (group_title, label), False)
         return False
-    done = {"clicked": False}
-
-    def click(step, tries=0):
-        try:
-            menu, action = path[step]
-            if not menu.isVisible():
-                if tries == 3 and step > 0:
-                    # the submenu did not open from the pointer: the keyboard's Right
-                    # arrow opens the highlighted entry's submenu
-                    parent, parent_action = path[step - 1]
-                    parent.setActiveAction(parent_action)
-                    QtTest.QTest.keyClick(parent, QtCore.Qt.Key_Right)
-                if tries < 20:
-                    QtCore.QTimer.singleShot(150, lambda: click(step, tries + 1))
-                return
-            rect = menu.actionGeometry(action)
-            # From a neighbouring pixel (a pointer already on the spot sends no move), each move
-            # seen by the menu before the next; the menu takes the click only on an entry it
-            # has lit (a "moved" that came late, or two folded into one, dropped the click:
-            # CI #285 - #287, a second CREATE > Offset, INSERT > Insert Derive, SOLVE >
-            # Generate Mesh did nothing). Another neighbouring pixel if it is still not lit.
-            for near in ((0, -3), (2, 3), (-3, 2)):
-                _move_seen(menu, rect.center() + QtCore.QPoint(*near))
-                _move_seen(menu, rect.center())
-                if action.menu() is not None or _seen_on(menu, action):
-                    break
-            if action.menu() is not None:
-                # hovering opens a submenu (a click on it could close it again)
-                QtCore.QTimer.singleShot(400, lambda: click(step + 1))
-                return
-            QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center())
-            done["clicked"] = True
-        except Exception as exc:
-            h.check("Menu click %s" % label, False, exc)
-            QtWidgets.QApplication.activePopupWidget() and QtWidgets.QApplication.activePopupWidget().close()
-
-    def safety():  # never leave a menu open (it would block the scenario)
-        popup = QtWidgets.QApplication.activePopupWidget()
-        while popup is not None:
-            popup.close()
-            popup = QtWidgets.QApplication.activePopupWidget()
-
-    QtCore.QTimer.singleShot(300, lambda: click(0))
-    guard = QtCore.QTimer()
-    guard.setSingleShot(True)
-    guard.timeout.connect(safety)
-    guard.start(4000)
-    # A person's pointer is on the group's name when the menu opens (it could still be on an
-    # entry from the last time the menu was used, and Qt drops a click on an entry the pointer
-    # has not moved to since the menu opened).
-    QtTest.QTest.mouseMove(group.label, group.label.rect().center())
-    QtTest.QTest.qWait(100)  # (the real pointer's move reaches Qt a moment later)
-    group.label.click()  # the menu runs its own loop until it closes
-    guard.stop()  # (a late guard would close the next menu)
-    QtWidgets.QApplication.processEvents()
-    h.check("Clicked %s > %s" % (group_title, label), done["clicked"])
-    return done["clicked"]
+    # A person's pointer is on the group's name when the menu opens (Qt drops a click on an
+    # entry the pointer has not moved to since the menu opened).
+    h.pointer_to(group.label, group.label.rect().center())
+    clicked = h.choose_from(
+        group.label.click,  # (the menu runs its own loop until it closes)
+        [action for _menu, action in path],
+        "the %s menu" % group_title,
+    )
+    h.check("Clicked %s > %s" % (group_title, label), clicked)
+    return clicked
 
 
 def notifications():
@@ -262,6 +176,7 @@ def palette_click(object_name):
     pos = widget.rect().center()
     if isinstance(widget, QtWidgets.QCheckBox):
         pos = QtCore.QPoint(8, widget.height() // 2)  # the box itself
+    h.pointer_to(widget, pos)
     QtTest.QTest.mouseClick(widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
     QtWidgets.QApplication.processEvents()
     return True
@@ -286,7 +201,7 @@ def click(point, approach=App.Vector(1.0, 0.6, 0)):
     # A hand rests a moment on the spot before pressing. FreeCAD's sketch finds what is
     # under the pointer when it redraws after a move; a press in the same instant (a busy
     # machine) found nothing and the click selected nothing.
-    QtTest.QTest.qWait(80)
+    h.view_drawn()
     return h.click(point)
 
 
@@ -314,7 +229,7 @@ def click_held(point, modifiers, approach=App.Vector(1.0, 0.6, 0)):
         move_held(h.screen_point(point + approach * f), modifiers)
     pos = h.screen_point(point)
     move_held(pos, modifiers)
-    QtTest.QTest.qWait(80)
+    h.view_drawn()
     QtTest.QTest.mouseClick(h.gl_widget(), QtCore.Qt.LeftButton, modifiers, pos)
     QtWidgets.QApplication.processEvents()
     return pos
@@ -563,7 +478,7 @@ def marking_slot(label):
         return False
     for button in menu.findChildren(QtWidgets.QToolButton):
         if button.text() == label:
-            QtTest.QTest.mouseMove(button, button.rect().center())
+            h.pointer_to(button, button.rect().center())
             QtTest.QTest.mouseClick(button, QtCore.Qt.LeftButton)
             QtWidgets.QApplication.processEvents()
             return True

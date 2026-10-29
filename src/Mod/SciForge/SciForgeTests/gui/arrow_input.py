@@ -124,8 +124,10 @@ def top_name(pos):
 
 class HeldDrag:
     """Press on `start` (widget pixel), move to `end` in `moves` steps `every_ms` apart with
-    the left button held, call sample(index) after each move, keep the button down for
-    `hold_ms` more (sample(-1) then), release. self.done turns True at the end."""
+    the left button held (a hand's pace: the live preview is tested while it lags behind),
+    call sample(index) after each move, keep the button down until the app has caught up
+    with the last move (sample(-1) then), release. self.done turns True at the end.
+    (hold_ms is no longer used: the hold lasts until the app has settled.)"""
 
     def __init__(self, start, end, moves=50, every_ms=20, hold_ms=250, sample=None):
         self.start, self.end = start, end
@@ -152,7 +154,7 @@ class HeldDrag:
             self.widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, self._local(self.start)
         )
         QtWidgets.QApplication.processEvents()
-        QtCore.QTimer.singleShot(self.every_ms, self._next)
+        QtCore.QTimer.singleShot(self.every_ms, self._next)  # input pace: a hand's speed
 
     def _local(self, pos):
         """A pixel of the 3D view in the coordinates of the widget that got the press."""
@@ -186,9 +188,10 @@ class HeldDrag:
             if self.sample:
                 self.sample(self.index)
             if self.index < self.moves:
-                QtCore.QTimer.singleShot(self.every_ms, self._next)
+                QtCore.QTimer.singleShot(self.every_ms, self._next)  # input pace: a hand's speed
             else:
-                QtCore.QTimer.singleShot(self.hold_ms, self._release)
+                # held still until the preview has caught up with the last move
+                h.when(h._calm(ignore_input=True), self._release, "the app to catch up with the held drag")
         except Exception as exc:
             self.error = str(exc)
             self._release()
@@ -255,18 +258,17 @@ def give_distance(text="10", timeout_ms=4000):
     if not type_distance(text):
         return False
     panel = extrude_ui.ExtrudePanel.last
-    end = time.time() + timeout_ms / 1000.0
-    while time.time() < end:
-        QtTest.QTest.qWait(50)
+
+    def caught_up():
         timer = getattr(panel, "_timer", None)
-        busy = (
+        return not (
             (timer is not None and timer.isActive())
             or getattr(panel, "_pending", False)
             or getattr(App.ActiveDocument, "Recomputing", False)
         )
-        if not busy:
-            break
-    return True
+
+    h.wait_for(caught_up, "the Extrude preview to catch up with the typed distance")
+    return h.settle()
 
 
 def focus_name():

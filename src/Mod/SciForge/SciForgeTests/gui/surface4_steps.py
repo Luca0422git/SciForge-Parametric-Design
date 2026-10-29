@@ -104,20 +104,9 @@ def panel():
     return p if p is not None and not p._closed else None
 
 
-def settle(timeout_ms=8000):
-    p = panel()
-    end = time.time() + timeout_ms / 1000.0
-    while time.time() < end:
-        QtTest.QTest.qWait(50)
-        if p is None:
-            break
-        timer = getattr(p, "_timer", None)
-        busy = (timer is not None and timer.isActive()) or getattr(
-            App.ActiveDocument, "Recomputing", False
-        )
-        if not busy:
-            break
-    QtTest.QTest.qWait(100)
+def settle(timeout_ms=None):
+    """The open dialog's preview caught up with the last input (timeout_ms: no longer used)."""
+    h.caught_up(panel())
 
 
 def type_main(text):

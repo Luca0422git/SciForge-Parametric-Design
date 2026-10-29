@@ -30,4 +30,5 @@ except Exception:
         json.dump(result, handle, indent=2)
     from PySide import QtCore, QtWidgets
 
-    QtCore.QTimer.singleShot(200, QtWidgets.QApplication.instance().quit)
+    app = QtWidgets.QApplication.instance()
+    QtCore.QMetaObject.invokeMethod(app, "quit", QtCore.Qt.QueuedConnection)

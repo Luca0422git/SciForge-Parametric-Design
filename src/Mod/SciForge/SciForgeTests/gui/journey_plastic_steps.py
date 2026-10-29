@@ -103,7 +103,7 @@ def tab(label):
 
 
 def settle():
-    p1.settle(None, 300)
+    h.settle()
 
 
 def ok_errors(where):

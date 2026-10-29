@@ -314,7 +314,7 @@ jobs:
       - name: Test the Linux build (unit, golden models, GUI smoke and journey)
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri
+          tools/sciforge/gui_env.sh --install
           image=$(ls package/rattler-build/linux/SciForge_*.AppImage | head -1)
           mkdir -p .sciforge-cache/sciforge
           (cd .sciforge-cache/sciforge && "$GITHUB_WORKSPACE/$image" --appimage-extract >/dev/null)
@@ -377,11 +377,15 @@ jobs:
           retention-days: 30
 
   # The GUI scenarios on the built Linux AppImage, in 9 parts side by side (as sciforge-tests.yml). They test the
-  # C++ fixes through the interface; the uploads above do not wait for them.
+  # C++ fixes through the interface; the uploads above do not wait for them. The same machine
+  # image and GUI environment (tools/sciforge/gui_env.sh) as the tests workflow's scenario parts,
+  # so a scenario green there is green here unless the compiled program differs. A failed part
+  # can be run again on its own (Re-run failed jobs): it downloads this run's AppImage again,
+  # nothing is compiled (docs/sciforge/dev/gui-tests.md).
   scenarios:
     needs: [matrix, build]
     if: ${{ !cancelled() && contains(needs.matrix.outputs.include, 'linux-64') }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
       contents: read
@@ -413,7 +417,7 @@ jobs:
 
       - name: Scenarios ${{ matrix.shard }}
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri
+          tools/sciforge/gui_env.sh --install
           tools/sciforge/run_tests.sh --freecad .sciforge-cache/sciforge --out test-output --only scenarios --shard ${{ matrix.shard }}
 
       - name: Name of the reports

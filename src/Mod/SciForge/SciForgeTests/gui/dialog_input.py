@@ -11,6 +11,8 @@ import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
 from PySide6 import QtTest
 
+from SciForgeTests.gui import harness as h
+
 
 def _process():
     QtWidgets.QApplication.processEvents()
@@ -18,26 +20,24 @@ def _process():
 
 def choose(combo, text):
     """Pick `text` in a drop-down with the keyboard (Up/Down, like a person who clicked it).
-    The list is waited for before the keys (it may open late on a slow machine: CI #110's
-    fillet_qa_more P17 lost its keys once); if it never shows, the same keys go to the closed
-    drop-down, which steps through its items as well (Tab into it and press Down)."""
+    The keys wait until the list shows (it may open late on a slow machine: CI #110's
+    fillet_qa_more P17 lost its keys once). (The pointer stays where it is: a list that
+    opens under the pointer follows it, and Down would start from the hovered row.)"""
     target = combo.findText(text)
     if target < 0:
         raise ValueError("%r is not in the drop-down %s" % (text, combo.objectName()))
+    if not combo.isEnabled():
+        h.check("the drop-down %s takes a choice (%s)" % (combo.objectName(), text), False, "greyed out")
+        return False
     # No shortcut when it already shows `text`: choosing it again is a real choice (Extrude,
     # Revolve, Sweep, Loft, Pipe and the primitives lock a picked Operation on `activated`).
     combo.setFocus()
     QtTest.QTest.mouseClick(combo, QtCore.Qt.LeftButton)  # opens the list
-    _process()
     view = combo.view()
-    for _ in range(40):  # up to a second, as a person waits to see the list
-        if view.isVisible():
-            break
-        QtTest.QTest.qWait(25)
-    if view.isVisible():
-        _step(view, target - combo.currentIndex())
-        QtTest.QTest.keyClick(view, QtCore.Qt.Key_Return)
-        _process()
+    h.wait_for(view.isVisible, "the list of %s to open" % (combo.objectName() or "a drop-down"))
+    _step(view, target - combo.currentIndex())
+    QtTest.QTest.keyClick(view, QtCore.Qt.Key_Return)
+    _process()
     if combo.currentText() != text:
         if view.isVisible():
             QtTest.QTest.keyClick(view, QtCore.Qt.Key_Escape)

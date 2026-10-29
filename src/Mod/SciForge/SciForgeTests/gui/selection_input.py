@@ -146,9 +146,7 @@ def drag_box(x0, y0, x1, y1, crossing=False, modifiers=NONE, steps=10):
     else:
         start, end = QtCore.QPoint(x0, y0), QtCore.QPoint(x1, y1)
     h.drag(start, end, steps=steps, modifiers=modifiers)
-    _process()
-    QtTest.QTest.qWait(80)  # the box's selection is applied a moment after the release
-    _process()
+    h.settle("the box's selection to be applied")  # (it comes a moment after the release)
 
 
 def box_around(points, margin=12, crossing=False, modifiers=NONE):
@@ -202,9 +200,7 @@ def lasso(points_3d, margin=14, crossing=False, modifiers=NONE):
             _process()
         last = target
     QtTest.QTest.mouseRelease(widget, LEFT, modifiers, last)
-    _process()
-    QtTest.QTest.qWait(80)
-    _process()
+    h.settle("the selection to be applied after the release")
 
 
 def paint(points_3d, modifiers=NONE, steps=6):
@@ -232,9 +228,7 @@ def paint(points_3d, modifiers=NONE, steps=6):
             _process()
         last = target
     QtTest.QTest.mouseRelease(widget, LEFT, modifiers, last)
-    _process()
-    QtTest.QTest.qWait(80)
-    _process()
+    h.settle("the selection to be applied after the release")
 
 
 def band():
@@ -267,9 +261,7 @@ def press_and_move(point, dx, dy, modifiers=NONE):
 
 def release_at(pos, modifiers=NONE):
     QtTest.QTest.mouseRelease(h.gl_widget(), LEFT, modifiers, pos)
-    _process()
-    QtTest.QTest.qWait(80)
-    _process()
+    h.settle("the selection to be applied after the release")
 
 
 # -- the long press (Select Other) -------------------------------------------------------------
@@ -307,16 +299,12 @@ def _action(menu, text):
 
 
 def hover_row(menu, text):
+    """The pointer onto the row until the list has lit it (each move seen by Qt)."""
     action = _action(menu, text)
     if action is None:
         h.check("Select Other row %r exists" % text, False, rows(menu))
         return False
-    rect = menu.actionGeometry(action)
-    for i in range(4):
-        QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 8 + 6 * i, rect.center().y()))
-        _process()
-    QtTest.QTest.mouseMove(menu, rect.center())
-    _process()
+    h.light_entry(menu, action)
     return True
 
 
@@ -325,13 +313,9 @@ def click_row(menu, text):
     if action is None:
         h.check("Select Other row %r exists" % text, False, rows(menu))
         return False
-    rect = menu.actionGeometry(action)
-    QtTest.QTest.mouseMove(menu, rect.center())
-    _process()
-    QtTest.QTest.mouseClick(menu, LEFT, NONE, rect.center())
-    _process()
-    QtTest.QTest.qWait(80)
-    _process()
+    h.light_entry(menu, action)
+    QtTest.QTest.mouseClick(menu, LEFT, NONE, menu.actionGeometry(action).center())
+    h.settle("the Select Other row's pick to be applied")
     return True
 
 
@@ -367,65 +351,19 @@ def choose_select(path):
         return result
     path = list(path or [])
 
-    def pick(tries=0):
-        menu = QtWidgets.QApplication.activePopupWidget()
-        if not isinstance(menu, QtWidgets.QMenu):
-            if tries < 40:
-                QtCore.QTimer.singleShot(50, lambda: pick(tries + 1))
-            return
+    def read(menu):
         result["entries"] = _menu_entries(menu)
-        if not path:
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
+        if len(path) < 2:
             return
-        action = None
-        for a in menu.actions():
-            if a.text().replace("&", "").split("\t")[0].strip() == path[0]:
-                action = a
+        action = h.find_entry(menu, path[0])
         if action is None or not action.isEnabled():
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
             return
-        rect = menu.actionGeometry(action)
-        if len(path) == 1:
-            _click_in(menu, rect)
-            result["ok"] = True
-            return
-        # A submenu: hover its row, then click inside the submenu once it is open.
-        QtTest.QTest.mouseMove(menu, rect.center())
-        _process()
-        menu.setActiveAction(action)
-        _process()
+        # the submenu's entries as it shows them (choose_from then clicks in it)
+        h.light_entry(menu, action)
+        sub = h.submenu(menu, action)
+        h.wait_for(lambda: sub is not None and sub.isVisible(), "the submenu %s to open" % path[0])
+        result["sub"] = _menu_entries(sub)
 
-        def pick_sub(tries=0):
-            sub = action.menu()
-            if sub is None or not sub.isVisible():
-                if tries < 40:
-                    QtCore.QTimer.singleShot(50, lambda: pick_sub(tries + 1))
-                else:
-                    QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-                return
-            result["sub"] = _menu_entries(sub)
-            target = None
-            for a in sub.actions():
-                if a.text().replace("&", "").split("\t")[0].strip() == path[1]:
-                    target = a
-            if target is None or not target.isEnabled():
-                QtTest.QTest.keyClick(sub, QtCore.Qt.Key_Escape)
-                QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-                return
-            _click_in(sub, sub.actionGeometry(target))
-            result["ok"] = True
-
-        QtCore.QTimer.singleShot(80, pick_sub)
-
-    QtCore.QTimer.singleShot(50, pick)
-    w.click(button)  # the drop-down runs its own event loop; pick() runs inside it
-    _process()
+    # the drop-down runs its own event loop; the entries are clicked inside it
+    result["ok"] = h.choose_from(lambda: w.click(button), path, "the SELECT menu", report=False, read=read)
     return result
-
-
-def _click_in(menu, rect):
-    for i in range(5):
-        QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 10 + 8 * i, rect.center().y()))
-    QtTest.QTest.mouseMove(menu, rect.center())
-    QtTest.QTest.mouseClick(menu, LEFT, NONE, rect.center())
-    _process()

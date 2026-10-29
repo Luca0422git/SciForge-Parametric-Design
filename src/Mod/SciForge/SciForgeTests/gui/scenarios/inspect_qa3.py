@@ -607,13 +607,13 @@ def r_start():
     s.menu("INSPECT", "Interference")
 
 
+# (the menu click once landed while FreeCAD was still busy, CI #114: a step now starts only
+# once the app has settled, and the dialog must be open before the next one)
+r_start.done = lambda: panel() is not None
+r_start.done_what = "the Interference dialog is open"
+
+
 def r_one():
-    if panel() is None and not st.get("r_retried"):
-        # The menu click can land while FreeCAD is still busy (CI #114): open it again.
-        st["r_retried"] = True
-        s.menu("INSPECT", "Interference")
-        h.state["queue"].insert(0, r_one)
-        return
     h.fit()
     h.click(V(5, 5, 10))
 

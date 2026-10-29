@@ -118,11 +118,12 @@ jobs:
           print("CHANGELOG.md has a section for %s" % version)
           PYEOF
 
+      # (a manual repeat run of some GUI scenarios does not count: it skips the other tests)
       - name: The tests passed on this commit
         run: |
           sha="${{ steps.what.outputs.sha }}"
           green="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/sciforge-tests.yml/runs?head_sha=${sha}&per_page=20" \
-            --jq '[.workflow_runs[] | select(.conclusion == "success")] | length')"
+            --jq '[.workflow_runs[] | select(.conclusion == "success" and (.display_title | startswith("Repeat") | not))] | length')"
           if [ "${green:-0}" -gt 0 ]; then
             echo "SciForge tests passed on ${sha}"
           elif [ "${PUBLISH}" = "true" ]; then
@@ -271,7 +272,7 @@ jobs:
 
       - name: Test it (unit, golden models, GUI smoke and journey)
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb xauth libgl1-mesa-dri
+          tools/sciforge/gui_env.sh --install
           mkdir -p .sciforge-cache/sciforge
           (cd .sciforge-cache/sciforge && "$GITHUB_WORKSPACE/out/${IMAGE}" --appimage-extract >/dev/null)
           tools/sciforge/run_tests.sh --freecad .sciforge-cache/sciforge --out test-output --only base

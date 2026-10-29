@@ -37,6 +37,13 @@ develop. So everything goes on develop until i give the green light".
   `sciforge-v0.1.0-beta` and push the tag. The tag starts `sciforge-build.yml` (already
   triggered by `sciforge-v*` tags), which builds and (after R3 of this brief) publishes the
   GitHub Release.
+- **The fast tests gate every release** (2026-10-29, the GUI test rework). A tag
+  `sciforge-v<version>` is pushed, and `Release` moved, only after **Actions > SciForge tests**
+  is fully green on that exact commit (a push run, or a manual run with repeat 1; a "Repeat GUI
+  scenarios" run does not count: it skips the base tests). The 4-hour build is never the first
+  place a test problem shows up: its scenario parts test the compiled program only. If one of
+  them fails, re-run just that part (Re-run failed jobs): it downloads the same run's AppImage,
+  nothing is compiled again (`docs/sciforge/dev/gui-tests.md`).
 - If `Release` and `develop` ever diverge (a hotfix), ask Luca; never rewrite either branch.
 - This rule is already in `CLAUDE.md` and in `MEMORY.md`'s Decisions log (2026-10-20).
 - Do not open pull requests (Luca's standing rule).

@@ -65,7 +65,7 @@ def person_double_click(pos, gap_ms=150):
     times a double-click with the wall clock, so it holds the second press back and hands
     it to the scene only together with the release."""
     click(pos)
-    QtTest.QTest.qWait(gap_ms)
+    QtTest.QTest.qWait(gap_ms)  # input pace: FreeCAD times a double-click with the clock
     click(pos)
 
 
@@ -150,7 +150,7 @@ def wait_until(condition, timeout_ms, step_ms=15):
             pass
         if (time.time() - start) * 1000 > timeout_ms:
             return None
-        QtTest.QTest.qWait(step_ms)
+        QtTest.QTest.qWait(step_ms)  # wait primitive: polls a state, measures how long it took
 
 
 def recomputing():
@@ -263,7 +263,7 @@ class SlowPart:
                 hook()
             except Exception:
                 SLOW["hook_error"] = traceback.format_exc()
-        time.sleep(SLOW["seconds"])
+        time.sleep(SLOW["seconds"])  # a slow part on purpose (the app under test)
 
     def onChanged(self, obj, prop):
         pass

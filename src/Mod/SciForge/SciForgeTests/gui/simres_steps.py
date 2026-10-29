@@ -409,23 +409,15 @@ def modified():
 
 
 def wait_until(test, name="wait", seconds=60):
-    """A step that comes back every 300 ms until test() is true (at most `seconds`)."""
-    import time
-
-    state = {"start": None}
+    """A step that waits until test() is true (at most `seconds`)."""
 
     def step():
-        if state["start"] is None:
-            state["start"] = time.time()
-        try:
-            done = test()
-        except Exception:
-            done = False
-        if not done and time.time() - state["start"] < seconds:
-            h.state["queue"].insert(0, step)
+        pass
 
     step.__name__ = name
-    step.wait_ms = 300
+    step.done = test
+    step.done_what = name.replace("_", " ")
+    step.timeout_s = seconds
     return step
 
 
