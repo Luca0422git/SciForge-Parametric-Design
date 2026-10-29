@@ -1209,6 +1209,10 @@ class ArrowDragger(BoxCarrier):
         # on the round, inside where the edge was, and points out of the material)
         self.keep_pointing = keep_pointing
         self.view = Gui.ActiveDocument.ActiveView
+        # the design the view shows: once it is closed the view is gone (or about to be), and
+        # asking it anything (its camera) crashed FreeCAD (sim_qa_results_close: Point Probes'
+        # grips polled the closed design's view until it was deleted)
+        self._doc_name = Gui.ActiveDocument.Document.Name
         self.origin = App.Vector(origin)
         self.direction = App.Vector(direction)
         if self.direction.Length > 1e-12:
@@ -1345,7 +1349,22 @@ class ArrowDragger(BoxCarrier):
         self.flip.angle.setValue(math.pi if distance < 0 and not self.keep_pointing else 0.0)
         self.guide.set_points([(0.0, 0.0, 0.0), (distance, 0.0, 0.0)])
 
+    def _view_gone(self):
+        """The design of this arrow's view is closed: stop for good, touching nothing of the
+        view (a closed design's view is deleted a moment later)."""
+        if self._doc_name in App.listDocuments():
+            return False
+        try:
+            self._timer.stop()
+        except Exception:
+            pass
+        drop_poll_on_move(self)
+        _LIVE_HANDLES.discard(self)
+        return True
+
     def _poll(self):
+        if self._view_gone():
+            return
         try:
             from . import handle_look
 
@@ -1380,6 +1399,9 @@ class ArrowDragger(BoxCarrier):
             scale.update(self.view, anchor)
 
     def remove(self):
+        if self._view_gone():
+            self.drop_box()
+            return
         try:
             self._timer.stop()
         except Exception:
