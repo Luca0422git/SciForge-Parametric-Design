@@ -370,7 +370,9 @@ def click_tab(label_start):
         pos = bar.tabRect(index).center()
         h.pointer_to(bar, pos)
         if bar.tabAt(pos) == index and wanted() == index:
+            before = bar.currentIndex()
             QtTest.QTest.mouseClick(bar, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
+            pressed = (index, before, bar.currentIndex(), bar.isEnabled())
             QtWidgets.QApplication.processEvents()
             break
     else:
@@ -388,13 +390,18 @@ def click_tab(label_start):
         own = doc_tabs.mdi_tabs()
         area = doc_tabs._area()
         sub = area.activeSubWindow() if area is not None else None
+        windows = area.subWindowList() if area is not None else []
         raise LookupError(
-            "tabs %s current %d; FreeCAD's %s current %s; active window %r; design %s"
+            "tabs %s current %d (the press on %d: current %d -> %d, bar enabled %s); FreeCAD's"
+            " %s current %s, enabled %s; windows %s; active window %r; design %s"
             % (
                 [tabs.tabText(i) for i in range(tabs.count())],
                 current,
+                *pressed,
                 [own.tabText(i) for i in range(own.count())] if own is not None else None,
                 own.currentIndex() if own is not None else None,
+                [own.isTabEnabled(i) for i in range(own.count())] if own is not None else None,
+                [(w.windowTitle(), w.isVisible(), w.isEnabled()) for w in windows],
                 sub.windowTitle() if sub is not None else None,
                 Gui.ActiveDocument.Document.Name if Gui.ActiveDocument else None,
             )
