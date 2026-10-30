@@ -15,7 +15,9 @@ Status: [x] 1 failures on the run page [x] 2 harness.wait_for / settle / ready /
 both workflows on ubuntu-24.04 [x] 7 check_waits.py ratchet [x] stress mode + CI repeat input
 [x] scenarios converted (batch 1, then CI part by part, each proven 3 times in a row under
 `--stress` first; f158198e: 0 fixed waits, 0 timer-paced scenarios) [ ] five green full runs
-in a row [ ] build dry run [ ] merged into develop (Luca).
+in a row (2026-10-30: 5 runs side by side on ee57bdd2, 1 all green, 4 with one flaky scenario
+each; next set on 727e6908; see the session log) [~] build dry run (build #15 on the branch,
+ee57bdd2, started 2026-10-30 13:05 UTC) [ ] merged into develop (Luca).
 Newest session log "GUI test rework".
 
 **2026-10-26: Luca's beta 3 list, split in two** (newest session log "Beta 3 list"):
@@ -643,7 +645,11 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
   Seen again on CI #324 (2026-10-30, 7d7735e5): 3.17656 mm across after OK and after Undo,
   FLAKY. Not reproduced here: 10 of 10 at full priority, and OK pressed 0, 0.2, 0.5, 0.9 and
   1.4 s into the Revolute preview 10 of 10. A real app race on CI's machine: the test is right
-  to fail; not loosened. Needs a reproduction (or the CI artifact's log) before a fix.
+  to fail; not loosened. Needs a reproduction (or the CI artifact's log) before a fix. Since
+  ee57bdd2 the shaft is checked square after the joint is made, after Offset Z, after OK and
+  after Undo, and a failure says its turn about Z and the joint's angle: the first stage that
+  fails says where the turn comes from. (The sandbox cannot fetch CI artifacts: the proxy
+  refuses GitHub's blob storage; only the job log is readable.)
 - **Open (found 2026-10-29 by the GUI test rework, not fixed): Create Sketch with a component
   active, the design's own XY row picked in the browser.** The component (Lid, at 0 0 0) has its
   XY in the same place as the design's. Picking the design's XY row put the sketch in Lid on a
@@ -661,6 +667,27 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
   for good, touching nothing of the view, once that design is closed (5 of 5 under stress after).
   Other polled handles (handles3d, move_ui's Triad, revolve_ui, hole_ui ...) may have the same
   weakness; none was seen crashing. Needs a CHANGELOG line in the next patch after the merge.
+- **Typing right after Rename went after the old name instead of replacing it (fixed
+  2026-10-30 on `sf/gui-tests-rework`, 727e6908; not released yet).** Right after Rename
+  (timeline step or group, browser row) the 3D view takes the keyboard for a moment; the name
+  field takes it back within its grace period (`inline_edit.GRACE_MS`), but Qt drops a
+  QLineEdit's selection when it loses the focus, so "Boss" typed then gave "Extrude 2Boss"
+  (timeline_browser on CI #331 and #334, full speed; "Body2Bracket" in the browser,
+  timeline_browser_qa3 on CI #337). During its grace period the field now never sees the focus
+  out (the event filter takes it) and takes the keyboard back: it keeps its selection, and keys
+  typed in between replace the name. A throwaway that moves the focus to the 3D view right
+  after Ctrl+A and types at once gave "Body2Bracket" before and "Bracket" after (727e6908 only
+  put the selection back on the refocus: too late for keys typed in between). The 18 scenarios
+  that rename in place pass. Needs a CHANGELOG line in the next patch.
+- **Open (CI #332 and the sandbox, 2026-10-30): INSERT's file dialog sometimes stays open after
+  the Enter** (journey_vex, journey_vex_sim j1: the name box empty, a file selected in the list,
+  no message box). Not reproduced alone (36 of 36 under `--stress`). The failure now says what
+  the dialog held at the Enter, each change of its name box, whether the box took the Enter and
+  the window Qt counted active (journey_vex_steps.answer_file_dialog): read that the next time.
+- **Open (CI #333, 2026-10-30): mesh_separate_combine F, the combined cube 1240 mm3 instead of
+  1180 after Keep Tools** (passed again in a fresh profile). 1240 = the bar overlapping 3.3 mm
+  instead of 5, or 4 mm of its width: as if the bar had moved. The failure now says the bar's
+  volume, place and box and the Combine's tools.
 - **Timeline playback went on after a command opened and was cancelled within 0.45 s (fixed
   2026-10-30 on `sf/gui-tests-rework`; not released yet).** Fusion stops the playback when a
   command starts; SciForge's playback step looked for an open command only on its own tick
@@ -1850,6 +1877,19 @@ branch off develop (a patch release was going out from develop). How it all work
   open and Esc closed it, not the dialog), exchange2_manip's crowded arrows (pressed only where
   no other arrow is lit; a wrong grab is said, not doubled), readme_shots, extrude_feel_keys.
   Left: vex_shaft (Known issues above), an app race.
+- **Afternoon of 2026-10-30 (Luca's 9am = 16:00 UTC).** exchange2_manip's arrow press found no
+  point on CI (#328: no arrow unlit by the others): it now presses where the arrow stands clear
+  of the others by more than the grab reach (geometry, farthest first), 3 of 3 and 3 of 3
+  under `--stress` (ee57bdd2). Five full runs side by side on ee57bdd2 (the branch's push, two
+  copies of the branch `sf/gui-tests-proof-1/-2` for more runs on the same commit, two manual):
+  #330 all green; #331 and #334 timeline_browser "Extrude 2Boss" (app fix: inline_edit keeps
+  its selection, 727e6908, completed after #337's "Body2Bracket" on 727e6908); #332
+  journey_vex file dialog; #333 mesh_separate_combine 1240
+  (both: diagnostics, Known issues). The sandbox ran all 588 scenarios in 3 lanes alongside:
+  journey_vex_sim (the same file dialog race) and inspect_qa L twice (a click 0.2 s after a
+  handle drag was let go: `press_pace` now waits for `handles3d.just_used()`, e230f503).
+  Comparison: scratchpad `github_vs_sandbox_2.txt` (in the report to Luca). Build dry run #15
+  (manual, on the branch: publishes nothing) started on ee57bdd2.
 
 ### Session log: quick patch 0.1.0-beta.3.1.3, stuck buttons (`develop`, 2026-10-29)
 
