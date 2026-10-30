@@ -72,9 +72,6 @@ def g2_delete():
     t.menu(title, "Delete")
 
 
-g2_delete.wait_ms = 2000
-
-
 def g2_check():
     h.check("G2 the boss is deleted", doc().getObject(st["boss"]) is None)
     obj = decal()
@@ -98,16 +95,10 @@ def g3_undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-g3_undo.wait_ms = 2000
-
-
 def g3_undone():
     h.check("G3 Ctrl+Z: the boss is back", doc().getObject(st["boss"]) is not None)
     f.follows("G3 Ctrl+Z: the decal on it", decal(), st["g1"], App.Placement())
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-g3_undone.wait_ms = 2000
 
 
 def g3_redone():
@@ -127,9 +118,6 @@ def g4_edit():
     t.double_click(m.timeline_title(decal()))
 
 
-g4_edit.wait_ms = 1500
-
-
 def g4_waits():
     p = f.panel()
     h.check("G4 Edit Decal", p is not None and p.title == "Edit Decal", p)
@@ -141,9 +129,6 @@ def g4_waits():
         (p.info.text(), p.face_label.text()),
     )
     h.click(f.TOP)
-
-
-g4_waits.wait_ms = 1500
 
 
 def g4_check():
@@ -160,16 +145,10 @@ def g4_check():
     h.task_button("OK")
 
 
-g4_check.wait_ms = 1200
-
-
 def g4_ok():
     h.check("G4 OK closed the dialog", f.panel() is None)
     f.follows("G4 after OK", decal(), st["g4"], App.Placement())
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
-
-
-g4_ok.wait_ms = 2000
 
 
 # -- G5 ----------------------------------------------------------------------------------------
@@ -178,9 +157,6 @@ def g5_undone():
     h.check("G5 Ctrl+Z: red again", obj is not None and f.red(obj), obj and obj.State)
     h.new_errors()
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-g5_undone.wait_ms = 2000
 
 
 def g5_redone():
@@ -192,16 +168,10 @@ def g6_edit():
     t.double_click(m.timeline_title(decal()))
 
 
-g6_edit.wait_ms = 1500
-
-
 def g6_select():
     p = f.panel()
     if h.check("G6 Edit Decal", p is not None and p.face_button is not None, p):
         w.click(p.face_button)
-
-
-g6_select.wait_ms = 800
 
 
 def g6_click():
@@ -212,9 +182,6 @@ def g6_click():
         p and p.face_label.text(),
     )
     h.click(f.SIDE)
-
-
-g6_click.wait_ms = 1500
 
 
 def g6_check():
@@ -233,9 +200,6 @@ def g6_check():
     )
     h.shot("G6-other-body")
     h.task_button("OK")
-
-
-g6_check.wait_ms = 1200
 
 
 def g6_ok():
@@ -274,4 +238,5 @@ h.run(
         g6_ok,
         cleanup,
     ],
+    paced_by="state",
 )

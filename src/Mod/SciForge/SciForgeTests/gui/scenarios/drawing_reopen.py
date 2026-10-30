@@ -84,8 +84,6 @@ def dimension(name, pick, place):
     def end():
         d.key(QtCore.Qt.Key_Escape)
 
-    picked.wait_ms = 1000
-    placed.wait_ms = 1000
     steps = [start, picked, placed, end]
     for step in steps:
         step.__name__ = "%s_%s" % (name, step.__name__)
@@ -98,9 +96,6 @@ def mark_start():
 
 def mark_pick():
     d.click_at(*at(0, 6))
-
-
-mark_pick.wait_ms = 1000
 
 
 def mark_end():
@@ -118,9 +113,6 @@ def scripted():
     drawing.add_text(page, ["NOTE 1"], (60.0, 60.0))
     drawing.set_title(page, {"Description": "Plate"})
     page.Document.recompute()
-
-
-scripted.wait_ms = 3000
 
 
 def before():
@@ -142,16 +134,10 @@ def a_save():
     d.key(QtCore.Qt.Key_S, QtCore.Qt.ControlModifier)
 
 
-a_save.wait_ms = 1500
-
-
 def a_dialog():
     if h.check("Ctrl+S on the sheet: the Save dialog", vi.save_dialog() is not None, h.popups()):
         vi.fill_save_dialog(name="Reo", location=OUT)
         vi.click_save()
-
-
-a_dialog.wait_ms = 3000
 
 
 def a_saved():
@@ -165,14 +151,8 @@ def b_close():
     App.closeDocument(App.ActiveDocument.Name)
 
 
-b_close.wait_ms = 1500
-
-
 def b_open():
     App.openDocument(state["file"])
-
-
-b_open.wait_ms = 4000
 
 
 def b_browser():
@@ -181,9 +161,6 @@ def b_browser():
     item = tree.row(state["page"])
     if h.check("browser row of the drawing", item is not None, tree.labels()):
         wi.double_click(tree.viewport(), tree.label_point(item))
-
-
-b_browser.wait_ms = 4000
 
 
 def b_whole():
@@ -229,15 +206,9 @@ def c_check():
     d.undo()
 
 
-c_check.wait_ms = 1200
-
-
 def c_undone():
     h.check("Ctrl+Z: gone", values() == [50.0], values())
     d.redo()
-
-
-c_undone.wait_ms = 1200
 
 
 def c_redone():
@@ -249,15 +220,9 @@ def d_design():
     d.workspace("Design")
 
 
-d_design.wait_ms = 1200
-
-
 def d_edit():
     h.fit()
     b.timeline_double_click("Fillet 1")
-
-
-d_edit.wait_ms = 1500
 
 
 def d_radius():
@@ -266,21 +231,12 @@ def d_radius():
         b.type_into(p.radius.widget, "8")
 
 
-d_radius.wait_ms = 1500
-
-
 def d_ok():
     h.task_button("OK")
 
 
-d_ok.wait_ms = 1500
-
-
 def d_back():
     d.workspace("Drawing", state["page"])
-
-
-d_back.wait_ms = 2500
 
 
 def d_followed():
@@ -299,4 +255,5 @@ h.run(
     + dimension("height", (-30, 0), (-42, 0))
     + [c_check, c_undone, c_redone]
     + [d_design, d_edit, d_radius, d_ok, d_back, d_followed],
+    paced_by="state",
 )

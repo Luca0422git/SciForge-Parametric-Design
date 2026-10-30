@@ -286,13 +286,11 @@ def steps_for(name, size, face, distance):
     def give():
         a.give_distance(distance)
 
-    give.wait_ms = 1500
 
     def fit():
         h.fit()
         park_mouse()
 
-    fit.wait_ms = 900
 
     def at_fit():
         measure_extrude(name + "-fit")
@@ -300,7 +298,6 @@ def steps_for(name, size, face, distance):
     def out():
         zoom(3.0)
 
-    out.wait_ms = 900
 
     def at_out():
         measure_extrude(name + "-out")
@@ -308,7 +305,6 @@ def steps_for(name, size, face, distance):
     def close():
         zoom(1.0 / 6.0)
 
-    close.wait_ms = 900
 
     def at_close():
         measure_extrude(name + "-in")
@@ -326,7 +322,6 @@ def steps_for(name, size, face, distance):
         h.click(face)
         park_mouse()
 
-    move_click.wait_ms = 900
 
     def move_fit():
         measure_move(name + "-fit")
@@ -334,7 +329,6 @@ def steps_for(name, size, face, distance):
     def move_out():
         zoom(2.5)
 
-    move_out.wait_ms = 900
 
     def move_at_out():
         measure_move(name + "-out")
@@ -374,4 +368,5 @@ h.run(
     steps_for("small", (4, 3, 1), V(2, 1.5, 1), "2")
     + steps_for("big", (400, 300, 100), V(200, 150, 100), "50")
     + [compare],
+    paced_by="state",
 )

@@ -554,4 +554,5 @@ h.run(
         s4_esc,
         s4_done,
     ],
+    paced_by="state",
 )

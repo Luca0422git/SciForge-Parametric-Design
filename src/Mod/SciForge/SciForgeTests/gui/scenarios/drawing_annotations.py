@@ -108,9 +108,6 @@ def a_line():
     d.key(QtCore.Qt.Key_Return)
 
 
-a_line.wait_ms = 1200
-
-
 def a_undo():
     h.check("Enter ends", d.panel() is None)
     d.undo()
@@ -120,9 +117,6 @@ def a_undone():
     h.check("undo: no mark", not marks(), marks())
     h.check("undo: no cosmetic lines", len(base().CosmeticEdges) == 0, len(base().CosmeticEdges))
     d.redo()
-
-
-a_undone.wait_ms = 1200
 
 
 def a_redone():
@@ -168,14 +162,8 @@ def c_type():
         d.type_into(p.text, "BREAK ALL SHARP EDGES")
 
 
-c_type.wait_ms = 1200
-
-
 def c_ok():
     d.ok()
-
-
-c_ok.wait_ms = 1200
 
 
 def c_made():
@@ -200,9 +188,6 @@ def d_open():
     d.double_click_at(x0 + 40, y0 + 22)  # the DESCRIPTION cell
 
 
-d_open.wait_ms = 1200
-
-
 def d_type():
     p = d.panel_of("TitleBlockPanel")
     if not h.check("the title block's dialog", p is not None, d.panel()):
@@ -210,9 +195,6 @@ def d_type():
     h.check("shows the title", p.fields["Title"].text() == "Marks", p.fields["Title"].text())
     d.type_into(p.fields["Description"], "Test plate")
     d.type_into(p.fields["Revision"], "B")
-
-
-d_type.wait_ms = 1000
 
 
 def d_ok():
@@ -229,9 +211,6 @@ def d_kept():
     App.ActiveDocument.recompute()
 
 
-d_kept.wait_ms = 1500
-
-
 def d_follows():
     values = title()
     h.check("the Title follows the design's name", values.get("Title") == "Marks2", values)
@@ -241,9 +220,6 @@ def d_follows():
 # -- E ------------------------------------------------------------------------------------------
 def e_open():
     d_open()
-
-
-e_open.wait_ms = 1200
 
 
 def e_type():
@@ -271,9 +247,6 @@ def f_delete():
     selected = [o.Name for o in Gui.Selection.getSelection()]
     h.check("the note is selected", texts()[0].Name in selected, selected)
     d.key(QtCore.Qt.Key_Delete)
-
-
-f_delete.wait_ms = 1200
 
 
 def f_gone():
@@ -316,4 +289,5 @@ h.run(
         f_delete,
         f_gone,
     ],
+    paced_by="state",
 )

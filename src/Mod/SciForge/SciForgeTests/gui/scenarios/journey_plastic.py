@@ -13,4 +13,5 @@ from SciForgeTests.gui import journey_plastic_steps as j
 h.run(
     "journey_plastic",
     j.build_steps() + j.advice_steps(),
+    paced_by="state",
 )

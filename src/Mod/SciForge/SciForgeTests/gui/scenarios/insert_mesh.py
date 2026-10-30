@@ -158,9 +158,6 @@ def d_drag_z():
     h.drag(h.screen_point(start), h.screen_point(start + V(0, 0, 8)))
 
 
-d_drag_z.wait_ms = 1200
-
-
 def d_check_drag():
     m = mesh()
     p = i.panel()
@@ -259,9 +256,6 @@ def g_click_mesh():
     h.click(i.mesh_click_point(mesh()))
 
 
-g_click_mesh.wait_ms = 1500
-
-
 def g_converted():
     bodies = s.bodies()
     h.check("a solid body", len(bodies) == 1, len(bodies))
@@ -284,9 +278,6 @@ def g_faceted():
         b.choose(p.method, "Faceted")
 
 
-g_faceted.wait_ms = 1200
-
-
 def g_check_faceted():
     bodies = s.bodies()
     h.check(
@@ -300,9 +291,6 @@ def g_prismatic():
     p = i.panel()
     if p is not None:
         b.choose(p.method, "Prismatic")
-
-
-g_prismatic.wait_ms = 1200
 
 
 def g_ok():
@@ -395,4 +383,5 @@ h.run(
         h_redo,
         h_check_redo,
     ],
+    paced_by="state",
 )

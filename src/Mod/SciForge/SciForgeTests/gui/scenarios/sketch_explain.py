@@ -171,9 +171,6 @@ def a_rect_check():
     h.check("A: the rectangle sits on the origin", sk().DoF == 2, sk().DoF)
 
 
-a_rect_check.wait_ms = 900
-
-
 def a_not_locked():
     text = freedom_text()
     h.check("A: the palette says 2 left to define", text == "2 left to define", text)
@@ -228,9 +225,6 @@ def a_locked():
     esc()
     h.check("A: the width is 40 and the height 20", len(dims(40)) == 1 and len(dims(20)) == 1)
     h.check("A: nothing left to move", sk().DoF == 0 and sk().solve() == 0, sk().DoF)
-
-
-a_locked.wait_ms = 900
 
 
 def a_padlock():
@@ -487,9 +481,6 @@ def g_check():
     h.shot("G-finished")
 
 
-g_check.wait_ms = 900
-
-
 # == H: least movement (finding, cadcraft-lessons idea 1) =========================================
 def _ends(sk, i):
     g = sk.Geometry[i]
@@ -673,4 +664,5 @@ h.run(
             i_collapse,
         ]
     ),
+    paced_by="state",
 )

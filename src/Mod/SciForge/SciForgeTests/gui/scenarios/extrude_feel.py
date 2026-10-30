@@ -355,9 +355,6 @@ def box_type_formula():
     a.type_in_box(boxes[0], "width*2", enter=True)
 
 
-box_type_formula.wait_ms = 1200
-
-
 def formula_done():
     h.check("R3: Enter in the box finishes the extrude (OK)", panel() is None and
             not Gui.Control.activeDialog())
@@ -487,4 +484,5 @@ h.run(
         from_sketch_preview,
         cancelled,
     ],
+    paced_by="state",
 )

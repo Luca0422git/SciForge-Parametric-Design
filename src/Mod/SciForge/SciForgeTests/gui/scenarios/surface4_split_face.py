@@ -144,4 +144,5 @@ h.run(
         undone,
         redone,
     ],
+    paced_by="state",
 )

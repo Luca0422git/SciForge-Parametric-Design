@@ -562,9 +562,6 @@ def p4_drag_far():
         ri.drag_handle(handle, 340.0, steps=36)
 
 
-p4_drag_far.wait_ms = 1500
-
-
 def p4_dragged_far():
     p = panel()
     a = p.angle.value()
@@ -575,9 +572,6 @@ def p4_dragged_far():
     handle = p.handles.get("angle")
     if handle is not None:
         ri.drag_handle(handle, -100.0, steps=60)
-
-
-p4_dragged_far.wait_ms = 1800
 
 
 def p4_dragged_back():
@@ -778,4 +772,4 @@ STEPS = [
     p5_end,
 ]
 
-h.run("revolve_qa", ti.watched(STEPS))
+h.run("revolve_qa", ti.watched(STEPS), paced_by="state")

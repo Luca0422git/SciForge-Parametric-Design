@@ -106,9 +106,6 @@ def plus_50():
     st.type_field("thickness", "-50")
 
 
-plus_50.wait_ms = 2500
-
-
 def minus_50():
     st.settle()
     p = st.panel()
@@ -135,15 +132,9 @@ def minus_50():
     st.type_field("thickness", "%g" % (1.0 if t > 0 else -1.0))
 
 
-minus_50.wait_ms = 2500
-
-
 def drag_inward():
     st.settle()
     s["drag"] = st.drag_arrow("thickness", 30.0 if s.get("t", 1) > 0 else -30.0)
-
-
-drag_inward.wait_ms = 2500
 
 
 def dragged_inward():
@@ -199,4 +190,5 @@ h.run(
         dragged_inward,
         made,
     ],
+    paced_by="state",
 )

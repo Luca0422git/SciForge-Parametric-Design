@@ -535,4 +535,4 @@ steps = b.box_steps("SelFilters") + [
     i_face_refused,
 ]
 
-h.run("selection_filters", steps)
+h.run("selection_filters", steps, paced_by="state")

@@ -318,4 +318,4 @@ STEPS = (
     + [q_start, q_body2, q_press_q, q_kept, q_escaped]
 )
 
-h.run("inspect_qa5", ti.watched(STEPS))
+h.run("inspect_qa5", ti.watched(STEPS), paced_by="state")

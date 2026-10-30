@@ -276,4 +276,5 @@ h.run(
             e_unchanged,
         ]
     ),
+    paced_by="state",
 )

@@ -188,4 +188,5 @@ h.run(
         e_check,
         e_off,
     ],
+    paced_by="state",
 )

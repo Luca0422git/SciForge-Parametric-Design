@@ -67,9 +67,6 @@ def p1_insert():
     i.menu("INSERT", "Insert STEP")
 
 
-p1_insert.wait_ms = 2500
-
-
 def p1_check():
     robot = x.comp("robot")
     h.check("P1 a component robot", robot is not None, x.labels())
@@ -95,14 +92,8 @@ def p2_type():
     i.type_value(p.distance_fields[0], "100")
 
 
-p2_type.wait_ms = 800
-
-
 def p2_ok():
     h.task_button("OK")
-
-
-p2_ok.wait_ms = 1200
 
 
 def p2_check():
@@ -126,9 +117,6 @@ def p3_undo_move():
     t.ctrl("z")
 
 
-p3_undo_move.wait_ms = 1200
-
-
 def p3_undo_insert():
     robot = x.comp("robot")
     h.check(
@@ -139,9 +127,6 @@ def p3_undo_insert():
     t.ctrl("z")
 
 
-p3_undo_insert.wait_ms = 1500
-
-
 def p3_redo():
     h.check("P3 Ctrl+Z again: no robot", x.comp("robot") is None, x.labels())
     h.check("P3 no components left", not x.comps(), x.labels())
@@ -149,15 +134,9 @@ def p3_redo():
     t.ctrl("y")
 
 
-p3_redo.wait_ms = 1500
-
-
 def p3_redo_move():
     x.check_robot("P3 redo", top="robot")
     t.ctrl("y")
-
-
-p3_redo_move.wait_ms = 1500
 
 
 def p3_check():
@@ -174,9 +153,6 @@ def p4_activate_base():
     c.click_radio("Base")
 
 
-p4_activate_base.wait_ms = 800
-
-
 def p4_insert():
     from sciforge import components
 
@@ -186,15 +162,9 @@ def p4_insert():
     i.menu("INSERT", "Insert STEP")
 
 
-p4_insert.wait_ms = 2500
-
-
 def p4_escape():
     h.check("P4 the Move dialog opened", move_panel() is not None)
     h.press(QtCore.Qt.Key_Escape)
-
-
-p4_escape.wait_ms = 1200
 
 
 def p4_check():
@@ -226,22 +196,13 @@ def p5_activate_root():
     c.click_radio(App.ActiveDocument.Label)
 
 
-p5_activate_root.wait_ms = 800
-
-
 def p5_insert():
     i.use_file(s["robot"])
     i.menu("INSERT", "Insert STEP")
 
 
-p5_insert.wait_ms = 2500
-
-
 def p5_escape():
     h.press(QtCore.Qt.Key_Escape)
-
-
-p5_escape.wait_ms = 1000
 
 
 def p5_check():
@@ -280,7 +241,6 @@ def p6_broken():
     i.menu("INSERT", "Insert STEP")
 
 
-p6_broken.wait_ms = 2000
 p6_broken.known = True  # OpenCASCADE's own reader lines about the broken file
 
 
@@ -332,4 +292,5 @@ h.run(
         p6_check,
         cleanup,
     ],
+    paced_by="state",
 )

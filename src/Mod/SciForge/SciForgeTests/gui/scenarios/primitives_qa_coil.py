@@ -100,16 +100,10 @@ def c1_rod_circle():
     pl.click_on_plane(V(10, 0, 0))
 
 
-c1_rod_circle.wait_ms = 1500
-
-
 def c1_rod_height():
     p = pi.panel("CylinderPanel")
     if p is not None:
         ui.type_into(p.height.widget, "30")
-
-
-c1_rod_height.wait_ms = 1500
 
 
 def c1_rod_ok():
@@ -137,9 +131,6 @@ def c1_edge():
     pl.click_on_plane(V(10, 0, 30))
 
 
-c1_edge.wait_ms = 2500
-
-
 def c1_first():
     p = panel()
     c = p.target if p is not None else None
@@ -163,9 +154,6 @@ def c1_first():
         pi.drag_handle(handle, -20.0)
 
 
-c1_first.wait_ms = 2500
-
-
 def c1_cut():
     p = panel()
     if p is None:
@@ -181,9 +169,6 @@ def c1_cut():
     ui.choose(p.type, "Height and Pitch")
 
 
-c1_cut.wait_ms = 2500
-
-
 def c1_type():
     p = panel()
     if p is None:
@@ -195,9 +180,6 @@ def c1_type():
         p.pitch.value(),
     )
     ui.type_into(p.pitch.widget, "1")
-
-
-c1_type.wait_ms = 2500
 
 
 def c1_touching():
@@ -213,17 +195,11 @@ def c1_touching_waits():
         ui.type_into(p.pitch.widget, "4")
 
 
-c1_touching_waits.wait_ms = 2500
-
-
 def c1_section():
     p = panel()
     h.check("C1 the message went", msg(p) == "", msg(p))
     if p is not None:
         ui.choose(p.section, "Triangular (External)")
-
-
-c1_section.wait_ms = 2500
 
 
 def c1_ok():
@@ -271,9 +247,6 @@ def c2_shows():
     ui.click(p.rotation)
 
 
-c2_shows.wait_ms = 2500
-
-
 def c2_ccw():
     p = panel()
     h.check(
@@ -284,9 +257,6 @@ def c2_ccw():
     c = p.target if p is not None else None
     h.check("C2 the coil turns the other way", c is not None and c.LeftHanded, c and c.LeftHanded)
     h.task_button("OK")
-
-
-c2_ccw.wait_ms = 1500
 
 
 def c2_edit_again():
@@ -307,15 +277,9 @@ def c2_bigger():
         ui.type_into(p.section_size.widget, "3")
 
 
-c2_bigger.wait_ms = 2500
-
-
 def c2_esc():
     h.check("C2 the preview changed", not near(vol(), s["thread"], 1e-5), vol())
     h.press(QtCore.Qt.Key_Escape)
-
-
-c2_esc.wait_ms = 1500
 
 
 def c2_unchanged():
@@ -326,16 +290,10 @@ def c2_unchanged():
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-c2_unchanged.wait_ms = 1200
-
-
 def c2_undone():
     c = coils()[0] if coils() else None
     h.check("C2 Ctrl+Z: Clockwise again", c is not None and not c.LeftHanded, c and c.LeftHanded)
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-c2_undone.wait_ms = 1500
 
 
 def c2_redone():
@@ -368,9 +326,6 @@ def c3_says():
     h.press(QtCore.Qt.Key_Escape)
 
 
-c3_says.wait_ms = 1200
-
-
 def c3_nothing():
     h.check("C3 Esc closed it", pi.no_dialog())
     h.check(
@@ -399,9 +354,6 @@ def c3_enter():
     keys_to_focus("", enter=True)
 
 
-c3_enter.wait_ms = 2500
-
-
 def c3_placed():
     p = panel()
     h.check(
@@ -418,9 +370,6 @@ def c3_placed():
     ui.type_into(p.revolutions.widget, "0")
 
 
-c3_placed.wait_ms = 2500
-
-
 def c3_zero():
     p = panel()
     h.check("C3 Revolutions 0 is said", "Revolutions" in msg(p), msg(p))
@@ -434,9 +383,6 @@ def c3_zero_waits():
         ui.type_into(p.revolutions.widget, "3")
 
 
-c3_zero_waits.wait_ms = 2500
-
-
 def c3_ok():
     p = panel()
     h.check("C3 the message went", msg(p) == "", msg(p))
@@ -447,15 +393,9 @@ def c3_ok():
     h.task_button("OK")
 
 
-c3_ok.wait_ms = 1500
-
-
 def c3_delete():
     h.check("C3 two coils", len(coils()) == 2 and len(sections()) == 2)
     ti.menu("Coil 2", "Delete")
-
-
-c3_delete.wait_ms = 1500
 
 
 def c3_deleted():
@@ -514,4 +454,5 @@ h.run(
         c3_delete,
         c3_deleted,
     ],
+    paced_by="state",
 )

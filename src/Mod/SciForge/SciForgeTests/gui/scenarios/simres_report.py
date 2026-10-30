@@ -73,9 +73,6 @@ def a_save():
     s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReportSave"))
 
 
-a_save.wait_ms = 2500
-
-
 def a_check():
     core = s.results_core()
     h.check("dialog closed after Save", s.dialog("SciForgeSimReport") is None)
@@ -169,9 +166,6 @@ def c_preview():
     state["open_in_browser"] = panels.open_in_browser
     panels.open_in_browser = opened.append  # (no web browser under the test: noted instead)
     s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReportPreview"))
-
-
-c_preview.wait_ms = 1500
 
 
 def c_preview_check():
@@ -278,9 +272,6 @@ def e_save():
     s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReportSave"))
 
 
-e_save.wait_ms = 2500
-
-
 def e_check():
     from sciforge import simulation
 
@@ -341,4 +332,5 @@ h.run(
         e_save,
         e_check,
     ],
+    paced_by="state",
 )

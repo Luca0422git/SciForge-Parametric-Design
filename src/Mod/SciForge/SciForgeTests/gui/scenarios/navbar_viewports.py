@@ -152,9 +152,6 @@ def other_design():
     App.closeDocument("Other")
 
 
-other_design.wait_ms = 900
-
-
 def other_closed():
     gui = Gui.ActiveDocument
     h.check("the split design in front again", gui is not None and gui.Document.Name == "Viewports")
@@ -351,4 +348,5 @@ h.run(
         sketch_pan_ended,
         sketch_done,
     ],
+    paced_by="state",
 )

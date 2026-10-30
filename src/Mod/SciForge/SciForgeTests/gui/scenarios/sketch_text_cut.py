@@ -395,4 +395,4 @@ steps += [
     c5_same_cut,
     c5_undone,
 ]
-h.run("sketch_text_cut", steps)
+h.run("sketch_text_cut", steps, paced_by="state")

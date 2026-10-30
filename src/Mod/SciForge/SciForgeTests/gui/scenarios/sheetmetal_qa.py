@@ -987,4 +987,5 @@ h.run(
         d3_two_edges,
         d3_edges_escaped,
     ],
+    paced_by="state",
 )

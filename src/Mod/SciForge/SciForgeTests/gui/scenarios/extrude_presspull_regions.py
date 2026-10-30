@@ -345,4 +345,5 @@ h.run(
         second_ok,
         after_second,
     ],
+    paced_by="state",
 )

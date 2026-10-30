@@ -98,9 +98,6 @@ def setup():
     browser()
 
 
-setup.wait_ms = 1500
-
-
 # -- Path 1 -------------------------------------------------------------------------------------
 def p1_menu():
     h.check("P1 Plate starts solid", see_through("plate", 0), transparency("plate"))
@@ -121,9 +118,6 @@ def p1_menu():
     )
 
 
-p1_menu.wait_ms = 800
-
-
 def p1_shown():
     from sciforge import opacity
 
@@ -141,18 +135,12 @@ def p1_shown():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-p1_shown.wait_ms = 800
-
-
 def p1_undone():
     from sciforge import opacity
 
     h.check("P1 Ctrl+Z: 100 % again", opacity.get(obj("plate")) == 100, opacity.get(obj("plate")))
     h.check("P1 Ctrl+Z: solid again", see_through("plate", 0), transparency("plate"))
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-p1_undone.wait_ms = 800
 
 
 def p1_redone():
@@ -164,9 +152,6 @@ def p2_component():
     opacity_menu("Arm", "20%")
 
 
-p2_component.wait_ms = 800
-
-
 def p2_shown():
     h.check(
         "P2 Link (in Arm) shows 80 % see-through", see_through("link", 80), transparency("link")
@@ -175,9 +160,6 @@ def p2_shown():
     box = add_box(doc(), obj("link"), 3, "LinkBox2")
     box.Placement = App.Placement(App.Vector(0, 0, 6), App.Rotation())
     doc().recompute()
-
-
-p2_shown.wait_ms = 1000
 
 
 def p2_new_step():
@@ -191,9 +173,6 @@ def p2_new_step():
 # -- Path 3 -------------------------------------------------------------------------------------
 def p3_custom():
     opacity_menu("Plate", "Custom Opacity...")
-
-
-p3_custom.wait_ms = 800
 
 
 def _dialog():
@@ -223,9 +202,6 @@ def p3_slide():
     w.click(d.findChild(QtWidgets.QPushButton, "SciForgeOpacityOk"))
 
 
-p3_slide.wait_ms = 800
-
-
 def p3_ok():
     from sciforge import opacity
 
@@ -233,9 +209,6 @@ def p3_ok():
     h.check("P3 30 % see-through", see_through("plate", 30), transparency("plate"))
     h.check("P3 the dialog closed", _dialog() is None)
     opacity_menu("Plate", "Custom Opacity...")
-
-
-p3_ok.wait_ms = 800
 
 
 def p3_cancel():
@@ -250,9 +223,6 @@ def p3_cancel():
     QtWidgets.QApplication.processEvents()
     h.check("P3 typed 10 % shows", see_through("plate", 90), transparency("plate"))
     QtTest.QTest.keyClick(d, QtCore.Qt.Key_Escape)
-
-
-p3_cancel.wait_ms = 800
 
 
 def p3_cancelled():
@@ -276,9 +246,6 @@ def p4_plate():
     _hover(App.Vector(5, 5, 10))
 
 
-p4_plate.wait_ms = 600
-
-
 def p4_plate_lit():
     tree = browser()
     key = tree.view_hover() if tree else None
@@ -289,9 +256,6 @@ def p4_plate_lit():
     )
     h.shot("P4-hover-plate")
     _hover(App.Vector(43, 3, 6))
-
-
-p4_plate_lit.wait_ms = 600
 
 
 def p4_link_lit():
@@ -305,9 +269,6 @@ def p4_link_lit():
     _hover(App.Vector(42, 2, 6))
 
 
-p4_link_lit.wait_ms = 600
-
-
 def p4_closed():
     tree = browser()
     key = tree.view_hover() if tree else None
@@ -317,9 +278,6 @@ def p4_closed():
         item.setExpanded(True)
     widget = h.gl_widget()
     h.move(QtCore.QPoint(8, widget.height() - 8))
-
-
-p4_closed.wait_ms = 600
 
 
 def p4_off():
@@ -336,9 +294,6 @@ def p5_save():
     App.closeDocument(s["doc"])
     reopened = App.openDocument(s["file"])
     s["doc"] = reopened.Name
-
-
-p5_save.wait_ms = 2000
 
 
 def p5_reopened():
@@ -382,4 +337,5 @@ h.run(
         p5_reopened,
         cleanup,
     ],
+    paced_by="state",
 )

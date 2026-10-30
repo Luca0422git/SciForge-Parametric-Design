@@ -309,14 +309,8 @@ def fillet_first():
     si.click(V(22, 10, 0), approach=V(0.0, -1.0, 0))  # the bottom line
 
 
-fillet_first.wait_ms = 500
-
-
 def fillet_second():
     si.click(V(10, 19, 0), approach=V(-1.0, 0.0, 0))  # then the left line
-
-
-fillet_second.wait_ms = 700
 
 
 def fillet_box():
@@ -324,9 +318,6 @@ def fillet_box():
     h.check("the radius box is up", t is not None and t.step == 2, t and t.step)
     h.shot("fillet-click")
     st.keys("4\n")
-
-
-fillet_box.wait_ms = 700
 
 
 def fillet_check():
@@ -496,4 +487,5 @@ h.run(
             reopened,
         ]
     ),
+    paced_by="state",
 )

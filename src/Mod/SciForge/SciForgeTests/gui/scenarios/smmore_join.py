@@ -239,9 +239,6 @@ def delete_flat():
     st.menu("MODIFY", "Delete")
 
 
-delete_flat.wait_ms = 1200
-
-
 def flat_deleted():
     h.check("the flat body is deleted", App.ActiveDocument.getObject(s["flat_name"]) is None)
     h.check(
@@ -350,4 +347,5 @@ h.run(
         undo_delete,
         after_undo_delete,
     ],
+    paced_by="state",
 )

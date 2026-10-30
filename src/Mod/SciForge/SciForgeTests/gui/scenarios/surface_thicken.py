@@ -117,9 +117,6 @@ def drag_thickness():
     s["drag"] = st.drag_arrow("thickness", 3.0)
 
 
-drag_thickness.wait_ms = 2200
-
-
 def dragged():
     st.settle()
     d = s.get("drag")
@@ -283,9 +280,6 @@ def drag_offset():
     s["drag"] = st.drag_arrow("distance", 5.0)
 
 
-drag_offset.wait_ms = 2200
-
-
 def offset_dragged():
     st.settle()
     d = s.get("drag")
@@ -447,4 +441,5 @@ h.run(
         reverse_undone,
         reverse_redone,
     ],
+    paced_by="state",
 )

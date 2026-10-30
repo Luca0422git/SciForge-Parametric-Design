@@ -97,9 +97,6 @@ def taper_held():
         ui.type_into(p.taper.widget, "0")
 
 
-taper_held.wait_ms = 4000
-
-
 def back_to_zero():
     p = panel()
     h.check("taper 0 again: 12000, no note", near(h.solid_volume(), 12000.0) and note(p) == "")
@@ -137,9 +134,6 @@ def turned_far():
     h.task_button("OK")
 
 
-turned_far.wait_ms = 3000
-
-
 def made():
     h.check("OK worked at once", panel() is None and not Gui.Control.activeDialog())
     v = h.solid_volume()
@@ -161,4 +155,5 @@ h.run(
         turned_far,
         made,
     ],
+    paced_by="state",
 )

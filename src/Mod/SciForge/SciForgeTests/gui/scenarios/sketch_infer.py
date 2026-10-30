@@ -421,9 +421,6 @@ def c_undo():
     h.press("z", CTRL)
 
 
-c_undo.wait_ms = 1200
-
-
 def c_undone():
     left = [c for c in on(s["c_line"]) if c[0] in ("Perpendicular", "Coincident")]
     h.check(
@@ -437,9 +434,6 @@ def c_undone():
         len(si.lines(s["sk"])),
     )
     h.press("y", CTRL)
-
-
-c_undone.wait_ms = 1200
 
 
 def c_redone():
@@ -722,9 +716,6 @@ def g_enter():
     si.key(QtCore.Qt.Key_Return)
 
 
-g_enter.wait_ms = 1000
-
-
 def g_check():
     index, line = newest_line()
     added = cons()[s["g_count"] :]
@@ -901,4 +892,5 @@ h.run(
             f_check,
         ]
     ),
+    paced_by="state",
 )

@@ -411,4 +411,5 @@ h.run(
         sketch_on_plane1_again,
         the_end,
     ],
+    paced_by="state",
 )

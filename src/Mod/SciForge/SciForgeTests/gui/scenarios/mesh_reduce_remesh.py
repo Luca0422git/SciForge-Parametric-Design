@@ -58,9 +58,6 @@ def a_open():
     h.ribbon("Reduce")
 
 
-a_open.wait_ms = 1500
-
-
 def a_dialog():
     p = m.panel()
     h.check("Reduce dialog", p is not None and p.title == "Reduce", p)
@@ -74,9 +71,6 @@ def a_dialog():
     m.choose(p.reduce_target, "Proportion")
     m.set_spin(p.proportion, 25)
     m.tick(p.preview, True)
-
-
-a_dialog.wait_ms = 2000
 
 
 def a_check():
@@ -93,17 +87,11 @@ def b_face_count():
     m.set_spin(p.face_count, 300)
 
 
-b_face_count.wait_ms = 2000
-
-
 def b_check():
     st = step("MeshReduce")
     h.check("Face Count 300: 300 faces", m.facets(st) == 300, m.facets(st))
     h.check("closed", m.closed(st))
     h.task_button("OK")
-
-
-b_check.wait_ms = 1500
 
 
 def b_done():
@@ -122,9 +110,6 @@ def c_open():
     h.ribbon("Remesh")
 
 
-c_open.wait_ms = 1500
-
-
 def c_adaptive():
     p = m.panel()
     h.check("Remesh dialog", p is not None and p.title == "Remesh", p)
@@ -135,9 +120,6 @@ def c_adaptive():
     )
     m.set_spin(p.density, 0.5)
     m.tick(p.preview, True)
-
-
-c_adaptive.wait_ms = 4000
 
 
 def c_check_adaptive():
@@ -154,9 +136,6 @@ def c_check_adaptive():
     m.choose(m.panel().remesh_type, "Uniform")
 
 
-c_check_adaptive.wait_ms = 5000
-
-
 def c_check_uniform():
     st = step("MeshRemesh")
     faces = m.facets(st)
@@ -168,9 +147,6 @@ def c_check_uniform():
         (m.volume(st), state["reduced"]),
     )
     h.task_button("OK")
-
-
-c_check_uniform.wait_ms = 2000
 
 
 def c_done():
@@ -189,9 +165,6 @@ def d_open():
     s.menu("MODIFY", "Smooth")
 
 
-d_open.wait_ms = 1500
-
-
 def d_preview():
     p = m.panel()
     h.check("Smooth dialog", p is not None and p.title == "Smooth", p)
@@ -204,9 +177,6 @@ def d_preview():
     m.tick(p.preview, True)
 
 
-d_preview.wait_ms = 2500
-
-
 def d_check():
     st = step("MeshSmooth")
     h.check("the faces stay", m.facets(st) == state["faces_before_smooth"], m.facets(st))
@@ -216,9 +186,6 @@ def d_check():
         "smoothed: a little smaller (under 3 %)", before * 0.97 < after < before, (before, after)
     )
     h.task_button("OK")
-
-
-d_check.wait_ms = 1500
 
 
 def d_done():
@@ -235,9 +202,6 @@ def e_edit():
     s.timeline_double_click(step("MeshReduce"))
 
 
-e_edit.wait_ms = 2000
-
-
 def e_dialog():
     p = m.panel()
     h.check("Reduce edit dialog", p is not None and p.title == "Reduce", p)
@@ -246,9 +210,6 @@ def e_dialog():
     h.check("Face Count 300", int(p.face_count.value()) == 300, p.face_count.value())
     m.set_spin(p.face_count, 600)
     h.task_button("OK")
-
-
-e_dialog.wait_ms = 6000
 
 
 def e_check():
@@ -274,9 +235,6 @@ def f_undo():
     i.undo()
 
 
-f_undo.wait_ms = 5000
-
-
 def f_check_undo():
     h.check(
         "Ctrl+Z: 300 faces again", m.facets(step("MeshReduce")) == 300, m.facets(step("MeshReduce"))
@@ -285,9 +243,6 @@ def f_check_undo():
 
 def f_redo():
     i.redo()
-
-
-f_redo.wait_ms = 5000
 
 
 def f_check_redo():
@@ -300,17 +255,11 @@ def g_open():
     h.ribbon("Reduce")
 
 
-g_open.wait_ms = 1500
-
-
 def g_too_many():
     p = m.panel()
     m.choose(p.reduce_target, "Face Count")
     m.set_spin(p.face_count, 100000)
     m.tick(p.preview, True)
-
-
-g_too_many.wait_ms = 2000
 
 
 def g_refused():
@@ -320,16 +269,10 @@ def g_refused():
     h.task_button("OK")
 
 
-g_refused.wait_ms = 1200
-
-
 def g_waits():
     p = m.panel()
     h.check("OK waits", p is not None and p.title == "Reduce", p)
     h.task_button("Cancel")
-
-
-g_waits.wait_ms = 1500
 
 
 def g_check():
@@ -376,5 +319,6 @@ h.run(
         g_waits,
         g_check,
     ],
+    paced_by="state",
 )
 _ = App

@@ -85,9 +85,6 @@ def set_up():
     state["front"] = view.Name
 
 
-set_up.wait_ms = 3000
-
-
 def set_up_check():
     view = front()
     h.check("the front view", view is not None and len(view.getVisibleEdges()) > 0)
@@ -100,9 +97,6 @@ def a_command():
     w.menu("CREATE", "Breakout Section View")
 
 
-a_command.wait_ms = 800
-
-
 def a_points():
     p = d.panel_of("BreakoutPanel")
     if not h.check("Breakout Section View dialog", p is not None, d.panel()):
@@ -113,18 +107,12 @@ def a_points():
     w.move(-10.0, 0.0)
 
 
-a_points.wait_ms = 800
-
-
 def a_escape():
     p = d.panel_of("BreakoutPanel")
     h.check("the base view picked", p is not None and p.view is not None and p.view == w.base())
     h.check("two points so far", p is not None and len(p.points) == 2, p and p.points)
     h.check("a preview of the boundary", d.previews_left() > 0, d.previews_left())
     d.key(QtCore.Qt.Key_Escape)
-
-
-a_escape.wait_ms = 1000
 
 
 def a_nothing():
@@ -141,15 +129,9 @@ def b_command():
     w.menu("CREATE", "Breakout Section View")
 
 
-b_command.wait_ms = 800
-
-
 def b_view():
     state["before"] = len(front().getVisibleEdges())
     w.click(30.0, 0.0, front())
-
-
-b_view.wait_ms = 800
 
 
 def b_points():
@@ -162,16 +144,10 @@ def b_points():
     w.move(-29.0, -7.0, front())
 
 
-b_points.wait_ms = 800
-
-
 def b_close():
     p = d.panel_of("BreakoutPanel")
     h.check("four corners", p is not None and len(p.points) == 4, p and p.points)
     w.click(*BOUNDARY[0], view=front())
-
-
-b_close.wait_ms = 3000
 
 
 def b_made():
@@ -183,16 +159,10 @@ def b_made():
         d.key(QtCore.Qt.Key_Tab)
 
 
-b_made.wait_ms = 3500
-
-
 def b_ok():
     h.check("15 deep", data() is not None and data()["depth"] == 15.0, data())
     h.check("hole 1's sides show", visible_upright(front(), -25.0) >= 1)
     d.ok()
-
-
-b_ok.wait_ms = 2500
 
 
 def b_check():
@@ -240,9 +210,6 @@ def c_undo():
     d.undo()
 
 
-c_undo.wait_ms = 2500
-
-
 def c_undone():
     from sciforge import drawing
 
@@ -252,9 +219,6 @@ def c_undone():
     h.check("the copy gone", App.ActiveDocument.getObject(state["clip"]) is None)
     h.check("hole 1 hidden again", visible_upright(view, -25.0) == 0)
     d.redo()
-
-
-c_undone.wait_ms = 3000
 
 
 def c_redone():
@@ -268,14 +232,8 @@ def d_command():
     w.menu("CREATE", "Breakout Section View")
 
 
-d_command.wait_ms = 800
-
-
 def d_click():
     w.click(30.0, 0.0, front())
-
-
-d_click.wait_ms = 800
 
 
 def d_refused():
@@ -288,9 +246,6 @@ def d_refused():
     d.key(QtCore.Qt.Key_Escape)
 
 
-d_refused.wait_ms = 1000
-
-
 def d_closed():
     h.check("dialog closed", d.panel() is None)
 
@@ -298,9 +253,6 @@ def d_closed():
 # -- E ------------------------------------------------------------------------------------------
 def e_open():
     d.double_click_at(*w.at(*INSIDE, view=front()))
-
-
-e_open.wait_ms = 1500
 
 
 def e_through():
@@ -313,9 +265,6 @@ def e_through():
     d.key(QtCore.Qt.Key_Tab)
 
 
-e_through.wait_ms = 3000
-
-
 def e_deep():
     from sciforge import drawing_breakout
 
@@ -324,9 +273,6 @@ def e_deep():
     h.check("more taken away", clip.Shape.Volume < state["volume"] - 1.0)
     h.check("no floor to hatch", drawing_breakout.hatch_of(front()) == [])
     wi.click(d.panel().default_button)
-
-
-e_deep.wait_ms = 3000
 
 
 def e_ok():
@@ -339,15 +285,9 @@ def e_ok():
     d.ok()
 
 
-e_ok.wait_ms = 2000
-
-
 def e_undo():
     h.check("dialog closed", d.panel() is None)
     d.undo()
-
-
-e_undo.wait_ms = 2500
 
 
 def e_undone():
@@ -362,9 +302,6 @@ def f_hole():
     doc = App.ActiveDocument
     doc.getObject("Hole1").Radius = 6.0
     doc.recompute()
-
-
-f_hole.wait_ms = 4000
 
 
 def f_followed():
@@ -389,9 +326,6 @@ def g_child():
     state["child"] = child.Name
 
 
-g_child.wait_ms = 2500
-
-
 def g_check():
     from sciforge import drawing
 
@@ -402,9 +336,6 @@ def g_check():
     iso = drawing.add_projected(front(), "FrontTopRight", x + 70.0, y - 50.0)
     App.ActiveDocument.recompute()
     state["iso"] = iso.Name
-
-
-g_check.wait_ms = 2500
 
 
 def g_iso():
@@ -434,17 +365,11 @@ def i_open():
     d.double_click_at(*w.at(*INSIDE, view=front()))
 
 
-i_open.wait_ms = 1500
-
-
 def i_remove():
     p = d.panel_of("BreakoutPanel")
     if not h.check("Edit Breakout", p is not None and p.closed, d.panel()):
         return
     wi.click(p.remove_button)
-
-
-i_remove.wait_ms = 3000
 
 
 def i_removed():
@@ -459,9 +384,6 @@ def i_removed():
     iso = App.ActiveDocument.getObject(state["iso"])
     h.check("the isometric view: the whole body", [s.Name for s in iso.Source] == ["Body"])
     d.undo()
-
-
-i_removed.wait_ms = 3000
 
 
 def i_back():
@@ -481,29 +403,17 @@ def j_save():
     state["file"] = path
 
 
-j_save.wait_ms = 1500
-
-
 def j_close():
     h.check("saved", os.path.isfile(state["file"]))
     App.closeDocument(App.ActiveDocument.Name)
-
-
-j_close.wait_ms = 1500
 
 
 def j_open():
     App.openDocument(state["file"])
 
 
-j_open.wait_ms = 4000
-
-
 def j_drawing():
     d.workspace("Drawing", state["label"])
-
-
-j_drawing.wait_ms = 5000
 
 
 def j_back():
@@ -525,9 +435,6 @@ def j_back():
     App.ActiveDocument.recompute()
 
 
-j_back.wait_ms = 4000
-
-
 def j_followed():
     clip = App.ActiveDocument.getObject(state["clip"])
     h.check(
@@ -541,9 +448,6 @@ def j_select():
     d.click_at(380, 250)  # the sheet takes the keyboard (empty paper)
     Gui.Selection.addSelection(front())
     d.key(QtCore.Qt.Key_Delete)
-
-
-j_select.wait_ms = 2500
 
 
 def j_deleted():
@@ -570,4 +474,5 @@ h.run(
     + [i_open, i_remove, i_removed, i_back]
     + [j_save, j_close, j_open, j_drawing, j_back, j_followed]
     + [j_select, j_deleted],
+    paced_by="state",
 )

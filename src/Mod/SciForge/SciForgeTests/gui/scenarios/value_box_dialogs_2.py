@@ -167,9 +167,6 @@ def box_second_corner():
     pl.click_on_plane(V(40, 20, 0))
 
 
-box_second_corner.wait_ms = 1200
-
-
 def box_box():
     p = pi.panel("BoxPanel")
     h.check("Box: placed with its handles", p is not None and p.state == "ready"
@@ -351,4 +348,5 @@ h.run(
         rib_three,
         rib_gone,
     ],
+    paced_by="state",
 )

@@ -130,9 +130,6 @@ def setup():
     )
 
 
-setup.wait_ms = 1500
-
-
 def web_point(origin, i, j, top=True, dx=3.6):
     c = vx.hole_centre(i, j, top=top, origin=origin)
     return V(c.x + dx, c.y, c.z)
@@ -158,9 +155,6 @@ def a_click_b():
     h.click(S["pt"])
 
 
-a_click_b.wait_ms = 400
-
-
 def a_hover_a():
     S["pt"] = web_point(App.Placement(), *HOLE)
     vx.look_at(hole_axis(), 40.0)
@@ -172,24 +166,15 @@ def a_click_a():
     h.click(S["pt"])
 
 
-a_click_a.wait_ms = 1500
-
-
 def a_offset():
     p = vx.joint_panel()
     if h.check("the Joint dialog stays open", p is not None, p):
         s.type_value(p.offset_fields["z"].widget, "1 in")
 
 
-a_offset.wait_ms = 1500
-
-
 def a_ok():
     b_on_a("joined, Offset Z 1 in")
     vx.ok()
-
-
-a_ok.wait_ms = 1200
 
 
 def a_made():
@@ -226,9 +211,6 @@ def b_click_top():
     h.click(S["pt"])
 
 
-b_click_top.wait_ms = 400
-
-
 def b_hover_b():
     c = V(hole_axis().x, hole_axis().y, b_outer_z())
     S["b_hole"] = c
@@ -254,9 +236,6 @@ def b_click_b():
     h.click(S["pt"])
 
 
-b_click_b.wait_ms = 1500
-
-
 def b_offset():
     box = vx.bbox(S["shaft"])
     h.check(
@@ -269,9 +248,6 @@ def b_offset():
         s.type_value(p.offset_fields["z"].widget, "-2 in")
 
 
-b_offset.wait_ms = 1500
-
-
 def b_revolute():
     shaft_through("Offset Z -2 in")
     p = vx.joint_panel()
@@ -279,14 +255,8 @@ def b_revolute():
     j.choose_type(p, "Revolute")
 
 
-b_revolute.wait_ms = 2600
-
-
 def b_ok():
     vx.ok()
-
-
-b_ok.wait_ms = 1200
 
 
 def b_made():
@@ -306,8 +276,6 @@ def drive_steps(prefix, degrees):
         if S.get("revolute") is not None:
             j.browser_menu(S["revolute"].Label, "Drive Joints")
 
-    drive.wait_ms = 1500
-
     def type_angle():
         p = j.panel()
         h.check(
@@ -318,8 +286,6 @@ def drive_steps(prefix, degrees):
         if p is not None:
             s.type_value(p.angle.widget, "%g" % degrees)
 
-    type_angle.wait_ms = 2500
-
     def turned():
         shaft_through("%s: driven %g degrees" % (prefix, degrees), degrees)
         channel_still("a")
@@ -327,7 +293,6 @@ def drive_steps(prefix, degrees):
         h.shot("%s-driven" % prefix)
         j.ok()
 
-    turned.wait_ms = 1200
     drive.__name__ = "%s_drive" % prefix
     type_angle.__name__ = "%s_type" % prefix
     turned.__name__ = "%s_turned" % prefix
@@ -337,9 +302,6 @@ def drive_steps(prefix, degrees):
 def c_undo():
     j.no_dialog("Drive OK")
     s.undo()
-
-
-c_undo.wait_ms = 1500
 
 
 def c_undone():
@@ -356,15 +318,9 @@ def d_save():
     App.closeDocument(App.ActiveDocument.Name)
 
 
-d_save.wait_ms = 1000
-
-
 def d_open():
     App.openDocument(S["path"])
     Gui.activateWorkbench("SciForgeWorkbench")
-
-
-d_open.wait_ms = 2500
 
 
 def d_reopened():
@@ -383,9 +339,6 @@ def d_reopened():
     S["a_box"] = vx.bbox(S["a"])
     S["b_box"] = vx.bbox(S["b"])
     vx.fit()
-
-
-d_reopened.wait_ms = 1000
 
 
 def d_cleanup():
@@ -421,4 +374,5 @@ h.run(
     + [c_undo, c_undone, d_save, d_open, d_reopened]
     + drive_steps("d", 30.0)
     + [d_cleanup],
+    paced_by="state",
 )

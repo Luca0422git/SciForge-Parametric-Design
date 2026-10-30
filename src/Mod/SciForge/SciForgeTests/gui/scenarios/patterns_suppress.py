@@ -246,4 +246,5 @@ h.run(
         circ_cancel,
         circ_after,
     ],
+    paced_by="state",
 )

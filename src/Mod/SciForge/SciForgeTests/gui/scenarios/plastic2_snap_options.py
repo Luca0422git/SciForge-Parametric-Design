@@ -207,9 +207,6 @@ def independent_angles():
         ri.drag_handle(p.arrows["angle1"], 90.0)
 
 
-independent_angles.wait_ms = 1200
-
-
 def turned_one():
     ps.settle(ps.snap_panel)
     p = ps.snap_panel()
@@ -508,4 +505,5 @@ h.run(
         no_snap_dialog,
         no_lip_dialog,
     ],
+    paced_by="state",
 )

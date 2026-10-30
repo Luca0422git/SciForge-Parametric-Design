@@ -229,9 +229,6 @@ def drag_depth():
     hole_steps.drag_arrow(origin, grow, arrow.distance(), 3.0, arrow=arrow)
 
 
-drag_depth.wait_ms = 1500
-
-
 def dragged():
     p = panel()
     d = p.depth.value()
@@ -382,4 +379,5 @@ h.run(
         esc_now,
         after_esc,
     ],
+    paced_by="state",
 )

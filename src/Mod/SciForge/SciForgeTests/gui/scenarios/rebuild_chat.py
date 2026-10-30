@@ -201,9 +201,6 @@ def a_start():
     r.browser_menu(s["label"], ENTRY)
 
 
-a_start.wait_ms = 2000
-
-
 def a_message():
     from sciforge import ai_panel_ui, rebuild
 
@@ -232,16 +229,10 @@ def b_send():
         wi.click(panel.send_button)
 
 
-b_send.wait_ms = 6000
-
-
 def b_wait():
     panel = chat()
     if panel is not None and panel.busy():
         b_wait.waited = getattr(b_wait, "waited", 0) + 1
-
-
-b_wait.wait_ms = 6000
 
 
 def b_rebuilt():
@@ -325,4 +316,5 @@ def finish():
 h.run(
     "rebuild_chat",
     [setup, a_start, a_message, b_send, b_wait, b_wait, b_wait, b_rebuilt, finish],
+    paced_by="state",
 )

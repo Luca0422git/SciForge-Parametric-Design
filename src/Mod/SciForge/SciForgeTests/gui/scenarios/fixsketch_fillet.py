@@ -154,4 +154,4 @@ steps += fs.undo_redo("C", "B", s)
 steps += fs.edit_later("D", "A", s)
 steps += [suppress_fillet, h.idle_step(), suppressed, h.idle_step("wait_unsuppress"), unsuppressed]
 
-h.run("fixsketch_fillet", steps)
+h.run("fixsketch_fillet", steps, paced_by="state")

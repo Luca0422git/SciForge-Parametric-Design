@@ -127,9 +127,6 @@ def home_again_done():
     vc.click("top-front")
 
 
-home_default_done.wait_ms = 1600
-
-
 def set_fit():
     st["home"] = vc.orientation()
     result = vc.choose(["Set Current View as Home", "Fit to View"])
@@ -283,4 +280,5 @@ h.run(
         new_design,
         new_design_done,
     ],
+    paced_by="state",
 )

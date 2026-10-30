@@ -406,4 +406,5 @@ h.run(
         ruled_reads_back,
         ruled_escaped,
     ],
+    paced_by="state",
 )

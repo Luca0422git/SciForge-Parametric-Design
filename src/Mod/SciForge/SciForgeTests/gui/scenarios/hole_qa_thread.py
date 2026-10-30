@@ -96,7 +96,6 @@ def open_thread():
 
 
 def slow(fn, ms=2500):
-    fn.wait_ms = ms  # a modeled thread takes a moment (FreeCAD is busy meanwhile)
     return fn
 
 
@@ -299,9 +298,6 @@ def t3_cancelled():
     h.check("T3 Cancel kept M10x1.5", t and t[0].Designation == "M10x1.5", t and t[0].Designation)
     h.check("T3 still drawn", drawn() == 1, drawn())
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
-
-
-t3_cancelled.wait_ms = 2500
 
 
 def t3_undone():
@@ -708,4 +704,5 @@ h.run(
             t7_done,
         ]
     ),
+    paced_by="state",
 )

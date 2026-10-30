@@ -76,9 +76,6 @@ def p1_compute():
     si.menu_item("MODIFY", "Compute All")
 
 
-p1_compute.wait_ms = 1500
-
-
 def p1_summary():
     d = summary()
     h.check("P1 the summary window", d is not None, h.popups())
@@ -125,9 +122,6 @@ def p3_fix():
     d.getObject("Parameters").depth = 20  # changed, not recomputed yet
     s["before"] = d.getObject(s["body"]).Shape.Volume
     h.press(QtCore.Qt.Key_B, QtCore.Qt.ControlModifier)
-
-
-p3_fix.wait_ms = 1500
 
 
 def p3_check():
@@ -177,4 +171,5 @@ h.run(
         p5_no_design,
         cleanup,
     ],
+    paced_by="state",
 )

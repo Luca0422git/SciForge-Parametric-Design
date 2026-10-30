@@ -353,4 +353,5 @@ h.run(
         delete_shell,
         after_delete,
     ],
+    paced_by="state",
 )

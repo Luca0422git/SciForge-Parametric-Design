@@ -132,9 +132,6 @@ def p1_open():
     si.menu_item("INSERT", "Insert Derive")
 
 
-p1_open.wait_ms = 1500
-
-
 def p1_dialog():
     p = m.derive_panel()
     h.check("P1 the Derive dialog", p is not None, h.popups())
@@ -174,9 +171,6 @@ def p1_dialog():
 
 def p1_ok():
     h.task_button("OK")
-
-
-p1_ok.wait_ms = 1500
 
 
 def p1_made():
@@ -229,9 +223,6 @@ def p2_edit():
     t.double_click(m.timeline_title(master()))
 
 
-p2_edit.wait_ms = 1500
-
-
 def p2_pick_v1():
     p = m.derive_panel()
     if not h.check("P2 the Edit Derive dialog", p is not None):
@@ -254,7 +245,6 @@ def p2_ok():
     h.task_button("OK")
 
 
-p2_ok.wait_ms = 2600  # (the application bar looks every 2 s)
 p2_ok.done = p2.out_of_date_shown
 p2_ok.done_what = p2.OUT_OF_DATE_READ
 
@@ -285,7 +275,6 @@ def p3_update():
     t.menu(m.timeline_title(master()), "Update Derive")
 
 
-p3_update.wait_ms = 2600
 p3_update.done = p2.out_of_date_shown
 p3_update.done_what = p2.OUT_OF_DATE_READ
 
@@ -322,17 +311,11 @@ def p4_change_source():
     App.setActiveDocument(s["doc"])  # back on Cell's tab
 
 
-p4_change_source.wait_ms = 1500
-
-
 def p4_update():
     from sciforge import derive, derive_core
 
     h.check("P4 out of date after the source's save", derive.state(master()) == derive_core.NEWER)
     t.menu(m.timeline_title(master()), "Update Derive")
-
-
-p4_update.wait_ms = 1500
 
 
 def p4_thumb():
@@ -349,9 +332,6 @@ def p5_edit():
     t.double_click(m.timeline_title(master()))
 
 
-p5_edit.wait_ms = 1500
-
-
 def p5_ticks():
     p = m.derive_panel()
     if not h.check("P5 the Edit Derive dialog", p is not None):
@@ -359,9 +339,6 @@ def p5_ticks():
     m.tick(p, s["arm_key"], False)
     m.tick(p, s["base_key"], True)
     h.task_button("OK")
-
-
-p5_ticks.wait_ms = 1500
 
 
 def p5_changed():
@@ -396,9 +373,6 @@ def p6_save():
     path = d.FileName
     App.closeDocument(d.Name)
     s["doc"] = App.openDocument(path).Name
-
-
-p6_save.wait_ms = 1500
 
 
 def p6_reopened():
@@ -449,4 +423,4 @@ STEPS = [
     p6_look,
 ]
 
-h.run("polish2_derive", STEPS)
+h.run("polish2_derive", STEPS, paced_by="state")

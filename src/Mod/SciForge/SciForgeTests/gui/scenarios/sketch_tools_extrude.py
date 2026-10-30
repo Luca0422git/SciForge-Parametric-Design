@@ -40,9 +40,6 @@ def slot_width():
     st.keys("10\n")
 
 
-slot_width.wait_ms = 800
-
-
 def slot_check():
     sk = st.sketch()
     st.sketch_ok("overall slot")
@@ -98,4 +95,5 @@ h.run(
             extrude_check,
         ]
     ),
+    paced_by="state",
 )

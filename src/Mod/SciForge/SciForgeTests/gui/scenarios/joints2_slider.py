@@ -99,15 +99,9 @@ def make_motion():
     j.choose_type(p, "Slider")
 
 
-make_motion.wait_ms = 2600
-
-
 def make_axis():
     p = j.panel()
     b.choose(p.axis_boxes["Slide"][0], "X Axis")
-
-
-make_axis.wait_ms = 1500
 
 
 def make_limits():
@@ -266,9 +260,6 @@ def s4_type():
     s.type_value(p.slide.widget, "%g" % (25 * state.get("sign", 1.0)))
 
 
-s4_type.wait_ms = 2500
-
-
 def s4_stopped():
     p = j.panel()
     x0, x1 = block_x()
@@ -336,4 +327,4 @@ steps += [s3_enable, s3_drag, s3_stopped, s3_undo]
 steps += [s4_drive, s4_type, s4_stopped, s4_cancel, s4_back]
 steps += [s5_drag_wall, s5_moved, s5_undo, s5_undone, s5_disable, s5_off]
 
-h.run("joints2_slider", steps)
+h.run("joints2_slider", steps, paced_by="state")

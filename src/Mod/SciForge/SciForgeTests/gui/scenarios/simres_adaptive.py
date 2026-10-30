@@ -203,9 +203,6 @@ def e_report():
     s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReportSave"))
 
 
-e_report.wait_ms = 1500
-
-
 def e_check():
     path = state.get("report") or ""
     h.check("report written", os.path.isfile(path), path)
@@ -235,9 +232,6 @@ def e_pictures():
     state["report2"] = os.path.join(s.OUT, "simres_adaptive_report_pictures.html")
     ui.type_into(dialog.findChild(QtWidgets.QLineEdit, "SciForgeSimReportPath"), state["report2"])
     s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReportSave"))
-
-
-e_pictures.wait_ms = 2500
 
 
 def e_pictures_check():
@@ -270,4 +264,5 @@ h.run(
         e_pictures,
         e_pictures_check,
     ],
+    paced_by="state",
 )
