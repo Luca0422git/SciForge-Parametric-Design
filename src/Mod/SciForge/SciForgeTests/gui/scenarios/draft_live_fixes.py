@@ -223,41 +223,26 @@ def f2_typed():
     p = panel()
     S["f2"] = {}
     sd.type_into(p.angle.widget, "15")
-    began = time.perf_counter()
-    h.BUSY.add("f2")
+    # typed again while the dialog searches its limit (the search runs on the event loop)
+    h.wait_for(lambda: panel() is None or panel().limit_searching(), "the dialog to search its limit")
+    q = panel()
+    if q is None:
+        return
+    S["f2"]["typed"] = time.perf_counter()
+    sd.type_into(q.angle.widget, "3")
+    S["f2"]["searching after"] = q.limit_searching()
+    orig = q.show_preview
 
-    def watch():
-        try:
-            q = panel()
-            if q is None:
-                h.BUSY.discard("f2")
-                return
-            if q.limit_searching() and "typed" not in S["f2"]:
-                S["f2"]["typed"] = time.perf_counter()
-                sd.type_into(q.angle.widget, "3")
-                S["f2"]["searching after"] = q.limit_searching()
-                orig = q.show_preview
+    def show(on):
+        if on and "exact" not in S["f2"]:
+            S["f2"]["exact"] = (
+                round((time.perf_counter() - S["f2"]["typed"]) * 1000.0),
+                q.options.get("angle"),
+            )
+        return orig(on)
 
-                def show(on):
-                    if on and "exact" not in S["f2"]:
-                        S["f2"]["exact"] = (
-                            round((time.perf_counter() - S["f2"]["typed"]) * 1000.0),
-                            q.options.get("angle"),
-                        )
-                        h.BUSY.discard("f2")
-                    return orig(on)
-
-                q.show_preview = show
-                return
-            if time.perf_counter() - began < 6.0:
-                QtCore.QTimer.singleShot(15, watch)
-            else:
-                h.BUSY.discard("f2")
-        except Exception as exc:
-            S["f2"]["error"] = str(exc)
-            h.BUSY.discard("f2")
-
-    QtCore.QTimer.singleShot(15, watch)
+    q.show_preview = show
+    h.wait_for(lambda: "exact" in S["f2"] or panel() is None, "the exact preview after the search")
 
 
 f2_typed.wait_ms = 2000

@@ -72,7 +72,7 @@ def a_press_and_drag():
     # handle's 30 ms poll), about 0.8 s with the button held.
     for i in range(1, 81):
         _move(widget, QtCore.QPoint(start_px.x(), start_px.y() - i))
-        QtTest.QTest.qWait(10)
+        QtTest.QTest.qWait(10)  # input pace: a real mouse, a pixel every 10 ms
         d = p.datum
         if d is not None:
             seen.append(d.getGlobalPlacement().Base.z)

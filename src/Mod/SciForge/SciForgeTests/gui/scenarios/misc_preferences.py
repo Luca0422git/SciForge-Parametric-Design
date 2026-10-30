@@ -141,8 +141,7 @@ def middle_drag():
     before_pos = V(*camera().position.getValue().getValue())
     cx, cy = gl.width() // 2, gl.height() // 2
     h.drag(QtCore.QPoint(cx - 120, cy), QtCore.QPoint(cx + 40, cy - 30), button=MIDDLE)
-    QtTest.QTest.qWait(100)
-    m.process()
+    h.settle("the view to follow the drag")
     turned = abs(before_rot.inverted().multiply(h.view().getCameraOrientation()).Angle)
     moved = (V(*camera().position.getValue().getValue()) - before_pos).Length
     return turned, moved

@@ -9,7 +9,7 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtWidgets
+from PySide import QtWidgets
 
 from SciForgeTests.gui import harness as h
 
@@ -120,7 +120,10 @@ def _step(tab, group, label, resolved):
             _open_sketch()
         h.new_errors()
 
+        looked = {"it": False}
+
         def look():  # runs even while a modal pop-up blocks the command
+            looked["it"] = True
             entry["popups"] = [p for p in h.popups() if p != INTENDED.get(label)]
             entry["in_edit"] = str(Gui.ActiveDocument.getInEdit())
             entry["task_panel"] = bool(Gui.Control.activeDialog())
@@ -133,9 +136,18 @@ def _step(tab, group, label, resolved):
                 h.shot("popup-%s-%s" % (tab, label.replace(" ", "_").replace("/", "_")))
             _cleanup()
 
-        QtCore.QTimer.singleShot(900, look)
-        ribbon_ui.run(resolved, label)
-        QtWidgets.QApplication.processEvents()
+        # a pop-up (modal: it runs its own loop inside the command) is looked at from inside
+        # it; with none, once the command has settled
+        watch = h.when(lambda: bool(h.popups()), look, "the command %s" % label)
+        try:
+            ribbon_ui.run(resolved, label)
+            QtWidgets.QApplication.processEvents()
+            if not looked["it"]:
+                h.settle("%s to settle" % label)
+        finally:
+            watch["cancelled"] = True
+        if not looked["it"]:
+            look()
 
     step.__name__ = "%s: %s > %s" % (tab, group, label)
     step.known = label in KNOWN

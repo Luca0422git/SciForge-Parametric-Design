@@ -240,7 +240,7 @@ def cp_clicks():
 
 def cp_ok():
     h.click(st.g(V(65, -55, 0)), button=QtCore.Qt.RightButton)
-    QtCore.QTimer.singleShot(250, lambda: si.marking_slot("OK"))
+    si.marking_choose("OK")
 
 
 cp_ok.wait_ms = 1200
@@ -275,7 +275,8 @@ def marking_trim():
     gl = h.gl_widget()
     pos = h.screen_point(st.g(V(-65, -25, 0)))
     QtTest.QTest.mouseClick(gl, QtCore.Qt.RightButton, QtCore.Qt.NoModifier, pos)
-    QtCore.QTimer.singleShot(300, _click_trim_row)
+    h.wait_for(lambda: si.marking_menu() is not None, "the right-click menu to open")
+    _click_trim_row()
 
 
 def _click_trim_row():

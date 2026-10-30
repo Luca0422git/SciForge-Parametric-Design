@@ -255,6 +255,8 @@ def p2_ok():
 
 
 p2_ok.wait_ms = 2600  # (the application bar looks every 2 s)
+p2_ok.done = p2.out_of_date_shown
+p2_ok.done_what = p2.OUT_OF_DATE_READ
 
 
 def p2_older():
@@ -284,6 +286,8 @@ def p3_update():
 
 
 p3_update.wait_ms = 2600
+p3_update.done = p2.out_of_date_shown
+p3_update.done_what = p2.OUT_OF_DATE_READ
 
 
 def p3_updated():

@@ -1760,6 +1760,33 @@ branch off develop (a patch release was going out from develop). How it all work
   at the end); `pkill -f <pattern>` kills the shell running it when the pattern is in its own
   command line (use the PIDs); no `git stash` games with a dirty tree (a conflict in harness.py
   had to be restored from the stash).
+- **2026-10-30.** CI trial #308 (every scenario 3 times under `--stress` with no fixed waits,
+  on c565fdbc; a part takes about 1 h 50 min, not the 6 h feared: state pacing is faster than
+  the 700 ms clock): 61-63 of each part's 65-66 passed 3 of 3. Every failure was looked at; the
+  causes, all in the tests:
+  - **The app times some clicks itself** (0.6-0.8 s windows after an overlay click, a pick, a
+    Move drag; the sketcher's double-click): every 3D-view press now keeps `h.click_gap()`
+    after the last (`h.press_pace`, applied to all QTest presses on the 3D view). Fixed
+    inspect_qa3/4/8, bodies_qa (a Move arrow dragged right after the pick moved nothing).
+  - **The menu helpers dropped the processEvents after the click** that the old ones had: the
+    browser runs a menu entry just after its menu closes (Rename's field). CI #310 (timer
+    pacing) failed components_basic / components2_copy / components2_pattern /
+    fixdecal_components on it; reproduced and fixed.
+  - **Polls settling cannot see**, now named: the RESULTS view following the eyes (in
+    `h.busy()` now), the Data Panel's 4 s folder look, the Out-of-Date button's 2 s look
+    (`polish2_steps.out_of_date_shown`), a joint animation (one cycle on its own clock).
+  - **Animations**: Animate Joint plays until Esc, so the steps around it are `while_busy`.
+  - **Long operations**: twenty VEX parts inserted settle in ~17 s, ~50 s under stress: those
+    two steps say `timeout_s = 120` (a hang is far longer); the speed limit scales with
+    `h.SLOWDOWN`.
+  - Real-time frame counts of a drag at a hand's pace are `h.speed_check`s (fillet_live,
+    draft_live, live_shapes): counted on normal runs, printed under `--stress`.
+- The base runners (smoke_gui, journey_gui, restart_gui) were on their own clocks: they run on
+  the harness now, paced by state (`run_tests.sh --only gui-base` runs just them). The harness's
+  Report-view scan flagged its own progress line for a step called step_errors: it ignores it.
+- Every helper and scenario wait was named (about 230 of them); what is left are the marked
+  ones: a hand's pace (`# input pace`), timing that is itself tested or a fake server's delay
+  (`# on purpose`). After the mechanical conversion of the wait_ms, 0 fixed waits remain.
 
 ### Session log: quick patch 0.1.0-beta.3.1.3, stuck buttons (`develop`, 2026-10-29)
 

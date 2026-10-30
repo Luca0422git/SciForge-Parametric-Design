@@ -55,14 +55,6 @@ def popup():
 CLICKED = {"pending": False}  # a menu row click is on its way (click_menu_action)
 
 
-def guard_popups():
-    """The safety net for a menu that never got its click: close it, unless a click is on
-    its way (under load the net went off first and closed the menu under the coming click,
-    so Reset All's question never opened)."""
-    if not CLICKED["pending"]:
-        close_popups()
-
-
 def close_popups():
     p = popup()
     while p is not None:
@@ -71,12 +63,13 @@ def close_popups():
 
 
 def click_menu_action(menu, text):
-    """Click a menu row. The click goes out a moment later: what it starts may open its own
-    window (a question box) and wait, and the steps after it must go on meanwhile."""
+    """Click a menu row once the menu has lit it under the pointer. The click goes out once
+    this returns (posted, no delay): what it starts may open its own window (a question box)
+    and wait, and the steps after it must go on meanwhile."""
     for action in menu.actions():
         if action.text().replace("&", "").split("\t")[0] == text:
+            h.light_entry(menu, action)
             rect = menu.actionGeometry(action)
-            QtTest.QTest.mouseMove(menu, rect.center())
             CLICKED["pending"] = True
 
             def click():
@@ -90,27 +83,31 @@ def click_menu_action(menu, text):
     return False
 
 
-def later(steps, done, i=0, tries=0):
-    """Run `steps` (functions returning True when they did their part) one after another,
-    each when it can, while a menu's own event loop runs."""
+def later(steps, done, i=0):
+    """Run `steps` (functions returning True once they did their part, False while the app
+    does not show yet what they need) one after another, each as soon as it can, while a
+    menu's own event loop runs (h.when: a step that never can fails, naming it, and the
+    menus close)."""
     if i >= len(steps):
         done["ok"] = True
         return
-    try:
-        ok = steps[i]()
-    except Exception as exc:
-        done["error"] = str(exc)
-        close_popups()
-        return
-    if ok and i + 1 == len(steps):
-        done["ok"] = True
-    elif ok:
-        QtCore.QTimer.singleShot(250, lambda: later(steps, done, i + 1))
-    elif tries < 30:
-        QtCore.QTimer.singleShot(150, lambda: later(steps, done, i, tries + 1))
-    else:
-        done["stuck"] = i
-        close_popups()
+    did = {"it": False}
+
+    def attempt():
+        if not did["it"]:
+            try:
+                did["it"] = bool(steps[i]())
+            except Exception as exc:
+                done["error"] = str(exc)
+                close_popups()
+                return True  # (the chain ends: done has no "ok")
+        return did["it"]
+
+    def next_one():
+        if "error" not in done:
+            later(steps, done, i + 1)
+
+    h.when(attempt, next_one, "the menu to allow %s (%d of %d)" % (steps[i].__name__, i + 1, len(steps)))
 
 
 def menu_options(title, label, option):
@@ -133,7 +130,7 @@ def menu_options(title, label, option):
             return False
         rect = menu.actionGeometry(path[0][1])
         for x in (rect.left() + 10, rect.center().x(), rect.right() - 30):
-            QtTest.QTest.mouseMove(menu, QtCore.QPoint(x, rect.center().y()))
+            h.pointer_to(menu, QtCore.QPoint(x, rect.center().y()))
         state["button_seen"] = g.menu._sf_options.button.isVisible()
         return True
 
@@ -153,13 +150,8 @@ def menu_options(title, label, option):
         state["options"] = [a.text() for a in menu.actions()]
         return click_menu_action(menu, option)
 
-    QtCore.QTimer.singleShot(300, lambda: later([hover, dots, choose], done))
-    guard = QtCore.QTimer()
-    guard.setSingleShot(True)
-    guard.timeout.connect(guard_popups)
-    guard.start(20000)
+    later([hover, dots, choose], done)  # (each step once the menu allows it)
     g.open_menu()
-    guard.stop()
     QtWidgets.QApplication.processEvents()
     s["last_options"] = state
     return h.check(
@@ -177,17 +169,12 @@ def right_click(widget, option, pos=None):
             return False
         return click_menu_action(menu, option)
 
-    QtCore.QTimer.singleShot(300, lambda: later([choose], done))
-    guard = QtCore.QTimer()
-    guard.setSingleShot(True)
-    guard.timeout.connect(guard_popups)
-    guard.start(20000)
+    later([choose], done)  # (once the menu is there)
     pos = pos or QtCore.QPoint(widget.width() // 2, widget.height() // 2)
     event = QtGui.QContextMenuEvent(
         QtGui.QContextMenuEvent.Mouse, pos, widget.mapToGlobal(pos), QtCore.Qt.NoModifier
     )
     QtWidgets.QApplication.sendEvent(widget, event)
-    guard.stop()
     QtWidgets.QApplication.processEvents()
     return h.check("right-click > %s" % option, done.get("ok"), done)
 
@@ -303,7 +290,7 @@ def c_pin_by_right_click():
             return False
         path = si._find(menu, "Coil")
         rect = menu.actionGeometry(path[0][1])
-        QtTest.QTest.mouseMove(menu, rect.center())
+        h.pointer_to(menu, rect.center())
         event = QtGui.QContextMenuEvent(
             QtGui.QContextMenuEvent.Mouse, rect.center(), menu.mapToGlobal(rect.center())
         )
@@ -316,13 +303,8 @@ def c_pin_by_right_click():
             return False
         return click_menu_action(menu, "Pin to Toolbar")
 
-    QtCore.QTimer.singleShot(300, lambda: later([right, choose], done))
-    guard = QtCore.QTimer()
-    guard.setSingleShot(True)
-    guard.timeout.connect(guard_popups)
-    guard.start(20000)
+    later([right, choose], done)  # (each step once the menu allows it)
     g.open_menu()
-    guard.stop()
     QtWidgets.QApplication.processEvents()
     h.check("right-click on Coil in the menu > Pin to Toolbar", done.get("ok"), done)
     h.check("Coil pinned again", big("Coil") is not None)

@@ -548,7 +548,7 @@ def p9_face():
     # the back face is hidden from the iso view: a person turns the view round
     h.view().viewRear()
     h.view().fitAll()
-    QtTest.QTest.qWait(50)
+    h.view_drawn("the 3D view to draw the turned view")
     h.click(BACK_FACE)
 
 

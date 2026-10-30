@@ -127,6 +127,19 @@ def dialog(object_name):
     return None
 
 
+def out_of_date_shown():
+    """True once the Out-of-Date button shows what the active design's links say now (the
+    application bar looks again every third tick of its 700 ms timer: it reads files' dates)."""
+    from sciforge import versions_ui
+
+    button = child(Gui.getMainWindow(), "SciForgeOutOfDate")
+    items = versions_ui.out_of_date(App.ActiveDocument) if App.ActiveDocument else []
+    return button is not None and button.isVisible() == bool(items)
+
+
+OUT_OF_DATE_READ = "the Out-of-Date button to show what the links say (it looks every 2 s)"
+
+
 def child(parent, object_name):
     if parent is None:
         return None

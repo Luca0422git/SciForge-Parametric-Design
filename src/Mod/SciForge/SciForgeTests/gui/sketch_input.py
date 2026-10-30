@@ -487,6 +487,12 @@ def marking_slot(label):
     return False
 
 
+def marking_choose(label):
+    """Once the marking menu a right click opened is on the screen, click its `label`."""
+    h.wait_for(lambda: marking_menu() is not None, "the marking menu to open")
+    return marking_slot(label)
+
+
 def drawing():
     """True while a sketch tool runs (FreeCAD's drawing cursor on the 3D view)."""
     return h.gl_widget().cursor().shape() != QtCore.Qt.ArrowCursor

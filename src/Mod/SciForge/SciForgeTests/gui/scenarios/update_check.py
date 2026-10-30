@@ -44,7 +44,6 @@ import time
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui, QtWidgets
-from PySide6 import QtTest
 
 from SciForgeTests.gui import fake_github as fg
 from SciForgeTests.gui import harness as h
@@ -78,13 +77,14 @@ def forget_prefs():
             pass
 
 
-def wait_for(condition, seconds=15.0):
-    end = time.time() + seconds
-    while time.time() < end:
-        QtWidgets.QApplication.processEvents()
-        if condition():
-            return True
-        QtTest.QTest.qWait(30)
+def wait_for(condition, seconds=None, what=None):
+    """True once condition() holds: the update check and the download run in threads of their
+    own and report back on the GUI thread. A hang fails h.wait_for's check naming it (rule 5);
+    `seconds` (how long it usually takes) is no longer a bound."""
+    name = what or getattr(condition, "__name__", "") or "the update check"
+    if name == "<lambda>":
+        name = "the update check to answer"
+    h.wait_for(condition, name)
     return bool(condition())
 
 
@@ -397,7 +397,7 @@ def p1b_the_light_look():
     from sciforge import theme
 
     theme.set_theme("light")
-    QtTest.QTest.qWait(500)
+    h.settle("the light look to be painted")
     found = line()
     h.check("P1 light look: the line is still there", found is not None and found.isVisible())
     if found is None:
@@ -415,7 +415,7 @@ def p1b_the_light_look():
     h.check("P1 light look: the sentence is dark on it", darkest < 110, darkest)
     h.shot("line_light")
     theme.set_theme("dark")
-    QtTest.QTest.qWait(500)
+    h.settle("the dark look to be painted")
     again = pixel(found, 5, found.height() // 2)
     h.check("P1 and the dark look again", near(again, (0x35, 0x4A, 0x63)), again.name())
 
@@ -427,8 +427,7 @@ def p2_once_a_day():
     fake = s["fake"]
     count = fake.count("/repos")
     update_ui._start_if_due()
-    wait_for(checking_done, 2)
-    QtTest.QTest.qWait(200)
+    wait_for(checking_done)  # (a check that started would have asked GitHub by then)
     h.check("P2 asked a moment ago: GitHub is not asked again", fake.count("/repos") == count, fake.hits)
     fake.delay = 0.0
     auto_check()
@@ -436,7 +435,7 @@ def p2_once_a_day():
     group().SetBool("CheckForUpdates", False)
     due_again()
     update_ui._start_if_due()
-    QtTest.QTest.qWait(300)
+    wait_for(checking_done)  # (a check that started would have asked GitHub by then)
     h.check("P2 with 'Check for updates when SciForge starts' off it never asks by itself", fake.count("/repos") == count + 1)
     h.check("P2 ... and nothing is running", checking_done())
     group().RemBool("CheckForUpdates")
@@ -446,7 +445,7 @@ def p2_once_a_day():
 def p3_later_hides_the_line():
     found = line()
     w.click(found.later_button)
-    QtTest.QTest.qWait(100)
+    h.settle("Later to be handled")
     h.check("P3 Later hides the line", line_text() == "", line_text())
     h.check("P3 ... for that version", group().GetString("UpdateLater", "") == "0.1.0-beta.2")
     button = icon_button()
@@ -524,14 +523,13 @@ def p16_the_icon_menu():
     from sciforge import update_ui
 
     if button is not None:
-        QtCore.QTimer.singleShot(
-            80,
-            lambda: (
-                texts.extend(a.text() for a in QtWidgets.QApplication.activePopupWidget().actions()),
-                QtWidgets.QApplication.activePopupWidget().close(),
-            ),
+        # (read, then closed with Esc: an empty path)
+        h.choose_from(
+            lambda: w.click(button),
+            [],
+            "the update icon's menu",
+            read=lambda menu: texts.extend(a.text() for a in menu.actions()),
         )
-        w.click(button)
     h.check(
         "P16 the menu lists the version, Update now and What's new",
         [t for t in texts if t] == ["SciForge 0.1.0-beta.3 is available", "Update now", "What's new"],
@@ -749,25 +747,27 @@ class _Dialog:
 
 
 def p11_a_command_is_open():
+    from sciforge import update_ui
+
     reset_state()
     fake = s["fake"]
     fake.publish("0.1.0-beta.9", core="testcore")
     auto_check()
     Gui.Control.showDialog(_Dialog())
-    QtTest.QTest.qWait(200)
+    h.settle("the command dialog to open")
     h.check("P11 a command dialog is open", bool(Gui.Control.activeDialog()))
     asked = fake.count("/dl/SciForge-quick-update")
     press_update_now()
     wait_for(lambda: answer() is not None, 5)
     box = answer()
     h.check("P11 a box asks to finish the command first", box is not None and "command is still open" in box.text(), box.text() if box else "")
-    QtTest.QTest.qWait(300)
+    h.check("P11 no download started", update_ui._state.get("download") is None)
     h.check("P11 nothing was downloaded", fake.count("/dl/SciForge-quick-update") == asked and not files_in(updates_folder("0.1.0-beta.9")))
     h.check("P11 nothing was handed over", not s["handed"] and not s["quit"])
     h.shot("command_open")
     close_answer()
     Gui.Control.closeDialog()
-    QtTest.QTest.qWait(200)
+    h.settle("the command dialog to close")
 
 
 # -- P12 -------------------------------------------------------------------------------------
@@ -817,7 +817,7 @@ def p13_updated_to():
     h.check("P13 Home says it once", line_text() == "Updated to %s." % VERSION, line_text())
     h.check("P13 ... What's new and Dismiss, not Update now", found.whats_new_button.isVisible() and found.dismiss_button.isVisible() and not found.update_button.isVisible() and not found.later_button.isVisible())
     h.check("P13 it is remembered only for this start", group().GetString("UpdateJustInstalled", "x") == "")
-    QtTest.QTest.qWait(250)  # (painted before the screen is looked at)
+    h.settle("the line to be painted")  # (the screen is looked at)
     inside = pixel(found, 5, found.height() // 2)
     h.check("P13 it is on the screen, in the blue of the update line", near(inside, (0x35, 0x4A, 0x63)), inside.name())
     h.shot("updated_to")
@@ -827,7 +827,7 @@ def p13_updated_to():
     update_ui._note_updated()
     h.check("P13 the next start does not say it again", group().GetString("UpdateJustInstalled", "") == "")
     w.click(found.dismiss_button)
-    QtTest.QTest.qWait(100)
+    h.settle("Dismiss to be handled")
     h.check("P13 Dismiss hides it", line_text() == "", line_text())
 
 
@@ -870,9 +870,9 @@ def p15_open_preferences():
 
     reset_state()
     home_ui.show()
-    QtTest.QTest.qWait(200)
+    h.settle("Home to show")
     w.click(home_ui.view().preferences_button)  # Home's own Preferences button
-    QtTest.QTest.qWait(400)
+    h.settle("Preferences to open")
 
 
 def p15_the_updates_group():
@@ -894,7 +894,7 @@ def p15_the_updates_group():
             parent = parent.parentWidget()
         if parent is not None:
             parent.ensureWidgetVisible(channel)
-        QtTest.QTest.qWait(200)
+        h.settle("the page to scroll")
         h.shot("preferences_updates")
 
 
@@ -906,13 +906,13 @@ def p15_switch_off_and_stable():
     m.set_check(check, False)
     channel.setCurrentIndex(channel.findText("Stable only"))
     w.click(d.ok_button)
-    QtTest.QTest.qWait(300)
+    h.settle("OK to be handled")
     h.check("P15 OK keeps the choices", group().GetBool("CheckForUpdates", True) is False and group().GetString("UpdateChannel", "") == "stable")
     h.check("P15 ... the update check reads them", not update_ui.check_on_start() and update_ui.channel() == "stable")
     count = s["fake"].count("/repos")
     due_again()
     update_ui._start_if_due()
-    QtTest.QTest.qWait(300)
+    wait_for(checking_done)  # (a check that started would have asked GitHub by then)
     h.check("P15 switched off, nothing asks GitHub at the start", s["fake"].count("/repos") == count)
     group().RemBool("CheckForUpdates")
     group().RemString("UpdateChannel")

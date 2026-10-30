@@ -170,7 +170,7 @@ def extrude():
 
 
 def extrude_distance():
-    sm.wait(300)
+    h.settle("the Extrude dialog to open")
     h.check("distance typed", ai.give_distance("5"))
 
 

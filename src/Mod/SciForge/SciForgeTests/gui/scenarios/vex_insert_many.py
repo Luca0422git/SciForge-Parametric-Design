@@ -98,6 +98,9 @@ def p1_insert():
 
 
 p1_insert.wait_ms = 2500
+# ten VEX parts inserted, then what the app does after (browser, timeline, joints): about 10 s
+# here, three times that under --stress; a hang is far longer
+p1_insert.timeout_s = 120
 
 
 def p1_check():
@@ -216,13 +219,14 @@ def p4_twenty():
 
 
 p4_twenty.wait_ms = 2500
+p4_twenty.timeout_s = 120  # (twenty parts: about 17 s with what follows, as p1_insert)
 
 
 def p4_check():
     n = len([c for c in comps() if c.Label.endswith(("_1", "_2"))])
     h.check("P4 twenty components", n == 20, [c.Label for c in comps()])
     print("[SciForge] vex: twenty STEP files inserted in %.2f s" % S["insert20"], flush=True)
-    h.check("P4 twenty files in under a minute here", S["insert20"] < 60.0, S["insert20"])
+    h.check("P4 twenty files in under a minute here", S["insert20"] < 60.0 * h.SLOWDOWN, S["insert20"])
     h.press(QtCore.Qt.Key_Escape)
     no_files()
 

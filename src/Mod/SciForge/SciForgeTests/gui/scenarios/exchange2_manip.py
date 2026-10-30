@@ -28,7 +28,6 @@ import math
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore
-from PySide6 import QtTest
 
 from SciForgeTests.gui import arrow_input as ai
 from SciForgeTests.gui import exchange_steps as x
@@ -83,27 +82,14 @@ def panel():
     return i.panel()
 
 
-def _settled_arrow(key, timeout_ms=3000):
+def _settled_arrow(key, timeout_ms=None):
     """The dialog's arrow `key` once it stays put on the screen: after a Fit the handles
-    are rebuilt and their boxes moved by timers, later on a slow machine (CI #145, #148:
-    the press went where the arrow had been)."""
-    last, arrow = None, None
-    waited = 0
-    while waited <= timeout_ms:
-        p = panel()
-        arrow = p.handle_by.get(key) if p is not None else None
-        if arrow is None:
-            return None
-        now = (
-            h.screen_point(ai.arrow_point(arrow, 0.2)),
-            h.screen_point(ai.arrow_point(arrow, 0.9)),
-        )
-        if now == last:
-            return arrow
-        last = now
-        QtTest.QTest.qWait(250)
-        waited += 250
-    return arrow
+    are rebuilt and their boxes moved by their polls, later on a slow machine (CI #145,
+    #148: the press went where the arrow had been): the app settled, every live handle
+    polled since."""
+    h.settle("the handles to follow the view")
+    p = panel()
+    return p.handle_by.get(key) if p is not None else None
 
 
 def drag_arrow(key, mm):
@@ -129,14 +115,14 @@ def drag_arrow(key, mm):
         point = ai.arrow_point(arrow, part)
         px = h.screen_point(point)
         h.move(px)
-        QtTest.QTest.qWait(150)
+        h.view_drawn()
         under = h.covered(px)
         if under is not None:
             tries.append((part, (px.x(), px.y()), under.metaObject().className()))
             continue
         end = point + arrow.direction * mm
         h.drag(px, h.screen_point(end), steps=16)
-        QtTest.QTest.qWait(300)
+        h.settle("the drag to be applied")
         tries.append(
             (part, (px.x(), px.y()), "moved" if _handle_value(p, key) != value else "missed")
         )

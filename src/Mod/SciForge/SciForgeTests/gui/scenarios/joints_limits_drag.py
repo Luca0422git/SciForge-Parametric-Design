@@ -68,7 +68,7 @@ def turn_to(end, step=5.0):
         )
         QtWidgets.QApplication.sendEvent(widget, event)
         QtWidgets.QApplication.processEvents()
-        QtTest.QTest.qWait(30)
+        QtTest.QTest.qWait(30)  # input pace: a hand's drag (the handle polls between moves)
     QtTest.QTest.mouseRelease(widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pixels[-1])
     QtWidgets.QApplication.processEvents()
 
@@ -109,7 +109,7 @@ def drag_block(end, step=6.0):
         )
         QtWidgets.QApplication.sendEvent(widget, event)
         QtWidgets.QApplication.processEvents()
-        QtTest.QTest.qWait(30)
+        QtTest.QTest.qWait(30)  # input pace: a hand's drag (the handle polls between moves)
     QtTest.QTest.mouseRelease(widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pixels[-1])
     QtWidgets.QApplication.processEvents()
 

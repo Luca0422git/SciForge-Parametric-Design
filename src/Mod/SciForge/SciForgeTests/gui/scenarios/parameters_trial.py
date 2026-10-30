@@ -90,7 +90,7 @@ def drain(where):
     """The trial recompute reports the failure it found in FreeCAD's Report view: expected
     here (the user sees the dialog's message), so taken out of the error check. (The Report
     view gets its lines through Qt's event queue: they are let in first.)"""
-    QtTest.QTest.qWait(500)
+    h.settle("FreeCAD to report the trial's failure")
     seen = h.new_errors()
     h.check("%s: FreeCAD reported the trial's failure (expected)" % where, True, seen)
 

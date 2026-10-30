@@ -416,7 +416,7 @@ def p19_modeled_ok():
     )
     if p:
         hs.click_checkbox(p.modeled)
-        QtTest.QTest.qWait(80)  # the preview starts (60 ms)...
+        QtTest.QTest.qWait(80)  # on purpose: OK while the preview (60 ms) is cutting the thread
         h.task_button("OK")  # ... and OK comes while FreeCAD is still cutting the thread
 
 

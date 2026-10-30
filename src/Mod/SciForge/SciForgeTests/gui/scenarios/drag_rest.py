@@ -118,7 +118,7 @@ class Drive:
         )
         QtWidgets.QApplication.processEvents()
         self.probe.press = time.perf_counter()
-        QtCore.QTimer.singleShot(int(self.plan[0][1]) if self.plan else 0, self._next)
+        QtCore.QTimer.singleShot(int(self.plan[0][1]) if self.plan else 0, self._next)  # input pace: the planned hand
 
     def _local(self, pos):
         gl = h.gl_widget()
@@ -142,9 +142,9 @@ class Drive:
             self.probe.moves.append(time.perf_counter())
             self.i += 1
             if self.i < len(self.plan):
-                QtCore.QTimer.singleShot(int(self.plan[self.i][1]), self._next)
+                QtCore.QTimer.singleShot(int(self.plan[self.i][1]), self._next)  # input pace: the planned hand
             else:
-                QtCore.QTimer.singleShot(self.hold_ms, self._release)
+                QtCore.QTimer.singleShot(self.hold_ms, self._release)  # input pace: the hand rests
         except Exception as exc:
             print("[SciForge] drag_rest drive: %s" % exc, flush=True)
             self._release()

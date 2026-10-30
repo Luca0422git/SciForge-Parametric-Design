@@ -302,7 +302,7 @@ def ta_check():
 def ta_ok_menu():
     """OK in the right-click menu ends the tool (3 o'clock)."""
     h.click(st.g(V(65, 45, 0)), button=QtCore.Qt.RightButton)
-    QtCore.QTimer.singleShot(200, lambda: si.marking_slot("OK"))
+    si.marking_choose("OK")
 
 
 def ta_ok_check():

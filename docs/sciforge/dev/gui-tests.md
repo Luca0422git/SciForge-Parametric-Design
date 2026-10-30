@@ -16,6 +16,10 @@ scenario (CI #277 to #287). This page is how they work now. The brief that start
 1. **Wait for state, never for time.** Before each input, wait until the app shows the state
    that input needs (the dialog is open, the menu has lit the entry, nothing is recomputing).
    No new `wait_ms`, `qWait(n)`, `singleShot(n, ...)` or `time.sleep` used as a delay.
+   (`singleShot(0, fn)` is not a delay: fn runs once the current handler returns, to click
+   inside a menu's own loop. A pause that is the thing tested, or the pace of a hand, says so
+   on its line: `# input pace: ...` or `# on purpose: ...`; `check_waits.py` does not count
+   those.)
 2. **Timeouts only catch hangs.** Every wait has a generous bound (30 s, longer for a solve).
    Reaching it means something is broken. Never lower one to go faster, never raise one to pass.
 3. **Check after the input, by state.** Wait for the input's effect, then look.
@@ -55,7 +59,8 @@ h.run("my_scenario", [new_design, open_offset, solve, ...], paced_by="state")
   not converted yet) waits each step's fixed `wait_ms` as before.
 - Inside a step: `h.wait_for(condition, "what it is")`, `h.settle()`, and for something that
   opens and runs its own loop (a menu, a modal dialog) `h.when(condition, action, "what")` set up
-  before the call that opens it. Menus: `h.choose_from(open_it, path, "the X menu")`,
+  before the call that opens it. A step that only waits for a long operation (inserting
+  twenty parts, a solve) says so once with `step.timeout_s`. Menus: `h.choose_from(open_it, path, "the X menu")`,
   `h.choose_path(menu, path)`, `h.light_entry(menu, action)`. The 3D view:
   `h.view_drawn()` (FreeCAD's sketch finds what is under the pointer when it redraws).
 - **Settled** (`h.busy()` lists why not): no design recomputing, no input still being played
@@ -80,6 +85,20 @@ h.run("my_scenario", [new_design, open_offset, solve, ...], paced_by="state")
   posted before they return; a check that needs more waits for it by state.
 - Steps that re-insert themselves into the queue to poll (`h.state["queue"].insert(0, step)`)
   become a `done`.
+
+The waits that came up most, and the state each stood for:
+
+| A fixed wait before... | waits now for |
+|---|---|
+| a click or press after hovering in a sketch | `h.view_drawn()`: the view drew what is under the pointer |
+| reading screen colours, a screenshot | `h.view_drawn()` |
+| a check after typing into a dialog | `h.caught_up(panel)`: its preview timer done, no recompute |
+| a check after a click, a drag, an Undo | `h.settle()` (the app settled: posted work, panels' reads, handles) |
+| clicking a menu entry | `h.choose_from` / `h.light_entry`: the entry lit under the pointer |
+| answering a modal question | `h.when(question shown, answer)` set up before the click |
+| a marking-menu slot after a right click | `sketch_input.marking_choose(label)` |
+| a program or thread of its own (a fake slicer, the update check, the AI connector) | `h.wait_for` on what it writes or answers |
+| "nothing happened" (no second start, GitHub not asked) | the app's own record of it (programs started, a check running) |
 
 ## Converting a scenario
 

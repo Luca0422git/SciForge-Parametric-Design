@@ -126,7 +126,7 @@ def _esc_in_rules():
         return
     target = d.focusWidget() or d
     QtTest.QTest.keyClick(target, QtCore.Qt.Key_Escape)
-    QtTest.QTest.qWait(50)
+    h.settle("Esc to be handled")
 
 
 def empty_rules_esc_editor():

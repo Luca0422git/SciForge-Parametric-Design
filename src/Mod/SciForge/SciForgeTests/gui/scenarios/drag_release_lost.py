@@ -56,11 +56,10 @@ def screen(point):
     return h.screen_point(point)
 
 
-def settle(ms=350):
-    """Let the handles' timers and the preview catch up."""
-    QtTest.QTest.qWait(ms)
-    d.wait_until(lambda: not d.recomputing(), 6000)
-    QtTest.QTest.qWait(120)
+def settle(ms=None):
+    """The handles' timers and the preview caught up (the app settled: no recompute, no
+    posted work, every live handle polled since)."""
+    h.settle("the handles and the preview to catch up")
 
 
 def note(text):
@@ -304,8 +303,7 @@ def m2c_drag():
     d.press(pos)
     d.moves([d.lerp(pos, end, i / 12.0) for i in range(1, 13)])
     # hold still like a person until the preview moved the body under the mouse
-    QtTest.QTest.qWait(600)
-    d.wait_until(lambda: d.under(end) is not None, 3000)
+    h.wait_for(lambda: d.under(end) is not None, "the preview to move the body under the pointer")
     st["under"] = d.under(end)
     d.release(end)
     let_go(m_dragging)
@@ -488,7 +486,7 @@ def h2b_double_click():
     st["n0"] = len(st["spy"].calls)
     d.click(pos)
     st["second"] = time.time()
-    QtTest.QTest.qWait(150)  # a person's double-click
+    QtTest.QTest.qWait(150)  # input pace: a person's double-click (the timing is the test)
     d.click(pos)
     let_go(o_dragging)
     st["hover"] = [screen(p3 + hd.direction * k) for k in (4, 8, 12)]

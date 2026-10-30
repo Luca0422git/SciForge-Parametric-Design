@@ -131,6 +131,11 @@ def count():
             elif isinstance(node, ast.Call):
                 name = _call_name(node)
                 if name in TIMER_CALLS and not exempt(node):
+                    first = node.args[0] if node.args else None
+                    if isinstance(first, ast.Constant) and first.value == 0:
+                        # singleShot(0, fn): fn runs once this handler returns (to click
+                        # inside a menu's own loop, say), not after any time: not a wait
+                        continue
                     waits.append((rel, node.lineno, name))
                 elif (node.args or node.keywords) and not exempt(node):
                     # a call to a helper that only waits: st.wait(600) (st: a GUI test module

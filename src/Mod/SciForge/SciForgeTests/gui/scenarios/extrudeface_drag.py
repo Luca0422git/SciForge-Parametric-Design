@@ -25,7 +25,6 @@ Hand-derived: plate 15000 + tower 12000 = 27000; the boss 100 mm^2 x 30 = 3000.
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore
-from PySide6 import QtTest
 
 from SciForgeTests.gui import arrow_input as a
 from SciForgeTests.gui import dialog_input as ui
@@ -203,10 +202,10 @@ def d5_two_sides():
         return
     # as a person watches the preview catch up with the typed value (a slower machine
     # rebuilds it later: CI #151 still showed the cut)
-    for _ in range(40):
-        if p.operation.currentData() == "join" and x.near(x.total(), PARTS + 3000.0):
-            break
-        QtTest.QTest.qWait(100)
+    h.wait_for(
+        lambda: p.operation.currentData() == "join" and x.near(x.total(), PARTS + 3000.0),
+        "the preview to catch up with the typed 30 (a join again)",
+    )
     h.check(
         "D5 typed 30 is a join again",
         p.operation.currentData() == "join" and x.near(x.total(), PARTS + 3000.0),

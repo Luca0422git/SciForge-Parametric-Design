@@ -233,9 +233,6 @@ def browser_node(key):
     return browser_core.find(tree, key) if tree is not None else None
 
 
-def wait(ms):
-    QtTest.QTest.qWait(ms)
-
 
 def click_rules_button(name):
     """Click a button of the Sheet Metal Rules dialog by its object name suffix."""

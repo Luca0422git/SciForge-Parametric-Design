@@ -174,13 +174,7 @@ def extrude_panel():
 
 
 def wait_preview(p):
-    from PySide6 import QtTest
-
-    for _ in range(80):
-        timer = getattr(p, "_timer", None)
-        if (timer is None or not timer.isActive()) and not getattr(doc(), "Recomputing", False):
-            return
-        QtTest.QTest.qWait(50)
+    h.caught_up(p, "the Extrude preview to catch up")
 
 
 def sketch_rects(sk, rects):

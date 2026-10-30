@@ -21,7 +21,6 @@ import time
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore
-from PySide6 import QtTest
 
 from SciForgeTests.gui import dialog_input as ui
 from SciForgeTests.gui import harness as h
@@ -211,7 +210,7 @@ def e7_check():
     s["step"] = next((t for t in titles if t.startswith("Emboss")), None)
     h.check("E7 one timeline step Emboss", s["step"] is not None, titles)
     h.check("E7 the sketch is hidden", not s["sketch"].ViewObject.Visibility)
-    QtTest.QTest.qWait(100)
+    h.settle("the text to be hidden with its sketch")
     h.check("E7 and its text", not s["text"].ViewObject.Visibility)
     h.check("E7 one undo step", s["doc"].UndoNames[0] == "Emboss", s["doc"].UndoNames[:3])
     s["after_ok"] = volume()

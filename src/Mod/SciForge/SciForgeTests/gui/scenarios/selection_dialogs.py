@@ -19,7 +19,6 @@
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
-from PySide6 import QtTest
 
 from SciForgeTests.gui import arrow_input as ai
 from SciForgeTests.gui import blend_steps as b
@@ -169,8 +168,7 @@ def c_drag_arrow():
     start = h.screen_point(ai.head_point(dragger, 0.6))
     end = QtCore.QPoint(start.x() + 40, start.y() - 40)
     h.drag(start, end, steps=16)
-    QtTest.QTest.qWait(300)
-    QtWidgets.QApplication.processEvents()
+    h.settle("the drag to be applied")
 
 
 def c_arrow_moved_not_boxed():
