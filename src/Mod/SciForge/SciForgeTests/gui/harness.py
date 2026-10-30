@@ -362,6 +362,22 @@ def press_pace():
     left = _pointer.last_press + click_gap() - time.monotonic()
     if left > 0:
         QtTest.QTest.qWait(int(left * 1000) + 10)  # input pace: the app times the gap between clicks
+    _handles_let_go()
+
+
+def _handles_let_go():
+    """Until handles3d.JUST_USED_S after a handle was pressed, dragged or let go, the app
+    drops what FreeCAD's selection makes of a click in the 3D view (that is the drag's press
+    or release, not a pick), and a release it notices from Qt's mouse state is stamped late.
+    The next click comes once the app takes picks again (inspect_qa L in the sandbox, under
+    load: the front face clicked 0.2 s after a drag was let go, counted from the drag's press,
+    stayed unpicked, twice)."""
+    try:
+        from sciforge import handles3d
+    except Exception:
+        return
+    if handles3d.just_used():
+        wait_for(lambda: not handles3d.just_used(), "the app to take a click as a pick again")
 
 
 def after_view_pace():

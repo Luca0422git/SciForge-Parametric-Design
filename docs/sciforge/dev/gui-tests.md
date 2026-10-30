@@ -225,4 +225,9 @@ compiled again (an artifact of attempt 1 is there for attempt 2: the scenario de
   `QTest` press): a hand that comes from the view. On CI's faster machines a timeline click
   right after an axis pick was dropped (patterns_qa_paths P2), and a design tab clicked within
   0.15 s of a click in another design's view showed its design, then lost it again (that view
-  takes the keyboard a moment after the click: revolve_qa_more P12).
+  takes the keyboard a moment after the click: revolve_qa_more P12). And for
+  `handles3d.JUST_USED_S` after a handle was pressed, dragged or let go, the app drops the
+  selection a click in the 3D view makes (it would be the drag's press or release); so
+  `h.press_pace` also waits until `handles3d.just_used()` is over: the app's state, measured
+  from the release (the gap from the drag's press was not enough: inspect_qa L, a click 0.2 s
+  after the drag was let go stayed unpicked under load).
