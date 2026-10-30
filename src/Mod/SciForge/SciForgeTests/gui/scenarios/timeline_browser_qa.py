@@ -274,14 +274,16 @@ def p3_all():
 
 # -- Path 4: Play, then E straight away -------------------------------------------------------
 def p4_play():
-    t.playback("play")
-    s["play_volume"] = t.volume()  # Play starts from the beginning (an empty design)
+    t.playback("play")  # Play starts from the beginning (an empty design) and steps on
     h.press("e")
 
 
 def p4_after():
     h.check("E opened Extrude during playback", xpanel() is not None)
-    s["play_tip"] = getattr(h.body().Tip, "Name", None)  # None: Play starts empty
+    # where playback stopped: read once E's dialog is open (playback steps on its own timer:
+    # at CI's full speed it had played a step or two by then, CI #326)
+    s["play_tip"] = getattr(h.body().Tip, "Name", None)
+    s["play_volume"] = t.volume()
 
 
 def p4_still():

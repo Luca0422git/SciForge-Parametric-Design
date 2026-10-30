@@ -42,6 +42,13 @@ def current():
 
 def set_current(dialog):
     _OPEN["dialog"] = dialog
+    if dialog is not None:
+        try:  # Fusion: starting a command stops the timeline's playback
+            from . import timeline_ui
+
+            timeline_ui.stop_playback()
+        except Exception as exc:
+            warn("timeline playback: %s" % exc)
 
 
 def handle_released():

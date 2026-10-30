@@ -22,7 +22,7 @@ import FreeCADGui as Gui
 
 from . import _remember, components, doc_epoch, timeline_core as core, undo_fast
 from . import timeline_ops as ops
-from . import ui_icon, warn
+from . import log, ui_icon, warn
 from .compat import QtCore, QtGui, QtWidgets, Signal
 from .inline_edit import InlineEditor
 
@@ -1611,6 +1611,23 @@ def _ensure_dock():
 
 def widget():
     return _dock.widget() if _dock is not None else None
+
+
+def stop_playback():
+    """Fusion: starting a command stops the playback. The playback's own step looks for an
+    open command only every 0.45 s: a command opened and cancelled between two steps left
+    it playing on after Cancel (timeline_browser_qa P4, at CI's full speed). taskui calls
+    this when a SciForge dialog opens."""
+    try:
+        w = widget()
+        timer = getattr(w, "_play_timer", None) if w is not None else None
+        if timer is not None and timer.isActive():
+            timer.stop()
+            log("timeline: playback stopped by a command")
+    except RuntimeError:
+        pass  # (the timeline went with its window)
+    except Exception as exc:
+        warn("timeline playback: %s" % exc)
 
 
 def find(name):

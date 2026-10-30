@@ -661,6 +661,13 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
   for good, touching nothing of the view, once that design is closed (5 of 5 under stress after).
   Other polled handles (handles3d, move_ui's Triad, revolve_ui, hole_ui ...) may have the same
   weakness; none was seen crashing. Needs a CHANGELOG line in the next patch after the merge.
+- **Timeline playback went on after a command opened and was cancelled within 0.45 s (fixed
+  2026-10-30 on `sf/gui-tests-rework`; not released yet).** Fusion stops the playback when a
+  command starts; SciForge's playback step looked for an open command only on its own tick
+  (450 ms), so E then Cancel between two ticks left it playing: the design moved on after
+  Cancel (timeline_browser_qa P4 on CI #326, 2 of 2; 2 of 3 here at full priority). taskui's
+  `set_current` (every SciForge dialog opening) now stops the playback at once
+  (`timeline_ui.stop_playback`); 3 of 3 after. Needs a CHANGELOG line in the next patch.
 - **Closing a design while its drawing tab was the active one could crash FreeCAD (fixed
   2026-10-30 on `sf/gui-tests-rework`; not released yet).** Found by drawing2_breakout under
   `--stress` (1 run in 6). FreeCAD 1.1.4 takes the closing design's tabs away and deletes them
