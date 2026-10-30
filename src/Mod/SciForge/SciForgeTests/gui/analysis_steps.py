@@ -97,30 +97,17 @@ def inspect(label, keep_selection=False):
 
 
 def set_combo(combo, text):
-    """Choose `text` in a drop-down with the keyboard, as a person can."""
+    """Choose `text` in a drop-down with the keyboard, as a person can (dialog_input.choose:
+    the list opened, the keys, Enter). A click on an entry of the list just opened was let go
+    by Qt when it came too soon after the list showed (at CI's full speed): the list stayed
+    open and the next Esc closed it instead of the dialog (inspect_analysis_draft, CI #320)."""
+    from SciForgeTests.gui import dialog_input as ui
+
     index = combo.findText(text)
     h.check("the list has %s" % text, index >= 0, [combo.itemText(i) for i in range(combo.count())])
     if index < 0:
         return
-    w.click(combo)
-    QtWidgets.QApplication.processEvents()
-    popup = QtWidgets.QApplication.activePopupWidget()
-    view = combo.view()
-    if popup is not None and view is not None and view.isVisible():
-        rect = view.visualRect(view.model().index(index, 0))
-        QtTest.QTest.mouseClick(
-            view.viewport(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center()
-        )
-    else:
-        combo.setCurrentIndex(index)
-    QtWidgets.QApplication.processEvents()
-    if combo.currentIndex() != index:  # the list did not take the click: keys
-        combo.setFocus()
-        while combo.currentIndex() < index:
-            QtTest.QTest.keyClick(combo, QtCore.Qt.Key_Down)
-        while combo.currentIndex() > index:
-            QtTest.QTest.keyClick(combo, QtCore.Qt.Key_Up)
-    QtWidgets.QApplication.processEvents()
+    h.check("%s chosen" % text, ui.choose(combo, text), combo.currentText())
 
 
 def type_spin(box, value):

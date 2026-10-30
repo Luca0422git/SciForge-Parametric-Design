@@ -122,6 +122,14 @@ def drag_arrow(key, mm):
         if under is not None:
             tries.append((part, (px.x(), px.y()), under.metaObject().className()))
             continue
+        # pressed only once that arrow lights up under the pointer and no other handle does,
+        # as a hand sees it (the handles start at one point: a press there took the Y arrow,
+        # counted as a miss, and both drags stayed: CI #321's P2, X 7.96 and Y 3.99)
+        h.settle("the handles to see the pointer")
+        lit = [k for k, other in p.handle_by.items() if getattr(other, "_hover", False)]
+        if lit != [key]:
+            tries.append((part, (px.x(), px.y()), "lit: %s" % lit))
+            continue
         end = point + arrow.direction * mm
         h.drag(px, h.screen_point(end), steps=16)
         h.settle("the drag to be applied")
