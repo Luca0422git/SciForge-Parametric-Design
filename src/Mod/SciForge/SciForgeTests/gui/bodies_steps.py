@@ -227,7 +227,7 @@ def click_browser_row(label, modifiers=QtCore.Qt.NoModifier):
     tree = browser()
     item = tree.row(label) if tree is not None else None
     if h.check("browser row %r" % label, item is not None, tree.labels() if tree else None):
-        w.click(tree.viewport(), tree.label_point(item), modifiers)
+        w.click_item(tree, lambda: tree.row(label), tree.label_point, modifiers=modifiers, what="the row %s" % label)
 
 
 def click_timeline(obj):

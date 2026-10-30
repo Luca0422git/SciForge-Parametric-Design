@@ -64,13 +64,14 @@ def _wait_ms_functions(trees):
 
 
 def _delay_functions(trees, lines):
-    """Names of the helpers that only wait a time they are given (def wait(ms): qWait(ms)):
-    a call to one is a fixed wait at the caller. (One whose timer line says why it is not a
-    wait for the app, an input pace, is not.)"""
-    found = set()
+    """{module name: names of its helpers that only wait a time they are given} (def
+    wait(ms): qWait(ms)): a call to one is a fixed wait at the caller. (One whose timer line
+    says why it is not a wait for the app, an input pace, is not.)"""
+    found = {}
     for path, tree in trees.items():
         source = lines[path]
-        for node in ast.walk(tree):
+        module = os.path.splitext(os.path.basename(path))[0]
+        for node in ast.iter_child_nodes(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             params = {a.arg for a in node.args.args}
@@ -83,7 +84,18 @@ def _delay_functions(trees, lines):
                     and inner.args[0].id in params
                     and not any(word in source[inner.lineno - 1] for word in EXEMPT)
                 ):
-                    found.add(node.name)
+                    found.setdefault(module, set()).add(node.name)
+    return found
+
+
+def _aliases(tree):
+    """{name a file uses: the GUI test module it stands for} (from SciForgeTests.gui import
+    vex_steps as vx)."""
+    found = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module == "SciForgeTests.gui":
+            for alias in node.names:
+                found[alias.asname or alias.name] = alias.name
     return found
 
 
@@ -104,6 +116,8 @@ def count():
     for path, tree in trees.items():
         rel = os.path.relpath(path, REPO)
         source = lines[path]
+        aliases = _aliases(tree)
+        own = delays.get(os.path.splitext(os.path.basename(path))[0], set())
 
         def exempt(node):
             line = source[node.lineno - 1] if node.lineno - 1 < len(source) else ""
@@ -118,14 +132,20 @@ def count():
                 name = _call_name(node)
                 if name in TIMER_CALLS and not exempt(node):
                     waits.append((rel, node.lineno, name))
-                elif (
-                    name in delays
-                    and (node.args or node.keywords)
-                    and (isinstance(node.func, ast.Name) or isinstance(node.func.value, ast.Name))
-                    and not exempt(node)
-                ):
-                    # (a module's helper: st.wait(600); not self.proc.wait(10))
-                    waits.append((rel, node.lineno, "%s()" % name))
+                elif (node.args or node.keywords) and not exempt(node):
+                    # a call to a helper that only waits: st.wait(600) (st: a GUI test module
+                    # that defines it), or wait(600) in the file that defines it; not
+                    # h.settle() because some scenario has a settle(ms) of its own
+                    func = node.func
+                    if isinstance(func, ast.Name):
+                        hit = func.id in own
+                    elif isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+                        module = aliases.get(func.value.id)
+                        hit = module is not None and func.attr in delays.get(module, set())
+                    else:
+                        hit = False
+                    if hit:
+                        waits.append((rel, node.lineno, "%s()" % name))
                 elif name in takes_wait:
                     given = None
                     index = takes_wait[name]

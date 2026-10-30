@@ -68,6 +68,12 @@ h.run("my_scenario", [new_design, open_offset, solve, ...], paced_by="state")
   timers, and timers of 1 s or more. Those last ones are left out on purpose: they are display
   times or decisions (the timeline shows a refusal for 2.5 s; a long press opens Select Other),
   and waiting for them would undo the state a step checks.
+- An animation (a joint's motion, Animate in RESULTS) keeps changing the design, so the app
+  never settles while it plays: a step that acts while it runs says `step.while_busy = True`
+  (no waiting for a quiet app around it, only its `ready` / `done`).
+- The browser and the timeline read the design on a poll (0.5 / 0.4 s) once it changed:
+  settling includes them having read the last change (an active component's see-through look
+  comes with the browser's read).
 - Steps that re-insert themselves into the queue to poll (`h.state["queue"].insert(0, step)`)
   become a `done`.
 
@@ -97,6 +103,8 @@ A green run proves little: the flaky scenarios also passed on most runs.
   slow. Every converted batch passes three times in a row under stress before it is pushed. A
   speed limit in a check (the window never froze longer than 4 s) is written `4.0 * h.SLOWDOWN`:
   1 normally, the deliberate slowdown (loops + 1) under `--stress`; it never changes a wait.
+  A real-time check no limit can scale (no exact rebuild between the moves of a drag at a
+  hand's pace) is `h.speed_check`: counted on every normal run, only printed under `--stress`.
 - **Repeat in CI:** Actions > SciForge tests > Run workflow with `repeat` (and optionally
   `scenarios`, `stress`): each scenario part runs its scenarios that many times and the job
   summary lists each one's pass count. Such a run is titled "Repeat GUI scenarios xN" and does not
@@ -145,3 +153,8 @@ compiled again (an artifact of attempt 1 is there for attempt 2: the scenario de
   about, and ignores the first six moves within 10 px of where it opened (`hasMouseMoved`).
 - A drop-down list that opens under the pointer follows the pointer: `dialog_input.choose` leaves
   the pointer where it is and steps with the keys.
+- Any wait lets the app's timers run: a row aimed at, then the wait for the pointer, then the
+  click landed on another row after the browser rebuilt. `widget_input.click_item` presses only
+  once the row under the pointer is the row wanted.
+- A target outside every SciForge window (a model point off the view) gets no pointer wait: Qt
+  is never told of a pointer there; the input goes to the widget as it always did.

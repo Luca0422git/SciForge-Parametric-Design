@@ -253,7 +253,7 @@ def dragged(label, expect_sign=None):
     )
     last_move = max([x["i"] for x in moving], default=0)
     early = [i for i in rec.get("builds", []) if i < last_move - 1]
-    h.check("%s: no exact rebuild between the moves" % label, not early, early)
+    h.speed_check("%s: no exact rebuild between the moves" % label, not early, early)
     h.check("%s: the picture was checked" % label, rec.get("checked"), rec.get("checked"))
     if expect_sign is not None and p is not None:
         angle = float(p.options.get("angle", 0.0))

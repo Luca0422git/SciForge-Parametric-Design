@@ -18,6 +18,9 @@ work SciForge posted for a moment later, every pointer move seen by Qt) and once
     step.ready = lambda: ...   what must be true before the step's input
     step.done = lambda: ...    what proves the step worked
     step.timeout_s = 120       a longer upper bound for both (a solve); bounds only catch hangs
+    step.while_busy = True     the step acts while something plays on purpose (an animation
+                               runs, a solve goes on): no waiting for a quiet app around it,
+                               only for its ready / done
 Inside a step, wait_for(condition, what) and settle() do the same. A wait that runs into
 its bound fails a check named after what it waited for, with what was seen instead and a
 screenshot, closes any modal dialog or open menu and stops the scenario at once.
@@ -80,6 +83,22 @@ def check(name, ok, detail=""):
         {"name": name, "ok": bool(ok), "detail": str(detail)[:4000], "step": state.get("step")}
     )
     return bool(ok)
+
+
+def speed_check(name, ok, detail=""):
+    """A check of how SciForge keeps up in real time that no limit can scale (no exact
+    rebuild between the moves of a drag at a hand's pace). Under run_tests.sh --stress the
+    machine is slowed down on purpose and the answer says nothing about SciForge: there it is
+    printed, not counted. On every normal run it counts like any check. (A limit that scales
+    is written limit * SLOWDOWN instead.)"""
+    if SLOWDOWN > 1 and not ok:
+        print(
+            "[SciForge] %s: not counted under --stress (a speed check): %s %s"
+            % (state["name"], name, str(detail)[:300]),
+            flush=True,
+        )
+        return True
+    return check(name, ok, detail)
 
 
 def shot(label):
@@ -441,6 +460,8 @@ def busy(since=None):
         reasons.append("work posted for a moment later: %s" % ", ".join(due[:6]))
     if _pointer.expected is not None:
         reasons.append("a pointer move Qt has not been told about")
+    for name in _panels_behind():
+        reasons.append("the %s has not read the latest change yet" % name)
     try:
         from sciforge import shell
 
@@ -449,6 +470,37 @@ def busy(since=None):
     except Exception:
         pass
     return reasons
+
+
+def _panels_behind():
+    """The browser and the timeline read the design on a poll (every 0.5 / 0.4 s) once it has
+    changed (sciforge.doc_epoch); until then they show it as it was. Activating a component
+    dims the rest of the design only with the browser's read: a click before it hit the
+    root body that was about to turn see-through (components2_marker, on a slow machine). A
+    panel waiting for the person (a name being typed, a drag) is not counted."""
+    found = []
+    try:
+        from sciforge import browser_ui, doc_epoch, timeline_ui
+
+        key = doc_epoch.key()
+        if key is None:
+            return found
+        for name, panel, holds in (
+            ("browser", browser_ui.widget(), ("_busy", "_renaming")),
+            ("timeline", timeline_ui.widget(), ("_busy", "_drag", "_editor")),
+        ):
+            if panel is None or not _alive(panel):
+                continue
+            timer, gate = getattr(panel, "_timer", None), getattr(panel, "_gate", None)
+            if gate is None or timer is None or not timer.isActive():
+                continue
+            if any(getattr(panel, attr, None) not in (None, False) for attr in holds):
+                continue
+            if gate.key != key:
+                found.append(name)
+    except Exception:
+        pass
+    return found
 
 
 def seen_now():
@@ -746,9 +798,16 @@ def choose_from(open_it, path, what, report=True, read=None):
     handle = when(lambda: open_menu() is not None, pick, what)
     try:
         open_it()
-        settle("the app to settle after opening %s" % what)
-        if not box["done"] and open_menu() is not None:
-            wait_for(lambda: box["done"] or bool(state.get("stop")), what)
+        if not box["done"]:
+            # a menu that opens without a loop of its own is picked from here; none opened
+            # once the app has settled: there is none (an entry that set an animation going
+            # is never waited for here: box["done"] holds by then)
+            wait_for(
+                lambda: box["done"] or bool(state.get("stop")) or (open_menu() is None and not busy()),
+                what,
+            )
+            if not box["done"] and open_menu() is not None:
+                wait_for(lambda: box["done"] or bool(state.get("stop")), what)
     finally:
         handle["cancelled"] = True
     if not box["done"] and report:
@@ -1470,7 +1529,13 @@ def run(name, steps, check_errors_each_step=True, start_ms=2500, paced_by="timer
         state["step"] = step.__name__
         limit = getattr(step, "timeout_s", WAIT_S)
         ready = getattr(step, "ready", None)
-        if by_state or ready is not None:
+        if (by_state or ready is not None) and getattr(step, "while_busy", False):
+            # a step that acts while something plays on purpose (an animation, a solve):
+            # only its own precondition
+            first = ready if ready is not None else (lambda: True)
+            poll_until(first, _wait_name(step, "ready", ready) if ready else "nothing", limit,
+                       lambda: perform(step))
+        elif by_state or ready is not None:
             # the app settled after the step before, then the step's own precondition
             calm = _calm()
             first = (lambda: calm() and ready()) if ready is not None else calm
@@ -1515,7 +1580,7 @@ def run(name, steps, check_errors_each_step=True, start_ms=2500, paced_by="timer
             _later(getattr(step, "wait_ms", STEP_MS), lambda: errors_then_next(step))
 
     def settled(step):
-        if state.get("stop"):
+        if state.get("stop") or getattr(step, "while_busy", False):
             errors_then_next(step)
             return
         poll_until(

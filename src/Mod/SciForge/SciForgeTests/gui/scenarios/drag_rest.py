@@ -266,7 +266,7 @@ def pp_quick_check():
     first = after[0][0] if after else None
     h.check(
         "2-F5: let go right after moving, the rebuild starts at once (not after the rest)",
-        first is not None and first < 150,
+        first is not None and first < 150 * h.SLOWDOWN,
         after,
     )
 

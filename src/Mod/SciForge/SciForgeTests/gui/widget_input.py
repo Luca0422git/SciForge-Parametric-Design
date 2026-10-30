@@ -47,6 +47,41 @@ def double_click(widget, pos=None):
     _process()
 
 
+def click_item(tree, find, point_of=None, double=False, modifiers=NONE, what="the row"):
+    """Click (or double-click) a row of a tree as a person does: the pointer on it, and the
+    press only once the row under the pointer is that row. The browser rebuilds its rows on
+    its poll; a row found, then the wait for the pointer, then the click landed on another
+    row (components2_marker on a slow machine: a double-click meant for an Origin folder
+    activated the design). find() gives the row anew each time (a rebuilt tree has new
+    rows); point_of(item) where on it to aim (default its middle). True when clicked."""
+    for _attempt in range(6):
+        item = find()
+        if item is None:
+            h.check("%s is in the tree" % what, False)
+            return False
+        tree.scrollToItem(item)
+        pos = point_of(item) if point_of is not None else tree.visualItemRect(item).center()
+        h.pointer_to(tree.viewport(), pos)
+        try:
+            same = tree.itemAt(pos) is item and find() is item
+        except RuntimeError:  # (the row was rebuilt meanwhile)
+            same = False
+        if same:
+            viewport = tree.viewport()
+            if double:
+                QtTest.QTest.mousePress(viewport, LEFT, modifiers, pos)
+                QtTest.QTest.mouseRelease(viewport, LEFT, modifiers, pos)
+                QtTest.QTest.mouseDClick(viewport, LEFT, modifiers, pos)
+                QtTest.QTest.mouseRelease(viewport, LEFT, modifiers, pos)
+            else:
+                QtTest.QTest.mouseClick(viewport, LEFT, modifiers, pos)
+            _process()
+            return True
+        h.settle("the tree to settle before aiming at %s again" % what)
+    h.check("%s stays under the pointer" % what, False, "the tree kept changing under it")
+    return False
+
+
 def _menu_action(menu, text):
     for action in menu.actions():
         if action.text().replace("&", "").strip() == text:
@@ -117,9 +152,31 @@ def click_menu(button, choose):
     return h.choose_from(lambda: click(button), [choose], "the menu of %s" % h.describe(button), report=False)
 
 
-def _open_menu(widget, pos):
+def _picker(result, choose):
+    """A function that clicks the entry `choose` of the menu open when it runs (for
+    scenarios that schedule it themselves before opening the menu); an entry that is not
+    there or greyed out: Esc, result["texts"] lists the entries. A menu not open yet is
+    waited for (h.when), not looked for again on a timer."""
+
+    def pick():
+        menu = h.open_menu()
+        if menu is None:
+            h.when(lambda: h.open_menu() is not None, pick, "a menu to open (for %s)" % choose)
+            return
+        result["seen"] = True
+        if choose is None:
+            h.close_menus()
+            return
+        if h.find_entry(menu, choose) is None or not h.find_entry(menu, choose).isEnabled():
+            result["texts"] = [a.text() for a in menu.actions()]
+        result["ok"] = h.choose_path(menu, [choose], report=False)
+
+    return pick
+
+
+def _open_menu(widget, pos, _state=None):
     """A right button press/release, then the context-menu event the window system
-    sends for it, unless the release already opened the menu."""
+    sends for it, unless the release already opened the menu. (_state: no longer used.)"""
     move(widget, pos)
     shown = h.menus_shown()
     QtTest.QTest.mousePress(widget, QtCore.Qt.RightButton, NONE, pos)

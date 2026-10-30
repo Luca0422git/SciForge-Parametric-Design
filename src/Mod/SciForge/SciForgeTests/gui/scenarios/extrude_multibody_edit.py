@@ -581,7 +581,7 @@ def e_type(text, operation, label):
         )
         h.check(
             "E: the preview for %s is rebuilt within 2.5 s (%.2f s; 4 s before)" % (text, total),
-            total < 2.5,
+            total < 2.5 * h.SLOWDOWN,
             total,
         )
 

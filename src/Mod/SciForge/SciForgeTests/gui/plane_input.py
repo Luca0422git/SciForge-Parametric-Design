@@ -93,14 +93,31 @@ def _plane_row(tree, role):
     if plane is None or tree is None:
         return None
     doc = plane.Document
+    rows = []
     for item in tree._items():
         node = item.data(1, browser_ui.ROLE_NODE) or {}
         obj = doc.getObject(node.get("object") or "")
         if obj is None or not (getattr(obj, "Role", "") or "").startswith(role.split("_")[0]):
             continue
-        if obj is plane or sketch_ui._same_place(obj, plane):
+        rows.append((item, obj))
+    # the squares' very plane first: a component at the origin has its XY in the same place
+    # as the design's, and the design's row (first in the browser) put the sketch in the root
+    # on a slow machine (components2_marker)
+    for item, obj in rows:
+        if obj.Name == plane.Name:
             return item
-    return None
+    same = [(item, obj) for item, obj in rows if sketch_ui._same_place(obj, plane)]
+    try:  # (the body's own origin is not listed: the active component's, at the same place)
+        from sciforge import components
+
+        active = components.active_component(doc)
+        for item, obj in same:
+            holder = components.container_of(obj)
+            if active is not None and holder is not None and holder.Name == active.Name:
+                return item
+    except Exception:
+        pass
+    return same[0][0] if same else None
 
 
 def pick_in_browser(role="XY_Plane"):
@@ -113,18 +130,24 @@ def pick_in_browser(role="XY_Plane"):
     tree = bodies_steps.browser()
     item = _plane_row(tree, role)
     if item is not None:
-        folder = item.parent()
-        if folder is not None and not folder.isExpanded():
-            tree.scrollToItem(folder)
-            rect = tree.visualItemRect(folder)
-            w.double_click(tree.viewport(), QtCore.QPoint(rect.left() + 40, rect.center().y()))
-            if not folder.isExpanded():
-                folder.setExpanded(True)
-            QtWidgets.QApplication.processEvents()
+
+        def folder():
+            row = _plane_row(tree, role)
+            return row.parent() if row is not None else None
+
+        if folder() is not None and not folder().isExpanded():
+            w.click_item(
+                tree,
+                folder,
+                lambda f: QtCore.QPoint(tree.visualItemRect(f).left() + 40, tree.visualItemRect(f).center().y()),
+                double=True,
+                what="the Origin folder",
+            )
+            h.settle("the browser to open the Origin folder")
+            if folder() is not None and not folder().isExpanded():
+                folder().setExpanded(True)
         h.check("the %s plane in the browser" % role, True)
-        tree.scrollToItem(item)
-        QtWidgets.QApplication.processEvents()
-        w.click(tree.viewport(), tree.label_point(item))
+        w.click_item(tree, lambda: _plane_row(tree, role), tree.label_point, what="the %s row" % label)
         return label
     if tree is not None and tree.row(label) is None:
         shell_draft_steps.expand_browser_row("Origin")
