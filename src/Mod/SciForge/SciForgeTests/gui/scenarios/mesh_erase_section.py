@@ -61,9 +61,6 @@ def b_open():
     s.menu("MODIFY", "Erase and Fill")
 
 
-b_open.wait_ms = 1500
-
-
 def b_waits():
     p = m.panel()
     h.check("Erase and Fill dialog", p is not None and p.title == "Erase and Fill", p)
@@ -78,9 +75,6 @@ def b_waits():
         m.facets(step("MeshEraseFill")),
     )
     m.click_body(m.body(NAME), SPHERE_POINT)
-
-
-b_waits.wait_ms = 2500
 
 
 def b_uniform():
@@ -103,9 +97,6 @@ def b_untick():
     h.click(SPHERE_POINT, modifiers=QtCore.Qt.ControlModifier)
 
 
-b_untick.wait_ms = 2500
-
-
 def b_none():
     p = m.panel()
     h.check("Ctrl+click took them off", p.picked_faces == [], len(p.picked_faces))
@@ -117,16 +108,10 @@ def b_none():
     m.click_body(m.body(NAME), SPHERE_POINT)
 
 
-b_none.wait_ms = 2500
-
-
 def b_minimal():
     p = m.panel()
     h.check("picked again", len(p.picked_faces) == state["picked"], len(p.picked_faces))
     m.choose(p.fill, "Minimal")
-
-
-b_minimal.wait_ms = 2500
 
 
 def b_check_minimal():
@@ -138,9 +123,6 @@ def b_check_minimal():
         (m.facets(st), state["uniform"]),
     )
     h.task_button("OK")
-
-
-b_check_minimal.wait_ms = 1500
 
 
 def b_done():
@@ -159,16 +141,10 @@ def c_open():
     s.menu("MODIFY", "Delete Faces")
 
 
-c_open.wait_ms = 1500
-
-
 def c_click():
     p = m.panel()
     h.check("Delete Faces dialog", p is not None and p.title == "Delete Faces", p)
     m.click_body(m.body(NAME), SPHERE_POINT)
-
-
-c_click.wait_ms = 2500
 
 
 def c_check():
@@ -177,9 +153,6 @@ def c_check():
     h.check("a hole", m.analysis(st)["holes"] == 1, m.analysis(st))
     h.check("the dialog says so", "1 hole" in p.info.text(), p.info.text())
     h.task_button("OK")
-
-
-c_check.wait_ms = 1500
 
 
 def c_done():
@@ -199,16 +172,10 @@ def c_done():
     h.ribbon("Repair")
 
 
-c_done.wait_ms = 1500
-
-
 def c_repair():
     p = m.panel()
     h.check("Repair dialog", p is not None and p.title == "Repair", p)
     m.tick(p.preview, True)
-
-
-c_repair.wait_ms = 2000
 
 
 def c_repaired():
@@ -217,17 +184,11 @@ def c_repaired():
     h.task_button("OK")
 
 
-c_repaired.wait_ms = 1500
-
-
 # -- D ----------------------------------------------------------------------------------------
 def d_open():
     state["sketches"] = len(sketches())
     h.fit()
     s.menu("CREATE", "Create Mesh Section Sketch")
-
-
-d_open.wait_ms = 1500
 
 
 def d_body():
@@ -243,9 +204,6 @@ def d_body():
     m.click_body(m.body(NAME), SPHERE_POINT)
 
 
-d_body.wait_ms = 1500
-
-
 def d_plane():
     p = m.panel()
     h.check(
@@ -257,9 +215,6 @@ def d_plane():
         p.active,
     )
     h.click(p.squares.point_on("XY", 0.9, 0.9))
-
-
-d_plane.wait_ms = 2000
 
 
 def d_section():
@@ -274,18 +229,12 @@ def d_section():
     m.type_field(p.distance, "5")
 
 
-d_section.wait_ms = 2000
-
-
 def d_moved():
     p = m.panel()
     h.check("still one line", p.lines is not None and len(p.lines) == 1, p.lines and len(p.lines))
     if p.lines:
         h.check("at z = 5", all(abs(pt[2] - 5.0) < 1e-6 for pt in p.lines[0]), p.lines[0][:2])
     h.task_button("OK")
-
-
-d_moved.wait_ms = 2000
 
 
 def d_done():
@@ -320,14 +269,8 @@ def e_open():
     s.menu("CREATE", "Create Mesh Section Sketch")
 
 
-e_open.wait_ms = 1500
-
-
 def e_pick():
     m.click_body(m.body(NAME), SPHERE_POINT)
-
-
-e_pick.wait_ms = 1500
 
 
 def e_plane():
@@ -335,14 +278,8 @@ def e_plane():
     h.click(p.squares.point_on("XY", 0.9, 0.9))
 
 
-e_plane.wait_ms = 2000
-
-
 def e_off():
     m.type_field(m.panel().distance, "20")
-
-
-e_off.wait_ms = 2000
 
 
 def e_refused():
@@ -352,16 +289,10 @@ def e_refused():
     h.task_button("OK")
 
 
-e_refused.wait_ms = 1200
-
-
 def e_waits():
     p = m.panel()
     h.check("OK waits", p is not None and p.title == "Create Mesh Section Sketch", p)
     h.task_button("Cancel")
-
-
-e_waits.wait_ms = 1500
 
 
 def e_check():
@@ -378,4 +309,5 @@ h.run(
     + [c_open, c_click, c_check, c_done, c_repair, c_repaired]
     + [d_open, d_body, d_plane, d_section, d_moved, d_done]
     + [e_open, e_pick, e_plane, e_off, e_refused, e_waits, e_check],
+    paced_by="state",
 )

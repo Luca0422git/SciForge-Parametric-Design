@@ -337,4 +337,5 @@ h.run(
             f_reopened,
         ]
     ),
+    paced_by="state",
 )

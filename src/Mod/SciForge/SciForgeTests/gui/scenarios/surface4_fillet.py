@@ -306,4 +306,5 @@ h.run(
         chord_ok,
         chord_made,
     ],
+    paced_by="state",
 )

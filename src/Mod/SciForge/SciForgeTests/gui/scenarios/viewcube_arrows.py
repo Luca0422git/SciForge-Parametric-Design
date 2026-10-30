@@ -84,7 +84,6 @@ def quick_done():
     h.shot("3-back")
 
 
-quick_done.wait_ms = 1800
 def turned_to_a_face():
     """The animated turn ended: the camera stopped, at a face, away from the one it started at
     (FreeCAD runs the turn on its own timers, which settling cannot see; a turn on to FRONT
@@ -111,7 +110,6 @@ def spaced_clicks():
     QtCore.QTimer.singleShot(150, second)  # on purpose: a person's double-click (150 ms)
 
 
-spaced_clicks.wait_ms = 1800
 spaced_clicks.done = lambda: "second" in st and turned_to_a_face()
 spaced_clicks.done_what = "the second click, and the animated turn to end at another face"
 
@@ -148,7 +146,6 @@ def stopped_turn():
     )
 
 
-stopped_turn.wait_ms = 1800
 stopped_turn.done_what = "the zoom to stop the turn and the cube to drop the arrows it kept for it"
 
 
@@ -189,4 +186,5 @@ h.run(
     + step("roll-ccw", "FRONT turned counter-clockwise", (0, 1, 0), (1, 0, 0))
     + step("roll-cw", "FRONT upright again", (0, 1, 0), (0, 0, 1))
     + [quick_clicks, quick_done, spaced_clicks, spaced_done, stopped_turn, stopped_done],
+    paced_by="state",
 )

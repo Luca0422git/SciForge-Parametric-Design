@@ -46,8 +46,6 @@ FOUND = {}  # dialog -> the undo step left open after its design closed (None: n
 
 def step(fn, name, wait_ms=None):
     fn.__name__ = name
-    if wait_ms:
-        fn.wait_ms = wait_ms
     return fn
 
 
@@ -167,10 +165,10 @@ def a_steps(kind, changed):
 
     steps = [
         step(new_a, "%s_new_a" % key),
-        step(start, "%s_start" % key, 1200),
+        step(start, "%s_start" % key),
     ]
     if changed:
-        steps += [step(pick, "%s_pick" % key, 1200), step(change, "%s_change" % key, 1200)]
+        steps += [step(pick, "%s_pick" % key), step(change, "%s_change" % key)]
     return steps + [step(pending, "%s_pending" % key)]
 
 
@@ -202,8 +200,8 @@ def close_steps(kind, changed):
         h.check("%s: no undo step left open by the closed design" % tag, left is None, left)
 
     return [
-        step(close_a, "%s_close_a" % key, 1200),
-        step(dont_save, "%s_dont_save" % key, 1200),
+        step(close_a, "%s_close_a" % key),
+        step(dont_save, "%s_dont_save" % key),
         step(closed, "%s_closed" % key),
     ]
 
@@ -300,15 +298,15 @@ def b_steps(kind, changed):
         App.closeDocument(doc.Name)
 
     return [
-        step(new_b, "%s_new_b" % key, 1200),
-        step(fillet, "%s_b_fillet" % key, 1200),
-        step(fillet_edge, "%s_b_fillet_edge" % key, 1200),
-        step(fillet_ok, "%s_b_fillet_ok" % key, 1500),
-        step(hole, "%s_b_hole" % key, 1200),
-        step(hole_face, "%s_b_hole_face" % key, 1200),
-        step(hole_ok, "%s_b_hole_ok" % key, 1500),
-        step(two_steps, "%s_b_two_steps" % key, 1200),
-        step(undone_once, "%s_b_undone_once" % key, 1200),
+        step(new_b, "%s_new_b" % key),
+        step(fillet, "%s_b_fillet" % key),
+        step(fillet_edge, "%s_b_fillet_edge" % key),
+        step(fillet_ok, "%s_b_fillet_ok" % key),
+        step(hole, "%s_b_hole" % key),
+        step(hole_face, "%s_b_hole_face" % key),
+        step(hole_ok, "%s_b_hole_ok" % key),
+        step(two_steps, "%s_b_two_steps" % key),
+        step(undone_once, "%s_b_undone_once" % key),
         step(undone_twice, "%s_b_undone_twice" % key),
     ]
 
@@ -367,12 +365,12 @@ def other_steps():
         h.check("other: nothing more to undo", not doc.UndoNames, list(doc.UndoNames))
 
     return [
-        step(new_d_and_c, "other_new_d_and_c", 1500),
-        step(close_d, "other_close_d", 1200),
-        step(dont_save, "other_dont_save", 1200),
-        step(c_still_open, "other_c_still_open", 1200),
-        step(c_ok, "other_c_ok", 1500),
-        step(c_one_step, "other_c_one_step", 1200),
+        step(new_d_and_c, "other_new_d_and_c"),
+        step(close_d, "other_close_d"),
+        step(dont_save, "other_dont_save"),
+        step(c_still_open, "other_c_still_open"),
+        step(c_ok, "other_c_ok"),
+        step(c_one_step, "other_c_one_step"),
         step(c_undone, "other_c_undone"),
     ]
 
@@ -385,4 +383,4 @@ for _kind, _changed in ROUNDS:
     STEPS += a_steps(_kind, _changed) + close_steps(_kind, _changed) + b_steps(_kind, _changed)
 STEPS += other_steps() + [summary]
 
-h.run("dialog_closed_design_undo", STEPS)
+h.run("dialog_closed_design_undo", STEPS, paced_by="state")

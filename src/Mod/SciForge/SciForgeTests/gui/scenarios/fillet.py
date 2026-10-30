@@ -155,9 +155,6 @@ def impossible_reported():
     h.shot("5-too-big")
 
 
-impossible_reported.wait_ms = 1500  # the largest radius that fits is worked out
-
-
 def type_radius_2():
     p = b.blend_panel()
     if p:
@@ -456,4 +453,5 @@ h.run(
         undo_inside_after,
         redo_after_inside,
     ],
+    paced_by="state",
 )

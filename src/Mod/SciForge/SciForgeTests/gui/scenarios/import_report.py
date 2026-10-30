@@ -65,16 +65,10 @@ def a_open():
     h.ribbon("Insert Mesh")
 
 
-a_open.wait_ms = 1500
-
-
 def a_ok():
     p = i.panel()
     if h.check("Insert Mesh dialog", p is not None and p.title == "Insert Mesh", p):
         h.task_button("OK")
-
-
-a_ok.wait_ms = 1200
 
 
 def a_check():
@@ -119,9 +113,6 @@ def press_export():
         b.click_widget(d.export_button)
 
 
-press_export.wait_ms = 1500
-
-
 def b_check():
     h.check("B open_mesh.stl written", os.path.isfile(os.path.join(OUT, "open_mesh.stl")))
     text = notice_text()
@@ -138,16 +129,10 @@ def c_insert_closed():
     h.ribbon("Insert Mesh")
 
 
-c_insert_closed.wait_ms = 1500
-
-
 def c_ok():
     p = i.panel()
     if h.check("Insert Mesh dialog (closed box)", p is not None and p.title == "Insert Mesh", p):
         h.task_button("OK")
-
-
-c_ok.wait_ms = 1200
 
 
 def c_check_insert():
@@ -167,23 +152,14 @@ def d_open_dxf():
     i.menu("INSERT", "Insert DXF")
 
 
-d_open_dxf.wait_ms = 1500
-
-
 def d_click_xy():
     p = i.panel()
     if h.check("Insert DXF dialog", p is not None and p.title == "Insert DXF", p):
         pl.click_on_plane(i.XY_CLICK)
 
 
-d_click_xy.wait_ms = 1200
-
-
 def d_ok():
     h.task_button("OK")
-
-
-d_ok.wait_ms = 1500
 
 
 def d_check():
@@ -211,9 +187,6 @@ def e_open():
 
     x.use_open_file(state["mixed.step"])
     h.press(QtCore.Qt.Key_O, QtCore.Qt.ControlModifier)
-
-
-e_open.wait_ms = 2500
 
 
 def e_check():
@@ -259,4 +232,5 @@ h.run(
         e_open,
         e_check,
     ],
+    paced_by="state",
 )

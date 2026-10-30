@@ -227,9 +227,6 @@ def c_ok():
     st.enter()
 
 
-c_ok.wait_ms = 900
-
-
 def c_check():
     found = projected()
     h.check("C Projected Curves made, the sketch's own", len(found) == s["count"] + 1, found)
@@ -316,16 +313,10 @@ def f_delete():
         tree.delete([item.data(1, browser_ui.ROLE_NODE)])
 
 
-f_delete.wait_ms = 900
-
-
 def f_check():
     h.check("F the sketch is gone", doc().getObject(s["sk2_name"]) is None)
     h.check("F ...its Projected Curves too", doc().getObject(s["projected"]) is None)
     st.undo()
-
-
-f_check.wait_ms = 900
 
 
 def f_undone():
@@ -399,4 +390,5 @@ h.run(
             g_check,
         ]
     ),
+    paced_by="state",
 )

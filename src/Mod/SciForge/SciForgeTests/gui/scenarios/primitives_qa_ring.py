@@ -136,9 +136,6 @@ def r1_picked():
     h.press(QtCore.Qt.Key_Escape)
 
 
-r1_picked.wait_ms = 2000
-
-
 def r1_gone():
     h.check("R1 Esc closed it", pi.no_dialog())
     h.check("R1 no pipe left", not pipes(), [o.Name for o in pipes()])
@@ -147,9 +144,6 @@ def r1_gone():
     h.check("R1 the sketch is still shown", sketch_shown())
     h.check("R1 timeline: Sketch 1", ti.titles() == ["Sketch 1"], ti.titles())
     pi.menu("Pipe")
-
-
-r1_gone.wait_ms = 1000
 
 
 # == R2: the ring ==================================================================================
@@ -170,17 +164,11 @@ def r2_picked():
     ui.type_into(p.size.widget, "2")
 
 
-r2_picked.wait_ms = 2000
-
-
 def r2_size():
     p = panel()
     h.check("R2 d2 round r 10: 20 pi^2", near(vol(), 20.0 * PI * PI, 1e-5), vol())
     if p is not None:
         ui.type_into(p.distance, "0.5")
-
-
-r2_size.wait_ms = 2000
 
 
 def r2_half():
@@ -195,18 +183,12 @@ def r2_half():
         pi.tick(p.hollow)
 
 
-r2_half.wait_ms = 2000
-
-
 def r2_hollow():
     p = panel()
     h.check("R2 the wall: 0.5", p is not None and near(p.thickness.value(), 0.5), p and p.thickness)
     h.check("R2 hollow: 7.5 pi^2", near(vol(), 7.5 * PI * PI, 1e-5), vol())
     h.check("R2 no message", msg(p) == "", msg(p))
     h.task_button("OK")
-
-
-r2_hollow.wait_ms = 2000
 
 
 def r2_ok():
@@ -219,16 +201,10 @@ def r2_ok():
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-r2_ok.wait_ms = 1200
-
-
 def r2_undone():
     h.check("R2 Ctrl+Z: no pipe", not pipes() and near(vol(), 0.0), vol())
     h.check("R2 Ctrl+Z: the sketch shown again", sketch_shown())
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-r2_undone.wait_ms = 1500
 
 
 def r2_redone():
@@ -238,9 +214,6 @@ def r2_redone():
     h.check("R2 Ctrl+Y: the sketch hidden", not sketch_shown())
     parameters.set_user(doc(), "r", "15")  # in Change Parameters
     doc().recompute()
-
-
-r2_redone.wait_ms = 1500
 
 
 # == R3: the circle grows, edit, Esc ===============================================================
@@ -255,9 +228,6 @@ def r3_follows():
     s["ring15"] = vol()
     h.fit()
     h.check("R3 double-click Pipe 1", ti.double_click("Pipe 1"))
-
-
-r3_follows.wait_ms = 1500
 
 
 def r3_edit():
@@ -276,9 +246,6 @@ def r3_edit():
     ui.type_into(p.distance, "1")
 
 
-r3_edit.wait_ms = 2000
-
-
 def r3_whole():
     h.check("R3 the whole ring: 22.5 pi^2", near(vol(), 22.5 * PI * PI, 1e-5), vol())
     p = panel()
@@ -286,16 +253,10 @@ def r3_whole():
         ui.choose(p.section, "Square")
 
 
-r3_whole.wait_ms = 2000
-
-
 def r3_square():
     want = 30.0 * PI * (2.0 * math.sqrt(2.0) - 1.0)
     h.check("R3 a hollow square ring", near(vol(), want, 1e-5), (vol(), want))
     h.press(QtCore.Qt.Key_Escape)
-
-
-r3_square.wait_ms = 2000
 
 
 def r3_esc():
@@ -308,9 +269,6 @@ def r3_esc():
     h.check("R4 saved", os.path.isfile(path), path)
 
 
-r3_esc.wait_ms = 1200
-
-
 # == R4: reopened, edited ==========================================================================
 def r4_close():
     App.closeDocument(doc().Name)
@@ -321,17 +279,11 @@ def r4_open():
     h.fit()
 
 
-r4_open.wait_ms = 2500
-
-
 def r4_reopened():
     h.check("R4 reopened: the same ring", near(vol(), s["ring15"], 1e-6), vol())
     doc().recompute()
     h.check("R4 a recompute keeps it", near(vol(), s["ring15"], 1e-6), vol())
     h.check("R4 double-click Pipe 1", ti.double_click("Pipe 1"))
-
-
-r4_reopened.wait_ms = 2000
 
 
 def r4_edit():
@@ -341,17 +293,11 @@ def r4_edit():
         ui.type_into(p.size.widget, "3")
 
 
-r4_edit.wait_ms = 2000
-
-
 def r4_ok():
     p = panel()
     h.check("R4 Section Size 3: 18.75 pi^2", near(vol(), 18.75 * PI * PI, 1e-5), vol())
     h.check("R4 no message", msg(p) == "", msg(p))
     h.task_button("OK")
-
-
-r4_ok.wait_ms = 2000
 
 
 def r4_done():
@@ -364,9 +310,6 @@ def r4_done():
     ti.menu("Pipe 1", "Delete")
 
 
-r4_done.wait_ms = 1000
-
-
 # == R5: deleted in the timeline ===================================================================
 def r5_deleted():
     h.check("R5 Delete: no pipe", not pipes(), [o.Name for o in pipes()])
@@ -376,16 +319,10 @@ def r5_deleted():
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-r5_deleted.wait_ms = 1500
-
-
 def r5_back():
     h.check("R5 Ctrl+Z: the ring is back", near(vol(), s["final"], 1e-9), vol())
     h.check("R5 with its two helpers", len(helpers()) == 2, [o.Name for o in helpers()])
     h.check("R5 timeline", ti.titles() == ["Sketch 1", "Pipe 1"], ti.titles())
-
-
-r5_back.wait_ms = 1500
 
 
 h.run(
@@ -421,4 +358,5 @@ h.run(
         r5_deleted,
         r5_back,
     ],
+    paced_by="state",
 )

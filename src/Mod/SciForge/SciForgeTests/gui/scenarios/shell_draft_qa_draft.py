@@ -305,9 +305,6 @@ def p4_far():
     h.check("P4 nothing in the Report view", not sd.report_errors(), sd.report_errors())
 
 
-p4_far.wait_ms = 4000
-
-
 def p4_ok_waits():
     p = sd.draft_panel()
     if p is None or p.handle is None:
@@ -627,4 +624,5 @@ h.run(
             p7_undo,
         ]
     ),
+    paced_by="state",
 )

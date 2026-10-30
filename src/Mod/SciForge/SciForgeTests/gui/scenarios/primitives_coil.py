@@ -100,9 +100,6 @@ def coil_circle():
     pl.click_on_plane(V(10, 0, 0))
 
 
-coil_circle.wait_ms = 2500
-
-
 def coil_first():
     p = panel()
     if p is None:
@@ -137,23 +134,14 @@ def coil_first():
     ui.type_into(p.revolutions.widget, "4")
 
 
-coil_first.wait_ms = 1500
-
-
 def four_turns():
     h.check("4 turns: 72 pi^2", near(vol(), 72.0 * PI * PI, 1e-5), vol())
     h.check("On Center", ui.choose(panel().section_position, "On Center"))
 
 
-four_turns.wait_ms = 1500
-
-
 def on_center():
     h.check("On Center: 80 pi^2", near(vol(), 80.0 * PI * PI, 1e-5), vol())
     h.check("Square", ui.choose(panel().section, "Square"))
-
-
-on_center.wait_ms = 1500
 
 
 def square():
@@ -162,18 +150,12 @@ def square():
     ui.click(panel().rotation)
 
 
-square.wait_ms = 1500
-
-
 def counterclockwise():
     p = panel()
     h.check("Rotation says Counterclockwise", p.rotation.text() == "Counterclockwise")
     h.check("left-handed now", p.target is not None and p.target.LeftHanded)
     h.check("same volume", near(vol(), 160.0 * PI, 1e-5), vol())
     h.check("Spiral", ui.choose(p.type, "Spiral"))
-
-
-counterclockwise.wait_ms = 1500
 
 
 def spiral():
@@ -190,17 +172,11 @@ def spiral():
     h.check("Height and Pitch", ui.choose(p.type, "Height and Pitch"))
 
 
-spiral.wait_ms = 2500
-
-
 def height_pitch():
     p = panel()
     h.check("back to a rising coil: 160 pi", near(vol(), 160.0 * PI, 1e-5), vol())
     h.check("height shown again", p.height.widget.isVisible())
     h.fit()
-
-
-height_pitch.wait_ms = 2000
 
 
 def drag_height():
@@ -209,9 +185,6 @@ def drag_height():
     h.check("height handle", handle is not None, list(p.handles))
     if handle is not None:
         pi.drag_handle(handle, 26.0)
-
-
-drag_height.wait_ms = 2500
 
 
 def dragged():
@@ -226,15 +199,9 @@ def dragged():
     ui.type_into(p.height.widget, "20")
 
 
-dragged.wait_ms = 1500
-
-
 def coil_ok():
     h.check("160 pi", near(vol(), 160.0 * PI, 1e-5), vol())
     h.task_button("OK")
-
-
-coil_ok.wait_ms = 1500
 
 
 def coil_kept():
@@ -257,16 +224,10 @@ def coil_undone():
     h.check("Redo button", ui.quick_access("Redo"))
 
 
-coil_undone.wait_ms = 1500
-
-
 def coil_redone():
     h.check("Redo brings it back", near(vol(), 160.0 * PI, 1e-5), vol())
     h.fit()
     h.check("double-click Coil 1", ui.double_click_timeline("Coil 1"), ui.timeline_titles())
-
-
-coil_redone.wait_ms = 1500
 
 
 def coil_editing():
@@ -286,9 +247,6 @@ def coil_editing():
 def coil_edit_ok():
     h.check("section 1.5: 90 pi", near(vol(), 90.0 * PI, 1e-5), vol())
     h.task_button("OK")
-
-
-coil_edit_ok.wait_ms = 1500
 
 
 def coil_edited():
@@ -316,9 +274,6 @@ def box_corner():
 
 def box_corner2():
     pl.click_on_plane(V(80, 20, 0))
-
-
-box_corner2.wait_ms = 1200
 
 
 def box_height():
@@ -357,18 +312,12 @@ def coil2_circle():
     pl.click_on_plane(V(70, 0, 30))
 
 
-coil2_circle.wait_ms = 2500
-
-
 def coil2_down():
     p = panel()
     if p is None:
         return
     h.check("diameter 20", near(p.diameter.value(), 20.0), p.diameter.value())
     ui.type_into(p.height.widget, "-20")
-
-
-coil2_down.wait_ms = 2500
 
 
 def coil2_cut():
@@ -383,9 +332,6 @@ def coil2_cut():
     h.check("nearly the whole coil is cut out", 0.93 * whole < removed < whole, (removed, whole))
     h.shot("4-cut-coil")
     h.task_button("OK")
-
-
-coil2_cut.wait_ms = 2500
 
 
 def coil2_kept():
@@ -412,9 +358,6 @@ def cancel_centre():
 
 def cancel_circle():
     pl.click_on_plane(V(65, 0, 30))
-
-
-cancel_circle.wait_ms = 2500
 
 
 def cancel_now():
@@ -490,4 +433,5 @@ h.run(
         esc_now,
         after_esc,
     ],
+    paced_by="state",
 )

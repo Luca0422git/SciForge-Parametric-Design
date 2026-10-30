@@ -151,7 +151,6 @@ def _step(tab, group, label, resolved):
 
     step.__name__ = "%s: %s > %s" % (tab, group, label)
     step.known = label in KNOWN
-    step.wait_ms = 1500
     step.entry_label = label
     return step
 
@@ -161,4 +160,4 @@ def write_report():
         json.dump(report, f, indent=1)
 
 
-h.run("ribbon_sweep", [setup])
+h.run("ribbon_sweep", [setup], paced_by="state")

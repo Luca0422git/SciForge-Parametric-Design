@@ -294,4 +294,5 @@ h.run(
         f4_distance_refused,
         f4_cancelled,
     ],
+    paced_by="state",
 )

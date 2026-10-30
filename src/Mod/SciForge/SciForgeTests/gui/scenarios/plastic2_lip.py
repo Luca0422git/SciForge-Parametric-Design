@@ -571,4 +571,5 @@ h.run(
         rim_face_lip,
         rim_face_cancelled,
     ],
+    paced_by="state",
 )

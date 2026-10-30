@@ -74,9 +74,6 @@ def build():
     Gui.SendMsgToActiveView("ViewFit")
 
 
-build.wait_ms = 1500
-
-
 # -- Path 1 -------------------------------------------------------------------------------------
 def selection_does_not_tint():
     doc = App.ActiveDocument
@@ -96,9 +93,6 @@ def selection_does_not_tint():
     after = [x.ObjectName for x in Gui.Selection.getSelectionEx(doc.Name, 0)]
     h.check("the person's selection is put back", after == ["Body"], after)
     Gui.Selection.clearSelection()
-
-
-selection_does_not_tint.wait_ms = 800
 
 
 # -- Path 2 -------------------------------------------------------------------------------------
@@ -145,9 +139,6 @@ def highlight_is_orange():
     h.check("nothing of the highlight is left in the 3D view", not _leftover())
 
 
-highlight_is_orange.wait_ms = 800
-
-
 def _leftover():
     root = Gui.ActiveDocument.ActiveView.getSceneGraph()
     return [
@@ -183,9 +174,6 @@ def direction_keeps_z_up():
     )
 
 
-direction_keeps_z_up.wait_ms = 800
-
-
 def turn_without_fit():
     """fit false: the camera turns about the point it looks at (the part stays in view)."""
     Gui.ActiveDocument.ActiveView.viewIsometric()
@@ -195,9 +183,6 @@ def turn_without_fit():
     )
     box, _mask = part_box(pixels(picture(answer)))
     h.check("render front without fit still shows the part", box is not None, answer["text"])
-
-
-turn_without_fit.wait_ms = 800
 
 
 # -- Path 4 -------------------------------------------------------------------------------------
@@ -228,9 +213,6 @@ def framing_fills_the_picture():
     )
 
 
-framing_fills_the_picture.wait_ms = 800
-
-
 def done():
     h.check("no pop-up left", not h.popups(), h.popups())
     s["done"] = json.dumps(True)
@@ -247,4 +229,5 @@ h.run(
         framing_fills_the_picture,
         done,
     ],
+    paced_by="state",
 )

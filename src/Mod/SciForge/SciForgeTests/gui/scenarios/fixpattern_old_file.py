@@ -73,9 +73,6 @@ def a_open():
     h.fit()
 
 
-a_open.wait_ms = 3000
-
-
 def a_upgraded():
     from sciforge import pattern
 
@@ -205,9 +202,6 @@ def e_reopen():
     h.fit()
 
 
-e_reopen.wait_ms = 2500
-
-
 def e_reopened():
     check_all("saved and opened again", 10, 30)
 
@@ -219,4 +213,5 @@ h.run(
     + [c_select, c_press_m, c_dz, c_ok, c_moved]
     + [d_select, d_delete, d_deleted, d_undone]
     + [e_reopen, e_reopened],
+    paced_by="state",
 )

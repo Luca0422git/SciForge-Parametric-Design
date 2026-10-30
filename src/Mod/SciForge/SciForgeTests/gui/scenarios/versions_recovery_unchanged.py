@@ -60,7 +60,6 @@ def tick(tag):
         S[tag] = r.written - before
 
     step.__name__ = "tick_" + tag
-    step.wait_ms = 1500
     return step
 
 
@@ -128,4 +127,5 @@ h.run(
         changed_checks,
         cleanup,
     ],
+    paced_by="state",
 )

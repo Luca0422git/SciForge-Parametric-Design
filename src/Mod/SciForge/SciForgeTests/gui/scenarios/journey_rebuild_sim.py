@@ -20,4 +20,5 @@ h.run(
     + j.finish_steps(with_joint=False, with_undo=False)
     + j.sim_steps()
     + [j.finish_scenario("the rebuild journey in SIMULATION")],
+    paced_by="state",
 )

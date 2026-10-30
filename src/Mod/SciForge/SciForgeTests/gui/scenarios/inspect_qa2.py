@@ -697,4 +697,4 @@ STEPS = (
     + [n_edit_preview, n_edit_escaped, the_end]
 )
 
-h.run("inspect_qa2", ti.watched(STEPS))
+h.run("inspect_qa2", ti.watched(STEPS), paced_by="state")

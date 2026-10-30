@@ -294,4 +294,5 @@ h.run(
         reopen,
         reopened,
     ],
+    paced_by="state",
 )

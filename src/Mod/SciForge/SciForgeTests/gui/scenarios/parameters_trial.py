@@ -159,9 +159,6 @@ def a_check():
     h.shot("A-refused")
 
 
-a_check.wait_ms = 1200
-
-
 # == B: accepted ================================================================================
 def b_type_50():
     d = dialog()
@@ -174,9 +171,6 @@ def b_check():
     h.check("B: no message", d is not None and d.message.text() == "", d and d.message.text())
     h.check("B: width = 50", abs(width() - 50) < 1e-9, width())
     h.check("B: the part follows (50 x 20 x 10)", abs(volume() - 10000) < 1e-6, volume())
-
-
-b_check.wait_ms = 1200
 
 
 # == B2, B3: a typo and a negative length ===========================================================
@@ -200,9 +194,6 @@ def b2_check():
     h.check("B2: nothing is left broken", not broken(), broken())
 
 
-b2_check.wait_ms = 1200
-
-
 def b3_type():
     d = dialog()
     row = user_row("width")
@@ -217,9 +208,6 @@ def b3_check():
     h.check("B3: shows the value typed", "would be -5 mm" in text, text)
     h.check("B3: width stays 50", abs(width() - 50) < 1e-9, width())
     h.check("B3: nothing is left broken", not broken(), broken())
-
-
-b3_check.wait_ms = 1200
 
 
 # == C: a model parameter ==========================================================================
@@ -260,9 +248,6 @@ def c_check():
     h.shot("C-refused")
 
 
-c_check.wait_ms = 1200
-
-
 def c2_type():
     d = dialog()
     label = "d%d" % (s["h"] + 1)
@@ -285,9 +270,6 @@ def c2_check():
     h.check("C2: the height stays 20", abs(s["sk"].getDatum(s["h"]).Value - 20) < 1e-9)
     h.check("C2: the part is unchanged", abs(volume() - 10000) < 1e-6, volume())
     h.check("C2: nothing is left broken", not broken(), broken())
-
-
-c2_check.wait_ms = 1200
 
 
 # == D: OK =========================================================================================
@@ -345,8 +327,6 @@ def e_done():
     h.check("E: the part is fine", not broken() and abs(volume() - 10000) < 1e-6, volume())
 
 
-e_done.wait_ms = 1200
-
 h.run(
     "parameters_trial",
     [
@@ -373,4 +353,5 @@ h.run(
         e_finish,
         e_done,
     ],
+    paced_by="state",
 )

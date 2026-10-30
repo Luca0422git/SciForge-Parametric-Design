@@ -83,7 +83,6 @@ def _steps(group, label, command):
 
     for f, name in ((start, "start"), (look, "look"), (after, "after")):
         f.__name__ = "%s > %s (%s)" % (group, label, name)
-    look.wait_ms = 400
     return [start, look, after]
 
 
@@ -93,4 +92,4 @@ def write_report():
     h.ribbon("Finish Sketch")
 
 
-h.run("sketch_sweep", [setup])
+h.run("sketch_sweep", [setup], paced_by="state")

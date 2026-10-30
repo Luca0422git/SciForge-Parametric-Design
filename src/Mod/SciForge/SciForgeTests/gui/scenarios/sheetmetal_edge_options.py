@@ -485,4 +485,5 @@ h.run(
         rule_default,
         closed,
     ],
+    paced_by="state",
 )

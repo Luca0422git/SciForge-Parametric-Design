@@ -98,9 +98,6 @@ def a_everything():
     i.menu("MAKE", "Export Everything")
 
 
-a_everything.wait_ms = 4000
-
-
 def a_check():
     text = notice_text()
     h.check("A the card shows", notice() is not None, text)
@@ -153,9 +150,6 @@ def b_press_export():
         b.click_widget(d.export_button)
 
 
-b_press_export.wait_ms = 2000
-
-
 def b_check():
     from sciforge import export_report_ui
 
@@ -177,16 +171,10 @@ def c_shrink():
     window.resize(1100, 700)
 
 
-c_shrink.wait_ms = 1500
-
-
 def c_everything_again():
     from sciforge import export_ui
 
     export_ui.export_everything(App.ActiveDocument, open_after=False)
-
-
-c_everything_again.wait_ms = 3000
 
 
 def c_check():
@@ -234,4 +222,5 @@ h.run(
         c_check,
         c_restore,
     ],
+    paced_by="state",
 )

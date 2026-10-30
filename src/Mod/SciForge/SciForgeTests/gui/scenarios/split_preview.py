@@ -147,9 +147,6 @@ def a_click_yz():
     pl.click_square("YZ_Plane")
 
 
-a_click_yz.wait_ms = 800  # the preview is rebuilt a moment after the change
-
-
 def a_red_plane():
     p = s.panel()
     h.check("A: the YZ plane is the tool", p is not None and p.options["tool"] is not None)
@@ -177,9 +174,6 @@ def b_click_face():
     h.click(V(30, -5, 10))
 
 
-b_click_face.wait_ms = 800  # the preview is rebuilt a moment after the change
-
-
 def b_red_face_plane():
     p = s.panel()
     tool = p.options["tool"] if p is not None else None
@@ -194,9 +188,6 @@ def c_extend_off():
     p = s.panel()
     if p is not None and p.extend.isChecked():
         s.toggle(p.extend)
-
-
-c_extend_off.wait_ms = 800  # the preview is rebuilt a moment after the change
 
 
 def c_face_only():
@@ -216,9 +207,6 @@ def c_extend_on():
         s.toggle(p.extend)
 
 
-c_extend_on.wait_ms = 800  # the preview is rebuilt a moment after the change
-
-
 def c_extended_again():
     red_covers("C", union(BODY1, FACE), plane_axis=1, plane_at=-5.0)
 
@@ -231,9 +219,6 @@ def d_clear():
 def d_click_body2():
     state["body2"] = body2().Label
     s.click_browser_row(state["body2"])
-
-
-d_click_body2.wait_ms = 800  # the preview is rebuilt a moment after the change
 
 
 def d_red_body():
@@ -256,9 +241,6 @@ def e_click_yz():
     pl.click_square("YZ_Plane")
 
 
-e_click_yz.wait_ms = 800  # the preview is rebuilt a moment after the change
-
-
 def e_red():
     h.check("E: red before OK", len(red_nodes()) == 1, len(red_nodes()))
 
@@ -278,9 +260,6 @@ def e_done():
 def f_edit():
     h.fit()
     s.timeline_double_click(splits()[0])
-
-
-f_edit.wait_ms = 800  # the preview is rebuilt a moment after the change
 
 
 def f_red_at_once():
@@ -311,9 +290,6 @@ def g_click_body():
 
 def g_click_xz():
     pl.click_square("XZ_Plane")
-
-
-g_click_xz.wait_ms = 800  # the preview is rebuilt a moment after the change
 
 
 def g_red():
@@ -383,4 +359,5 @@ h.run(
         g_escape,
         g_escaped,
     ],
+    paced_by="state",
 )

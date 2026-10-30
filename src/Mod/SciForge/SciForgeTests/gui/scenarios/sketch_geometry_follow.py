@@ -145,9 +145,6 @@ def a_delete():
     b.menu("MODIFY", "Delete")
 
 
-a_delete.wait_ms = 1500
-
-
 def _a_follows(where):
     doc = App.ActiveDocument
     s2 = doc.getObject("Sketch2")
@@ -516,4 +513,5 @@ h.run(
     "sketch_geometry_follow",
     [b.new_design("SketchGeometryFollow"), a_build, a_select, a_delete, a_deleted, a_reopen]
     + [b_pattern, c_helpers, s_scale, d_derive],
+    paced_by="state",
 )

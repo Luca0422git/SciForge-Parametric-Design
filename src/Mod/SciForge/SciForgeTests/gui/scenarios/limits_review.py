@@ -59,9 +59,6 @@ def draft_80():
         sd.type_into(p.angle.widget, "80")
 
 
-draft_80.wait_ms = 4000
-
-
 def draft_held():
     p = sd.draft_panel()
     a = p.options["angle"] if p else 0
@@ -70,9 +67,6 @@ def draft_held():
     h.check("and said", note(p) == "80° does not fit: limited to %.1f°" % a, note(p))
     if p:
         ui.click(p.flip)
-
-
-draft_held.wait_ms = 3000
 
 
 def draft_flipped():
@@ -84,17 +78,11 @@ def draft_flipped():
         sd.type_into(p.angle.widget, "80")
 
 
-draft_flipped.wait_ms = 3000
-
-
 def draft_80_flipped():
     p = sd.draft_panel()
     h.check("with Flip 80 fits", p is not None and p.options["angle"] == 80.0, p and p.options)
     h.check("no note, no error", note(p) == "" and msg(p) == "", (note(p), msg(p)))
     h.task_button("Cancel")
-
-
-draft_80_flipped.wait_ms = 2000
 
 
 # -- L6: Coil revolutions -----------------------------------------------------------------
@@ -116,17 +104,11 @@ def coil_point():
     pl.click_on_plane(V(10, 0, 0))
 
 
-coil_point.wait_ms = 2000
-
-
 def coil_20():
     p = pi.panel("CoilPanel")
     h.check("the Coil dialog", p is not None)
     if p:
         ui.type_into(p.revolutions.widget, "20")
-
-
-coil_20.wait_ms = 3000
 
 
 def coil_held():
@@ -139,9 +121,6 @@ def coil_held():
         note(p),
     )
     h.task_button("Cancel")
-
-
-coil_held.wait_ms = 2000
 
 
 # -- L3: Shell on a busy part -------------------------------------------------------------
@@ -170,9 +149,6 @@ def plate():
     h.ribbon("Shell")
 
 
-plate.wait_ms = 4000
-
-
 def shell_50():
     from sciforge import shell_ui
 
@@ -183,9 +159,6 @@ def shell_50():
         ui.type_into(p.inside.widget, "50")
 
 
-shell_50.wait_ms = 10000
-
-
 def shell_held():
     p = s.get("shell")
     t = p.options.get("inside") if p else 0
@@ -193,9 +166,6 @@ def shell_held():
     h.check("and said", note(p) == "50 mm does not fit: limited to %.2f mm" % t, note(p))
     h.check("no error", msg(p) == "", msg(p))
     h.task_button("Cancel")
-
-
-shell_held.wait_ms = 2000
 
 
 # -- L4: Distance and Angle chamfer on edges with different corner angles -----------------
@@ -235,4 +205,5 @@ h.run(
     + [draft, draft_xy, draft_front, draft_80, draft_held, draft_flipped, draft_80_flipped]
     + [coil, coil_xy, coil_centre, coil_point, coil_20, coil_held]
     + [plate, shell_50, shell_held, chamfer_angles],
+    paced_by="state",
 )

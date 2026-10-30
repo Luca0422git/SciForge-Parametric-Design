@@ -181,9 +181,6 @@ def redone():
     ti.click_row("Draft1")
 
 
-redone.wait_ms = 900
-
-
 def edit_again():
     a.inspect("Draft Analysis", keep_selection=True)
 
@@ -282,4 +279,5 @@ h.run(
         access_both,
         access_cancelled,
     ],
+    paced_by="state",
 )

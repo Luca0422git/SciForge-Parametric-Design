@@ -337,9 +337,6 @@ def p2_drag_out():
     hole_steps.drag_arrow(origin, across, arrow.distance(), 25.0, arrow=arrow)
 
 
-p2_drag_out.wait_ms = 1500
-
-
 def p2_dragged_out():
     p = panel()
     t = p.thickness.value() if p is not None else 0
@@ -357,9 +354,6 @@ def p2_dragged_out():
         hole_steps.drag_arrow(
             origin, across, arrow.distance(), -(arrow.distance() + 6.0), arrow=arrow
         )
-
-
-p2_dragged_out.wait_ms = 1500
 
 
 def p2_dragged_back():
@@ -533,9 +527,6 @@ def p4_reopen():
     App.openDocument(s["path"])
 
 
-p4_reopen.wait_ms = 2000
-
-
 def p4_reopened():
     h.check("P4 the rib is back", near(vol(), gusset(4.0), 1e-6), vol())
     h.check("P4 Rib 1 in the timeline", "Rib 1" in st.timeline_titles(), st.timeline_titles())
@@ -636,4 +627,5 @@ h.run(
             p4_done,
         ]
     ),
+    paced_by="state",
 )

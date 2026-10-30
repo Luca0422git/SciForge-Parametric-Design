@@ -441,4 +441,5 @@ h.run(
         lid_off,
         lid_on,
     ],
+    paced_by="state",
 )

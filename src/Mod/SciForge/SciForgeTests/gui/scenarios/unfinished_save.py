@@ -106,9 +106,6 @@ def designs_listed():
     h.shot("listed")
 
 
-designs_listed.wait_ms = 1500
-
-
 # -- Path 2 -------------------------------------------------------------------------------
 def save_left_unfinished():
     from sciforge import versions_ui
@@ -121,17 +118,11 @@ def save_left_unfinished():
     s["design"] = design
 
 
-save_left_unfinished.wait_ms = 1500
-
-
 def rescued():
     from sciforge import versions
 
     h.check("SciForge finished the save", s["done"] and versions.complete_save(s["design"]))
     h.check("Home lists it first in Recent", names("recent")[:1] == ["Rescued"], names("recent"))
-
-
-rescued.wait_ms = 1000
 
 
 # -- Path 3 -------------------------------------------------------------------------------
@@ -152,9 +143,6 @@ def save_where_renames_are_refused():
     doc.getObject("Body").addObject(doc.addObject("PartDesign::AdditiveBox", "Box"))
     doc.recompute()
     versions_ui._save_version(doc.Name, "second save")
-
-
-save_where_renames_are_refused.wait_ms = 1500
 
 
 def saved_directly():
@@ -180,8 +168,6 @@ def saved_directly():
         shutil.rmtree(folder, ignore_errors=True)
 
 
-saved_directly.wait_ms = 1000
-
 h.run(
     "unfinished_save",
     [
@@ -192,4 +178,5 @@ h.run(
         save_where_renames_are_refused,
         saved_directly,
     ],
+    paced_by="state",
 )

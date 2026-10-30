@@ -315,4 +315,5 @@ h.run(
     + [b_tick_min, b_drag, b_dragged]
     + [c_ok, c_done, c_undo, c_undone]
     + [d_open, d_tick, d_drag, d_dragged, d_cancel, d_cancelled],
+    paced_by="state",
 )

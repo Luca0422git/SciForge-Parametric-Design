@@ -285,4 +285,5 @@ h.run(
         mirror_edit,
         closed_unchanged,
     ],
+    paced_by="state",
 )

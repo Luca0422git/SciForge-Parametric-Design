@@ -201,4 +201,5 @@ h.run(
         s.wait_until(_solved, "wait_solved", 180),
         d_check,
     ],
+    paced_by="state",
 )

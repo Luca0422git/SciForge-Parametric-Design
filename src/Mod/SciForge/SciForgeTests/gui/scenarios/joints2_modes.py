@@ -81,9 +81,6 @@ def fillet_radius():
         b.type_into(p.radius.widget, "%g" % ROUND)
 
 
-fillet_radius.wait_ms = 1500
-
-
 def fillet_ok():
     h.task_button("OK")
 
@@ -92,9 +89,6 @@ def fillet_done():
     plate = j.plate()
     rounds = [f for f in plate.Shape.Faces if f.Surface.TypeId == "Part::GeomCylinder"]
     h.check("the plate's corner is rounded", len(rounds) == 1, len(rounds))
-
-
-fillet_done.wait_ms = 1500
 
 
 # -- M1 Joint Origin, Between Two Faces -------------------------------------------------------
@@ -205,9 +199,6 @@ def m2_edge2():
     h.click_edge(V(40, 26, 10))  # the top right edge
 
 
-m2_edge2.wait_ms = 1500
-
-
 def m2_joined():
     p = j.panel()
     h.check("component 2 is the edge intersection", p.snaps["comp2"] is not None)
@@ -249,9 +240,6 @@ def m3_shown():
     h.check("component 2 shows Two Edge Intersection", slot.mode == "twoedges", slot.mode)
     h.check("both edges listed", slot.ready() and "Edge" in p.fields["comp2_a"].button.text())
     s.type_value(p.offset_fields["z"].widget, "5")
-
-
-m3_shown.wait_ms = 1500
 
 
 def m3_lifted():
@@ -309,9 +297,6 @@ def m4_edge2():
     h.click_edge(V(15, 0, 0))  # the bottom front edge: parallel
 
 
-m4_edge2.wait_ms = 1500
-
-
 def m4_refused():
     p = j.panel()
     h.check("parallel edges are refused", "parallel" in p.message.text(), p.message.text())
@@ -365,4 +350,4 @@ steps += [m3_edit, m3_shown, m3_lifted, m3_ok, m3_undo, m3_undone, m3_redo, m3_r
 steps += [m4_open, m4_mode, m4_edge1, m4_edge2, m4_refused, m4_cancel]
 steps += [m5_save_close, m5_open, m5_reopened]
 
-h.run("joints2_modes", steps)
+h.run("joints2_modes", steps, paced_by="state")

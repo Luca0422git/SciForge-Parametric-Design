@@ -35,15 +35,9 @@ def setup():
     h.fit()
 
 
-setup.wait_ms = 800
-
-
 # -- A: inches, a sketch ---------------------------------------------------------------------------
 def a_units():
     ti.click_row("Units: mm")
-
-
-a_units.wait_ms = 800
 
 
 def a_inch():
@@ -58,9 +52,6 @@ def a_inch():
     h.task_button("OK")
 
 
-a_inch.wait_ms = 800
-
-
 def a_inches():
     h.check(
         "the design is in inches",
@@ -68,9 +59,6 @@ def a_inches():
         App.ActiveDocument.UnitSystem,
     )
     st.create_sketch()
-
-
-a_inches.wait_ms = 800
 
 
 def a_open():
@@ -156,9 +144,6 @@ def c_dim_place():
     si.click(c.Center + V(c.Radius + 5, -4, 0))
 
 
-c_dim_place.wait_ms = 600
-
-
 def c_dim_box():
     from sciforge import sketch_mode
 
@@ -168,9 +153,6 @@ def c_dim_box():
     h.check("the dimension's box opens", editor is not None)
     h.check("... showing the diameter in inches", bool(text) and text.endswith(" in"), text)
     si.type_text("1.5")
-
-
-c_dim_box.wait_ms = 800
 
 
 def c_dim_typed():
@@ -241,4 +223,5 @@ h.run(
         d_type,
         d_typed,
     ],
+    paced_by="state",
 )

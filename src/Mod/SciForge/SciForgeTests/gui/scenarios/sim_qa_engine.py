@@ -133,9 +133,6 @@ def after_drawing():
     h.check("B: and the results are not out of date", not sim.out_of_date(S["study"]))
 
 
-after_drawing.wait_ms = 1000
-
-
 def hide_body():
     sim = _sim()
     S["bodies"] = [b.Name for b in sim.study_bodies(S["study"])]
@@ -228,4 +225,5 @@ h.run(
         after_observed_solve,
         close,
     ],
+    paced_by="state",
 )

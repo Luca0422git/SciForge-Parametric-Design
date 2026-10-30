@@ -531,4 +531,5 @@ h.run(
         ring_ok,
         ring_made,
     ],
+    paced_by="state",
 )

@@ -710,4 +710,5 @@ h.run(
         e_dragged,
         e_closed,
     ],
+    paced_by="state",
 )

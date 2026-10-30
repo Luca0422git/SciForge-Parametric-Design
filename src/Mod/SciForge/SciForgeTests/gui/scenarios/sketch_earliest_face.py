@@ -143,4 +143,5 @@ h.run(
         boss_made,
         hole_suppressed,
     ],
+    paced_by="state",
 )

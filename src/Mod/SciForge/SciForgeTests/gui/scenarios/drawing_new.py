@@ -45,9 +45,6 @@ def a_refused():
     h.check("a message says why", "nothing to draw" in d.tooltip_text(), d.tooltip_text())
 
 
-a_refused.wait_ms = 300
-
-
 # -- B ------------------------------------------------------------------------------------------
 def b_block():
     fx.block(App.ActiveDocument)
@@ -79,9 +76,6 @@ def b_dialog():
 
 def b_ok():
     d.ok()
-
-
-b_ok.wait_ms = 2000
 
 
 def b_opened():
@@ -154,9 +148,6 @@ def c_style():
     d.set_combo_text(p.scale, "1:1")
 
 
-c_style.wait_ms = 1500
-
-
 def c_styled():
     base = d.bases()[0]
     h.check("no hidden edges", not base.HardHidden)
@@ -166,9 +157,6 @@ def c_styled():
 
 def c_ok():
     d.ok()
-
-
-c_ok.wait_ms = 1500
 
 
 def c_done():
@@ -191,9 +179,6 @@ def d_undone():
 
 def d_redo():
     d.redo()
-
-
-d_redo.wait_ms = 1500
 
 
 def d_redone():
@@ -221,9 +206,6 @@ def f_design():
     d.workspace("Design")
 
 
-f_design.wait_ms = 1000
-
-
 def f_back():
     from SciForgeTests.gui import timeline_input as t
 
@@ -243,9 +225,6 @@ def f_open():
 
         tree = s.browser()
         wi.double_click(tree.viewport(), tree.label_point(item))
-
-
-f_open.wait_ms = 1200
 
 
 def f_opened():
@@ -287,4 +266,5 @@ h.run(
         f_open,
         f_opened,
     ],
+    paced_by="state",
 )

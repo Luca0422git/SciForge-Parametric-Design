@@ -53,8 +53,6 @@ def open_dialog(dim_name):
         if h.check("the %s dimension exists" % dim_name, dim is not None):
             d.double_click_at(*w.label_point(dim))
 
-    open_.wait_ms = 1500
-
     def opened():
         p = dlg()
         h.check("the Dimension dialog opened", p is not None, d.panel())
@@ -99,9 +97,6 @@ def a_fit():
     d.choose(p.display, "Class and tolerances")
 
 
-a_fit.wait_ms = 1200
-
-
 def a_tolerances():
     p = dlg()
     h.check("+0.015 over 0", texts(dia()) == (DIA + "10 H7", "+0.015", "0"), texts(dia()))
@@ -116,9 +111,6 @@ def a_tolerances():
         p and p.fit_info.text(),
     )
     w.ok()
-
-
-a_tolerances.wait_ms = 1500
 
 
 def a_closed():
@@ -152,14 +144,8 @@ def b_limits():
     w.ok()
 
 
-b_limits.wait_ms = 1500
-
-
 def b_undo():
     d.undo()
-
-
-b_undo.wait_ms = 1500
 
 
 def b_undone():
@@ -170,9 +156,6 @@ def b_undone():
         (texts(dia()), dia().SciForgeDimSettings, doc.UndoNames, doc.RedoNames),
     )
     d.redo()
-
-
-b_undone.wait_ms = 1500
 
 
 def b_redone():
@@ -202,9 +185,6 @@ def c_shown():
     w.cancel()
 
 
-c_shown.wait_ms = 1500
-
-
 def c_cancelled():
     h.check(
         "Cancel: TechDraw's own text",
@@ -222,9 +202,6 @@ def d_deviation():
     d.choose(p.tolerance, "Deviation")
     d.type_into(p.upper, "0.1")
     d.type_into(p.lower, "-0.05")
-
-
-d_deviation.wait_ms = 1200
 
 
 def d_shown():
@@ -256,9 +233,6 @@ def d_ok():
     w.ok()
 
 
-d_ok.wait_ms = 1200
-
-
 def d_kept():
     h.check("closed", d.panel() is None)
     h.check("the deviation is kept", texts(length()) == ("80", "+0.100", "-0.050"), texts(length()))
@@ -271,9 +245,6 @@ def e_text():
         return
     d.choose(p.tolerance, "None")
     d.type_into(p.prefix, "2x ")
-
-
-e_text.wait_ms = 1000
 
 
 def e_symbol():
@@ -316,9 +287,6 @@ def e_ok():
     w.ok()
 
 
-e_ok.wait_ms = 1200
-
-
 # -- F ------------------------------------------------------------------------------------------
 def f_custom():
     p = dlg()
@@ -335,9 +303,6 @@ def f_classes():
     d.type_into(p.hole, "H8")
     d.type_into(p.shaft, "f7")
     d.choose(p.member, "Shaft")
-
-
-f_classes.wait_ms = 1500
 
 
 def f_shaft():
@@ -360,9 +325,6 @@ def f_refused():
     )
     d.click_at(380, 250)
     d.key(QtCore.Qt.Key_Escape)
-
-
-f_refused.wait_ms = 1500
 
 
 def f_cancelled():
@@ -411,4 +373,5 @@ h.run(
     + open_dialog("dia")
     + [f_custom, f_classes, f_shaft, f_fit, f_refused, f_cancelled]
     + [g_dxf],
+    paced_by="state",
 )

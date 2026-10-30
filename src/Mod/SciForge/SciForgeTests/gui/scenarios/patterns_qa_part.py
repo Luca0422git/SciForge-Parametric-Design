@@ -220,9 +220,6 @@ def p9_delete():
         h.check("Delete in its menu", w.right_click(button, w.center(button), "Delete"))
 
 
-p9_delete.wait_ms = 2000
-
-
 def p9_deleted():
     h.check(
         "the copies went with the hole: a plain box", ps.close(vol(body1()), ps.BOX), vol(body1())
@@ -247,9 +244,6 @@ def p9_taller_ok():
     h.task_button("OK")
 
 
-p9_taller_ok.wait_ms = 1500
-
-
 def p9_flows_through():
     h.check("the taller box reaches the end", ps.close(vol(body1()), 14400.0), vol(body1()))
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
@@ -258,9 +252,6 @@ def p9_flows_through():
 def p9_undo_taller():
     h.check("Ctrl+Z: 10 high again", ps.close(vol(body1()), ps.BOX), vol(body1()))
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
-
-
-p9_undo_taller.wait_ms = 1500
 
 
 def p9_undo_delete():
@@ -300,9 +291,6 @@ def p10_press_e():
     h.press("e")
 
 
-p10_press_e.wait_ms = 1200
-
-
 def p10_after_e():
     h.check("E kept the pattern", len(ps.patterns()) == s["n"] + 1, ps.patterns())
     p = b.active_panel()
@@ -323,9 +311,6 @@ def p10_press_f():
     h.check("Circular Pattern waits", p is not None and p.kind == "circular" and p.target is None)
     h.fit()
     h.press("f")
-
-
-p10_press_f.wait_ms = 1200
 
 
 def p10_after_f():
@@ -424,4 +409,5 @@ h.run(
         p10_nothing_deleted,
         p10_end,
     ],
+    paced_by="state",
 )

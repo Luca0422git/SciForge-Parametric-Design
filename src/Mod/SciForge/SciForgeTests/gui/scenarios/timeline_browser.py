@@ -708,4 +708,5 @@ h.run(
         check_regrouped,
         check_end_state,
     ],
+    paced_by="state",
 )

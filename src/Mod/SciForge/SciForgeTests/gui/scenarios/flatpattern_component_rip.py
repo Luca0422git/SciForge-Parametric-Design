@@ -221,4 +221,5 @@ h.run(
         finish,
         browser_row,
     ],
+    paced_by="state",
 )

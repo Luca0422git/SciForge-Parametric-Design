@@ -316,4 +316,5 @@ h.run(
         e_materials,
         e_back,
     ],
+    paced_by="state",
 )

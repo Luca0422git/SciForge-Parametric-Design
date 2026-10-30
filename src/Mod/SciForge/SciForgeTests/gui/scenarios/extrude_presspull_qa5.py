@@ -596,4 +596,5 @@ h.run(
         p27_pp_plain,
         p27_pp_done,
     ],
+    paced_by="state",
 )

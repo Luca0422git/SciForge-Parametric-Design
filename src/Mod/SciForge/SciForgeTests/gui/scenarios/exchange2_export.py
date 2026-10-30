@@ -111,9 +111,6 @@ def p1_export():
     press_export()
 
 
-p1_export.wait_ms = 2000
-
-
 def p1_reopen():
     path = os.path.join(OUT, "robot_out.step")
     h.check("P1 robot_out.step written", os.path.isfile(path), os.listdir(OUT))
@@ -122,9 +119,6 @@ def p1_reopen():
     s["design"] = App.ActiveDocument.Name
     x.use_open_file(path)
     h.press(QtCore.Qt.Key_O, QtCore.Qt.ControlModifier)
-
-
-p1_reopen.wait_ms = 2500
 
 
 def p1_check():
@@ -146,9 +140,6 @@ def p1_check():
     insert.restore_active_document(s["design"])
 
 
-p1_check.wait_ms = 1200
-
-
 # -- P2 ----------------------------------------------------------------------------------------
 def p2_open():
     open_export()
@@ -162,9 +153,6 @@ def p2_fill():
 
 def p2_export():
     press_export()
-
-
-p2_export.wait_ms = 2000
 
 
 def p2_check():
@@ -206,9 +194,6 @@ def p3_export():
     press_export()
 
 
-p3_export.wait_ms = 2500
-
-
 def p3_check():
     import Mesh
 
@@ -232,9 +217,6 @@ def p4_save_dxf():
     s["dxf"] = os.path.join(OUT, "Sketch.dxf")
     i.record_exports(save_path=s["dxf"])
     t.row_menu("Sketch", "Save As DXF")
-
-
-p4_save_dxf.wait_ms = 1500
 
 
 def p4_check():
@@ -270,9 +252,6 @@ def p5_click_face():
     h.click(V(10, 10, 10))
 
 
-p5_click_face.wait_ms = 800
-
-
 def p5_open():
     sel = Gui.Selection.getSelectionEx()
     subs = [n for sx in sel for n in sx.SubElementNames]
@@ -291,9 +270,6 @@ def p5_fill():
 
 def p5_export():
     press_export()
-
-
-p5_export.wait_ms = 1500
 
 
 def p5_check():
@@ -327,9 +303,6 @@ def p6_dwg():
     press_export()
 
 
-p6_dwg.wait_ms = 1200
-
-
 def p6_check():
     d = dialog()
     h.check("P6 the dialog stays open", d is not None)
@@ -341,9 +314,6 @@ def p6_check():
     d.flat = None
     d._show_flat()
     press_export()
-
-
-p6_check.wait_ms = 1200
 
 
 # -- P8 (DXF with nothing picked) ------------------------------------------------------------------
@@ -362,9 +332,6 @@ def p8_check():
 # -- P7 ----------------------------------------------------------------------------------------
 def p7_save_as_mesh():
     t.row_menu("Drive", "Save As Mesh")
-
-
-p7_save_as_mesh.wait_ms = 1500
 
 
 def p7_check():
@@ -422,4 +389,5 @@ h.run(
         p7_check,
         cleanup,
     ],
+    paced_by="state",
 )

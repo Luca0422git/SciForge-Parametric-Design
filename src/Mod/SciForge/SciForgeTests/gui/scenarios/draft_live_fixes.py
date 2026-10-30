@@ -127,7 +127,6 @@ def opener(name, steps, names_fn, wait=3000):
         open_draft(names_fn())
 
     step.__name__ = "open_" + name
-    step.wait_ms = wait
     return step
 
 
@@ -143,9 +142,6 @@ def f1_enter():
     QtTest.QTest.keyClick(p.angle.widget, QtCore.Qt.Key_Return)
     QtWidgets.QApplication.processEvents()
     S["f1 closed"] = not Gui.Control.activeDialog()
-
-
-f1_enter.wait_ms = 3000
 
 
 def f1_check():
@@ -167,9 +163,6 @@ def f1_part_ok():
     S["f1 part closed"] = not Gui.Control.activeDialog()
 
 
-f1_part_ok.wait_ms = 3000
-
-
 def f1_part_check():
     S["ok angle"] = kept_angle()
     h.check(
@@ -184,9 +177,6 @@ def f1_part_check():
 # -- F5: the same limit every time --------------------------------------------------------------
 def f5_typed():
     sd.type_into(panel().angle.widget, "15")
-
-
-f5_typed.wait_ms = 12000  # the background search (the harness waits for it too)
 
 
 def f5_record(key):
@@ -249,9 +239,6 @@ def f2_typed():
     h.wait_for(lambda: "exact" in S["f2"] or panel() is None, "the exact preview after the search")
 
 
-f2_typed.wait_ms = 2000
-
-
 def f2_check():
     info = S.get("f2", {})
     p = panel()
@@ -294,7 +281,6 @@ def f3_typed(angle):
         S["f3"] = (pic, pic.points_at(float(angle)))
 
     step.__name__ = "f3_typed_%g" % angle
-    step.wait_ms = 2500
     return step
 
 
@@ -351,9 +337,6 @@ def f4_typed():
     S["f4 error"] = p.error
 
 
-f4_typed.wait_ms = 2500
-
-
 def f4_check():
     p = panel()
     h.check(
@@ -376,7 +359,6 @@ def f6_typed(text):
         sd.type_into(panel().angle.widget, text)
 
     step.__name__ = "f6_typed_" + text
-    step.wait_ms = 4000
     return step
 
 
@@ -411,9 +393,6 @@ def holes_first_drag():
     d.run()
 
 
-holes_first_drag.wait_ms = 12000
-
-
 def holes_second_drag():
     p = panel()
     S["f7 limit"] = float(p.options.get("angle", 0.0))
@@ -439,9 +418,6 @@ def holes_second_drag():
         sample=sample,
     )
     d.run()
-
-
-holes_second_drag.wait_ms = 6000
 
 
 def holes_check():
@@ -507,4 +483,5 @@ h.run(
         holes_check,
         close_all,
     ],
+    paced_by="state",
 )

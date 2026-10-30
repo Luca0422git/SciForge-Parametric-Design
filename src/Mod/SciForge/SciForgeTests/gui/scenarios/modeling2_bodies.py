@@ -567,16 +567,6 @@ def reopened():
     hs.no_popups("Objects To Cut")
 
 
-draw_plate1.wait_ms = 300
-both_cut.wait_ms = 1200
-left_out.wait_ms = 1200
-taken_back.wait_ms = 1200
-cleared.wait_ms = 1200
-both_back.wait_ms = 1200
-sweep_built.wait_ms = 1500
-edit_ok.wait_ms = 1200
-loft_built.wait_ms = 1500
-
 h.run(
     "modeling2_bodies",
     [
@@ -653,4 +643,5 @@ h.run(
         reopen,
         reopened,
     ],
+    paced_by="state",
 )

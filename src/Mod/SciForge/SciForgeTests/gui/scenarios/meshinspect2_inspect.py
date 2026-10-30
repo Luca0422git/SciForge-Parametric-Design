@@ -111,7 +111,6 @@ def tall_steps():
 
     steps = [sketch, pick_xy, draw, finish, extrude, distance, join, ok, made]
     for step in steps:
-        step.wait_ms = 1200
         step.__name__ = "tall_" + step.__name__
     return steps
 
@@ -121,9 +120,6 @@ def a_start():
     state["bodies"] = len(bodies())
     h.click_empty()
     s.menu("INSPECT", "Interference")
-
-
-a_start.wait_ms = 1200
 
 
 def a_first():
@@ -144,9 +140,6 @@ def a_compute():
     di.click(p.compute)
 
 
-a_compute.wait_ms = 1500
-
-
 def a_result():
     p = b.active_panel()
     rows = p.rows()
@@ -156,17 +149,11 @@ def a_result():
     a.tick(p.create_all, True)
 
 
-a_result.wait_ms = 1000
-
-
 def a_ticked():
     p = b.active_panel()
     h.check("Create Bodies From Interferences ticks the row", p.ticked() == [0], p.ticked())
     h.check("the dialog says what OK makes", "1 body" in p.message.text(), p.message.text())
     h.task_button("OK")
-
-
-a_ticked.wait_ms = 2000
 
 
 def a_made():
@@ -193,9 +180,6 @@ def a_made():
     s.undo()
 
 
-a_made.wait_ms = 2000
-
-
 def a_undone():
     from sciforge import analysis
 
@@ -207,17 +191,11 @@ def a_undone():
     s.redo()
 
 
-a_undone.wait_ms = 2000
-
-
 def a_redone():
     new = body(state["new"])
     h.check("Redo: the body is back", new is not None and near(volume(new), 3000.0), new)
     h.click_empty()
     a.inspect("Minimum Radius Analysis")
-
-
-a_redone.wait_ms = 1500
 
 
 # -- B ------------------------------------------------------------------------------------------
@@ -227,16 +205,10 @@ def b_pick():
     h.click(V(10, 15, 20))
 
 
-b_pick.wait_ms = 1500
-
-
 def b_sharp():
     p = a.panel()
     h.check("Body picked", [o.Label for o, _n in p.entries] == ["Body"], p.entries)
     a.tick(p.field("IncludeSharpCurves"), True)
-
-
-b_sharp.wait_ms = 2500
 
 
 def b_drawn():
@@ -256,9 +228,6 @@ def b_drawn():
     h.task_button("OK")
 
 
-b_drawn.wait_ms = 1500
-
-
 def b_kept():
     found = a.analyses("MinimumRadiusAnalysis")
     h.check("Minimum Radius1 kept", len(found) == 1, found)
@@ -267,15 +236,9 @@ def b_kept():
     t.row_menu("Body", "Create Components from Bodies")
 
 
-b_kept.wait_ms = 1500
-
-
 # -- C ------------------------------------------------------------------------------------------
 def c_second_component():
     t.row_menu("Body3", "Create Components from Bodies")
-
-
-c_second_component.wait_ms = 1500
 
 
 def c_measure():
@@ -287,9 +250,6 @@ def c_measure():
     h.click_empty()
     h.fit()
     h.press("i")
-
-
-c_measure.wait_ms = 1500
 
 
 def measure_panel():
@@ -310,14 +270,8 @@ def c_filter():
     a.set_combo(p.filter, "Component")
 
 
-c_filter.wait_ms = 800
-
-
 def c_first():
     h.click(V(25, 15, 10))
-
-
-c_first.wait_ms = 1200
 
 
 def c_one():
@@ -326,9 +280,6 @@ def c_one():
     one = vals.get("Selection 1", {})
     h.check("the whole component", one.get("Volume") == "18000.000 mm^3", vals)
     h.click(V(10, 60, 10))
-
-
-c_one.wait_ms = 1200
 
 
 def c_two():
@@ -341,14 +292,8 @@ def c_two():
     di.click(p.restart)
 
 
-c_two.wait_ms = 1000
-
-
 def c_root_body():
     h.click(V(60, 15, 10))
-
-
-c_root_body.wait_ms = 1200
 
 
 def c_refused():
@@ -357,9 +302,6 @@ def c_refused():
     h.check("a body in no component: it says so", "not in a component" in text, text)
     h.check("nothing measured", p.values() == {}, p.values())
     h.task_button("Close")
-
-
-c_refused.wait_ms = 1200
 
 
 # -- D ------------------------------------------------------------------------------------------
@@ -376,16 +318,10 @@ def d_zebra():
     a.inspect("Zebra Analysis")
 
 
-d_zebra.wait_ms = 1500
-
-
 def d_pick():
     p = a.panel()
     h.check("Zebra dialog", p is not None and p.kind == "ZebraAnalysis", p)
     h.click(e.on_sphere(0.1, 0.2))
-
-
-d_pick.wait_ms = 2500
 
 
 def d_striped():
@@ -404,9 +340,6 @@ def d_striped():
     h.task_button("OK")
 
 
-d_striped.wait_ms = 1500
-
-
 def d_kept():
     found = a.analyses("ZebraAnalysis")
     h.check("Zebra1 kept", [o.Label for o in found] == ["Zebra1"], [o.Label for o in found])
@@ -414,9 +347,6 @@ def d_kept():
 
     state["recent"] = len(sciforge.RECENT)
     a.inspect("Draft Analysis")
-
-
-d_kept.wait_ms = 1500
 
 
 def d_draft_refused():
@@ -432,16 +362,10 @@ def d_draft_refused():
     s.menu("MODIFY", "Smooth")
 
 
-d_draft_refused.wait_ms = 1500
-
-
 def d_smooth_ok():
     p = m.panel()
     h.check("Smooth dialog", p is not None and p.title == "Smooth", p)
     h.task_button("OK")
-
-
-d_smooth_ok.wait_ms = 2500
 
 
 def d_follows():
@@ -457,9 +381,6 @@ def d_follows():
     h.shot("end")
 
 
-d_follows.wait_ms = 1500
-
-
 h.run(
     "meshinspect2_inspect",
     [s.new_design("MeshInspect2")]
@@ -473,4 +394,5 @@ h.run(
     + [d_closed, i.new_design("MeshZebra")]
     + m.insert_file(sphere_file())
     + [d_zebra, d_pick, d_striped, d_kept, d_draft_refused, d_smooth_ok, d_follows],
+    paced_by="state",
 )

@@ -87,8 +87,6 @@ def open_move(point):
         h.check("Move/Copy open", p is not None and p.title == "Move/Copy", p)
         pl.click_on_plane(point)
 
-    press.wait_ms = 1200
-    click.wait_ms = 1200
     return [press, click]
 
 
@@ -115,9 +113,6 @@ def p2_type():
     s.type_value(field(p, "rz"), "90")
 
 
-p2_type.wait_ms = 1500
-
-
 def p2_live():
     from sciforge import move
 
@@ -127,9 +122,6 @@ def p2_live():
     f.follows("P2 while the dialog is open", f.flat(), st["flat0"], place)
     h.shot("P2-live")
     h.task_button("OK")
-
-
-p2_live.wait_ms = 1200
 
 
 def p2_ok():
@@ -145,16 +137,10 @@ def p3_undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-p3_undo.wait_ms = 1500
-
-
 def p3_undone():
     h.check("P3 Ctrl+Z: no Move", not moves(), moves())
     f.follows("P3 Ctrl+Z", f.flat(), st["flat0"], App.Placement())
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-p3_undone.wait_ms = 1500
 
 
 def p3_redone():
@@ -167,23 +153,14 @@ def p4_edit():
     s.timeline_double_click(moves()[0])
 
 
-p4_edit.wait_ms = 1500
-
-
 def p4_type():
     p = s.panel()
     if h.check("P4 the Move's dialog", p is not None and p.editing, p):
         s.type_value(field(p, "dx"), "50")
 
 
-p4_type.wait_ms = 1500
-
-
 def p4_ok():
     h.task_button("OK")
-
-
-p4_ok.wait_ms = 1200
 
 
 def p4_check():
@@ -207,14 +184,8 @@ def p5_type():
     s.type_value(field(p, "rx"), "90")
 
 
-p5_type.wait_ms = 1500
-
-
 def p5_ok():
     h.task_button("OK")
-
-
-p5_ok.wait_ms = 1200
 
 
 def p5_check():
@@ -242,14 +213,8 @@ def p6_press():
     h.press("m")
 
 
-p6_press.wait_ms = 1200
-
-
 def p6_click():
     h.click(st["place6"].multVec(f.TOP))
-
-
-p6_click.wait_ms = 1200
 
 
 def p6_drag():
@@ -261,9 +226,6 @@ def p6_drag():
     h.drag(h.screen_point(start), h.screen_point(start + V(12, 0, 0)))
 
 
-p6_drag.wait_ms = 1500
-
-
 def p6_live():
     from sciforge import move
 
@@ -273,9 +235,6 @@ def p6_live():
     # what the drag actually produced (CI's window differs by a pixel)
     f.follows("P6 during the drag", f.flat(), st["before6"], place)
     h.task_button("OK")
-
-
-p6_live.wait_ms = 1200
 
 
 def p6_check():
@@ -291,14 +250,8 @@ def p7_press():
     h.press("m")
 
 
-p7_press.wait_ms = 1200
-
-
 def p7_click():
     h.click(movement(box()).multVec(f.TOP))
-
-
-p7_click.wait_ms = 1200
 
 
 def p7_copy():
@@ -309,14 +262,8 @@ def p7_copy():
     s.type_value(field(p, "dy"), "60")
 
 
-p7_copy.wait_ms = 1500
-
-
 def p7_ok():
     h.task_button("OK")
-
-
-p7_ok.wait_ms = 1500
 
 
 def p7_check():
@@ -337,9 +284,6 @@ def p8_roll_back():
     t.drag_marker(before_title=s.timeline_title_of(moves()[0]))
 
 
-p8_roll_back.wait_ms = 2500
-
-
 def p8_rolled():
     from SciForgeTests.gui import timeline_input as t
 
@@ -355,9 +299,6 @@ def p8_rolled():
     )
     h.shot("P8-rolled")
     t.drag_marker(to_end=True)
-
-
-p8_rolled.wait_ms = 2500
 
 
 def p8_end():
@@ -411,4 +352,5 @@ h.run(
         p8_end,
         cleanup,
     ],
+    paced_by="state",
 )
