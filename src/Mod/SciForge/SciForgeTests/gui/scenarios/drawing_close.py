@@ -13,7 +13,9 @@ B  The drawing opened again (double-click in the browser's Drawings folder); a b
    placed and OK'd; the tab's x again: closed, back to the design.
 C  Opened again; Window > Close (Ctrl+F4, FreeCAD's close of the current tab).
 D  Opened again; the whole design closed (File > Close, nothing saved) while the drawing's
-   tab is current; a new design afterwards works (a box extruded).
+   tab is current; FreeCAD asks at once whether Redo can run, as its command update does
+   every 150 ms (the closed tab answered from the closed design: SIGSEGV, drawing2_breakout
+   under load, 2026-10-30); a new design afterwards works (a box extruded).
 """
 
 import FreeCAD as App
@@ -96,9 +98,6 @@ def open_again():
         drawing_ui.open_drawing(pages[0])
 
 
-open_again.wait_ms = 1500
-
-
 def opened():
     h.check("the drawing's tab is open again", page_window() is not None)
 
@@ -121,9 +120,6 @@ def a_ok():
     d.ok()
 
 
-a_ok.wait_ms = 2500
-
-
 def a_base_view_open():
     h.check("the drawing opened", page_window() is not None)
     h.check("the Base View dialog started by itself", d.panel_of("BaseViewPanel") is not None)
@@ -134,16 +130,10 @@ def a_close():
     click_tab_x()
 
 
-a_close.wait_ms = 1500
-
-
 # -- B ----------------------------------------------------------------------------------------
 def b_base_view():
     if d.panel_of("BaseViewPanel") is None:
         h.ribbon("Base View")
-
-
-b_base_view.wait_ms = 1500
 
 
 def b_place():
@@ -157,18 +147,12 @@ def b_ok():
         d.ok()
 
 
-b_ok.wait_ms = 1500
-
-
 def b_placed():
     h.check("a base view on the drawing", len(d.bases()) >= 1, d.bases())
 
 
 def b_close():
     click_tab_x()
-
-
-b_close.wait_ms = 1500
 
 
 # -- C ----------------------------------------------------------------------------------------
@@ -182,9 +166,6 @@ def c_ctrl_w():
         QtWidgets.QApplication.processEvents()
 
 
-c_ctrl_w.wait_ms = 1500
-
-
 # -- D ----------------------------------------------------------------------------------------
 def d_close_design():
     sub = page_window()
@@ -195,10 +176,10 @@ def d_close_design():
     state["closed"] = name
     Gui.ActiveDocument.Modified = False  # nothing to save: no "save changes?" question
     App.closeDocument(name)
+    # FreeCAD's command update, before anything else runs (drawing_ui._drop_closed_tabs)
+    redo = Gui.Command.get("Std_Redo").isActive()
+    h.check("FreeCAD answers whether Redo can run (no crash)", redo in (True, False), redo)
     QtWidgets.QApplication.processEvents()
-
-
-d_close_design.wait_ms = 2000
 
 
 def d_after():
@@ -247,4 +228,5 @@ h.run(
         d_new_design,
         d_works,
     ],
+    paced_by="state",
 )

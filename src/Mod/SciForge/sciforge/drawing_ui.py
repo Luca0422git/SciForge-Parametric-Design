@@ -371,6 +371,10 @@ class _Observer:
         except Exception:
             pass
 
+    def slotDeletedDocument(self, doc):
+        # (after FreeCAD's own handling: its drawing tabs are closed, not yet deleted)
+        _drop_closed_tabs()
+
     def slotDeletedObject(self, obj):
         try:
             if drawing.is_page(obj):
@@ -696,6 +700,7 @@ class _DocWatch:
             warn("drawing close watch unavailable: %s" % exc)
 
     def slotDeletedDocument(self, gdoc):
+        STATE["closing_tabs"] = _sheet_tabs()
         _leave_sheets()
         try:
             name = gdoc.Document.Name
@@ -711,6 +716,39 @@ class _DocWatch:
                 inp.detach()
         except Exception as exc:
             warn("drawing close watch: %s" % exc)
+
+
+def _sheet_tabs():
+    area = _area()
+    if area is None:
+        return []
+    found = []
+    for sub in area.subWindowList():
+        try:
+            widget = sub.widget()
+            if widget is not None and widget.metaObject().className() == PAGE_VIEW:
+                found.append(sub)
+        except RuntimeError:
+            continue  # (a tab already on its way out)
+    return found
+
+
+def _drop_closed_tabs():
+    """FreeCAD 1.1.4 takes a closing design's drawing tabs away and deletes them a moment
+    later; until then the main window can still call one its active view, and a drawing
+    tab answers "can Redo?" from its design without checking that the design is still
+    there. FreeCAD's command update (every 150 ms) came in between: SIGSEGV in
+    MDIViewPage::onHasMsg (drawing2_breakout under load; every time when asked at once).
+    The tabs noted just before the close (`_DocWatch`) that FreeCAD has now put up for
+    deletion are deleted at once (open tabs have nothing waiting: they stay)."""
+    tabs, STATE["closing_tabs"] = STATE.get("closing_tabs") or [], []
+    for sub in tabs:
+        try:
+            QtCore.QCoreApplication.sendPostedEvents(sub, QtCore.QEvent.DeferredDelete)
+        except RuntimeError:
+            continue  # (already deleted)
+        except Exception as exc:
+            warn("drawing close: %s" % exc)
 
 
 def _leave_sheets():
