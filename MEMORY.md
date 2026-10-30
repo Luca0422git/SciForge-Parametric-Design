@@ -16,9 +16,10 @@ both workflows on ubuntu-24.04 [x] 7 check_waits.py ratchet [x] stress mode + CI
 [x] scenarios converted (batch 1, then CI part by part, each proven 3 times in a row under
 `--stress` first; f158198e: 0 fixed waits, 0 timer-paced scenarios) [x] five green full runs
 on one commit (ae69b62a, 2026-10-30: CI #340 - #344, all green; the sets before found races,
-see the session log) [~] build dry run (build #15 on the branch, ee57bdd2: Linux compiled,
-then appimagetool refused the AppDir's icon, Known issues "BEFORE THE NEXT FULL BUILD";
-Windows was still building at 16:25 UTC) [ ] merged into develop (Luca) [ ] delete the
+see the session log; #346 on 97ee6139 green too) [x] build dry run (build #16 on the branch,
+97ee6139, 2026-10-30: Linux AppImage, Windows portable and installer built, release files made,
+all 9 scenario parts green on the built AppImage; #15 before it failed at appimagetool's icon
+check, fixed by core patch #20) [ ] merged into develop (Luca) [ ] delete the
 branches sf/gui-tests-proof-1/2/3 (copies of the branch for runs side by side; this sandbox
 may not delete branches: HTTP 403).
 Newest session log "GUI test rework".
@@ -1899,6 +1900,14 @@ branch off develop (a patch release was going out from develop). How it all work
   green runs on one commit). Still open, with diagnostics in place: the INSERT file dialog
   race, mesh_separate_combine 1240, vex_shaft's turn (Known issues). The build dry run found
   appimagetool's new icon check (Known issues): Luca decides the create_bundle.sh fix.
+- **Evening of 2026-10-30.** Luca: "fix the packaging with the PNG icon and the linux stuff. and
+  then lets build". Core patch #20 (97ee6139): create_bundle.sh puts the installed 256 px PNG
+  next to the desktop file and as `.DirIcon`, and runs `chmod -R a+rX AppDir` before
+  appimagetool; tried first with appimagetool build 333 on a small AppDir (old steps: CI's
+  message; a 0700 folder alone: "has mode 0700"; new steps: "Success"). Build dry run #16 on the
+  branch: all green (both platforms, release files, the 9 scenario parts on the AppImage).
+  Not done (Luca's): the merge into develop, the version and CHANGELOG lines for the three app
+  fixes (drawing tab crash, playback, rename field), the release tag.
 
 ### Session log: quick patch 0.1.0-beta.3.1.3, stuck buttons (`develop`, 2026-10-29)
 
