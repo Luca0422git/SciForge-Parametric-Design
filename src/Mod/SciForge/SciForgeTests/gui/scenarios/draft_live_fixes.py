@@ -224,24 +224,28 @@ def f2_typed():
     S["f2"] = {}
     sd.type_into(p.angle.widget, "15")
     # typed again while the dialog searches its limit (the search runs on the event loop)
-    h.wait_for(lambda: panel() is None or panel().limit_searching(), "the dialog to search its limit")
+    h.wait_for(
+        lambda: panel() is None or panel().limit_searching(), "the dialog to search its limit"
+    )
     q = panel()
     if q is None:
         return
-    S["f2"]["typed"] = time.perf_counter()
-    sd.type_into(q.angle.widget, "3")
-    S["f2"]["searching after"] = q.limit_searching()
     orig = q.show_preview
 
     def show(on):
-        if on and "exact" not in S["f2"]:
+        if on and "typed" in S["f2"] and "exact" not in S["f2"]:
             S["f2"]["exact"] = (
                 round((time.perf_counter() - S["f2"]["typed"]) * 1000.0),
                 q.options.get("angle"),
             )
         return orig(on)
 
+    # (watched before the typing: on a slow machine the exact preview came while the 3 was
+    # being typed, before a watch set after it)
     q.show_preview = show
+    S["f2"]["typed"] = time.perf_counter()
+    sd.type_into(q.angle.widget, "3")
+    S["f2"]["searching after"] = q.limit_searching()
     h.wait_for(lambda: "exact" in S["f2"] or panel() is None, "the exact preview after the search")
 
 
@@ -261,8 +265,13 @@ def f2_check():
     # a normal exact rebuild of this part takes ~0.4 s after the 0.2 s rest; the stale search
     # held it ~3.5 s (a loaded machine is allowed for)
     h.check(
-        "F2: the exact preview of 3 deg comes at the normal pace",
-        exact is not None and exact[1] == 3.0 and exact[0] < 2000,
+        "F2: the exact preview after the typing is of 3 deg",
+        exact is not None and exact[1] == 3.0,
+        info,
+    )
+    h.check(
+        "F2: ... at the normal pace",
+        exact is not None and exact[0] < 2000 * h.SLOWDOWN,
         info,
     )
     h.check("F2: 3 deg kept, no note", p.options.get("angle") == 3.0 and not p.limits.note)
