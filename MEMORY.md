@@ -13,10 +13,9 @@ time. The brief said to work on a branch off develop (another session was releas
 Status: [x] 1 failures on the run page [x] 2 harness.wait_for / settle / ready / done
 [x] 3 input helpers on it [x] 4 fresh profile per scenario [x] 5 hang watchdog [x] 6 gui_env.sh,
 both workflows on ubuntu-24.04 [x] 7 check_waits.py ratchet [x] stress mode + CI repeat input
-[ ] scenarios converted: batch 1 (the CI #277 - #287 ones), then CI part by part, each part
-proven 3 times in a row under `--stress` first (all 9 parts done, 2026-10-30: 0 fixed waits, 0 timer-paced scenarios;
-every helper and scenario wait is named, `check_waits.py` counts what is left) [ ] five green
-full runs in a row [ ] build dry run [ ] merged into develop (Luca).
+[x] scenarios converted (batch 1, then CI part by part, each proven 3 times in a row under
+`--stress` first; f158198e: 0 fixed waits, 0 timer-paced scenarios) [ ] five green full runs
+in a row [ ] build dry run [ ] merged into develop (Luca).
 Newest session log "GUI test rework".
 
 **2026-10-26: Luca's beta 3 list, split in two** (newest session log "Beta 3 list"):
@@ -1817,6 +1816,23 @@ branch off develop (a patch release was going out from develop). How it all work
   - A real crash (app side, fixed): closing a design while its drawing tab was the active one
     (drawing2_breakout under `--stress`; Known issues, "Closing a design while its drawing
     tab...").
+- **Night of 2026-10-30 (Luca: done by 9am; "run them in your sandbox in parallel and compare
+  the two").** Parts 5-9 were proven on GitHub (trial #316: all 316 scenarios left, 3 times
+  under `--stress`, paced by state, on a910c520) with the sandbox running the same proof in
+  parallel (`chunks/`, 4 workers). The two agree on all but three scenarios, each explained:
+  draft_live_fixes (sandbox 0 of 3: a watch set too late on the slower machine), vex_qa_occ
+  (sandbox 0 of 3: a twenty-part insert past the 30 s bound under load), patterns_qa_paths
+  (GitHub 2 of 3: a click after a pick too fast for the app's 0.6 s window). All fixed. All
+  nine parts converted; `check_waits.py`: 0 fixed waits, 0 timer-paced scenarios (f158198e).
+- The normal runs (CI #315 - #319) found the races only full speed shows: Create Sketch's origin
+  squares (a 250 ms camera look), a design tab clicked right after a click in another design's
+  view (that view takes the keyboard a moment later and brings its design back; traced with a
+  throwaway that clicks at once), a taper handle's hover (every 4th poll), Compare's panes
+  (a 70 ms tick). Settling covers the polls; any press after a click in the 3D view keeps a
+  hand's pace (`h.after_view_pace`, as `h.press_pace` in the view).
+- My own slip, caught by CI: `dialog_input.choose`'s disconnect of its watch printed a PySide
+  RuntimeWarning when the dialog had taken the connection away (the Report-view check counts
+  it): it disconnects quietly now.
 
 ### Session log: quick patch 0.1.0-beta.3.1.3, stuck buttons (`develop`, 2026-10-29)
 
