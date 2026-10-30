@@ -339,4 +339,5 @@ h.run(
         export_components,
         conflict_highlight,
     ],
+    paced_by="state",
 )

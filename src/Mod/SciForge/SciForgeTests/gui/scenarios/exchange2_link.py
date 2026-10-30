@@ -101,9 +101,6 @@ def setup():
     versions_ui.show_panel()
 
 
-setup.wait_ms = 1500
-
-
 def menu_on_card(text_start, entry):
     lst = vi.panel_list()
     if not h.check("the Data Panel", lst is not None):
@@ -122,9 +119,6 @@ def menu_on_card(text_start, entry):
 # -- P1 ----------------------------------------------------------------------------------------
 def p1_insert():
     menu_on_card("Wheel", "Insert into Current Design")
-
-
-p1_insert.wait_ms = 2500
 
 
 def p1_check():
@@ -146,14 +140,8 @@ def p1_check():
         i.type_value(p.distance_fields[0], "30")
 
 
-p1_check.wait_ms = 800
-
-
 def p1_ok():
     h.task_button("OK")
-
-
-p1_ok.wait_ms = 1200
 
 
 def p1_moved():
@@ -167,9 +155,6 @@ def p1_moved():
     t.ctrl("z")
 
 
-p1_moved.wait_ms = 1200
-
-
 # -- P2 ----------------------------------------------------------------------------------------
 def p2_undo_insert():
     comp = wheel_comp()
@@ -181,24 +166,15 @@ def p2_undo_insert():
     t.ctrl("z")
 
 
-p2_undo_insert.wait_ms = 1500
-
-
 def p2_redo():
     h.check("P2 Ctrl+Z again: no Wheel", wheel_comp() is None, x.labels(cart()))
     t.ctrl("y")
-
-
-p2_redo.wait_ms = 1500
 
 
 def p2_redo_move():
     comp = wheel_comp()
     h.check("P2 Ctrl+Y: linked again", comp is not None and linked(comp))
     t.ctrl("y")
-
-
-p2_redo_move.wait_ms = 1500
 
 
 def p2_check():
@@ -215,9 +191,6 @@ def p3_break():
     entries = [e for e, _on in t.row_menu_entries("Wheel")]
     h.check("P3 the menu offers Break Link", "Break Link" in entries, entries)
     t.row_menu("Wheel", "Break Link")
-
-
-p3_break.wait_ms = 2000
 
 
 def p3_check():
@@ -242,9 +215,6 @@ def p3_check():
     t.ctrl("z")
 
 
-p3_check.wait_ms = 1500
-
-
 # -- P4 ----------------------------------------------------------------------------------------
 def p4_redo():
     comp = wheel_comp()
@@ -252,9 +222,6 @@ def p4_redo():
     body = wheel_body()
     h.check("P4 its copy is whole", body is not None and x.near(body.Shape.Volume, 1000.0), body)
     t.ctrl("y")
-
-
-p4_redo.wait_ms = 1500
 
 
 def p4_check():
@@ -269,15 +236,9 @@ def p5_insert_again():
     menu_on_card("Wheel", "Insert into Current Design")
 
 
-p5_insert_again.wait_ms = 2500
-
-
 def p5_escape():
     h.check("P5 the Move dialog", move_panel() is not None)
     h.press(QtCore.Qt.Key_Escape)
-
-
-p5_escape.wait_ms = 1000
 
 
 def p5_save_and_remove():
@@ -297,7 +258,6 @@ def p5_save_and_remove():
     App.openDocument(s["cart"])
 
 
-p5_save_and_remove.wait_ms = 2500
 p5_save_and_remove.known = True  # FreeCAD's own 'file does not exist' lines
 
 
@@ -314,9 +274,6 @@ def p5_reopened():
     )
     h.new_errors()
     t.row_menu("Wheel (2)", "Break Link")
-
-
-p5_reopened.wait_ms = 1500
 
 
 def p5_check():
@@ -375,4 +332,5 @@ h.run(
         p6_menu,
         cleanup,
     ],
+    paced_by="state",
 )

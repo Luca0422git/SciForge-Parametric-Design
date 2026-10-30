@@ -91,9 +91,6 @@ def scripted():
     page.Document.recompute()
 
 
-scripted.wait_ms = 4000
-
-
 def summary(path):
     from sciforge import drawing_pdf_core
 
@@ -224,9 +221,6 @@ def a_normal():
     h.check("the view below's hidden edges are hidden edges", counts["hidden"]["below"] > 5, counts)
 
 
-a_normal.wait_ms = 3000
-
-
 # -- B --------------------------------------------------------------------------------------
 def red_pixels(image):
     count = 0
@@ -287,9 +281,6 @@ def b_pdfa():
     h.check("no marker left (no red pixel)", red_pixels(image) == 0, red_pixels(image))
 
 
-b_pdfa.wait_ms = 3000
-
-
 # -- C --------------------------------------------------------------------------------------
 def c_pdfx():
     path = export("pdfx4", 3)
@@ -312,12 +303,10 @@ def c_pdfx():
     h.check("no link annotations", info["links"] == [], info["links"])
 
 
-c_pdfx.wait_ms = 3000
-
-
 h.run(
     "drawing_pdf_archival",
     [new_design]
     + d.drawing_steps("sheet", base_at=BASE, scale="1:1", orientation="Top", style="Visible Edges")
     + [scripted, a_normal, b_pdfa, c_pdfx],
+    paced_by="state",
 )

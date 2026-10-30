@@ -295,7 +295,5 @@ def watched(steps):
             one()
 
         run.__name__ = one.__name__
-        if hasattr(one, "wait_ms"):
-            run.wait_ms = one.wait_ms
         wrapped.append(run)
     return wrapped

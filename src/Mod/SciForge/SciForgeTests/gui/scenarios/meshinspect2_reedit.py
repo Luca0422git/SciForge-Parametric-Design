@@ -57,9 +57,6 @@ def a_open():
     s.menu("MODIFY", "Direct Edit")
 
 
-a_open.wait_ms = 1500
-
-
 def a_free_form():
     p = e.direct_panel()
     h.check("Direct Edit dialog", p is not None, m.panel())
@@ -70,14 +67,8 @@ def a_free_form():
     h.check("the brush is off for it", not p.brush.widget.isEnabled())
 
 
-a_free_form.wait_ms = 800
-
-
 def a_lasso():
     e.lasso(e.on_sphere(), 45)
-
-
-a_lasso.wait_ms = 1500
 
 
 def a_lassoed():
@@ -88,25 +79,16 @@ def a_lassoed():
     e.key(QtCore.Qt.Key_C, QtCore.Qt.AltModifier)
 
 
-a_lassoed.wait_ms = 1200
-
-
 def a_connected():
     p = e.direct_panel()
     h.check("Alt+C: every face of the sphere", len(p.selected) == state["faces"], len(p.selected))
     e.key(QtCore.Qt.Key_N, QtCore.Qt.AltModifier)
 
 
-a_connected.wait_ms = 1200
-
-
 def a_inverted():
     p = e.direct_panel()
     h.check("Alt+N: none", p.selected == [], len(p.selected))
     e.key(QtCore.Qt.Key_N, QtCore.Qt.AltModifier)
-
-
-a_inverted.wait_ms = 1200
 
 
 def a_all():
@@ -117,15 +99,9 @@ def a_all():
     m.type_field(p.brush, "4")
 
 
-a_all.wait_ms = 800
-
-
 # -- B ----------------------------------------------------------------------------------------
 def b_paint():
     h.click(e.on_sphere())
-
-
-b_paint.wait_ms = 1200
 
 
 def b_shrink():
@@ -133,9 +109,6 @@ def b_shrink():
     state["painted"] = len(p.selected)
     h.check("painted", state["painted"] >= 6, state["painted"])
     e.key(QtCore.Qt.Key_Down, QtCore.Qt.ShiftModifier)
-
-
-b_shrink.wait_ms = 1200
 
 
 def b_reverse():
@@ -149,9 +122,6 @@ def b_reverse():
     e.press_button(p, "reverse")
 
 
-b_reverse.wait_ms = 1500
-
-
 def b_reversed():
     p = e.direct_panel()
     info = m.analysis(step())
@@ -161,15 +131,9 @@ def b_reversed():
     e.press_button(p, "clear")
 
 
-b_reversed.wait_ms = 800
-
-
 # -- C ----------------------------------------------------------------------------------------
 def c_paint():
     h.click(e.on_sphere(0.55, 0.45))
-
-
-c_paint.wait_ms = 1200
 
 
 def c_fill():
@@ -177,9 +141,6 @@ def c_fill():
     h.check("painted the upper right", len(p.selected) >= 3, len(p.selected))
     e.choose(p, "fill", "Minimal")
     e.press_button(p, "erase_fill")
-
-
-c_fill.wait_ms = 2000
 
 
 def c_filled():
@@ -190,9 +151,6 @@ def c_filled():
     h.check("two edits", e.edits(p) == 2, e.edits(p))
     state["after_c"] = m.facets(st)
     e.press_button(p, "finish")
-
-
-c_filled.wait_ms = 2000
 
 
 def c_done():
@@ -207,9 +165,6 @@ def c_done():
     s.timeline_double_click(st)
 
 
-c_done.wait_ms = 2000
-
-
 # -- D ----------------------------------------------------------------------------------------
 def d_listed():
     p = e.direct_panel()
@@ -221,17 +176,11 @@ def d_listed():
     e.press_button(p, "remove_last")
 
 
-d_listed.wait_ms = 2000
-
-
 def d_removed():
     p = e.direct_panel()
     h.check("one edit left", e.edits(p) == 1, e.edits(p))
     h.check("the body shows it", m.facets(step()) == state["faces"], m.facets(step()))
     h.task_button("Cancel")
-
-
-d_removed.wait_ms = 2000
 
 
 def d_cancelled():
@@ -242,17 +191,11 @@ def d_cancelled():
     s.timeline_double_click(st)
 
 
-d_cancelled.wait_ms = 2000
-
-
 # -- E ----------------------------------------------------------------------------------------
 def e_paint():
     p = e.direct_panel()
     h.check("opened again", p is not None and e.edits(p) == 2, p and e.edits(p))
     h.click(e.on_sphere(-0.5, -0.45))
-
-
-e_paint.wait_ms = 1200
 
 
 def e_delete():
@@ -261,16 +204,10 @@ def e_delete():
     e.key(QtCore.Qt.Key_Delete)
 
 
-e_delete.wait_ms = 1500
-
-
 def e_ok():
     p = e.direct_panel()
     h.check("three edits", e.edits(p) == 3, e.edits(p))
     h.task_button("OK")
-
-
-e_ok.wait_ms = 2000
 
 
 def e_kept():
@@ -284,9 +221,6 @@ def e_kept():
     s.menu("MODIFY", "Direct Edit")
 
 
-e_kept.wait_ms = 1500
-
-
 # -- F ----------------------------------------------------------------------------------------
 def f_paint():
     p = e.direct_panel()
@@ -294,14 +228,8 @@ def f_paint():
     h.click(e.on_sphere(0.3, -0.3))
 
 
-f_paint.wait_ms = 1200
-
-
 def f_delete():
     e.key(QtCore.Qt.Key_Delete)
-
-
-f_delete.wait_ms = 1500
 
 
 def f_escape():
@@ -310,17 +238,11 @@ def f_escape():
     h.press(QtCore.Qt.Key_Escape)
 
 
-f_escape.wait_ms = 2000
-
-
 def f_gone():
     h.check("Esc: dialog closed", m.panel() is None, m.panel())
     h.check("no new step", len(m.steps("MeshDirectEdit")) == 1, m.steps("MeshDirectEdit"))
     h.check("the body as it was", m.facets(body()) == state["after_e"], m.facets(body()))
     h.check("the body is the first step", body() is step(), (body(), step()))
-
-
-f_gone.wait_ms = 800
 
 
 # -- G ----------------------------------------------------------------------------------------
@@ -334,9 +256,6 @@ def g_save_reopen():
     h.fit()
 
 
-g_save_reopen.wait_ms = 3000
-
-
 def g_check():
     st = step()
     h.check("the step is there", st is not None)
@@ -348,16 +267,10 @@ def g_check():
     s.timeline_double_click(st)
 
 
-g_check.wait_ms = 2000
-
-
 def g_listed():
     p = e.direct_panel()
     h.check("the dialog lists the three edits", p is not None and e.edits(p) == 3, p and e.edits(p))
     h.task_button("Cancel")
-
-
-g_listed.wait_ms = 1500
 
 
 def g_end():
@@ -376,4 +289,5 @@ h.run(
     + [e_paint, e_delete, e_ok, e_kept]
     + [f_paint, f_delete, f_escape, f_gone]
     + [g_save_reopen, g_check, g_listed, g_end],
+    paced_by="state",
 )

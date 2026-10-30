@@ -472,4 +472,5 @@ h.run(
         x6_esc,
         x6_done,
     ],
+    paced_by="state",
 )

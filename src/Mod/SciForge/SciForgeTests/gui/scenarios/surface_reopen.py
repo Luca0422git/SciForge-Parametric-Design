@@ -323,4 +323,5 @@ h.run(
         thicken_open,
         cancelled,
     ],
+    paced_by="state",
 )

@@ -335,9 +335,6 @@ def m4_after():
     judge("M4", m_dragging, m_dx, m_final)
 
 
-m4_drag.wait_ms = 400
-
-
 def m8_rotate():
     p = move_panel()
     if h.check("Move dialog open", p is not None):
@@ -520,9 +517,6 @@ def h3_drag():
     st["hover"] = [screen(end3 + hd.direction * k) for k in (4, 8, 12)]
 
 
-h3_drag.wait_ms = 400
-
-
 def h3_after():
     case_eaten("H3")
     judge("H3", o_dragging, o_distance, o_final)
@@ -639,9 +633,6 @@ def p2_drag():
     arrow_release_during_recompute("P2")
 
 
-p2_drag.wait_ms = 400
-
-
 def p2_after():
     case_eaten("P2")
     judge("P2", a_dragging, a_distance, pp_final)
@@ -677,9 +668,6 @@ def e_ready():
 
 def e4_drag():
     arrow_release_during_recompute("E4")
-
-
-e4_drag.wait_ms = 400
 
 
 def e4_after():
@@ -779,4 +767,4 @@ steps += [p_open, p_pick_top, p_ready, p2_drag, p2_after, cancel]
 steps += [e_sketch, e_click_top, e_draw, e_extrude, e_ready, e4_drag, e4_after]
 steps += [e7_click, e7_type, e7_new_arrows, e7_drag, e7_after, cancel]
 
-h.run("drag_release_lost", steps)
+h.run("drag_release_lost", steps, paced_by="state")

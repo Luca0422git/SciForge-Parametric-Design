@@ -223,4 +223,5 @@ h.run(
         row_then_ok,
         done,
     ],
+    paced_by="state",
 )

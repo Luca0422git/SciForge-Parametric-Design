@@ -162,4 +162,5 @@ h.run(
         d_finish,
         d_check,
     ],
+    paced_by="state",
 )

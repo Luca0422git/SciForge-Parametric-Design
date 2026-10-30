@@ -301,5 +301,4 @@ def wait(ms):
         pass
 
     step.__name__ = "wait_%d" % ms
-    step.wait_ms = ms
     return step

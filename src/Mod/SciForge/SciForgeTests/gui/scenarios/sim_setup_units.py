@@ -259,4 +259,5 @@ h.run(
         e_check,
         e_closed,
     ],
+    paced_by="state",
 )

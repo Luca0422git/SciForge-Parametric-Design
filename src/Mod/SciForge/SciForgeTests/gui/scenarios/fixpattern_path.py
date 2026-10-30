@@ -13,4 +13,4 @@ save and reopen.
 from SciForgeTests.gui import fixpattern_steps as f
 from SciForgeTests.gui import harness as h
 
-h.run("fixpattern_path", f.main_steps("path", "FixPatternPath"))
+h.run("fixpattern_path", f.main_steps("path", "FixPatternPath"), paced_by="state")

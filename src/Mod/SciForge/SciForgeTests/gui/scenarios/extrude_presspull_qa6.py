@@ -368,4 +368,5 @@ h.run(
         p28_press_pull,
         p28_done,
     ],
+    paced_by="state",
 )

@@ -574,8 +574,6 @@ def insert_steps(with_clamp=True):
         use_file(s["bracket_file"])
         menu("INSERT", "Insert STEP")
 
-    insert_bracket.wait_ms = 2000
-
     def bracket_in():
         found = [b for b in bodies() if near(volume(b), BRACKET, 1e-6)]
         h.check("Insert STEP: the bracket came in as one body", len(found) == 1, volume_list())
@@ -601,13 +599,9 @@ def insert_steps(with_clamp=True):
         )
         press_esc()  # the Move dialog of Fusion's Initial Position: it stays where it came in
 
-    bracket_in.wait_ms = 1000
-
     def insert_clamp():
         use_file(s["clamp_file"])
         menu("INSERT", "Insert STEP")
-
-    insert_clamp.wait_ms = 2000
 
     def clamp_in():
         found = [b for b in bodies() if near(volume(b), CLAMP, 1e-6)]
@@ -617,8 +611,6 @@ def insert_steps(with_clamp=True):
             s["clamp_component"] = found[0].getParentGeoFeatureGroup().Name
         press_esc()
         h.fit()
-
-    clamp_in.wait_ms = 1000
 
     steps = [new_design, insert_bracket, bracket_in]
     if with_clamp:
@@ -662,8 +654,6 @@ def joint_steps():
         s["first_kind"] = js.hot_kind(p) if p is not None else None
         h.click(V(157.5, 12, 0))
 
-    first.wait_ms = 900
-
     def second():
         # as a person does: the mouse moved around the counterbore's rim until its centre
         # lights up, then the click
@@ -689,12 +679,8 @@ def joint_steps():
                     return
         h.check("the counterbore's centre lights up somewhere on its rim", False, tried)
 
-    second.wait_ms = 1200
-
     def ok():
         js.ok()
-
-    ok.wait_ms = 1200
 
     def joined():
         found = joint_list()
@@ -732,8 +718,6 @@ def rebuild_steps():
         start_fake_ai()
         browser_menu(s["label"], ENTRY)
 
-    right_click.wait_ms = 2500
-
     def ready():
         from sciforge import ai_panel_ui
 
@@ -761,8 +745,6 @@ def rebuild_steps():
         panel = chat()
         if panel is not None:
             wi.click(panel.send_button)
-
-    send.wait_ms = 3000
 
     def built():
         panel = chat()
@@ -879,8 +861,6 @@ def compare_steps():
     def open_compare():
         utilities_menu("Compare with Reference")
 
-    open_compare.wait_ms = 2500
-
     def hundred():
         box_ = dialog("SciForgeRebuildCompare")
         if not h.check("Compare with Reference opened its window", box_ is not None, h.popups()):
@@ -911,8 +891,6 @@ def finish_steps(with_joint=True, with_undo=True):
             return
         wi.type_text(panel.input, FINISH_WORDS)
         wi.click(panel.send_button)
-
-    tell.wait_ms = 2500
 
     def finished():
         from sciforge import components
@@ -953,8 +931,6 @@ def finish_steps(with_joint=True, with_undo=True):
     def undo():
         ctrl("z")
 
-    undo.wait_ms = 1500
-
     def undone():
         original = doc().getObject(s["original"])
         target = doc().getObject(s["rebuilt"] or "-")
@@ -976,8 +952,6 @@ def finish_steps(with_joint=True, with_undo=True):
 
     def redo():
         ctrl("y")
-
-    redo.wait_ms = 1500
 
     def redone():
         target = doc().getObject(s["rebuilt"] or "-")
@@ -1054,8 +1028,6 @@ def edit_steps(with_joint=True):
         if title:
             t.double_click(title)
 
-    open_base.wait_ms = 1500
-
     def thicker():
         from sciforge import extrude_ui
 
@@ -1068,12 +1040,8 @@ def edit_steps(with_joint=True):
         ui.type_into(panel.distance.widget, "12")
         QtWidgets.QApplication.processEvents()
 
-    thicker.wait_ms = 1500
-
     def ok():
         h.task_button("OK")
-
-    ok.wait_ms = 1500
 
     def thick():
         target = bracket()
@@ -1096,8 +1064,6 @@ def edit_steps(with_joint=True):
         if title:
             t.double_click(title)
 
-    open_hole.wait_ms = 1500
-
     def wider():
         from SciForgeTests.gui import hole_steps as hs
 
@@ -1108,12 +1074,8 @@ def edit_steps(with_joint=True):
         ui.type_into(panel.diameter.widget, "6.5")
         QtWidgets.QApplication.processEvents()
 
-    wider.wait_ms = 1500
-
     def hole_ok():
         h.task_button("OK")
-
-    hole_ok.wait_ms = 1500
 
     def wide():
         target = bracket()
@@ -1202,21 +1164,15 @@ def sim_steps():
         h.fit()
         ss.workspace("Simulation")
 
-    enter.wait_ms = 1500
-
     def create():
         dialog = ss.new_study_dialog()
         h.check("SIMULATION: New Study opens by itself", dialog is not None)
         ss.click_widget(dialog.create_button if dialog is not None else None)
 
-    create.wait_ms = 1500
-
     def constraints():
         study = ss.active_study()
         h.check("a Static Stress study", study is not None, ss.studies())
         h.ribbon("Structural Constraints")
-
-    constraints.wait_ms = 1200
 
     def hold():
         p = ss.item_panel()
@@ -1235,8 +1191,6 @@ def sim_steps():
             click_ring(target, face)
         h.fit()
 
-    hold.wait_ms = 1200
-
     def hold_ok():
         p = ss.item_panel()
         if p is not None:
@@ -1244,13 +1198,9 @@ def sim_steps():
             h.check("the counterbores picked", picked == sorted(s.get("held", [])), picked)
         ss.ok()
 
-    hold_ok.wait_ms = 1200
-
     def loads():
         h.check("Fixed 1 made", [i.Label for i in ss.items("constraint")] == ["Fixed 1"])
         h.ribbon("Structural Loads")
-
-    loads.wait_ms = 1200
 
     def push():
         p = ss.item_panel()
@@ -1268,15 +1218,11 @@ def sim_steps():
         ss.type_in("SciForgeSim_fy", "0 N")
         ss.type_in("SciForgeSim_fz", "-%g N" % FORCE)
 
-    push.wait_ms = 1200
-
     def push_ok():
         p = ss.item_panel()
         if p is not None:
             h.check("the far end picked", [sub for _b, sub in p.picks] == [s.get("pushed")])
         ss.ok()
-
-    push_ok.wait_ms = 1200
 
     def loaded():
         found = ss.items("load")
@@ -1287,15 +1233,11 @@ def sim_steps():
             h.check("... 1000 N straight down", opts.get("direction") == "vector", opts)
         h.ribbon("Solve")
 
-    loaded.wait_ms = 1500
-
     def go():
         dialog = ss.solve_dialog()
         if h.check("the Solve dialog opened", dialog is not None):
             h.check("Solve 1 Study", dialog.go.text() == "Solve 1 Study", dialog.go.text())
             ss.click_widget(dialog.go)
-
-    go.wait_ms = 3000
 
     def solved():
         from SciForgeTests.gui import simres_steps as sr
@@ -1322,8 +1264,6 @@ def sim_steps():
     def design():
         ss.workspace("Design")
 
-    design.wait_ms = 1500
-
     def back():
         h.check("DESIGN again: the timeline is back", ss.timeline_visible())
 
@@ -1332,14 +1272,10 @@ def sim_steps():
     def again():
         ss.workspace("Simulation")
 
-    again.wait_ms = 1500
-
     def stale():
         study = ss.active_study()
         h.check("the study is out of date", study is not None and ss.sim().out_of_date(study))
         h.ribbon("Solve")
-
-    stale.wait_ms = 1500
 
     def resolved():
         study = ss.active_study()
@@ -1409,8 +1345,6 @@ def mesh_steps():
         use_file(s["stl"])
         h.ribbon("Insert Mesh")
 
-    insert.wait_ms = 2000
-
     def inserted():
         p = ins.panel()
         h.check(
@@ -1422,12 +1356,8 @@ def mesh_steps():
             s["mesh"], s["mesh_label"] = meshes[0].Name, meshes[0].Label
         h.task_button("OK")
 
-    inserted.wait_ms = 1000
-
     def right_click():
         browser_menu(s["mesh_label"], ENTRY)
-
-    right_click.wait_ms = 2500
 
     def no_ai():
         box_ = dialog("SciForgeRebuildNoAI")
@@ -1486,15 +1416,11 @@ def mesh_steps():
         )
         h.press("e")  # Extrude, straight from the sketch
 
-    rect_drawn.wait_ms = 1500
-
     def distance():
         h.check("Extrude opened", ai.give_distance("8"))
 
     def ok():
         h.task_button("OK")
-
-    ok.wait_ms = 1500
 
     def plate_made():
         target = doc().getObject(s.get("rebuilt") or "-")
@@ -1502,8 +1428,6 @@ def mesh_steps():
 
     def compare():
         utilities_menu("Compare with Reference")
-
-    compare.wait_ms = 2500
 
     def says_holes():
         box_ = dialog("SciForgeRebuildCompare")
@@ -1522,8 +1446,6 @@ def mesh_steps():
     def finish_early():
         h.check("the window closed", dialog("SciForgeRebuildCompare") is None)
         utilities_menu("Finish Rebuild")
-
-    finish_early.wait_ms = 2500
 
     def keeps_original():
         box_ = dialog("SciForgeRebuildFinish")
@@ -1580,8 +1502,6 @@ def mesh_steps():
         )
         h.press("e")
 
-    circles_drawn.wait_ms = 1500
-
     def pick_circles():
         # the sketch on the face holds the face's outline too (projected, as Fusion does), so
         # nothing is picked yet: a click inside each circle picks it
@@ -1633,16 +1553,12 @@ def mesh_steps():
         h.shot("mesh-compare-done")
         wi.click(box_.finish_button)
 
-    compare_done.wait_ms = 1500
-
     def finish_ok():
         box_ = dialog("SciForgeRebuildFinish")
         if not h.check("Finish Rebuild asks", box_ is not None, h.popups()):
             return
         h.check("... delete the original by default", box_.delete_original.isChecked())
         wi.click(box_.ok)
-
-    finish_ok.wait_ms = 1500
 
     def finished():
         target = doc().getObject(s.get("rebuilt") or "-")
@@ -1713,8 +1629,6 @@ def reopen_steps(name, check):
         s.setdefault("files", {})
         h.press(QtCore.Qt.Key_S, QtCore.Qt.ControlModifier)
 
-    save.wait_ms = 1200
-
     def save_dialog():
         if vi.save_dialog() is not None:
             s["files"][name] = os.path.join(folder(), name + ".FCStd")
@@ -1726,14 +1640,10 @@ def reopen_steps(name, check):
             s["files"][name] = doc().FileName
             h.check("%s: the version prompt" % name, vi.accept_save())
 
-    save_dialog.wait_ms = 4000
-
     def close():
         path = s["files"].get(name)
         h.check("%s: saved" % name, path and os.path.isfile(path), (path, h.popups()))
         p2.close_tab(doc())
-
-    close.wait_ms = 1500
 
     def reopen():
         h.check(
@@ -1743,8 +1653,6 @@ def reopen_steps(name, check):
         )
         App.openDocument(s["files"][name])  # (File > Open's system dialog)
         h.fit()
-
-    reopen.wait_ms = 3000
 
     return [
         step(save, "%s_save" % name),
@@ -1799,8 +1707,6 @@ def mesh_edit_steps():
                 return
         h.check("the plate's extrude in the timeline", False, t.titles())
 
-    open_pad.wait_ms = 1500
-
     def thicker():
         from sciforge import extrude_ui
 
@@ -1808,12 +1714,8 @@ def mesh_edit_steps():
         if h.check("the Extrude dialog", panel is not None and not panel._closed):
             ui.type_into(panel.distance.widget, "10")
 
-    thicker.wait_ms = 1500
-
     def ok():
         h.task_button("OK")
-
-    ok.wait_ms = 1500
 
     def thick():
         target = doc().getObject(s.get("rebuilt") or "-")
@@ -1866,8 +1768,6 @@ def finish_by_hand_steps():
     def compare():
         utilities_menu("Compare with Reference")
 
-    compare.wait_ms = 2500
-
     def hundred():
         box_ = dialog("SciForgeRebuildCompare")
         if not h.check("Compare with Reference opened", box_ is not None, h.popups()):
@@ -1875,14 +1775,10 @@ def finish_by_hand_steps():
         h.check("100 %", "100 %" in box_.headline.text(), box_.headline.text())
         wi.click(box_.finish_button)
 
-    hundred.wait_ms = 1500
-
     def finish():
         box_ = dialog("SciForgeRebuildFinish")
         if h.check("Finish Rebuild asks", box_ is not None, h.popups()):
             wi.click(box_.ok)
-
-    finish.wait_ms = 1500
 
     def finished():
         target = doc().getObject(s.get("rebuilt") or "-")

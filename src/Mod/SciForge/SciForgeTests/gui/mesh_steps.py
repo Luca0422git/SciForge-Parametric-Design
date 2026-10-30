@@ -128,7 +128,6 @@ def insert_file(path):
         i.no_file()
 
     ok.__name__ = "insert_ok_" + os.path.splitext(os.path.basename(path))[0]
-    ok.wait_ms = 1000
     return [open_dialog, ok]
 
 
@@ -256,8 +255,6 @@ def view_direction():
 
 def step(fn, ms=None, name=None):
     """A scenario step that waits `ms` after it (mesh work takes a moment)."""
-    if ms is not None:
-        fn.wait_ms = ms
     if name:
         fn.__name__ = name
     return fn

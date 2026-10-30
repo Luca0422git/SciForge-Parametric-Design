@@ -381,4 +381,5 @@ h.run(
         + b.box_steps("CupQA", height=20, profile=circle)
         + [p7_cup, p7_top, p7_picked, p7_done]
     ),
+    paced_by="state",
 )

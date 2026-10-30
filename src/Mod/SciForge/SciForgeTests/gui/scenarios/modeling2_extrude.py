@@ -400,12 +400,6 @@ def reopened():
     hs.no_popups("To Object options")
 
 
-column_options.wait_ms = 600
-selected_built.wait_ms = 800
-adjacent_built.wait_ms = 800
-plane_picked.wait_ms = 800
-offset_built.wait_ms = 800
-
 h.run(
     "modeling2_extrude",
     [
@@ -457,4 +451,5 @@ h.run(
         reopen,
         reopened,
     ],
+    paced_by="state",
 )

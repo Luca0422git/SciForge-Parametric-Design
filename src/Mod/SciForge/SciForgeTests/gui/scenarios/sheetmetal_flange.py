@@ -208,9 +208,6 @@ def drag_height():
     s["drag"] = sm.drag_arrow("height", 20.0)
 
 
-drag_height.wait_ms = 2200
-
-
 def dragged():
     sm.settle()
     d = s.get("drag")
@@ -301,9 +298,6 @@ def drag_angle():
         "the angle handle is there", p is not None and "angle" in p.arrows, p and list(p.arrows)
     )
     sm.drag_angle("angle", 120.0)
-
-
-drag_angle.wait_ms = 1500
 
 
 def angle_dragged():
@@ -460,4 +454,5 @@ h.run(
         undo_swap,
         swap_undone,
     ],
+    paced_by="state",
 )

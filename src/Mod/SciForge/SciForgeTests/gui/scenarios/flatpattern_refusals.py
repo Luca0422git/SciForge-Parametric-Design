@@ -215,4 +215,5 @@ h.run(
         stepped_cancel,
         stepped_after,
     ],
+    paced_by="state",
 )

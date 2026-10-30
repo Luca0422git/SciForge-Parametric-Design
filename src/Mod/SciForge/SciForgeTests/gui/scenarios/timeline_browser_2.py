@@ -835,4 +835,5 @@ h.run(
         check_sketches_shown,
         check_sketches_hidden,
     ],
+    paced_by="state",
 )

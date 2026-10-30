@@ -114,16 +114,10 @@ def setup():
     h.fit()
 
 
-setup.wait_ms = 1500
-
-
 # -- O1 --------------------------------------------------------------------------------------------
 def o1_insert():
     use_files([S["files"][n] for n in TEN])
     vx.menu("INSERT", "Insert STEP")
-
-
-o1_insert.wait_ms = 2500
 
 
 def o1_check():
@@ -132,16 +126,13 @@ def o1_check():
     esc_move()
 
 
-o1_check.wait_ms = 800
-
-
 # -- O2 --------------------------------------------------------------------------------------------
 def o2_insert():
     use_files([S["files"][n] for n in TEN] + S["copies"])
     vx.menu("INSERT", "Insert STEP")
 
 
-o2_insert.wait_ms = 3000
+o2_insert.timeout_s = 120  # (twenty parts, as vex_insert_many's p4_twenty: ~50 s under --stress)
 
 
 def twenty():
@@ -169,23 +160,14 @@ def o2_check():
     esc_move()
 
 
-o2_check.wait_ms = 800
-
-
 def o2_undo():
     vx.undo()
-
-
-o2_undo.wait_ms = 2000
 
 
 def o2_undone():
     labels = sorted(c.Label for c in comps())
     h.check("O2 one Ctrl+Z takes the twenty away", labels == sorted(TEN), labels)
     vx.redo()
-
-
-o2_undone.wait_ms = 2500
 
 
 def o2_redone():
@@ -208,9 +190,6 @@ def o3_insert():
     vx.menu("INSERT", "Insert STEP")
 
 
-o3_insert.wait_ms = 2000
-
-
 def o3_change():
     first = comp("screw")
     h.check(
@@ -221,15 +200,9 @@ def o3_change():
     shutil.copyfile(S["longer"], S["screw"])  # the file changes on disk
 
 
-o3_change.wait_ms = 800
-
-
 def o3_again():
     use_files([S["screw"]])
     vx.menu("INSERT", "Insert STEP")
-
-
-o3_again.wait_ms = 2000
 
 
 def o3_check():
@@ -253,9 +226,6 @@ def o3_check():
     no_files()
 
 
-o3_check.wait_ms = 800
-
-
 # -- O4 --------------------------------------------------------------------------------------------
 def o4_delete():
     S["occ"] = comp(SCREW + ":2").Name
@@ -264,9 +234,6 @@ def o4_delete():
     S["before"] = parts_list()
     h.click_empty()
     t.row_menu(SCREW, "Delete")
-
-
-o4_delete.wait_ms = 2000
 
 
 def took_over():
@@ -311,9 +278,6 @@ def o4_deleted():
     vx.undo()
 
 
-o4_deleted.wait_ms = 2000
-
-
 def o4_undone():
     from sciforge import instances
 
@@ -332,9 +296,6 @@ def o4_undone():
     vx.redo()
 
 
-o4_undone.wait_ms = 2000
-
-
 def o4_redone():
     h.check("O4 Ctrl+Y: deleted again, taken over again", took_over(), [c.Label for c in comps()])
     h.check("O4 Ctrl+Y: with its solid", solid(comp(SCREW)))
@@ -347,15 +308,9 @@ def o5_save():
     App.closeDocument(App.ActiveDocument.Name)
 
 
-o5_save.wait_ms = 1000
-
-
 def o5_open():
     App.openDocument(S["path"])
     Gui.activateWorkbench("SciForgeWorkbench")
-
-
-o5_open.wait_ms = 3000
 
 
 def o5_reopened():
@@ -372,9 +327,6 @@ def o5_reopened():
 def o6_insert():
     use_files([S["files"][SCREW]])
     vx.menu("INSERT", "Insert STEP")
-
-
-o6_insert.wait_ms = 2000
 
 
 def o6_check():
@@ -394,9 +346,6 @@ def o6_check():
         shutil.rmtree(S["work"], ignore_errors=True)
     except OSError:
         pass
-
-
-o6_check.wait_ms = 800
 
 
 h.run(
@@ -424,4 +373,5 @@ h.run(
         o6_insert,
         o6_check,
     ],
+    paced_by="state",
 )

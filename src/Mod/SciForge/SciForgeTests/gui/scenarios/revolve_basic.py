@@ -172,9 +172,6 @@ def drag_arrow():
         drag_handle(handle, 200.0)
 
 
-drag_arrow.wait_ms = 1200
-
-
 def dragged():
     p = panel()
     angle = p.angle.value()
@@ -446,4 +443,5 @@ h.run(
         esc_now,
         after_esc,
     ],
+    paced_by="state",
 )

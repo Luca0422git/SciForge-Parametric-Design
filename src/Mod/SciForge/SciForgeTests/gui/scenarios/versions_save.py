@@ -235,9 +235,6 @@ def p5_describe():
     vi.accept_save()
 
 
-p5_describe.wait_ms = 2500
-
-
 def p5_promoted():
     from sciforge import versions_ui
 
@@ -275,9 +272,6 @@ def p5_promoted():
 def p6_compare():
     h.check("P6 v2 selected", vi.history_select("v2"))
     h.check("P6 Compare clicked", vi.history_button("Compare"))
-
-
-p6_compare.wait_ms = 2500
 
 
 def p6_rows():
@@ -410,4 +404,5 @@ h.run(
         p8_saved,
         cleanup,
     ],
+    paced_by="state",
 )

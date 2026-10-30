@@ -123,9 +123,6 @@ def a_double():
     double_click(V(20, 0, 0))
 
 
-a_double.wait_ms = 900
-
-
 def a_check():
     got = names()
     h.check(
@@ -148,9 +145,6 @@ def b_double_chain():
     double_click(V(75, 10, 0))
 
 
-b_double_chain.wait_ms = 900
-
-
 def b_chain_check():
     got = names()
     h.check(
@@ -161,9 +155,6 @@ def b_chain_check():
     st.esc()
     st.esc()
     double_click(V(-25, 23, 0))
-
-
-b_chain_check.wait_ms = 900
 
 
 def b_circle_check():
@@ -179,17 +170,11 @@ def b_circle_check():
     double_click(V(0, 15, 0))
 
 
-b_circle_check.wait_ms = 900
-
-
 # -- C ----------------------------------------------------------------------------------------
 def c_window():
     h.check("C (the rectangle is selected first)", names() == edges(s["rect"]), sorted(names()))
     pts = [st.g(V(-34, 6, 0)), st.g(V(-16, 24, 0))]
     sel.box_around(pts, margin=4)
-
-
-c_window.wait_ms = 900
 
 
 def c_window_check():
@@ -201,9 +186,6 @@ def c_window_check():
     )
     pts = [st.g(V(53, -3, 0)), st.g(V(78, 23, 0))]
     sel.box_around(pts, margin=4, modifiers=sel.SHIFT)
-
-
-c_window_check.wait_ms = 900
 
 
 def c_shift_check():
@@ -219,9 +201,6 @@ def d_crossing():
     s["top"] = _edge_at(V(20, 30, 0))
     pts = [st.g(V(18, 27, 0)), st.g(V(22, 33, 0))]
     sel.box_around(pts, margin=2, crossing=True)
-
-
-d_crossing.wait_ms = 900
 
 
 def d_check():
@@ -241,16 +220,10 @@ def d_check():
     sel.box_around(pts, margin=4, modifiers=sel.SHIFT)
 
 
-d_check.wait_ms = 900
-
-
 def e_ctrl():
     s["before_ctrl"] = names()
     pts = [st.g(V(18, 27, 0)), st.g(V(22, 33, 0))]
     sel.box_around(pts, margin=2, crossing=True, modifiers=sel.CTRL)
-
-
-e_ctrl.wait_ms = 900
 
 
 def e_check():
@@ -272,9 +245,6 @@ def f_empty():
     double_click(V(-25, 34, 0))
 
 
-f_empty.wait_ms = 900
-
-
 def f_check():
     h.check(
         "F Esc cleared; a double-click on empty space selects nothing", not names(), sorted(names())
@@ -293,9 +263,6 @@ def f_line_b():
 
 def f_line_end():
     dclick_at(h.screen_point(st.g(V(20, 36, 0))))
-
-
-f_line_end.wait_ms = 900
 
 
 def f_line_check():
@@ -350,4 +317,5 @@ h.run(
             finished,
         ]
     ),
+    paced_by="state",
 )

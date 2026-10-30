@@ -106,9 +106,6 @@ def gear_outline():
     pl.click_on_plane(V(0, 0, 0))
 
 
-gear_outline.wait_ms = 800
-
-
 def gear_first():
     p = panel()
     if p is None:
@@ -144,9 +141,6 @@ def gear_first():
     ui.type_into(p.teeth.widget, "30")
 
 
-gear_first.wait_ms = 2000
-
-
 def thirty_teeth():
     p = panel()
     h.check("30 teeth: the preview redraws", near(vol(), area(teeth=30) * 10.0), vol())
@@ -156,18 +150,12 @@ def thirty_teeth():
     h.shot("2-gear-30")
 
 
-thirty_teeth.wait_ms = 2000
-
-
 def drag_thickness():
     p = panel()
     handle = p.handles.get("thickness")
     h.check("thickness handle", handle is not None, list(p.handles))
     if handle is not None:
         pi.drag_handle(handle, 16.0)
-
-
-drag_thickness.wait_ms = 2500
 
 
 def dragged():
@@ -180,15 +168,9 @@ def dragged():
     ui.type_into(p.thickness.widget, "12")
 
 
-dragged.wait_ms = 2000
-
-
 def gear_ok():
     h.check("12 thick", near(vol(), area(teeth=30) * 12.0), vol())
     h.task_button("OK")
-
-
-gear_ok.wait_ms = 2000
 
 
 def gear_kept():
@@ -213,16 +195,10 @@ def gear_undone():
     h.check("Redo button", ui.quick_access("Redo"))
 
 
-gear_undone.wait_ms = 1500
-
-
 def gear_redone():
     h.check("Redo brings it back", near(vol(), area(teeth=30) * 12.0), vol())
     h.fit()
     h.check("double-click Gear 1", ui.double_click_timeline("Gear 1"), ui.timeline_titles())
-
-
-gear_redone.wait_ms = 1500
 
 
 def gear_editing():
@@ -241,16 +217,10 @@ def edit_angle():
     ui.type_into(p.hole.widget, "0")
 
 
-edit_angle.wait_ms = 2000
-
-
 def edit_hole():
     expected = area(teeth=30, pressure_angle=25, hole=0) * 12.0
     h.check("no hole", near(vol(), expected), (vol(), expected))
     h.task_button("OK")
-
-
-edit_hole.wait_ms = 2000
 
 
 def gear_edited():
@@ -278,17 +248,11 @@ def cancel_centre():
     pl.click_on_plane(V(80, 0, 0))
 
 
-cancel_centre.wait_ms = 2000
-
-
 def cancel_now():
     p = panel()
     h.check("a second gear's preview", p is not None and p.target is not None)
     h.check("a second body", len(pi.bodies()) == 2, len(pi.bodies()))
     h.task_button("Cancel")
-
-
-cancel_now.wait_ms = 1500
 
 
 def cancelled():
@@ -339,4 +303,5 @@ h.run(
         esc_now,
         after_esc,
     ],
+    paced_by="state",
 )

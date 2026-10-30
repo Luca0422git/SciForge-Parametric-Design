@@ -408,4 +408,5 @@ h.run(
         reopened_reads_back,
         escaped,
     ],
+    paced_by="state",
 )

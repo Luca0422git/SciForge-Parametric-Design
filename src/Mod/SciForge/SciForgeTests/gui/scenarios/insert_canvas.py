@@ -90,9 +90,6 @@ def a_click_face():
     h.click(FACE_CENTRE)
 
 
-a_click_face.wait_ms = 1200
-
-
 def a_check():
     c = canvas()
     h.check("a canvas", c is not None)
@@ -229,9 +226,6 @@ def d_calibrate_menu():
         h.check("Calibrate in the right-click menu", ok)
 
 
-d_calibrate_menu.wait_ms = 1200
-
-
 def d_waits():
     p = i.panel()
     h.check("Calibrate dialog", p is not None and p.title == "Calibrate", p)
@@ -301,9 +295,6 @@ def f_edit():
     si.browser_double_click("canvas")
 
 
-f_edit.wait_ms = 1200
-
-
 def f_dialog():
     p = i.panel()
     h.check("Edit Canvas dialog", p is not None and p.title == "Edit Canvas", p and p.title)
@@ -341,9 +332,6 @@ def g_delete():
         from PySide6 import QtTest
 
         QtTest.QTest.keyClick(tree, QtCore.Qt.Key_Delete)
-
-
-g_delete.wait_ms = 1200
 
 
 def g_check_deleted():
@@ -407,4 +395,5 @@ h.run(
         g_undo,
         g_check_undo,
     ],
+    paced_by="state",
 )

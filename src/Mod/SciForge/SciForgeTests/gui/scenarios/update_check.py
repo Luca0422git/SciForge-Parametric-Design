@@ -938,7 +938,6 @@ def teardown():
 
 
 def _wait(step, ms):
-    step.wait_ms = ms
     return step
 
 
@@ -974,4 +973,5 @@ h.run(
         p15_switch_off_and_stable,
         teardown,
     ],
+    paced_by="state",
 )

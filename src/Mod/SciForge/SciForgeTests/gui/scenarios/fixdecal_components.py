@@ -65,14 +65,8 @@ def k1_check_decal():
     t.row_menu(st["box_label"], "Create Components from Bodies")
 
 
-k1_check_decal.wait_ms = 1500
-
-
 def k1_rename():
     cs.rename_row(st["box_label"], "Box")  # the component is named after its body at first
-
-
-k1_rename.wait_ms = 1200
 
 
 def k1_check():
@@ -99,24 +93,15 @@ def k2_press_m():
     h.press("m")
 
 
-k2_press_m.wait_ms = 1200
-
-
 def k2_components():
     p = c.panel()
     if h.check("K2 Move/Copy open", p is not None and p.title == "Move/Copy", p):
         c.choose(p.move_object, "Components", closes=True)
 
 
-k2_components.wait_ms = 1500
-
-
 def k2_click():
     h.check("K2 the components dialog", c.component_panel() is not None, c.panel())
     h.click(f.TOP)
-
-
-k2_click.wait_ms = 1200
 
 
 def k2_type():
@@ -131,18 +116,12 @@ def k2_type():
     c.toggle(p.capture)
 
 
-k2_type.wait_ms = 1500
-
-
 def k2_live():
     part = doc().getObject(st["part"])
     place = global_of(part).multiply(st["k2_before"].inverse())
     h.check("K2 the component moved 25", abs(place.Base.x - 25) < 1e-6, place)
     f.follows("K2 while the dialog is open", f.flat(), st["k1"], place)
     h.task_button("OK")
-
-
-k2_live.wait_ms = 1200
 
 
 def k2_ok():
@@ -154,17 +133,11 @@ def k2_ok():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-k2_ok.wait_ms = 1500
-
-
 def k2_undone():
     part = doc().getObject(st["part"])
     h.check("K2 Ctrl+Z: the component is back", global_of(part).isSame(st["k2_before"], 1e-9))
     f.follows("K2 Ctrl+Z", f.flat(), st["k1"], App.Placement())
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-k2_undone.wait_ms = 1500
 
 
 def k2_redone():
@@ -184,23 +157,14 @@ def k3_press_m():
     h.press("m")
 
 
-k3_press_m.wait_ms = 1200
-
-
 def k3_components():
     p = c.panel()
     if h.check("K3 Move/Copy open", p is not None, p):
         c.choose(p.move_object, "Components", closes=True)
 
 
-k3_components.wait_ms = 1500
-
-
 def k3_click():
     h.click(V(45, 15, 10))  # the box's top, 25 to the right now
-
-
-k3_click.wait_ms = 1200
 
 
 def k3_type():
@@ -213,14 +177,8 @@ def k3_type():
     c.type_value(p, "rz", "90")
 
 
-k3_type.wait_ms = 1500
-
-
 def k3_ok():
     h.task_button("OK")
-
-
-k3_ok.wait_ms = 1500
 
 
 def k3_check():
@@ -237,14 +195,8 @@ def k4_component():
     t.row_menu(body("cyl").Label, "Create Components from Bodies")
 
 
-k4_component.wait_ms = 1500
-
-
 def k4_rename():
     cs.rename_row(body("cyl").Label, "Can")
-
-
-k4_rename.wait_ms = 1200
 
 
 k4_decal = f.decal_steps("k4_wrapped", f.SIDE)
@@ -268,15 +220,9 @@ def k4_top_view():
     QtWidgets.QApplication.processEvents()
 
 
-k4_top_view.wait_ms = 800
-
-
 def k4_drag():
     # press on the cylinder's top (z 40) and drag 20 mm in -Y, in the plane facing the view
     h.drag(h.screen_point(V(103, 3, 40)), h.screen_point(V(103, -17, 40)), steps=16)
-
-
-k4_drag.wait_ms = 1500
 
 
 def k4_check():
@@ -299,17 +245,11 @@ def k4_check():
     h.fit()
 
 
-k4_check.wait_ms = 800
-
-
 # -- K5 ----------------------------------------------------------------------------------------
 def k5_drag_row():
     st["k5"] = f.snapshot(f.flat())
     cyl_part = doc().getObject(st["cyl_part"])
     cs.drag_row(st["box_label"], cyl_part.Label)
-
-
-k5_drag_row.wait_ms = 1500
 
 
 def k5_check():
@@ -355,18 +295,12 @@ def k6_select():
     t.click_row("Can")
 
 
-k6_select.wait_ms = 800
-
-
 def k6_copy():
     h.press(QtCore.Qt.Key_C, QtCore.Qt.ControlModifier)
 
 
 def k6_paste():
     h.press(QtCore.Qt.Key_V, QtCore.Qt.ControlModifier)
-
-
-k6_paste.wait_ms = 2000
 
 
 def k6_move():
@@ -376,14 +310,8 @@ def k6_move():
         c.type_value(p, "dx", "60")
 
 
-k6_move.wait_ms = 1500
-
-
 def k6_ok():
     h.task_button("OK")
-
-
-k6_ok.wait_ms = 1500
 
 
 def k6_check():
@@ -397,14 +325,8 @@ def k6_check():
     t.click_row("Can:2")
 
 
-k6_check.wait_ms = 800
-
-
 def k6_press_m():
     h.press("m")
-
-
-k6_press_m.wait_ms = 1500
 
 
 def k6_move_copy():
@@ -414,23 +336,14 @@ def k6_move_copy():
         c.type_value(p, "dy", "30")
 
 
-k6_move_copy.wait_ms = 1500
-
-
 def k6_moved():
     copies_on("K6 moved", can_copy())
     h.press(QtCore.Qt.Key_Escape)  # Esc puts the copy back where it was
 
 
-k6_moved.wait_ms = 1500
-
-
 def k6_back():
     copies_on("K6 Esc: back", can_copy())
     t.click_eye("Can:2")
-
-
-k6_back.wait_ms = 1200
 
 
 def k6_hidden():
@@ -441,9 +354,6 @@ def k6_hidden():
             obj.ViewObject.Proxy.copies_drawn(),
         )
     t.click_eye("Can:2")
-
-
-k6_hidden.wait_ms = 1200
 
 
 def k6_shown():
@@ -503,4 +413,5 @@ h.run(
         k6_shown,
         cleanup,
     ],
+    paced_by="state",
 )

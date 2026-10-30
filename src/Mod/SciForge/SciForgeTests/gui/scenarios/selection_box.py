@@ -435,4 +435,4 @@ steps = b.box_steps("SelBox") + [
     k_check,
 ]
 
-h.run("selection_box", steps)
+h.run("selection_box", steps, paced_by="state")

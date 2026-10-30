@@ -254,7 +254,6 @@ def pick_pair(prefix="pair", wait_after=900):
     def second():
         h.click(PLATE_TOP)
 
-    second.wait_ms = wait_after
     steps = [press, first, second]
     for step in steps:
         step.__name__ = "%s_%s" % (prefix, step.__name__)

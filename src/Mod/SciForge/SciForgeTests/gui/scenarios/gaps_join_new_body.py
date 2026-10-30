@@ -122,9 +122,6 @@ def j1_distance():
     h.check("J1 distance typed", ai.give_distance("8"))
 
 
-j1_distance.wait_ms = 1500
-
-
 def j1_preview():
     p = xpanel()
     if p is None:
@@ -231,9 +228,6 @@ def j2_auto():
     h.check("J2 choose Join", ui.choose(p.operation, "Join"))
 
 
-j2_auto.wait_ms = 1500
-
-
 def j2_join():
     p = rpanel()
     if p is None:
@@ -311,9 +305,6 @@ def j3_corner_b():
     h.click(V(20, 15, 10))
 
 
-j3_corner_b.wait_ms = 1200
-
-
 def j3_join_first():
     p = bpanel()
     if p is None:
@@ -330,9 +321,6 @@ def j3_join_first():
         labels,
     )
     h.check("J3 choose New Component", ui.choose(p.operation, "New Component"))
-
-
-j3_join_first.wait_ms = 1500
 
 
 def j3_preview():
@@ -410,16 +398,10 @@ def j4_corner_b():
     h.click(V(35, 15, 10))
 
 
-j4_corner_b.wait_ms = 1200
-
-
 def j4_new_component():
     p = bpanel()
     if h.check("J4 Box placed", p is not None and p.state == "ready", p and p.state):
         h.check("J4 choose New Component", ui.choose(p.operation, "New Component"))
-
-
-j4_new_component.wait_ms = 1500
 
 
 def j4_component():
@@ -427,9 +409,6 @@ def j4_component():
     p = bpanel()
     if p is not None:
         h.check("J4 choose New Body", ui.choose(p.operation, "New Body"))
-
-
-j4_component.wait_ms = 1500
 
 
 def j4_new_body():
@@ -507,4 +486,5 @@ h.run(
             j4_esc,
         ]
     ),
+    paced_by="state",
 )

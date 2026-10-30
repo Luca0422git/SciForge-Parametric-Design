@@ -131,9 +131,6 @@ def click_line():
     h.click_edge(V(10, 0, 0))
 
 
-click_line.wait_ms = 2000
-
-
 def chained():
     p = panel()
     if p is None:
@@ -144,9 +141,6 @@ def chained():
     h.check("first solid: New Body", p.operation.currentText() == "New Body")
     h.check("handles", set(p.handles) == {"distance", "section_size"}, list(p.handles))
     ui.type_into(p.size.widget, "size")  # the parameter size = 2
-
-
-chained.wait_ms = 1500
 
 
 def size_2():
@@ -166,9 +160,6 @@ def drag_distance():
         pi.drag_handle(handle, 0.5)
 
 
-drag_distance.wait_ms = 2000
-
-
 def distance_dragged():
     p = panel()
     d = p.distance.value()
@@ -177,15 +168,9 @@ def distance_dragged():
     ui.type_into(p.distance, "0.5")
 
 
-distance_dragged.wait_ms = 1500
-
-
 def half():
     h.check("half way: pi L / 2", near(vol(), PI * L / 2.0, 1e-5), vol())
     pi.tick(panel().chain)
-
-
-half.wait_ms = 1500
 
 
 def no_chain():
@@ -195,16 +180,10 @@ def no_chain():
     pi.tick(p.chain)
 
 
-no_chain.wait_ms = 1500
-
-
 def chain_again():
     p = panel()
     h.check("chain again", len(p.path) == 3, p.path)
     h.check("Square", ui.choose(p.section, "Square"))
-
-
-chain_again.wait_ms = 1500
 
 
 def square():
@@ -212,14 +191,8 @@ def square():
     h.check("Circular", ui.choose(panel().section, "Circular"))
 
 
-square.wait_ms = 1500
-
-
 def hollow():
     pi.tick(panel().hollow)
-
-
-hollow.wait_ms = 1500
 
 
 def hollow_on():
@@ -230,25 +203,16 @@ def hollow_on():
     ui.type_into(p.thickness.widget, "0.25")
 
 
-hollow_on.wait_ms = 1500
-
-
 def wall():
     p = panel()
     h.check("hollow half: 0.4375 pi L / 2", near(vol(), 0.4375 * PI * L / 2.0, 1e-5), vol())
     ui.type_into(p.distance, "1")
 
 
-wall.wait_ms = 1500
-
-
 def full():
     h.check("hollow, whole path", near(vol(), 0.4375 * PI * L, 1e-5), vol())
     h.shot("3-hollow")
     h.task_button("OK")
-
-
-full.wait_ms = 1500
 
 
 def pipe_kept():
@@ -265,16 +229,10 @@ def pipe_undone():
     h.check("Redo button", ui.quick_access("Redo"))
 
 
-pipe_undone.wait_ms = 1500
-
-
 def pipe_redone():
     h.check("Redo brings it back", near(vol(), 0.4375 * PI * L, 1e-5), vol())
     h.fit()
     h.check("double-click Pipe 1", ui.double_click_timeline("Pipe 1"), ui.timeline_titles())
-
-
-pipe_redone.wait_ms = 1500
 
 
 def pipe_editing():
@@ -293,15 +251,9 @@ def pipe_not_hollow():
     pi.tick(panel().hollow)
 
 
-pipe_not_hollow.wait_ms = 1500
-
-
 def pipe_edit_ok():
     h.check("triangle along the path", near(vol(), TRI * L, 1e-5), vol())
     h.task_button("OK")
-
-
-pipe_edit_ok.wait_ms = 1500
 
 
 def pipe_edited():
@@ -331,9 +283,6 @@ def box_corner2():
     pl.click_on_plane(V(80, -20, 0))
 
 
-box_corner2.wait_ms = 1200
-
-
 def box_height():
     ui.type_into(pi.panel("BoxPanel").height.widget, "10")
 
@@ -356,9 +305,6 @@ def pipe2_start():
     pi.menu("Pipe")
 
 
-pipe2_start.wait_ms = 2000
-
-
 def pipe2_taken():
     p = panel()
     h.check("the selected edge is taken at once", p is not None and len(p.path) == 1, p and p.path)
@@ -370,16 +316,10 @@ def pipe2_taken():
     h.check("Cut", ui.choose(p.operation, "Cut"))
 
 
-pipe2_taken.wait_ms = 1500
-
-
 def pipe2_cut():
     h.check("Cut: the quarter inside is gone", near(vol() - s["pipe"], 8000.0 - 10.0 * PI, 1e-5))
     h.shot("4-edge-cut")
     h.task_button("OK")
-
-
-pipe2_cut.wait_ms = 1500
 
 
 def pipe2_kept():
@@ -397,9 +337,6 @@ def cancel_start():
 
 def cancel_pick():
     h.click_edge(V(80, -30, 10))
-
-
-cancel_pick.wait_ms = 1500
 
 
 def cancel_now():
@@ -514,4 +451,5 @@ h.run(
         delete_pipe1,
         pipe1_deleted,
     ],
+    paced_by="state",
 )

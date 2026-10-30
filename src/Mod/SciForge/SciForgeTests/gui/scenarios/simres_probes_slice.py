@@ -78,9 +78,6 @@ def a_hover():
     h.move(h.screen_point(V(*sess.display.node_place(node))))
 
 
-a_hover.wait_ms = 400
-
-
 def a_hover_check():
     sess = s.session()
     hover = s.tags("hover")
@@ -90,9 +87,6 @@ def a_hover_check():
         h.check("the node's value", abs(hover[0]["value"] - value) < 1e-9, (hover, value))
     h.check("no probe placed by a move", not s.tags("probe"))
     h.move(h._empty_spot(h.gl_widget()))
-
-
-a_hover_check.wait_ms = 400
 
 
 def a_hover_away_check():
@@ -289,9 +283,6 @@ def b_drag():
     state["offset0"] = panel.offset.value()
     start = ai.head_point(arrow)
     h.drag_points(start, start + V(20, 0, 0))
-
-
-b_drag.wait_ms = 900
 
 
 def b_drag_check():
@@ -668,4 +659,5 @@ h.run(
         f_plane_check,
         f_ok_check,
     ],
+    paced_by="state",
 )

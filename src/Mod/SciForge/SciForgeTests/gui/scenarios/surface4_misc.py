@@ -221,4 +221,5 @@ h.run(
         look_given,
         look_kept,
     ],
+    paced_by="state",
 )

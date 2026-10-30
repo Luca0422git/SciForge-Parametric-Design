@@ -253,18 +253,12 @@ def p4_negative():
     s["arrow"] = ps.drag_arrow("distance", 150.0)
 
 
-p4_negative.wait_ms = 1200
-
-
 def p4_dragged_far():
     p = ps.panel()
     value = p.distance_field.value()
     h.check("dragged far out", value > 100.0, value)
     h.check("no message", message() == "", message())
     ps.drag_arrow("distance", -400.0)
-
-
-p4_dragged_far.wait_ms = 1200
 
 
 def p4_dragged_back():
@@ -302,9 +296,6 @@ def p4_clicked_arrow():
     QtTest.QTest.keyClicks(spin, "2")
     QtTest.QTest.keyClick(spin, QtCore.Qt.Key_Return)
     QtWidgets.QApplication.processEvents()
-
-
-p4_clicked_arrow.wait_ms = 1200
 
 
 def p4_enter_finished():
@@ -370,4 +361,5 @@ h.run(
         p4_undone,
         p4_redone,
     ],
+    paced_by="state",
 )

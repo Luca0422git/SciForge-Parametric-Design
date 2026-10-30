@@ -270,7 +270,6 @@ def wait_geometry(ms=1500):
         pass
 
     step.__name__ = "wait_geometry_%d" % ms
-    step.wait_ms = ms
     return step
 
 
@@ -350,8 +349,6 @@ def drawing_steps(
     def accept():
         ok()
 
-    accept.wait_ms = 2500
-
     def opened():
         count = len(drawing_module().drawings(App.ActiveDocument))
         h.check("%s: a new drawing" % prefix, count == state["before"] + 1, count)
@@ -375,12 +372,8 @@ def drawing_steps(
             if scale:
                 set_combo_text(p.scale, scale)
 
-        options.wait_ms = 1200
-
         def base_ok():
             ok()
-
-        base_ok.wait_ms = 2000
 
         def placed():
             found = bases()

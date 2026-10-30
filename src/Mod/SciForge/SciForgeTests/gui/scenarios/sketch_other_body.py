@@ -118,4 +118,5 @@ h.run(
         extrude_ok,
         joined_second_body,
     ],
+    paced_by="state",
 )

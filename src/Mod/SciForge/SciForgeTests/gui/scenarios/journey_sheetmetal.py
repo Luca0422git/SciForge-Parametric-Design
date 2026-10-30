@@ -851,4 +851,5 @@ h.run(
         undo_edit,
         edit_undone,
     ],
+    paced_by="state",
 )

@@ -229,9 +229,6 @@ def d_type():
     si.type_text("25", enter=True)
 
 
-d_type.wait_ms = 900
-
-
 def d_drawn():
     h.check("D: the typed line was drawn", count() == 4, count())
     if count() == 4:
@@ -264,9 +261,6 @@ def e_drawn():
     h.check("E: the chain goes on from the end", c.active and c.current is not None, c.current)
     s["e_end"] = line_at(4)[1]  # where the line really ended (FreeCAD snaps to its grid)
     h.double_click(s["e_end"])
-
-
-e_drawn.wait_ms = 700
 
 
 def e_after_dbl():
@@ -420,4 +414,5 @@ h.run(
         g_check,
         done,
     ],
+    paced_by="state",
 )

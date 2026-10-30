@@ -250,4 +250,5 @@ h.run(
         square_reliefs,
         finish_square,
     ],
+    paced_by="state",
 )

@@ -99,9 +99,6 @@ def drag_cut_to_end():
                                                                       after_last=True))
 
 
-drag_cut_to_end.wait_ms = 2500
-
-
 def moved_after_fill():
     titles = list(t.titles())
     h.check("the cut is last now", titles and titles[-1] == state["cut_title"], titles)
@@ -145,9 +142,6 @@ def drag_cut_back():
             t.drag_step(state["cut_title"], before_title=state["fill_title"]))
 
 
-drag_cut_back.wait_ms = 2500
-
-
 def moved_back():
     titles = list(t.titles())
     cut, fill = s.timeline_title_of(state["cut"]), s.timeline_title_of(state["fill"])
@@ -177,9 +171,6 @@ def drag_box2_after_cut():
     state["before_refused"] = list(t.titles())
     h.check("drag Body2's box after the cut",
             t.drag_step(state["box2_title"], before_title=state["fill_title"]))
-
-
-drag_box2_after_cut.wait_ms = 1200  # the red mark and its reason stay 2.5 s
 
 
 def refused():
@@ -227,4 +218,5 @@ h.run(
         delete_cut,
         deleted,
     ],
+    paced_by="state",
 )

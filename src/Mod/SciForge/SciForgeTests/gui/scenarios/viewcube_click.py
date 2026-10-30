@@ -144,8 +144,6 @@ def animate_done():
     vc.animations(False)
 
 
-animate_done.wait_ms = 1500
-
 h.run(
     "viewcube_click",
     [setup, look, hover_face, hover_face_done, hover_edge_done, away_done]
@@ -160,4 +158,5 @@ h.run(
     + checked("bottom", (0, 0, 1), up=(0, -1, 0))
     + checked("bottom-front-right", (-1 / S3, 1 / S3, 1 / S3))
     + [animate, animate_done],
+    paced_by="state",
 )

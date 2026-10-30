@@ -429,8 +429,6 @@ def reopen_steps(kind, height, name):
         App.openDocument(path)
         h.fit()
 
-    save_and_reopen.wait_ms = 2000
-
     def reopened():
         check_original(1200 * height - HOLE, 20, 20 + height, "reopened")
         check_copies(kind, height, 1200 * height, "reopened")

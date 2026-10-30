@@ -113,9 +113,6 @@ def cylinder_live():
     pl.click_on_plane(V(10, 0, 0))
 
 
-cylinder_live.wait_ms = 1200
-
-
 def cylinder_first():
     p = cyl_panel()
     if p is None:
@@ -134,9 +131,6 @@ def drag_diameter():
     h.check("diameter handle at 20", handle is not None and near(handle.value(), 20.0), handle)
     if handle is not None:
         pi.drag_handle(handle, 26.0)
-
-
-drag_diameter.wait_ms = 1200
 
 
 def diameter_dragged():
@@ -223,9 +217,6 @@ def cylinder2_circle():
     pl.click_on_plane(V(3, 0, 15))
 
 
-cylinder2_circle.wait_ms = 1200
-
-
 def cylinder2_built():
     p = cyl_panel()
     if p is None:
@@ -233,9 +224,6 @@ def cylinder2_built():
     h.check("diameter 6", near(p.diameter.value(), 6.0), p.diameter.value())
     h.check("upwards: Join", p.operation.currentText() == "Join", p.operation.currentText())
     ui.type_into(p.height.widget, "-8")
-
-
-cylinder2_built.wait_ms = 1200
 
 
 def cylinder2_cut():
@@ -268,9 +256,6 @@ def sphere_centre():
     p = sphere_panel()
     h.check("Sphere: the face is taken at once", p is not None and p.state == "place")
     pl.click_on_plane(V(6, 0, 15))
-
-
-sphere_centre.wait_ms = 1200
 
 
 def sphere_built():
@@ -360,9 +345,6 @@ def torus_circle():
     pl.click_on_plane(V(20, 0, 0))
 
 
-torus_circle.wait_ms = 1500
-
-
 def torus_built():
     p = torus_panel()
     if p is None:
@@ -384,9 +366,6 @@ def torus_built():
     h.check("choose Outside", ui.choose(p.position, "Outside"))
 
 
-torus_built.wait_ms = 1500
-
-
 def torus_outside():
     h.check("torus R25 r5", near(vol() - s["volume"], 1250.0 * PI * PI), vol() - s["volume"])
     h.check("choose Inside", ui.choose(torus_panel().position, "Inside"))
@@ -394,9 +373,6 @@ def torus_outside():
 
 def torus_too_thick():
     ui.type_into(torus_panel().tube.widget, "25")
-
-
-torus_too_thick.wait_ms = 1200
 
 
 def torus_refused():
@@ -466,9 +442,6 @@ def sphere_cancel_plane():
 
 def sphere_cancel_centre():
     pl.click_on_plane(V(0, -6, 15))
-
-
-sphere_cancel_centre.wait_ms = 1200
 
 
 def sphere_cancel():
@@ -560,4 +533,5 @@ h.run(
         esc_now,
         after_esc,
     ],
+    paced_by="state",
 )

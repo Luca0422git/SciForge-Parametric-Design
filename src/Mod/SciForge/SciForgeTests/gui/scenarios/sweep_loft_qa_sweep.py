@@ -409,9 +409,6 @@ def p3_drag_far():
         st.drag_ball_to(handle, V(0, 0, L1 + 30))
 
 
-p3_drag_far.wait_ms = 1500
-
-
 def p3_dragged_far():
     p = panel()
     d = p.distance.value() if p is not None else None
@@ -421,9 +418,6 @@ def p3_dragged_far():
     handle = p.handles.get("distance") if p is not None else None
     if handle is not None:
         st.drag_ball_to(handle, V(0, 0, -30))
-
-
-p3_dragged_far.wait_ms = 1500
 
 
 def p3_dragged_back():
@@ -625,9 +619,6 @@ def p5_first_area():
     st.region_click(s["s5"], lambda faces: max(faces, key=lambda f: f.CenterOfMass.y))
 
 
-p5_first_area.wait_ms = 1200
-
-
 def p5_second_area():
     both = PI * (s["ra"] ** 2 + s["rb"] ** 2) * PIN
     p = panel()
@@ -655,9 +646,6 @@ def p5_dropped():
     )
     s["v5"] = s["v4"] + pin_b
     h.press("e")
-
-
-p5_dropped.wait_ms = 1200
 
 
 def p5_extrude_started():
@@ -765,4 +753,5 @@ h.run(
             p5_done,
         ]
     ),
+    paced_by="state",
 )

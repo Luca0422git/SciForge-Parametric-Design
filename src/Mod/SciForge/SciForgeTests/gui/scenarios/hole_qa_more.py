@@ -73,7 +73,6 @@ def part_ok(where):
 
 
 def slow(fn, ms=4000):
-    fn.wait_ms = ms  # a modeled thread takes a moment: a person waits for the busy cursor
     return fn
 
 
@@ -420,16 +419,10 @@ def p19_modeled_ok():
         h.task_button("OK")  # ... and OK comes while FreeCAD is still cutting the thread
 
 
-p19_modeled_ok.wait_ms = 5000
-
-
 def p19_after():
     if dialog_open():
         # OK said to wait: press it again now that the preview is there.
         h.task_button("OK")
-
-
-p19_after.wait_ms = 3000
 
 
 def p19_done():
@@ -633,4 +626,5 @@ h.run(
             p21_hole1_back,
         ]
     ),
+    paced_by="state",
 )

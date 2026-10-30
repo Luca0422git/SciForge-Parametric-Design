@@ -216,4 +216,5 @@ h.run(
         arched,
         arched_kept,
     ],
+    paced_by="state",
 )

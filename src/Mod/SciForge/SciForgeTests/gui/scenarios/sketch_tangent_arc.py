@@ -243,9 +243,6 @@ def a_release():
     release_at(s["a_pos"])
 
 
-a_release.wait_ms = 1200
-
-
 def a_check():
     sk = s["sk"]
     found = arcs()
@@ -327,9 +324,6 @@ def a_undo():
     h.press("z", CTRL)
 
 
-a_undo.wait_ms = 1200
-
-
 def a_undone():
     sk = s["sk"]
     h.check(
@@ -339,9 +333,6 @@ def a_undone():
     )
     h.check("...and the line stays", len(si.lines(sk)) == 2)
     h.press("y", CTRL)
-
-
-a_undone.wait_ms = 1200
 
 
 def a_redone():
@@ -360,9 +351,6 @@ def b_plain_click():
     free = s.get("free1", V(50, 15, 0))
     pos = press_at(g(free))
     release_at(pos)
-
-
-b_plain_click.wait_ms = 900
 
 
 def b_check():
@@ -398,9 +386,6 @@ def c_drag():
 
 def c_release():
     release_at(s["c_pos"])
-
-
-c_release.wait_ms = 1200
 
 
 def c_check():
@@ -487,9 +472,6 @@ def d_enter():
     si.key(QtCore.Qt.Key_Return)
 
 
-d_enter.wait_ms = 1000
-
-
 def d_typed_check():
     sk = s["sk"]
     line = sk.Geometry[-1]
@@ -550,4 +532,5 @@ h.run(
             finish,
         ]
     ),
+    paced_by="state",
 )

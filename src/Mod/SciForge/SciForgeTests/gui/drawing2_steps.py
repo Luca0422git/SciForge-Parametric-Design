@@ -128,12 +128,10 @@ def dimension_steps(name, picks, place, expect_type=None):
             click(u, v)
         move(place[0] + 2.0, place[1] + 2.0)
 
-    pick.wait_ms = 1200
 
     def put():
         click(*place)
 
-    put.wait_ms = 1200
 
     def end():
         d.key(QtCore.Qt.Key_Escape)
@@ -192,7 +190,6 @@ def describe(obj):
 
 def process():
     QtWidgets.QApplication.processEvents()
-
 
 
 def _near_circle(c, r):

@@ -176,9 +176,6 @@ def fillet_radius():
     st.keys("3\n")
 
 
-fillet_radius.wait_ms = 900
-
-
 def fillet_check():
     sketch = sk()
     arcs = [g for g in sketch.Geometry if g.TypeId == "Part::GeomArcOfCircle"]
@@ -583,9 +580,6 @@ def p_check():
         d.reject()
 
 
-p_check.wait_ms = 1200
-
-
 def p_closed():
     h.check("P: the dialog closed", _dialog() is None)
     App.closeDocument(App.ActiveDocument.Name)
@@ -687,4 +681,5 @@ h.run(
             d_derive,
         ]
     ),
+    paced_by="state",
 )

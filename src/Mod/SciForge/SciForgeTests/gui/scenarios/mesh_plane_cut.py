@@ -63,9 +63,6 @@ def a_click_body():
     m.click_body(box())
 
 
-a_click_body.wait_ms = 1500
-
-
 def a_waits_for_plane():
     p = m.panel()
     h.check("the Body box names the box", p is not None and NAME in p.fields["body"].button.text())
@@ -87,9 +84,6 @@ def b_click_xy():
     h.click(p.squares.point_on("XY", -0.7, -0.7))
 
 
-b_click_xy.wait_ms = 1500
-
-
 def b_refused():
     p = m.panel()
     h.check("the plane is picked", p is not None and p.frame is not None, p and p.frame)
@@ -104,9 +98,6 @@ def b_refused():
     h.task_button("OK")
 
 
-b_refused.wait_ms = 1200
-
-
 def b_still_open():
     p = m.panel()
     h.check("OK waits", p is not None and p.title == "Plane Cut", p)
@@ -115,9 +106,6 @@ def b_still_open():
 # -- C ----------------------------------------------------------------------------------------
 def c_distance():
     m.type_field(m.panel().distance, "2")
-
-
-c_distance.wait_ms = 2000
 
 
 def c_check():
@@ -136,9 +124,6 @@ def d_flip():
     m.tick(m.panel().flip, True)
 
 
-d_flip.wait_ms = 2000
-
-
 def d_check():
     step = cut()
     h.check("Flip: the 600 mm3 above", i.close(m.volume(step), 600.0, 1e-4), m.volume(step))
@@ -154,9 +139,6 @@ def e_drag():
     start = handle.base_point() + handle.direction * (0.6 * handle.size)
     state["before_drag"] = p.distance.value()
     h.drag(h.screen_point(start), h.screen_point(start + V(0, 0, 1.0)))
-
-
-e_drag.wait_ms = 2500
 
 
 def e_check():
@@ -182,15 +164,9 @@ def e_back():
     m.tick(p.flip, False)
 
 
-e_back.wait_ms = 2000
-
-
 # -- F ----------------------------------------------------------------------------------------
 def f_minimal():
     m.choose(m.panel().fill, "Minimal")
-
-
-f_minimal.wait_ms = 1500
 
 
 def f_check_minimal():
@@ -208,9 +184,6 @@ def f_no_fill():
     m.choose(m.panel().fill, "No Fill")
 
 
-f_no_fill.wait_ms = 1500
-
-
 def f_check_no_fill():
     step = cut()
     info = m.analysis(step)
@@ -221,15 +194,9 @@ def f_uniform():
     m.choose(m.panel().fill, "Uniform")
 
 
-f_uniform.wait_ms = 1500
-
-
 # -- G ----------------------------------------------------------------------------------------
 def g_angle():
     m.type_field(m.panel().angle_x, "20")
-
-
-g_angle.wait_ms = 2000
 
 
 def g_check():
@@ -249,15 +216,9 @@ def g_check():
     m.type_field(m.panel().angle_x, "0")
 
 
-g_check.wait_ms = 2000
-
-
 # -- H ----------------------------------------------------------------------------------------
 def h_split():
     m.choose(m.panel().cut_type, "Split Body")
-
-
-h_split.wait_ms = 2500
 
 
 def h_check():
@@ -279,9 +240,6 @@ def h_check():
 # -- I ----------------------------------------------------------------------------------------
 def i_ok():
     h.task_button("OK")
-
-
-i_ok.wait_ms = 1500
 
 
 def i_check():
@@ -308,9 +266,6 @@ def j_edit():
     s.timeline_double_click(cut())
 
 
-j_edit.wait_ms = 1500
-
-
 def j_dialog():
     p = m.panel()
     h.check("edit dialog", p is not None and p.title == "Plane Cut", p)
@@ -321,14 +276,8 @@ def j_dialog():
     m.choose(p.cut_type, "Trim")
 
 
-j_dialog.wait_ms = 2500
-
-
 def j_ok():
     h.task_button("OK")
-
-
-j_ok.wait_ms = 1500
 
 
 def j_check():
@@ -348,9 +297,6 @@ def k_undo():
     i.undo()
 
 
-k_undo.wait_ms = 1500
-
-
 def k_check_undo():
     labels = [b.Label for b in m.bodies()]
     h.check("Ctrl+Z: split again", NAME + " (2)" in labels, labels)
@@ -358,9 +304,6 @@ def k_check_undo():
 
 def k_redo():
     i.redo()
-
-
-k_redo.wait_ms = 1500
 
 
 def k_check_redo():
@@ -379,31 +322,19 @@ def l_body():
     m.click_body(kept())
 
 
-l_body.wait_ms = 1500
-
-
 def l_plane():
     p = m.panel()
     h.click(p.squares.point_on("XY", -0.7, -0.7))
-
-
-l_plane.wait_ms = 1500
 
 
 def l_distance():
     m.type_field(m.panel().distance, "1")
 
 
-l_distance.wait_ms = 2000
-
-
 def l_previewed():
     steps = m.steps("MeshPlaneCut")
     h.check("a second cut previewed", len(steps) == 2, steps)
     h.task_button("Cancel")
-
-
-l_previewed.wait_ms = 1500
 
 
 def l_check():
@@ -462,4 +393,5 @@ h.run(
         l_previewed,
         l_check,
     ],
+    paced_by="state",
 )

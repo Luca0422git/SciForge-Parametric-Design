@@ -42,9 +42,6 @@ def setup():
     state["label"] = d.page().Label
 
 
-setup.wait_ms = 4000
-
-
 def s_check():
     from sciforge import drawing, drawing_annot
 
@@ -70,16 +67,10 @@ def a_design():
     d.workspace("Design")
 
 
-a_design.wait_ms = 1500
-
-
 def a_edit():
     h.check("the design's tab", d.page() is None)
     h.fit()
     b.timeline_double_click("Fillet 1")
-
-
-a_edit.wait_ms = 1500
 
 
 def a_radius():
@@ -88,21 +79,12 @@ def a_radius():
         b.type_into(p.radius.widget, "12")
 
 
-a_radius.wait_ms = 1500
-
-
 def a_ok():
     h.task_button("OK")
 
 
-a_ok.wait_ms = 2000
-
-
 def a_open():
     d.workspace("Drawing", state["label"])
-
-
-a_open.wait_ms = 4000
 
 
 def a_followed():
@@ -139,9 +121,6 @@ def b_hole():
     hole.Placement.Base = App.Vector(25.0, 15.0, 0)
     hole.Radius = 6.0
     doc.recompute()
-
-
-b_hole.wait_ms = 4000
 
 
 def b_followed():
@@ -188,22 +167,13 @@ def c_design():
     d.workspace("Design")
 
 
-c_design.wait_ms = 1500
-
-
 def c_undo():
     h.fit()
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-c_undo.wait_ms = 3000
-
-
 def c_back():
     d.workspace("Drawing", state["label"])
-
-
-c_back.wait_ms = 4000
 
 
 def c_followed():
@@ -218,4 +188,5 @@ h.run(
     + [a_design, a_edit, a_radius, a_ok, a_open, a_followed]
     + [b_hole, b_followed]
     + [c_design, c_undo, c_back, c_followed],
+    paced_by="state",
 )

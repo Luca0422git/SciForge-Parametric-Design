@@ -274,6 +274,4 @@ def named(name, fn, wait_ms=None):
         fn()
 
     step.__name__ = name
-    if wait_ms:
-        step.wait_ms = wait_ms
     return step

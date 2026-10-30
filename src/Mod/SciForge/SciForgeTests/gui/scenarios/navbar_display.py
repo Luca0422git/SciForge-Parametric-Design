@@ -268,9 +268,6 @@ def ortho_faces_iso():
     vc.click("top")
 
 
-ortho_faces_iso.wait_ms = 1500
-
-
 def ortho_faces_top():
     h.check("looking at TOP: orthographic", h.view().getCameraType() == "Orthographic")
     menu = vc.menu_texts(on="top")
@@ -282,9 +279,6 @@ def ortho_faces_top():
         "and ticks the same choice", menu.get("checked") == ["Perspective with Ortho Faces"], menu
     )
     vc.click("turn-down")
-
-
-ortho_faces_top.wait_ms = 1500
 
 
 def remembered():
@@ -338,4 +332,5 @@ h.run(
         ortho_faces_top,
         remembered,
     ],
+    paced_by="state",
 )

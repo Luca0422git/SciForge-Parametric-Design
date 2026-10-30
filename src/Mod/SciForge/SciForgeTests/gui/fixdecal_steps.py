@@ -112,9 +112,6 @@ def decal_steps(tag, point, check=None):
         if check is not None:
             check()
 
-    open_.wait_ms = 1500
-    click.wait_ms = 1500
-    ok.wait_ms = 1200
     steps = [open_, click, ok, done]
     for step in steps:
         step.__name__ = "%s_%s" % (tag, step.__name__.strip("_"))

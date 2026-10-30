@@ -172,9 +172,6 @@ def unlocked():
     )
 
 
-unlocked.wait_ms = 900
-
-
 def moved():
     tex = texcoords()
     changed = len(tex) == len(st["unlocked"]) and any(
@@ -183,9 +180,6 @@ def moved():
     h.check("unlocked stripes move when the view turns", changed)
     st["points"] = len(tex)
     a.tick(a.panel().field("HighQuality"), True)
-
-
-moved.wait_ms = 1200
 
 
 def high_quality():
@@ -264,14 +258,8 @@ def redone():
     h.check("and draws it", not a.model_faces_shown())
 
 
-redone.wait_ms = 900
-
-
 def save():
     st["path"] = a.save_reopen("inspect_analysis_zebra.FCStd")
-
-
-save.wait_ms = 1500
 
 
 def reopened():
@@ -341,4 +329,5 @@ h.run(
         esc_made,
         esc_done,
     ],
+    paced_by="state",
 )

@@ -669,4 +669,4 @@ STEPS = (
     + [h.idle_step(), r_start, r_one, r_compute, r_said, r_ok_waits, r_escaped, the_end]
 )
 
-h.run("inspect_qa3", ti.watched(STEPS))
+h.run("inspect_qa3", ti.watched(STEPS), paced_by="state")

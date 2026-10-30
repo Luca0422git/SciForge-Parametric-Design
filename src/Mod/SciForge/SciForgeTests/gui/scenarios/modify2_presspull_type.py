@@ -265,4 +265,5 @@ h.run(
         ok_waits,
         end,
     ],
+    paced_by="state",
 )
