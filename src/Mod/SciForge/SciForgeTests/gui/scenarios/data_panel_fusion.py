@@ -522,13 +522,31 @@ def p9_uploaded():
 # -- P10 ----------------------------------------------------------------------------------------
 def p10_elsewhere():
     shutil.copy(s["arm"], os.path.join(s["project"], "Arm Spare.FCStd"))
+    s["put_at"] = time.monotonic()
 
 
 p10_elsewhere.wait_ms = 6000
 
 
+def arm_spare_listed():
+    """The panel looks at its folder every POLL_MS (4 s) for changes made elsewhere."""
+    if card("Arm Spare") is None:
+        return False
+    s.setdefault("listed_at", time.monotonic())
+    return True
+
+
+p10_elsewhere.done = arm_spare_listed
+p10_elsewhere.done_what = "the Data Panel lists Arm Spare, put in its folder by another program"
+
+
 def p10_shown():
+    from sciforge import data_panel_ui
+
     h.check("P10 a file put there by another program shows", card("Arm Spare") is not None, texts())
+    took = s.get("listed_at", time.monotonic()) - s["put_at"]
+    limit = (data_panel_ui.POLL_MS / 1000.0 + 2.0) * h.SLOWDOWN
+    h.check("P10 ... by itself a few seconds later (%.0f s at most)" % limit, took < limit, round(took, 1))
 
 
 # -- P11 ----------------------------------------------------------------------------------------

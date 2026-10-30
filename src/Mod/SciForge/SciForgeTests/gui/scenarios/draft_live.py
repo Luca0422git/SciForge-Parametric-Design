@@ -241,7 +241,7 @@ def dragged(label, expect_sign=None):
     moving = [x for x in samples if x["i"] > 0 and x["active"]]
     h.check("%s: the disc was held and moved" % label, len(moving) >= 10, len(moving))
     shown = [x for x in moving if x["shown"]]
-    h.check(
+    h.speed_check(  # (a frame rate at a hand's pace: real time)
         "%s: the picture showed while moving" % label,
         len(shown) >= 0.6 * max(1, len(moving)),
         "%d of %d" % (len(shown), len(moving)),

@@ -158,3 +158,13 @@ compiled again (an artifact of attempt 1 is there for attempt 2: the scenario de
   once the row under the pointer is the row wanted.
 - A target outside every SciForge window (a model point off the view) gets no pointer wait: Qt
   is never told of a pointer there; the input goes to the widget as it always did.
+- **The app times some clicks itself.** For 0.6 - 0.8 s after a click an overlay took (the
+  Move triad's axes, pattern axes, Split's and Align's planes), after a pick (profile, axis,
+  plane, cell, point) and after a drag of the Move triad, SciForge ignores the selection a
+  click makes (to drop the one FreeCAD makes behind the overlay with the same click); FreeCAD's
+  sketcher counts two presses within the double-click interval as a double-click. So every
+  press in the 3D view comes at least `h.click_gap()` after the one before (`h.press_pace`,
+  applied to every `QTest` press on the 3D view, the scenarios' own included): the pace of a
+  hand, not a wait for the app. Without the fixed waits two clicks came 0.4 s apart and the
+  second was lost (inspect_qa4: the face after the Center of Mass dot; bodies_qa: a Move arrow
+  dragged right after the body was picked moved nothing).

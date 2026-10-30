@@ -114,16 +114,10 @@ def rev_second():
     h.click(V(21, 16, 10))  # the plate's top near its centre
 
 
-rev_second.wait_ms = 900
-
-
 def rev_type():
     p = j.panel()
     j.click_tab(p, "Motion")
     j.choose_type(p, "Revolute")
-
-
-rev_type.wait_ms = 2600
 
 
 def rev_ok():
@@ -169,9 +163,6 @@ def sli_second():
     h.click(V(20, 2.5, 10))  # the plate's top, by the middle of its front edge
 
 
-sli_second.wait_ms = 900
-
-
 def sli_type():
     p = j.panel()
     h.check(
@@ -183,15 +174,9 @@ def sli_type():
     j.choose_type(p, "Slider")
 
 
-sli_type.wait_ms = 2600
-
-
 def sli_axis():
     p = j.panel()
     b.choose(p.axis_boxes["Slide"][0], "X Axis")
-
-
-sli_axis.wait_ms = 1500
 
 
 def sli_ok():
@@ -261,9 +246,6 @@ def l2_type():
     s.type_value(p.angle.widget, "360")
 
 
-l2_type.wait_ms = 1500
-
-
 def l2_turned():
     p = j.panel()
     moved = rack_x() - state["rack_x"]
@@ -295,7 +277,6 @@ def l3_drag():
     top_view()
     # the pinion stands at 15..25 x 10..20 (upside down, heading kept); grab it off its axis
     h.drag(h.screen_point(V(24, 15, 20)), h.screen_point(V(20, 19, 20)), steps=16)
-    j.wait(200)
 
 
 def l3_dragged():
@@ -338,9 +319,6 @@ def l4_type():
     s.type_value(j.panel().angle.widget, "90")
 
 
-l4_type.wait_ms = 1500
-
-
 def l4_reversed():
     moved = rack_x() - state["rack_x"]
     expect = -state.get("sign", 1.0) * TURN / 4
@@ -365,9 +343,6 @@ def l5_drive():
 def l5_type():
     p = j.panel()
     s.type_value(p.slide.widget, "%.4f" % (TURN / 2))
-
-
-l5_type.wait_ms = 1500
 
 
 def l5_turned():
@@ -431,25 +406,27 @@ def l6_half():
 
 def l6_play():
     p = j.panel()
+    state["played"] = []
+    # every frame the playback shows (the playhead moves with it), as it happens
+    p.slider.valueChanged.connect(lambda _v: state["played"].append(angle_now()))
     QtTest.QTest.mouseClick(p.play, QtCore.Qt.LeftButton)
     QtWidgets.QApplication.processEvents()
-    state["played"] = []
+
+
+# Play starts the playback: the app is busy until it ends, and the next step watches it play
+l6_play.while_busy = True
 
 
 def l6_watch():
     p = j.panel()
-    end = 0
-    while end < 80 and p.playing:
-        j.wait(100)
-        state["played"].append(angle_now())
-        end += 1
+    h.wait_for(lambda: not p.playing, "Play Once to stop by itself", timeout_s=60)
     h.check("Play Once stopped by itself", not p.playing)
     h.check("it went through the turn", len(state["played"]) > 5, len(state["played"]))
     h.check("it ended at step 100 (one turn)", abs(angle_now() - 360) < 1e-6, angle_now())
     h.check("the playhead at the end", p.slider.value() == 100, p.slider.value())
 
 
-l6_watch.wait_ms = 300
+l6_watch.while_busy = True  # (it samples the playback while it runs)
 
 
 def l6_ok():
@@ -492,9 +469,6 @@ def l7_type():
     s.type_value(j.panel().angle.widget, "90")
 
 
-l7_type.wait_ms = 1500
-
-
 def l7_followed():
     moved = rack_x() - state["rack_x"]
     h.check("after reopening the rack still follows", abs(abs(moved) - TURN / 4) < LINK_TOL, moved)
@@ -517,4 +491,4 @@ steps += [l5_drive, l5_type, l5_turned, l5_cancel]
 steps += [l6_menu, l6_pick, l6_point, l6_scrub, l6_half, l6_play, l6_watch, l6_ok, l6_done]
 steps += [l7_save_close, l7_open, l7_drive, l7_type, l7_followed, l7_cancel]
 
-h.run("joints2_motion", steps)
+h.run("joints2_motion", steps, paced_by="state")

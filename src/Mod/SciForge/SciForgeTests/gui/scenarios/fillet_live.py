@@ -157,7 +157,7 @@ def dragged(label, check_builds=True):
     moving = [x for x in samples if x["i"] > 0]
     h.check("%s: the arrow was held and moved" % label, len(moving) >= 10, len(moving))
     shown = [x for x in moving if x["shown"]]
-    h.check(
+    h.speed_check(  # (a frame rate at a hand's pace: real time)
         "%s: the picture showed while moving" % label,
         len(shown) >= 0.6 * max(1, len(moving)),
         "%d of %d" % (len(shown), len(moving)),
@@ -176,7 +176,7 @@ def dragged(label, check_builds=True):
     if check_builds:
         last = max([x["i"] for x in moving], default=0)
         early = [i for i in rec.get("builds", []) if i < last - 1]
-        h.check("%s: no exact rebuild between the moves" % label, not early, early)
+        h.speed_check("%s: no exact rebuild between the moves" % label, not early, early)
     h.check("%s: the picture was checked" % label, rec.get("checked"))
 
 
@@ -292,10 +292,11 @@ def dragged_far_again():
     samples = [x for x in rec.get("samples", []) if x["i"] > 0]
     shown = [x for x in samples if x["live"] is not None]
     past = [x["live"] for x in shown if x["live"] > r + 1e-9]
-    h.check("dragged past the limit again: the picture showed", len(shown) >= 10, len(shown))
+    # (how many frames show while a hand drags: real time)
+    h.speed_check("dragged past the limit again: the picture showed", len(shown) >= 10, len(shown))
     h.check("no picture past the limit", not past, past[:4])
     held = [x for x in shown if abs(x["live"] - r) < 1e-9]
-    h.check("the picture stopped at the limit", len(held) >= 3, len(held))
+    h.speed_check("the picture stopped at the limit", len(held) >= 3, len(held))  # (frames shown)
     exact_shown("held at the limit again", one_edge(r))
 
 

@@ -312,6 +312,7 @@ class _PointerTap(QtCore.QObject):
         self.last = None
         self.expected = None
         self.menus_shown = 0  # menus that appeared (a right-click's may come and go at once)
+        self.last_press = 0.0  # when the last mouse button went down (time.monotonic)
 
     def eventFilter(self, obj, event):
         try:
@@ -320,9 +321,75 @@ class _PointerTap(QtCore.QObject):
                 self.last = event.globalPosition().toPoint()
             elif kind == QtCore.QEvent.Show and isinstance(obj, QtWidgets.QMenu):
                 self.menus_shown += 1
+            elif kind == QtCore.QEvent.MouseButtonPress and isinstance(obj, QtWidgets.QWidget):
+                self.last_press = time.monotonic()
         except Exception:
             pass
         return False
+
+
+def click_gap():
+    """The shortest time the app wants between two clicks in the 3D view, as it measures it:
+    FreeCAD's double-click interval (the sketcher times two presses itself: a second one
+    within it is a double-click), and SciForge's click windows: for OVERLAY_CLICK_S (0.6 -
+    0.8 s) after an overlay took a click (the move triad's axes, pattern axes, Split's and
+    Align's planes) the selection a click makes is ignored, to drop the one FreeCAD makes
+    behind the overlay with the same click; the pickers' clicked_recently() (0.6 s: profile,
+    axis, plane, cell and point picks) and the Move triad's busy() after a drag (0.6 s) do the
+    same. A second click within one of them is lost too."""
+    import importlib
+
+    found = [QtWidgets.QApplication.doubleClickInterval() / 1000.0]
+    for name in ("move_ui", "pattern_ui", "split_ui", "modify_common"):
+        try:
+            found.append(float(importlib.import_module("sciforge." + name).OVERLAY_CLICK_S))
+        except Exception:
+            pass
+    return max(found)
+
+
+def press_pace():
+    """Before a click in the 3D view: the next press comes once click_gap() has passed since
+    the last one, as a person's next click does (an input pace the app measures, not a wait
+    for the app). Without fixed waits two clicks came 0.4 s apart and the second was lost
+    (inspect_qa4: the face after the Center of Mass dot)."""
+    _install_pointer_tap()
+    left = _pointer.last_press + click_gap() - time.monotonic()
+    if left > 0:
+        QtTest.QTest.qWait(int(left * 1000) + 10)  # input pace: the app times the gap between clicks
+
+
+def _in_3d_view(target):
+    """True for a 3D view's GL widget (where a press in the 3D view goes)."""
+    try:
+        return (
+            isinstance(target, QtWidgets.QWidget)
+            and target.metaObject().className() == "QOpenGLWidget"
+        )
+    except Exception:
+        return False
+
+
+# Every press in the 3D view comes at press_pace(), whoever sends it: the input helpers and
+# the scenarios' own QTest.mousePress for a drag alike (92 files press there themselves).
+_QTEST = getattr(QtTest.QTest, "_sciforge_original", None)
+if _QTEST is None:  # (imported a second time: do not wrap the wrappers)
+    _QTEST = QtTest.QTest._sciforge_original = {
+        name: getattr(QtTest.QTest, name) for name in ("mousePress", "mouseClick", "mouseDClick")
+    }
+
+
+def _paced(original):
+    def press(target, *args, **kwargs):
+        if _in_3d_view(target):
+            press_pace()
+        return original(target, *args, **kwargs)
+
+    return staticmethod(press)
+
+
+for _name, _original in _QTEST.items():
+    setattr(QtTest.QTest, _name, _paced(_original))
 
 
 def menus_shown():
@@ -956,6 +1023,7 @@ def click(point, modifiers=QtCore.Qt.NoModifier, button=QtCore.Qt.LeftButton):
     """Click on the 3D point; remembers what was under the mouse and what got selected."""
     uncover(point)
     pos = screen_point(point)
+    press_pace()  # (before the move: the press follows the move at once)
     move(pos)
     hit = under_mouse(point)
     QtTest.QTest.mouseClick(gl_widget(), button, modifiers, pos)
@@ -990,6 +1058,7 @@ def click_edge(point, modifiers=QtCore.Qt.NoModifier):
         if best is not None:
             break
     pos = best or centre
+    press_pace()
     move(pos)
     QtTest.QTest.mouseClick(widget, QtCore.Qt.LeftButton, modifiers, pos)
     QtWidgets.QApplication.processEvents()
@@ -1049,6 +1118,7 @@ def click_empty():
     """Click on empty background (clears the selection, like in Fusion)."""
     widget = gl_widget()
     pos = _empty_spot(widget)
+    press_pace()
     move(pos)
     QtTest.QTest.mouseClick(widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
     QtWidgets.QApplication.processEvents()
@@ -1056,6 +1126,7 @@ def click_empty():
 
 def double_click(point):
     pos = screen_point(point)
+    press_pace()
     move(pos)
     QtTest.QTest.mouseDClick(gl_widget(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
     QtWidgets.QApplication.processEvents()
@@ -1071,6 +1142,7 @@ def drag(
     """Press, move and release a mouse button (left by default; Shift + middle orbits),
     start/end in widget pixels."""
     widget = gl_widget()
+    press_pace()
     move(start)
     QtTest.QTest.mousePress(widget, button, modifiers, start)
     for i in range(1, steps + 1):
