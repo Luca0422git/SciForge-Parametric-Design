@@ -22,29 +22,43 @@ def choose(combo, text):
     """Pick `text` in a drop-down with the keyboard (Up/Down, like a person who clicked it).
     The keys wait until the list shows (it may open late on a slow machine: CI #110's
     fillet_qa_more P17 lost its keys once). (The pointer stays where it is: a list that
-    opens under the pointer follows it, and Down would start from the hovered row.)"""
+    opens under the pointer follows it, so the keys count from the list's own row.)
+    True when the drop-down took the choice (its `activated` named it): the app may answer
+    by showing another a moment later (Extrude shows the operation really in place when a
+    Join is refused, CI trial #312), which the scenario checks itself."""
     target = combo.findText(text)
     if target < 0:
         raise ValueError("%r is not in the drop-down %s" % (text, combo.objectName()))
     if not combo.isEnabled():
-        h.check("the drop-down %s takes a choice (%s)" % (combo.objectName(), text), False, "greyed out")
+        h.check(
+            "the drop-down %s takes a choice (%s)" % (combo.objectName(), text), False, "greyed out"
+        )
         return False
     # No shortcut when it already shows `text`: choosing it again is a real choice (Extrude,
     # Revolve, Sweep, Loft, Pipe and the primitives lock a picked Operation on `activated`).
-    combo.setFocus()
-    QtTest.QTest.mouseClick(combo, QtCore.Qt.LeftButton)  # opens the list
-    view = combo.view()
-    h.wait_for(view.isVisible, "the list of %s to open" % (combo.objectName() or "a drop-down"))
-    _step(view, target - combo.currentIndex())
-    QtTest.QTest.keyClick(view, QtCore.Qt.Key_Return)
-    _process()
-    if combo.currentText() != text:
-        if view.isVisible():
-            QtTest.QTest.keyClick(view, QtCore.Qt.Key_Escape)
-            _process()
+    picked = []
+
+    def took(index):
+        picked.append(index)
+
+    combo.activated.connect(took)
+    try:
         combo.setFocus()
-        _step(combo, target - combo.currentIndex())
-    return combo.currentText() == text
+        QtTest.QTest.mouseClick(combo, QtCore.Qt.LeftButton)  # opens the list
+        view = combo.view()
+        h.wait_for(view.isVisible, "the list of %s to open" % (combo.objectName() or "a drop-down"))
+        _step(view, target - view.currentIndex().row())
+        QtTest.QTest.keyClick(view, QtCore.Qt.Key_Return)
+        _process()
+        if target not in picked and combo.currentText() != text:
+            if view.isVisible():
+                QtTest.QTest.keyClick(view, QtCore.Qt.Key_Escape)
+                _process()
+            combo.setFocus()
+            _step(combo, target - combo.currentIndex())
+    finally:
+        combo.activated.disconnect(took)
+    return target in picked or combo.currentText() == text
 
 
 def _step(widget, delta):

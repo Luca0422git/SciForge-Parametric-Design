@@ -82,12 +82,14 @@ def setup():
         from sciforge import versions
 
         versions.discard_recovery(rec.folder, entry["key"])
+    # Counted before the designs exist: the 2 s timer may write the copy during the rest of
+    # the setup (fit lets the app run until the view is still).
+    s["written"] = rec.written
     s["quiet"] = App.newDocument("Quiet")
     s["doc"] = App.newDocument("Gear")
     s["box"] = make_box(s["doc"], "Body", 10, 10, 10)
     h.fit()
     h.check("an unsaved design with a box", not doc().FileName and Gui.ActiveDocument.Modified)
-    s["written"] = rec.written
 
 
 # -- Path 1: autosave ----
@@ -95,7 +97,8 @@ def p1_wait():
     pass
 
 
-p1_wait.wait_ms = 3500
+p1_wait.done = lambda: recovery().written > s["written"]
+p1_wait.done_what = "the recovery timer (every 2 s for the test) to write a copy"
 
 
 def p1_copy():
@@ -382,4 +385,5 @@ h.run(
         p5_after,
         cleanup,
     ],
+    paced_by="state",
 )

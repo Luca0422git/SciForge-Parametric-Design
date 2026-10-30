@@ -537,6 +537,13 @@ def busy(since=None):
         reasons.append("input still being played (%d)" % len(BUSY))
     if _searching():
         reasons.append("a dialog is still looking for the largest value that fits")
+    try:
+        # TechDraw draws a view's lines and faces in Qt's thread pool (its only user here):
+        # what the sheet shows, and what SciForge works out from it, comes after.
+        if QtCore.QThreadPool.globalInstance().activeThreadCount():
+            reasons.append("TechDraw is still drawing a view")
+    except Exception:
+        pass
     due = _posted.due()
     if due:
         reasons.append("work posted for a moment later: %s" % ", ".join(due[:6]))
@@ -565,13 +572,11 @@ def _panels_behind():
         from sciforge import browser_ui, doc_epoch, timeline_ui
 
         key = doc_epoch.key()
-        if key is None:
-            return found
         for name, panel, holds in (
             ("browser", browser_ui.widget(), ("_busy", "_renaming")),
             ("timeline", timeline_ui.widget(), ("_busy", "_drag", "_editor")),
         ):
-            if panel is None or not _alive(panel):
+            if key is None or panel is None or not _alive(panel):
                 continue
             timer, gate = getattr(panel, "_timer", None), getattr(panel, "_gate", None)
             if gate is None or timer is None or not timer.isActive():
@@ -592,6 +597,65 @@ def _panels_behind():
         if session is not None and timer is not None and timer.isActive():
             if session._shown_key != session._visibility_key():
                 found.append("simulation results view")
+    except Exception:
+        pass
+    try:
+        # The SKETCH PALETTE reads FreeCAD's construction mode every 300 ms (X toggles it):
+        # its Linetype button and the note about it come with that read (sketch_qa F).
+        from sciforge import sketch_mode
+
+        session = sketch_mode.current()
+        palette = getattr(session, "palette", None) if session is not None else None
+        timer = getattr(palette, "_mode_timer", None)
+        if palette is not None and timer is not None and timer.isActive():
+            if palette._mode != sketch_mode.construction_mode():
+                found.append("sketch palette")
+        # The sketch's floating check (it ends a line chain) follows the chain's end on a
+        # 100 ms poll: after a zoom it is where the end was until then (polish2_sketch_check).
+        from sciforge import sketch_check
+
+        check = getattr(session, "check", None) if session is not None else None
+        button = getattr(check, "button", None)
+        timer = getattr(check, "timer", None)
+        if button is not None and timer is not None and timer.isActive() and button.isVisible():
+            kind, at = check.wanted()
+            if kind is not None:
+                size, parent = sketch_check.SIZE, button.parentWidget()
+                centre = QtCore.QPoint(int(round(at.x())), int(round(at.y()))) + sketch_check.OFFSET
+                left = max(0, min(parent.width() - size, centre.x() - size // 2))
+                top = max(0, min(parent.height() - size, centre.y() - size // 2))
+                if button.pos() != QtCore.QPoint(left, top):
+                    found.append("sketch's finish check")
+    except Exception:
+        pass
+    try:
+        # A drawing's section switches off its lines beyond its depth (and a cut hole's
+        # seam) once TechDraw has drawn them, on a look 1.5, 3, 6 and 12 s after a change:
+        # until then it shows TechDraw's lines (drawing2_sections E, CI trial #312).
+        from sciforge import drawing, drawing_depth
+
+        for doc in App.listDocuments().values():
+            for obj in doc.Objects:
+                if obj.TypeId != drawing.SECTION or drawing.has_breakout(obj):
+                    continue  # (a break-out section follows its own way, drawing_breakout)
+                if not drawing_depth._sources(obj):
+                    continue
+                lines = drawing_depth.section_lines(obj)
+                mode, value = drawing.section_depth(obj)
+                wanted = "%s %g | %s |" % (mode, value, drawing_depth._signature(lines))
+                if lines and not drawing_depth.signature(obj).startswith(wanted):
+                    found.append("depth of %s" % obj.Label)
+    except Exception:
+        pass
+    try:
+        # The AI chat's worker thread hands its answers and tool calls to the panel, which
+        # takes them every 50 ms: the worker can have ended while Send is still greyed out
+        # (ai_chat, Stop, CI trial #312).
+        from sciforge.ai import chat_ui
+
+        chat = chat_ui.panel()
+        if chat is not None and _alive(chat) and not (chat.events.empty() and chat.calls.empty()):
+            found.append("AI chat")
     except Exception:
         pass
     return found

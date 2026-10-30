@@ -81,7 +81,16 @@ h.run("my_scenario", [new_design, open_offset, solve, ...], paced_by="state")
 - The browser and the timeline read the design on a poll (0.5 / 0.4 s) once it changed:
   settling includes them having read the last change (an active component's see-through look
   comes with the browser's read). The RESULTS view follows the bodies' eyes on its own tick:
-  settling includes it having followed them.
+  settling includes it having followed them. So do the SKETCH PALETTE (it reads the
+  construction mode X toggles every 0.3 s) and the sketch's floating finish check (it follows
+  the line chain's end every 0.1 s, also after a zoom).
+- TechDraw draws a drawing view's lines and faces in a thread (Qt's thread pool): settling
+  includes it being done. A straight section then switches off its lines beyond its depth on
+  SciForge's next look (1.5, 3, 6 and 12 s after a change): settling includes every section's
+  switched-off lines being worked out from the lines TechDraw now draws. (`d.wait_geometry`
+  is a plain settle when paced by state.)
+- The AI chat's worker thread hands its answers to the panel, which takes them every 50 ms:
+  settling includes nothing waiting there (the worker can end while Send is still grey).
 - A menu entry the browser runs a moment after its menu closed (Rename opens its field then):
   the menu helpers (`widget_input.right_click`, `click_menu`) process the events the click
   posted before they return; a check that needs more waits for it by state.
@@ -147,6 +156,7 @@ A green run proves little: the flaky scenarios also passed on most runs.
   | Combine's operation greyed out (drop-down) | bodies_combine | step b_choose_cut: "the drop-down takes a choice (Cut): greyed out", at once |
   | the ViewCube menu's Go Home renamed | viewcube_menu | step menu: the entries listed, Go Home missing, at once |
   | the Move dialog ignores picks (3D click) | bodies_qa | step d_drag_negative: "body picked" with the dialog's empty pick list |
+  | Extrude ignores a picked Operation (drop-down; `choose` checks the list's `activated`) | extrude_presspull_objects | step intersected: "Intersect keeps the 10 x 10 x 10 inside the extrusion", the volume shown |
 
 The journey (`journey_gui.py`, part of the base tests) runs on the harness too, paced by state.
 
@@ -188,7 +198,11 @@ compiled again (an artifact of attempt 1 is there for attempt 2: the scenario de
 - A `QMenu` takes a click only on the entry it has lit, lights one only on a move it was told
   about, and ignores the first six moves within 10 px of where it opened (`hasMouseMoved`).
 - A drop-down list that opens under the pointer follows the pointer: `dialog_input.choose` leaves
-  the pointer where it is and steps with the keys.
+  the pointer where it is and steps with the keys, counted from the list's own row. (Moving the
+  pointer onto the drop-down first kept its list from opening at all: bodies_combine, 2 of 2.)
+  It checks that the list took the choice (its `activated` signal), not what the box shows a
+  moment later: the app may answer with another (Extrude shows New Body again, and says why,
+  when Join is refused; extrude_presspull_qa2 P8, CI trial #312).
 - Any wait lets the app's timers run: a row aimed at, then the wait for the pointer, then the
   click landed on another row after the browser rebuilt. `widget_input.click_item` presses only
   once the row under the pointer is the row wanted.

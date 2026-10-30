@@ -88,7 +88,7 @@ class _Fake(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         s["requests"].append(json.loads(self.rfile.read(length) or b"{}"))
         if s["loop"]:
-            time.sleep(0.3)  # on purpose: a real model takes seconds per answer (time to press Stop)
+            time.sleep(0.3)  # on purpose: a model takes time per answer (time to press Stop)
             self._json(_call("get_design", {}, len(s["requests"])))
         elif s["script"]:
             self._json(s["script"].pop(0))
@@ -227,6 +227,7 @@ def endless_model():
 
 endless_model.done = lambda: panel().busy() and panel().stop_button.isEnabled()
 endless_model.done_what = "the chat running (Stop offered)"
+endless_model.while_busy = True  # the chat goes on until Stop: the app does not settle
 
 
 def press_stop():
@@ -237,6 +238,7 @@ def press_stop():
 
 press_stop.done = lambda: not panel().busy()
 press_stop.done_what = "the chat stopped"
+press_stop.while_busy = True  # Stop is pressed while the chat runs
 
 
 def stopped():
