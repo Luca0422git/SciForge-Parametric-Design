@@ -283,3 +283,27 @@ def setup(doc_name):
     extrude.make(body, sk, {"distance": 10.0})
     App.ActiveDocument.recompute()
     h.fit()
+
+
+FACES = ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1))
+
+
+def at_a_face():
+    """True when a face of the cube is seen straight on, as exactly as looks_along checks it:
+    where FreeCAD's animated turns end (it animates them on its own timers, which settling
+    cannot see; mid-turn the view is tilted)."""
+    return any(looks_along(direction) for direction in FACES)
+
+
+def camera_stopped():
+    """A condition: true once the camera has not changed over three looks in a row (a turn
+    stopped part way, which ends at no face)."""
+    seen = []
+
+    def stopped():
+        cam = h.view().getCameraNode()
+        key = (tuple(cam.position.getValue().getValue()), tuple(cam.orientation.getValue().getValue()))
+        seen.append(key)
+        return len(seen) >= 3 and seen[-1] == seen[-2] == seen[-3]
+
+    return stopped

@@ -321,7 +321,13 @@ def f_refused():
     answer = ai("edit_step", {"step": t.obj("Fillet 1").Name, "set": {"radius": 50}})
     h.check(
         "F: R50 is refused with the largest radius that fits",
-        answer["is_error"] and "Largest radius that fits here" in answer["text"],
+        answer["is_error"] and "Largest radius" in answer["text"] and "fits here" in answer["text"],
+        answer["text"][:400],
+    )
+    # (the search for it has a time limit of its own: real time, which --stress slows)
+    h.speed_check(
+        "F: ... found within the search's time limit",
+        "Largest radius that fits here" in answer["text"],
         answer["text"][:400],
     )
     h.check("F: the design is as before", shapes() == before, (shapes(), before))

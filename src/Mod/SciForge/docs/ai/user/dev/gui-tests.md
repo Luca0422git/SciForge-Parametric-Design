@@ -59,7 +59,9 @@ h.run("my_scenario", [new_design, open_offset, solve, ...], paced_by="state")
   the step before and its own `step.ready` holds; the next step starts once `step.done` holds and
   the app has settled again. A scenario without it (`paced_by="timer"`, the default for the ones
   not converted yet) waits each step's fixed `wait_ms` as before.
-- Inside a step: `h.wait_for(condition, "what it is")`, `h.settle()`, and for something that
+- Inside a step: `h.wait_for(condition, "what it is")`, `h.settle()`, `h.view_still()` (two
+  frames in a row show the same view: after a fit, before a pixel is computed; `h.fit()` waits
+  for it), and for something that
   opens and runs its own loop (a menu, a modal dialog) `h.when(condition, action, "what")` set up
   before the call that opens it. A step that only waits for a long operation (inserting
   twenty parts, a solve) says so once with `step.timeout_s`. Menus: `h.choose_from(open_it, path, "the X menu")`,
@@ -137,7 +139,16 @@ A green run proves little: the flaky scenarios also passed on most runs.
   Actions > SciForge scenario debug, input `repeat`.
 - **A real bug still fails:** break the feature on purpose in a throwaway change (the menu command
   does nothing) and check that the scenario fails fast, naming the step and the state. Do not push
-  that change.
+  that change. Done for the rewritten helpers (2026-10-29/30), each failing in seconds:
+
+  | Broken on purpose | Scenario | Failed with |
+  |---|---|---|
+  | Duplicate With Joints does nothing (ribbon menu) | vex_duplicate | step a_open: "Waited for Duplicate With Joints is open", stopped, 27 steps not run |
+  | a command hangs in a question box | (a test scenario) | the watchdog: "Step a_open ended within 20 s ... modal: QMessageBox" |
+  | the browser's Rename does nothing (right-click menu) | components_basic | step e_rename: "Waited for the rename field of 'Pin' to open", stopped |
+  | Combine's operation greyed out (drop-down) | bodies_combine | step b_choose_cut: "the drop-down takes a choice (Cut): greyed out", at once |
+  | the ViewCube menu's Go Home renamed | viewcube_menu | step menu: the entries listed, Go Home missing, at once |
+  | the Move dialog ignores picks (3D click) | bodies_qa | step d_drag_negative: "body picked" with the dialog's empty pick list |
 
 The journey (`journey_gui.py`, part of the base tests) runs on the harness too, paced by state.
 

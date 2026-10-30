@@ -199,10 +199,11 @@ def b_z_box():
     h.check("B beside the Z arrow", ok, detail)
     # The first digit arrives at the 3D view and goes into the box, which takes the
     # keyboard; a person's next keys then reach the box itself.
+    before = box.text()
     QtTest.QTest.keyClick(h.gl_widget(), QtCore.Qt.Key_1)
     h.wait_for(
-        lambda: QtWidgets.QApplication.focusWidget() not in (None, h.gl_widget()),
-        "the value box to take the keyboard",
+        lambda: box.hasFocus() and box.text() != before and box.text().startswith("1"),
+        "the value box to take the keyboard and the first digit",
     )
     focus = QtWidgets.QApplication.focusWidget() or h.gl_widget()
     QtTest.QTest.keyClick(focus, QtCore.Qt.Key_2)

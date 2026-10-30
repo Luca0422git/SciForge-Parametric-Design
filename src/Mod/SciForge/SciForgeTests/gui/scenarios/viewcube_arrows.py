@@ -68,6 +68,8 @@ def step(arrow, name, direction, up):
 
 def quick_clicks():
     vc.animations(True)
+    st["from"] = vc.orientation()
+    st["stopped"] = vc.camera_stopped()
     vc.click("turn-right")
     vc.click("turn-right")
 
@@ -83,12 +85,23 @@ def quick_done():
 
 
 quick_done.wait_ms = 1800
+def turned_to_a_face():
+    """The animated turn ended: the camera stopped, at a face, away from the one it started at
+    (FreeCAD runs the turn on its own timers, which settling cannot see; a turn on to FRONT
+    passes RIGHT on its way)."""
+    return st["stopped"]() and vc.at_a_face() and vc.turned(st["from"]) > 45.0
+
+
+quick_clicks.done = turned_to_a_face
+quick_clicks.done_what = "the animated turns to end at another face"
 
 
 def spaced_clicks():
     """Two clicks on the right triangle 150 ms apart (a normal double-click): the second
     one comes while the view is still turning."""
     vc.animations(True)
+    st["from"] = vc.orientation()
+    st["stopped"] = vc.camera_stopped()
     vc.click("turn-right")
 
     def second():
@@ -99,11 +112,14 @@ def spaced_clicks():
 
 
 spaced_clicks.wait_ms = 1800
+spaced_clicks.done = lambda: "second" in st and turned_to_a_face()
+spaced_clicks.done_what = "the second click, and the animated turn to end at another face"
 
 
 def spaced_done():
-    h.check("150 ms later the arrow is still there to click", st.get("arrow_there"), st)
-    h.check("the second click went to the arrow", st.get("second"), st)
+    # (a click 150 ms into a turn: real time, which --stress slows on purpose)
+    h.speed_check("150 ms later the arrow is still there to click", st.get("arrow_there"), st)
+    h.speed_check("the second click went to the arrow", st.get("second"), st)
     h.check(
         "two clicks 150 ms apart add up: from BACK to FRONT",
         vc.looks_along((0, 1, 0)) and vc.z_up(),
@@ -117,10 +133,23 @@ def stopped_turn():
     stops its turning animation). The view stays tilted: no arrows there."""
     vc.animations(True)
     vc.click("turn-right")
-    QtCore.QTimer.singleShot(120, lambda: h.view().zoomIn())  # on purpose: mid-turn (120 ms)
+    st.pop("zoomed", None)
+
+    def zoom():
+        h.view().zoomIn()
+        st["zoomed"] = True
+
+    QtCore.QTimer.singleShot(120, zoom)  # on purpose: mid-turn (120 ms)
+    stopped = vc.camera_stopped()
+    # done: the zoom ran and the camera stopped; the cube keeps its arrows for a turn's length
+    # after the click (a quick second click adds up), then drops them on a tilted view
+    stopped_turn.done = lambda: st.get("zoomed") and (
+        vc.at_a_face() or (stopped() and not getattr(vc.cube(), "face_from_aim", False))
+    )
 
 
 stopped_turn.wait_ms = 1800
+stopped_turn.done_what = "the zoom to stop the turn and the cube to drop the arrows it kept for it"
 
 
 def stopped_done():
