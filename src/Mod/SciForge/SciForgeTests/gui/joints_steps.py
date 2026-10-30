@@ -13,7 +13,6 @@ import time
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtWidgets
 
 from SciForgeTests.gui import blend_steps as b
 from SciForgeTests.gui import bodies_steps as s
@@ -77,14 +76,10 @@ def joint_panel():
 
 
 def hover(point):
-    """Move the mouse onto a 3D point and give the snap hover time to look."""
+    """Move the mouse onto a 3D point and wait until the snap hover has looked there (its
+    single-shot HOVER_MS timer, started by the move, has run: part of settling)."""
     h.move(h.screen_point(point))
-    QtWidgets.QApplication.processEvents()
-    for _ in range(6):
-        from PySide6 import QtTest
-
-        QtTest.QTest.qWait(40)
-        QtWidgets.QApplication.processEvents()
+    h.settle("the snap hover to look under the pointer")
 
 
 def snap_kinds(p):
@@ -119,13 +114,6 @@ def press_j():
 
 def menu(label):
     return s.menu("ASSEMBLE", label)
-
-
-def wait(ms):
-    from PySide6 import QtTest
-
-    QtTest.QTest.qWait(ms)
-    QtWidgets.QApplication.processEvents()
 
 
 def row_labels():
@@ -175,28 +163,52 @@ def frames(joint):
     return jm.jcs_global(joint, 0), jm.jcs_global(joint, 1)
 
 
-def sample(joint, part, seconds=2.0):
-    """Watch a moving joint (an animation playing) for a while: one record per moment."""
+def playing():
+    """The joint animation playing now (the dialog's Animate or Animate Joint), or None."""
+    from sciforge import joints_ui
+
+    p = joint_panel()
+    animator = getattr(p, "animator", None) if p is not None else None
+    animator = animator or joints_ui._STANDALONE.get("animator")
+    return animator if animator is not None and animator.running else None
+
+
+def sample(joint, part, cycles=1.0):
+    """Watch a playing joint animation for `cycles` of its cycle, as the animation counts
+    it (joints_ui.ANIMATION_SECONDS on its own clock, where its phase comes from): one record
+    each time the part moved. Ends early if the animation stops."""
+    from sciforge import joints_ui
+
     jm = joints_module()
     out = []
-    end = time.time() + seconds
-    while time.time() < end:
-        wait(40)
+    last = [None]
+
+    def look():
+        animator = playing()
+        if animator is None:
+            return True
         try:
-            j1, j2 = frames(joint)
-            angle, slide = jm.value(joint)
-            out.append(
-                {
-                    "angle": angle,
-                    "slide": slide,
-                    "j1": j1,
-                    "j2": j2,
-                    "plc": App.Placement(part.Placement),
-                    "box": part.Shape.BoundBox,
-                }
-            )
+            plc = App.Placement(part.Placement)
+            key = (jm.value(joint), tuple(plc.Base), tuple(plc.Rotation.Q))
+            if key != last[0]:
+                last[0] = key
+                j1, j2 = frames(joint)
+                angle, slide = key[0]
+                out.append(
+                    {
+                        "angle": angle,
+                        "slide": slide,
+                        "j1": j1,
+                        "j2": j2,
+                        "plc": plc,
+                        "box": part.Shape.BoundBox,
+                    }
+                )
         except Exception:
             pass
+        return time.perf_counter() - animator.started >= cycles * joints_ui.ANIMATION_SECONDS
+
+    h.wait_for(look, "the joint animation to play %g cycle(s)" % cycles)
     return out
 
 

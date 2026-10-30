@@ -66,7 +66,7 @@ def top_view():
 
 def drag3d(a, bb, steps=16):
     h.drag(h.screen_point(a), h.screen_point(bb), steps=steps)
-    j.wait(200)
+    h.settle("the drag to be applied")
 
 
 def wall_part():
@@ -295,7 +295,7 @@ def s5_drag_wall():
     top_view()
     a = h.screen_point(V(46.5, 25, 40))
     h.drag(a, QtCore.QPoint(a.x() + 50, a.y() + 30), steps=12)
-    j.wait(200)
+    h.settle("the drag to be applied")
 
 
 def s5_moved():

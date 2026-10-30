@@ -183,7 +183,7 @@ def p4_check():
     d = options()
     if h.check("P4 the window", d is not None):
         w.click(cancel_button(d))
-    m.process(200)
+        h.wait_for(lambda: options() is None, "the Image Options window to close")
     h.check("P4 Cancel: no file asked for", len(s["saved"]) == s["count"])
     h.check("P4 closed", options() is None)
 

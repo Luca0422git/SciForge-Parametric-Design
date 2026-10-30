@@ -160,18 +160,21 @@ POPUPS = []  # pop-ups seen by press_guarded (and closed so the test does not ha
 
 
 def press_guarded(key, modifiers=QtCore.Qt.NoModifier):
-    """Press a key that must not open a pop-up; if one opens anyway it is recorded in
-    POPUPS and closed, so the scenario fails instead of hanging on a modal dialog."""
+    """Press a key that must not open a pop-up; if one opens anyway (now or from what the
+    key set going, until the app has settled) it is recorded in POPUPS and closed, so the
+    scenario fails instead of hanging on a modal dialog."""
 
-    def look():
-        found = h.popups()
-        if found:
-            POPUPS.extend(found)
-            h.shot("popup")
-            h.close_popups()
+    def caught():
+        POPUPS.extend(h.popups())
+        h.shot("popup")
+        h.close_popups()
 
-    QtCore.QTimer.singleShot(600, look)
-    h.press(key, modifiers)
+    watch = h.when(lambda: bool(h.popups()), caught, "the app to settle after the key (no pop-up)")
+    try:
+        h.press(key, modifiers)
+        h.settle("the app to settle after the key")
+    finally:
+        watch["cancelled"] = True
 
 
 def press_enter(widget):
@@ -192,11 +195,7 @@ def choose(combo, label):
     view = combo.view()
     # A busy machine opens the list a moment after the click; keys sent before it was there
     # went to the closed box and the Enter never came (revolve_qa_part P9 under load).
-    for _ in range(20):
-        QtWidgets.QApplication.processEvents()
-        if view.isVisible():
-            break
-        QtTest.QTest.qWait(25)
+    h.wait_for(view.isVisible, "the list of the drop-down to open (%s)" % label)
     target = labels.index(label)
     current = view.currentIndex().row() if view.isVisible() else combo.currentIndex()
     widget = view if view.isVisible() else combo

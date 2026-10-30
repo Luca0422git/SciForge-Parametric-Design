@@ -79,7 +79,7 @@ def top_view():
 def drag3d(a, b, steps=16):
     """A left-button drag from 3D point a to 3D point b (as seen now)."""
     h.drag(h.screen_point(a), h.screen_point(b), steps=steps)
-    j.wait(150)
+    h.settle("the drag to be applied")
 
 
 def placement_of(obj):
@@ -197,7 +197,7 @@ def g3_drag_plate():
 
 def drag_px(a, b):
     h.drag(a, b, steps=12)
-    j.wait(150)
+    h.settle("the drag to be applied")
 
 
 def g3_moved_together():

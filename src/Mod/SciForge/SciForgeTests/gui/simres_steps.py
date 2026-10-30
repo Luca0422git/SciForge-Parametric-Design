@@ -11,7 +11,7 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtGui, QtWidgets
+from PySide import QtCore, QtWidgets
 
 from SciForgeTests.gui import dialog_input as ui
 from SciForgeTests.gui import harness as h
@@ -145,74 +145,28 @@ def click_tab(tab_id):
 
 
 def menu(group, label):
-    """Click a ribbon group's name, then `label` in its menu with the mouse (no submenus in the
-    RESULTS tab's groups). Like a hand, the pointer travels to the entry in a few steps (a Qt
-    menu ignores a click that comes without the mouse having moved since it opened). When the
-    entry did not take the click (seen now and then on the second click of the same entry),
-    the menu is opened and the entry clicked once more, as a person would."""
-    from PySide6 import QtTest
-
+    """Click a ribbon group's name, then `label` in its menu with the mouse
+    (sketch_input.menu_item: the entry lit under the pointer before the click). True when the
+    entry's command ran (its action triggered)."""
     from SciForgeTests.gui import sketch_input
 
     widget = sketch_input._group_widget(group)
-    if widget is None:
-        h.check("Ribbon group %s is shown" % group, False)
-        return False
-    path = sketch_input._find(widget.menu, label)
+    path = sketch_input._find(widget.menu, label) if widget is not None else []
     if len(path) != 1:
-        h.check("Menu entry %s > %s exists" % (group, label), False)
-        return False
-    popup, action = path[0]
-    done = {"clicked": False, "triggered": False}
+        return sketch_input.menu_item(group, label)  # (it says what is missing)
+    action = path[0][1]
+    done = {"triggered": False}
 
     def triggered(*_args):
         done["triggered"] = True
 
-    def click(tries=0):
-        try:
-            if not popup.isVisible():
-                if tries < 20:
-                    QtCore.QTimer.singleShot(150, lambda: click(tries + 1))
-                return
-            target = popup.actionGeometry(action).center()
-            start = QtCore.QPoint(target.x() - 40, max(2, target.y() - 30))
-            for k in range(9):  # (more than 6 movements: Qt's menu takes the click then)
-                QtTest.QTest.mouseMove(popup, start + (target - start) * (k / 8.0))
-            QtTest.QTest.mouseClick(popup, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, target)
-            done["clicked"] = True
-        except Exception as exc:
-            h.check("Menu click %s" % label, False, exc)
-        if popup.isVisible() and not done["triggered"]:
-            QtCore.QTimer.singleShot(200, popup.close)
-
-    def safety():  # never leave a menu open (it would block the scenario)
-        popup_now = QtWidgets.QApplication.activePopupWidget()
-        while popup_now is not None:
-            popup_now.close()
-            popup_now = QtWidgets.QApplication.activePopupWidget()
-
     action.triggered.connect(triggered)
     try:
-        for _attempt in range(3):
-            # Qt's menu remembers where the pointer was when it opened and takes no click there
-            # unless it saw the mouse move; QTest moves the X pointer, whose motion events come
-            # a moment later: the pointer goes far away first, and that is waited for
-            gl = h.gl_widget()
-            QtGui.QCursor.setPos(gl.mapToGlobal(QtCore.QPoint(gl.width() - 30, gl.height() - 30)))
-            QtTest.QTest.qWait(150)
-            QtCore.QTimer.singleShot(300, click)
-            guard = QtCore.QTimer()
-            guard.setSingleShot(True)
-            guard.timeout.connect(safety)
-            guard.start(4000)
-            widget.label.click()  # the menu runs its own loop until it closes
-            guard.stop()
-            _process()
-            if done["triggered"] or not action.isEnabled():
-                break
+        sketch_input.menu_item(group, label)
+        _process()
     finally:
         action.triggered.disconnect(triggered)
-    h.check("Clicked %s > %s" % (group, label), done["clicked"] and done["triggered"])
+    h.check("%s > %s ran" % (group, label), done["triggered"])
     return done["triggered"]
 
 

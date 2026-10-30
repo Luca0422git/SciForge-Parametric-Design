@@ -278,7 +278,7 @@ def d5_back():
 # -- D6 -------------------------------------------------------------------------------------------
 def d6_animate():
     j.browser_menu("Revolute 1", "Animate Joint")
-    state["d6"] = j.sample(joint(), j.block(), 2.0)
+    state["d6"] = j.sample(joint(), j.block())
 
 
 def d6_watched():

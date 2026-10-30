@@ -155,7 +155,7 @@ def n2_drag():
     top_view()
     state["arm"] = App.Placement(arm().Placement)
     h.drag(h.screen_point(V(27, 15, 30)), h.screen_point(V(20, 22, 30)), steps=16)
-    j.wait(200)
+    h.settle("the drag to be applied")
 
 
 def n2_turned():
@@ -172,7 +172,7 @@ def n3_drag_base():
     state["block_box"] = global_box(j.block())
     a = h.screen_point(V(4, 27, 10))
     h.drag(a, a.__class__(a.x() + 60, a.y()), steps=12)
-    j.wait(200)
+    h.settle("the drag to be applied")
 
 
 def n3_moved():

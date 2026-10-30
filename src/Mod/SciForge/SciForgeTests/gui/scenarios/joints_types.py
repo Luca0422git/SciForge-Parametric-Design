@@ -90,7 +90,7 @@ def round_steps(tag, label, kind, freecad_type, setup=(), motion=None, after_ok=
             return
         b.click_widget(p.animate)
         h.check("%s: Animate pressed" % tag, p.animate.isChecked() and p.animator is not None)
-        state[tag] = j.sample(joint, j.block(), 2.1)
+        state[tag] = j.sample(joint, j.block())
         b.click_widget(p.animate)  # press again: it stops and puts the block back
 
     def animated():

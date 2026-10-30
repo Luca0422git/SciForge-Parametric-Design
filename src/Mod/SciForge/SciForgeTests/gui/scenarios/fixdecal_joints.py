@@ -167,7 +167,7 @@ def j5_drag():
     # at 90 the block's top (z 30) covers x 15..25, y 5..25 round the axis (20, 15): press 7 mm
     # along +Y from the axis and drag round to 7 mm along -X (a further quarter turn)
     h.drag(h.screen_point(V(20, 22, 30)), h.screen_point(V(13, 15, 30)), steps=16)
-    j.wait(150)
+    h.settle("the drag to be applied")
 
 
 j5_drag.wait_ms = 1500

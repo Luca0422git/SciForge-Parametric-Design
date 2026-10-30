@@ -8,7 +8,6 @@ import tempfile
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
-from PySide6 import QtTest
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import timeline_input as t
@@ -22,10 +21,8 @@ def near(a, b, tol=1e-3):
     return a is not None and b is not None and abs(a - b) <= tol
 
 
-def process(ms=0):
+def process():
     QtWidgets.QApplication.processEvents()
-    if ms:
-        QtTest.QTest.qWait(ms)
 
 
 def project_folder():
@@ -204,54 +201,15 @@ def told():
 # -- the application menu (the quick-access Menu button) -----------------------------------------
 def app_menu_item(path):
     """Click the Menu button at the top left, then the entries of `path` ("File", "Capture
-    Image") with the mouse, opening the submenus on the way. Returns a dict whose "clicked"
-    turns True once the last entry was clicked."""
+    Image") with the mouse, opening the submenus on the way (h.choose_from: each entry lit
+    under the pointer, each submenu waited for; the first "File" is SciForge's, FreeCAD's
+    comes after it). Returns a dict whose "clicked" is True once the last entry was clicked."""
     done = {"clicked": False}
     button = w.quick_access("Menu")
     if not h.check("the Menu button", button is not None):
         return done
-
-    def step(index, tries=0):
-        try:
-            menu = QtWidgets.QApplication.activePopupWidget()
-            if not isinstance(menu, QtWidgets.QMenu) or (
-                index and menu.objectName() != ("SciForgeFileMenu")
-            ):
-                if tries < 30:
-                    QtCore.QTimer.singleShot(100, lambda: step(index, tries + 1))
-                else:
-                    h.check(
-                        "menu %s opened" % path[index],
-                        False,
-                        menu.objectName() if menu is not None else None,
-                    )
-                    close_popups()
-                return
-            action = None
-            for candidate in menu.actions():  # the first one (SciForge's File, not FreeCAD's)
-                if candidate.text().split("\t")[0].replace("&", "") == path[index]:
-                    action = candidate
-                    break
-            if action is None:
-                h.check("menu entry %s" % path[index], False, [a.text() for a in menu.actions()])
-                close_popups()
-                return
-            rect = menu.actionGeometry(action)
-            QtTest.QTest.mouseMove(menu, rect.center())
-            if index < len(path) - 1:
-                menu.setActiveAction(action)
-                QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Right)
-                QtCore.QTimer.singleShot(400, lambda: step(index + 1))
-                return
-            QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center())
-            done["clicked"] = True
-        except Exception as exc:
-            h.check("app menu %s" % "/".join(path), False, exc)
-            close_popups()
-
-    QtCore.QTimer.singleShot(300, lambda: step(0))
-    QtCore.QTimer.singleShot(8000, close_popups)  # never leave a menu open
-    w.click(button)
+    done["clicked"] = h.choose_from(lambda: w.click(button), path, "the Menu button's menu")
+    QtWidgets.QApplication.processEvents()  # (the entry's posted work)
     return done
 
 

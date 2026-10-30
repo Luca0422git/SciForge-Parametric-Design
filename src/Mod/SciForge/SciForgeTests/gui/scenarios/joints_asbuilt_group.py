@@ -304,7 +304,7 @@ def c_done():
 def c_animate():
     j.browser_menu("Revolute 1", "Animate Joint")
     joint = j.joint_list()[0]
-    state["c_samples"] = j.sample(joint, j.block(), 2.0)
+    state["c_samples"] = j.sample(joint, j.block())
 
 
 def c_watched():

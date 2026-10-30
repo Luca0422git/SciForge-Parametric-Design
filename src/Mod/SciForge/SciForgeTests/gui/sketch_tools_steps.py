@@ -56,10 +56,11 @@ def move(point):
 
 
 def hover(point, towards=V(1.0, 0.6, 0)):
-    """Come to the sketch point in a few steps, as a hand does, and rest there."""
+    """Come to the sketch point in a few steps, as a hand does, and rest there until the view
+    has drawn what is under the pointer (FreeCAD's sketch finds it when it redraws)."""
     for f in (3.0, 1.5, 0.5, 0.0):
         move(point + towards * f)
-    QtTest.QTest.qWait(60)
+    h.view_drawn()
 
 
 def click(point, towards=V(1.0, 0.6, 0), modifiers=QtCore.Qt.NoModifier):
@@ -74,7 +75,7 @@ def click(point, towards=V(1.0, 0.6, 0), modifiers=QtCore.Qt.NoModifier):
 def press(point):
     pos = h.screen_point(g(point))
     move(point)
-    QtTest.QTest.qWait(60)
+    h.view_drawn()
     QtTest.QTest.mousePress(h.gl_widget(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
     QtWidgets.QApplication.processEvents()
     return pos

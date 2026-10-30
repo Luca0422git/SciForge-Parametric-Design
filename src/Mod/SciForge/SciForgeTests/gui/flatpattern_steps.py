@@ -16,7 +16,6 @@ radius 2: 36 + 26 + 36 + 26 + 3 BA = 130.78584 once one corner is ripped away.
 
 import math
 import os
-import time
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -256,21 +255,19 @@ def message(p=None):
     return (p.message.text() or "") + " | " + (info.text() if info is not None else "")
 
 
-def settle(timeout_ms=8000):
-    end = time.time() + timeout_ms / 1000.0
-    while time.time() < end:
-        QtTest.QTest.qWait(50)
+def settle(timeout_ms=None):
+    """The Flat Pattern dialog caught up with the last input: its preview timer and its event
+    timer done, no recompute running (timeout_ms: no longer used)."""
+
+    def events_due():
         p = sheet_panel()
-        timer = getattr(p, "_timer", None) if p is not None else None
         events = getattr(p, "_events", None) if p is not None else None
-        busy = (
-            (timer is not None and timer.isActive())
-            or (events is not None and events.isActive())
-            or getattr(App.ActiveDocument, "Recomputing", False)
-        )
-        if not busy:
-            break
-    QtTest.QTest.qWait(120)
+        try:
+            return events is not None and events.isActive()
+        except RuntimeError:
+            return False
+
+    h.caught_up(sheet_panel(), extra=events_due)
 
 
 def click_check(widget):

@@ -7,8 +7,7 @@ import os
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtWidgets
-from PySide6 import QtTest
+from PySide import QtWidgets
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import widget_input as wi
@@ -106,33 +105,14 @@ def close_tab(document):
 
 
 def click_menu_entry(button, entry):
-    """Click a button that opens a menu (exec), then the entry `entry` in it."""
-    result = {"ok": False, "tries": 0}
+    """Click a button that opens a menu (exec), then the entry `entry` in it (h.choose_from).
+    Returns {"ok": the entry was clicked, "texts": the menu's entries}."""
+    result = {"ok": False}
 
-    def pick():
-        menu = QtWidgets.QApplication.activePopupWidget()
-        if not isinstance(menu, QtWidgets.QMenu):
-            if result["tries"] < 30:
-                result["tries"] += 1
-                QtCore.QTimer.singleShot(50, pick)
-            return
+    def read(menu):
         result["texts"] = [a.text() for a in menu.actions()]
-        action = None
-        for a in menu.actions():
-            if a.text().replace("&", "").strip() == entry:
-                action = a
-        if action is None or not action.isEnabled():
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-            return
-        rect = menu.actionGeometry(action)
-        for i in range(8):
-            QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 10 + 8 * i, rect.center().y()))
-        QtTest.QTest.mouseMove(menu, rect.center())
-        QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center())
-        result["ok"] = True
 
-    QtCore.QTimer.singleShot(50, pick)
-    wi.click(button)
+    result["ok"] = h.choose_from(lambda: wi.click(button), [entry], "the menu of the button", report=False, read=read)
     process()
     return result
 

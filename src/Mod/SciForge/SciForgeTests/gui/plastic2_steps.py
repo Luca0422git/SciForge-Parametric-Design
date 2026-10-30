@@ -8,7 +8,6 @@ with the mouse and keyboard: the PLASTIC tab, its buttons and menus, clicks on s
 points, edges and browser rows, typing into the dialog's fields, dragging its arrows,
 double-clicking the timeline, Esc / OK / Cancel, Undo / Redo."""
 
-import time
 
 import FreeCAD as App
 import FreeCADGui as Gui
@@ -142,23 +141,10 @@ def advice_panel():
     return p if p is not None and not p._closed else None
 
 
-def settle(panel_fn, timeout_ms=8000):
-    """Let the open dialog's preview catch up (its timer done, no recompute running)."""
-    end = time.time() + timeout_ms / 1000.0
-    while time.time() < end:
-        QtTest.QTest.qWait(50)
-        p = panel_fn()
-        if p is None:
-            break
-        timer = getattr(p, "_timer", None)
-        busy = (
-            (timer is not None and timer.isActive())
-            or getattr(p, "_pending", False)
-            or getattr(App.ActiveDocument, "Recomputing", False)
-        )
-        if not busy:
-            break
-    QtTest.QTest.qWait(100)
+def settle(panel_fn, timeout_ms=None):
+    """The open dialog's preview caught up with the last input (panel_fn: the dialog, or a
+    function that finds it; timeout_ms: no longer used)."""
+    h.caught_up(panel_fn() if callable(panel_fn) else panel_fn)
 
 
 def type_field(panel, key, text):

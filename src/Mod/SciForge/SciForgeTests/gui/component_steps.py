@@ -138,6 +138,8 @@ def rename_row(label, text):
     """Rename a row through its menu: type the new name, Enter."""
     if not t.row_menu(label, "Rename"):
         return False
+    # (the browser runs a menu entry just after its menu closed)
+    h.wait_for(lambda: t.browser_field() is not None, "the rename field of %r to open" % label)
     field = t.browser_field()
     if not h.check("rename field open for %r" % label, field is not None):
         return False

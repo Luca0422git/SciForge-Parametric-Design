@@ -106,13 +106,17 @@ def menu_texts(widget, pos):
 
 def right_click(widget, pos, choose):
     """Right-click at pos, then click the menu entry `choose` (like a person). Returns
-    True if the entry was there and enabled. Esc closes the menu when choose is None."""
-    return h.choose_from(
+    True if the entry was there and enabled. Esc closes the menu when choose is None.
+    The events the click posted are then processed (the browser runs an entry a moment after
+    its menu closed: a rename field, a dialog), as the helper always did."""
+    ok = h.choose_from(
         lambda: _open_menu(widget, pos),
         [choose] if choose else [],
         "the right-click menu",
         report=False,
     )
+    _process()
+    return ok
 
 
 def right_click_sub(widget, pos, top, choose):
@@ -143,13 +147,16 @@ def right_click_sub(widget, pos, top, choose):
         report=False,
         read=read,
     )
+    _process()  # (the entry's posted work, as in right_click)
     return result
 
 
 def click_menu(button, choose):
     """Click a button that opens a menu (Home's ... of a place), then the entry `choose`.
     Returns True if the entry was there and enabled."""
-    return h.choose_from(lambda: click(button), [choose], "the menu of %s" % h.describe(button), report=False)
+    ok = h.choose_from(lambda: click(button), [choose], "the menu of %s" % h.describe(button), report=False)
+    _process()  # (the entry's posted work, as in right_click)
+    return ok
 
 
 def _picker(result, choose):

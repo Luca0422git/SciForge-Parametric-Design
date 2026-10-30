@@ -71,10 +71,9 @@ def timeline_shown():
 
 
 def wait_timeline():
-    """Let the timeline's 0.4 s refresh run (it hides itself for a design without history)."""
-    from PySide6 import QtTest
-
-    QtTest.QTest.qWait(500)
+    """Until the timeline has read the design (its 0.4 s poll; it hides itself for a design
+    without history): the app settled, which includes the timeline's read."""
+    h.settle("the timeline to read the design")
 
 
 # -- the design's right-click menu ------------------------------------------------------------
