@@ -640,6 +640,10 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
   family as 3.1.1's preview-after-OK (vex_qa_real, 0.03 deg): the Revolute type's preview
   animation and OK. joints_ui.Animator restores its start placements and solves on stop(); a
   stop that comes before the restore (was=False) or a solve that moves the part would leave it.
+  Seen again on CI #324 (2026-10-30, 7d7735e5): 3.17656 mm across after OK and after Undo,
+  FLAKY. Not reproduced here: 10 of 10 at full priority, and OK pressed 0, 0.2, 0.5, 0.9 and
+  1.4 s into the Revolute preview 10 of 10. A real app race on CI's machine: the test is right
+  to fail; not loosened. Needs a reproduction (or the CI artifact's log) before a fix.
 - **Open (found 2026-10-29 by the GUI test rework, not fixed): Create Sketch with a component
   active, the design's own XY row picked in the browser.** The component (Lid, at 0 0 0) has its
   XY in the same place as the design's. Picking the design's XY row put the sketch in Lid on a
@@ -1833,6 +1837,12 @@ branch off develop (a patch release was going out from develop). How it all work
 - My own slip, caught by CI: `dialog_input.choose`'s disconnect of its watch printed a PySide
   RuntimeWarning when the dialog had taken the connection away (the Report-view check counts
   it): it disconnects quietly now.
+- The full runs on the all-converted commit (CI #320 - #325) found five more full-speed races,
+  all fixed and proven 3 of 3 under `--stress`: Home's tile pictures (a worker thread),
+  analysis_steps.set_combo (a click on a list just opened is let go by Qt: the list stayed
+  open and Esc closed it, not the dialog), exchange2_manip's crowded arrows (pressed only where
+  no other arrow is lit; a wrong grab is said, not doubled), readme_shots, extrude_feel_keys.
+  Left: vex_shaft (Known issues above), an app race.
 
 ### Session log: quick patch 0.1.0-beta.3.1.3, stuck buttons (`develop`, 2026-10-29)
 
