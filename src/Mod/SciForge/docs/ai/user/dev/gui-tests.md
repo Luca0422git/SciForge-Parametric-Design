@@ -85,7 +85,8 @@ h.run("my_scenario", [new_design, open_offset, solve, ...], paced_by="state")
   comes with the browser's read). The RESULTS view follows the bodies' eyes on its own tick:
   settling includes it having followed them. So do the SKETCH PALETTE (it reads the
   construction mode X toggles every 0.3 s) and the sketch's floating finish check (it follows
-  the line chain's end every 0.1 s, also after a zoom).
+  the line chain's end every 0.1 s, also after a zoom), and Create Sketch's origin squares
+  (they keep their size on the screen by looking at the camera every 0.25 s).
 - TechDraw draws a drawing view's lines and faces in a thread (Qt's thread pool): settling
   includes it being done. A straight section then switches off its lines beyond its depth on
   SciForge's next look (1.5, 3, 6 and 12 s after a change): settling includes every section's
@@ -207,7 +208,9 @@ compiled again (an artifact of attempt 1 is there for attempt 2: the scenario de
   when Join is refused; extrude_presspull_qa2 P8, CI trial #312).
 - Any wait lets the app's timers run: a row aimed at, then the wait for the pointer, then the
   click landed on another row after the browser rebuilt. `widget_input.click_item` presses only
-  once the row under the pointer is the row wanted.
+  once the row under the pointer is the row wanted; `blend_steps.click_tab` the same for the
+  document tabs (the bar rebuilds its tabs when a design's title changes), then waits for
+  that design to show.
 - A target outside every SciForge window (a model point off the view) gets no pointer wait: Qt
   is never told of a pointer there; the input goes to the widget as it always did.
 - **The app times some clicks itself.** For 0.6 - 0.8 s after a click an overlay took (the

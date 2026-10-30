@@ -346,19 +346,44 @@ def top_cut():
 
 def click_tab(label_start):
     """Click the document tab (at the top, Fusion's place) whose title starts with
-    label_start."""
-    from SciForgeTests.gui import widget_input
-
+    label_start, as a person does: the press only once that tab is under the pointer (the
+    bar rebuilds its tabs when a title changes, a design marked as changed: the tab aimed at
+    moved during the wait for the pointer and the click took the other design, CI #315
+    revolve_qa_more P12), then until FreeCAD shows that design."""
     bar = h.document_tabs()
     if bar is None:
         h.check("document tabs exist", False)
         return False
-    for i in range(bar.count()):
-        if bar.tabText(i).startswith(label_start):
-            widget_input.click(bar, bar.tabRect(i).center())
-            return True
-    h.check("a tab %r" % label_start, False, [bar.tabText(i) for i in range(bar.count())])
-    return False
+
+    def wanted():
+        tabs = h.document_tabs()  # (in step with FreeCAD's own tabs)
+        for i in range(tabs.count()):
+            if tabs.tabText(i).startswith(label_start):
+                return i
+        return None
+
+    for _attempt in range(6):
+        index = wanted()
+        if index is None:
+            h.check("a tab %r" % label_start, False, [bar.tabText(i) for i in range(bar.count())])
+            return False
+        pos = bar.tabRect(index).center()
+        h.pointer_to(bar, pos)
+        if bar.tabAt(pos) == index and wanted() == index:
+            QtTest.QTest.mouseClick(bar, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
+            QtWidgets.QApplication.processEvents()
+            break
+    else:
+        h.check("the tab %r stays under the pointer" % label_start, False)
+        return False
+
+    def shown():
+        tabs = h.document_tabs()
+        current = tabs.currentIndex()
+        return current >= 0 and tabs.tabText(current).startswith(label_start)
+
+    h.wait_for(shown, "the design of the tab %r to show" % label_start)
+    return True
 
 
 def modified():

@@ -629,6 +629,21 @@ def _panels_behind():
     except Exception:
         pass
     try:
+        # Create Sketch's origin squares keep their size on the screen by looking at the
+        # camera every 250 ms: after a zoom they are their old size until then
+        # (origin_squares_small B, CI #315).
+        from sciforge import sketch_ui
+
+        for picker in list(sketch_ui.PlanePicker.LIVE):
+            timer = getattr(picker, "_zoom", None)
+            if timer is None or not timer.isActive() or not picker.callbacks:
+                continue
+            if picker._camera_key() != getattr(picker, "_camera", None):
+                found.append("origin squares")
+                break
+    except Exception:
+        pass
+    try:
         # A drawing's section switches off its lines beyond its depth (and a cut hole's
         # seam) once TechDraw has drawn them, on a look 1.5, 3, 6 and 12 s after a change:
         # until then it shows TechDraw's lines (drawing2_sections E, CI trial #312).

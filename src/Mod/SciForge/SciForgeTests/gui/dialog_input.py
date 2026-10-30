@@ -7,6 +7,8 @@ operate them the way a person does (clicks and key presses through Qt), never by
 setting values in code. Not a scenario itself (it lives outside scenarios/).
 """
 
+import warnings
+
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
 from PySide6 import QtTest
@@ -57,8 +59,27 @@ def choose(combo, text):
             combo.setFocus()
             _step(combo, target - combo.currentIndex())
     finally:
-        combo.activated.disconnect(took)
-    return target in picked or combo.currentText() == text
+        _disconnect(combo.activated, took)
+    return target in picked or _text(combo) == text
+
+
+def _disconnect(signal, slot):
+    """Disconnect quietly: the dialog may have taken the connection away or gone with the
+    drop-down itself (fixdecal_components K2, CI #315: PySide's RuntimeWarning about it went
+    to the Report view)."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            signal.disconnect(slot)
+    except (RuntimeError, TypeError):
+        pass
+
+
+def _text(combo):
+    try:
+        return combo.currentText()
+    except RuntimeError:  # (gone with its dialog)
+        return None
 
 
 def _step(widget, delta):
