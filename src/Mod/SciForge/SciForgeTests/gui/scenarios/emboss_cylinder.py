@@ -273,9 +273,6 @@ def e9_redone():
     h.shot("e9-done")
 
 
-for step in (e3_preview, e4_check, e5_check, e6_check, e8_ok):
-    step.wait_ms = 1500
-
 h.run(
     "emboss_cylinder",
     [
@@ -303,4 +300,5 @@ h.run(
         e9_redo_once,
         e9_redone,
     ],
+    paced_by="state",
 )

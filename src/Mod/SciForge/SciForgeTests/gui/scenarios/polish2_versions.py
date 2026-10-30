@@ -446,4 +446,4 @@ STEPS = [
     p9_done,
 ]
 
-h.run("polish2_versions", STEPS)
+h.run("polish2_versions", STEPS, paced_by="state")

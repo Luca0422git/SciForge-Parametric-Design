@@ -145,9 +145,6 @@ def a_type():
     st.keys("3\n")
 
 
-a_type.wait_ms = 900
-
-
 def a_check():
     from sciforge import sketch_fillet_core as core
 
@@ -219,9 +216,6 @@ def b_too_big():
     st.keys("50\n")
 
 
-b_too_big.wait_ms = 900
-
-
 def b_refused():
     g = sk().Geometry
     new = list(range(s["n"], len(g)))
@@ -257,9 +251,6 @@ def b_refused():
     st.undo()
 
 
-b_refused.wait_ms = 900
-
-
 def b_undone():
     h.check("B Ctrl+Z takes it back", geo_count() == s["n"], geo_count() - s["n"])
     si.menu_item("MODIFY", "Fillet")
@@ -272,9 +263,6 @@ def b_corner_again():
 def b_four():
     h.check("B the corner again", st.tool() is not None and st.tool().step == 2)
     st.keys("4\n")
-
-
-b_four.wait_ms = 900
 
 
 def b_check():
@@ -313,9 +301,6 @@ def c_corner():
 def c_keys():
     h.check("C the corner point picks the line and the arc", st.tool().step == 2, st.tool().step)
     st.keys("4\n")
-
-
-c_keys.wait_ms = 900
 
 
 def _chamfer_check(where, n, s_line, s_arc, angle=None, construction=True):
@@ -415,9 +400,6 @@ def d_keys():
     st.keys("5\t3\n")
 
 
-d_keys.wait_ms = 900
-
-
 def d_check():
     _chamfer_check("D", 3, 3.0, 5.0)
 
@@ -438,9 +420,6 @@ def e_arc():
 def e_keys():
     s["n_e"] = geo_count()
     st.keys("5\t40\n")
-
-
-e_keys.wait_ms = 900
 
 
 def e_check():
@@ -570,4 +549,5 @@ h.run(
             g_check,
         ]
     ),
+    paced_by="state",
 )

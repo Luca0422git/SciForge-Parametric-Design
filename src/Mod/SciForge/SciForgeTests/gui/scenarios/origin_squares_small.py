@@ -83,9 +83,6 @@ def b_zoomed():
     h.press(QtCore.Qt.Key_Escape)
 
 
-b_zoomed.wait_ms = 1200
-
-
 def c_part():
     h.check("Esc closed the picker", pl.picker() is None)
     doc = App.ActiveDocument
@@ -132,7 +129,4 @@ def c_on_xz():
         h.ribbon("Finish Sketch")
 
 
-c_fixed.wait_ms = 800  # the squares follow the view on a 250 ms timer
-
-
-h.run("origin_squares_small", [a_start, a_small, b_zoomed, c_part, c_fixed, c_turned, c_on_xz])
+h.run("origin_squares_small", [a_start, a_small, b_zoomed, c_part, c_fixed, c_turned, c_on_xz], paced_by="state")

@@ -289,4 +289,5 @@ h.run(
     + [d_marker, d_rolled]
     + [e_sketch, e_top, e_circle, e_finish, e_extrude, e_height, e_ok, e_added]
     + [f_marker_end, f_rolled_forward, f_marker_back, f_back, f_end_again],
+    paced_by="state",
 )

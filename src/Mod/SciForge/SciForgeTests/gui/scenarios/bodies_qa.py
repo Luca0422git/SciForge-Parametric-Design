@@ -246,9 +246,6 @@ def a_join_again():
     enter_on_view()
 
 
-a_join_again.wait_ms = 1200
-
-
 def a_done():
     h.check("Enter finished the Combine", s.panel() is None)
     h.check("Body1 = 21000", s.close(s.volume(body1()), 21000), s.volume(body1()))
@@ -330,9 +327,6 @@ def b_edit_tool_extrude():
     s.timeline_double_click(extrude_of(body2()))
 
 
-b_edit_tool_extrude.wait_ms = 1200
-
-
 def b_height_20():
     p = b.active_panel()
     field = getattr(getattr(p, "distance", None), "widget", None)
@@ -342,9 +336,6 @@ def b_height_20():
 
 def b_extrude_ok():
     h.task_button("OK")
-
-
-b_extrude_ok.wait_ms = 1200
 
 
 def b_followed():
@@ -552,9 +543,6 @@ def d_drag_negative():
     drag_arrow(0, -60)
 
 
-d_drag_negative.wait_ms = 1200
-
-
 def d_dragged():
     p = s.panel()
     dx = p.options["dx"] if p is not None else 0
@@ -567,9 +555,6 @@ def d_dragged():
 
 def d_turn():
     drag_turn(2, 30)
-
-
-d_turn.wait_ms = 1200
 
 
 def d_turned():
@@ -714,9 +699,6 @@ def e_press_e():
     h.press("e")
 
 
-e_press_e.wait_ms = 1200
-
-
 def e_extrude_open():
     p = s.panel()
     h.check("Extrude opened", p is not None and "Extrude" in p.title, p and p.title)
@@ -744,9 +726,6 @@ def e_press_q():
     h.press("q")
 
 
-e_press_q.wait_ms = 1200
-
-
 def e_presspull_open():
     p = s.panel()
     h.check("Press Pull opened", p is not None and p.title != "Combine", p and p.title)
@@ -766,9 +745,6 @@ def e_press_m():
     h.check("Split Body open", p is not None and p.title == "Split Body", p)
     state["e_bodies"] = len(s.bodies())
     h.press("m")
-
-
-e_press_m.wait_ms = 1200
 
 
 def e_move_open():
@@ -979,9 +955,6 @@ def f_reopen():
     QtWidgets.QApplication.processEvents()
 
 
-f_reopen.wait_ms = 1500
-
-
 def f_reopened():
     from sciforge import bodies
 
@@ -1131,9 +1104,6 @@ def g_delete_tool():
     s.menu("MODIFY", "Delete")
 
 
-g_delete_tool.wait_ms = 1200
-
-
 def g_tool_deleted():
     found = s.bodies()
     h.check("one body left", len(found) == 1, [x.Label for x in found])
@@ -1190,9 +1160,6 @@ def g_delete_target():
     s.menu("MODIFY", "Delete")
 
 
-g_delete_target.wait_ms = 1200
-
-
 def g_target_deleted():
     found = s.bodies()
     h.check("only Body2 left", len(found) == 1, [x.Label for x in found])
@@ -1224,9 +1191,6 @@ def g_pick_first_extrude():
 
 def g_delete_first_extrude():
     s.menu("MODIFY", "Delete")
-
-
-g_delete_first_extrude.wait_ms = 1200
 
 
 def g_first_extrude_deleted():
@@ -1604,4 +1568,5 @@ h.run(
         h_split_ok,
         h_split_material,
     ],
+    paced_by="state",
 )

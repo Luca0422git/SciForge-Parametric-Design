@@ -680,4 +680,5 @@ h.run(
         p22_next_f,
         p22_done,
     ],
+    paced_by="state",
 )

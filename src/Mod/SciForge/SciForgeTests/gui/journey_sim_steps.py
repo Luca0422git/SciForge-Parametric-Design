@@ -105,8 +105,6 @@ def near(a, b, tol):
 
 def step(fn, name, wait_ms=None):
     fn.__name__ = name
-    if wait_ms is not None:
-        fn.wait_ms = wait_ms
     return fn
 
 
@@ -844,8 +842,8 @@ def results_steps(report_dir):
     steps += [
         step(probe_check_first, "res_probe_check"),
         step(report, "res_report"),
-        step(report_write, "res_report_write", 500),
-        step(report_check, "res_report_check", 1500),
+        step(report_write, "res_report_write"),
+        step(report_check, "res_report_check"),
     ]
     return steps
 
@@ -1097,15 +1095,15 @@ def reopen_steps(folder):
 
     return [
         step(ctrl_s, "save_ctrl_s"),
-        step(save_dialog, "save_dialog", 800),
+        step(save_dialog, "save_dialog"),
         rs.wait_until(lambda: os.path.isfile(S["path"]) and not rs.modified(), "wait_saved", 20),
-        step(saved, "saved", 800),
+        step(saved, "saved"),
         step(close, "close"),
-        step(closed, "closed", 800),
+        step(closed, "closed"),
         step(reopen, "reopen"),
-        step(reopened, "reopened", 800),
-        step(results_back, "results_back", 800),
-        step(same_numbers, "same_numbers", 800),
+        step(reopened, "reopened"),
+        step(results_back, "results_back"),
+        step(same_numbers, "same_numbers"),
     ]
 
 

@@ -193,9 +193,6 @@ def a_released():
     )
 
 
-a_released.wait_ms = 1500
-
-
 def a_quarter():
     v = h.solid_volume()
     h.check("a quarter cylinder", ri.near(v, CYL / 4.0, 1e-6), v)
@@ -354,9 +351,6 @@ def f_turned():
     rz = p.options.get("rz") if p is not None else None
     h.check("turned exactly 90 about Z", rz is not None and abs(rz - 90.0) < 1e-9, rz)
     h.press(QtCore.Qt.Key_Escape)
-
-
-f_turned.wait_ms = 1500
 
 
 def f_cancelled():
@@ -536,4 +530,5 @@ h.run(
         h_free_value,
         h_cancelled,
     ],
+    paced_by="state",
 )

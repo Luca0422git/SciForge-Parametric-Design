@@ -417,4 +417,5 @@ h.run(
         lofted_open,
     )
     + [delete_join, join_deleted, undo_delete, delete_undone],
+    paced_by="state",
 )

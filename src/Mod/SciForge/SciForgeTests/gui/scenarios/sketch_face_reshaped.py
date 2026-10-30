@@ -320,4 +320,5 @@ h.run(
         check_outline("delete undone", (34.0, 24.0), False),
         close_all,
     ],
+    paced_by="state",
 )

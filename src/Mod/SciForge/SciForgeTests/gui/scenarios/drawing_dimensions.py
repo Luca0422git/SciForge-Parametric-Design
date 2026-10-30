@@ -121,8 +121,6 @@ def pick_and_place(name, picks, place, kind, expect, tol=1e-6):
     pick.__name__ = "b_%s_pick" % name
     placed.__name__ = "b_%s_place" % name
     check.__name__ = "b_%s_check" % name
-    pick.wait_ms = 1000
-    placed.wait_ms = 1000
     return [pick, placed, check]
 
 
@@ -150,9 +148,6 @@ def c_undone():
     d.redo()
 
 
-c_undone.wait_ms = 1200
-
-
 def c_redone():
     h.check("redo: six", len(dims()) == 6, len(dims()))
 
@@ -170,14 +165,8 @@ def d_pick():
     d.move_to(*at(-45, -32))
 
 
-d_pick.wait_ms = 1000
-
-
 def d_place():
     d.click_at(*at(-46, -33))
-
-
-d_place.wait_ms = 1000
 
 
 def d_check():
@@ -227,9 +216,6 @@ def f_iso():
     App.ActiveDocument.recompute()
 
 
-f_iso.wait_ms = 3000
-
-
 def f_start():
     from sciforge import drawing
 
@@ -242,9 +228,6 @@ def f_click():
     point = d.edge_point(state["iso"], lambda info: info["kind"] == "line")
     if h.check("an edge of the isometric view", point is not None):
         d.click_at(*point)
-
-
-f_click.wait_ms = 1000
 
 
 def f_refused():
@@ -294,4 +277,5 @@ h.run(
         f_refused,
         f_done,
     ],
+    paced_by="state",
 )

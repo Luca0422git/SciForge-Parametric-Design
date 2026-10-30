@@ -82,9 +82,6 @@ def distance():
         QtTest.QTest.keyClick(field, QtCore.Qt.Key_Tab)
 
 
-distance.wait_ms = 1200
-
-
 def extrude_ok():
     h.task_button("OK")
 
@@ -104,9 +101,6 @@ def a_open():
     i.record_exports(save_path=os.path.join(OUT, "cyl.3mf"))
     i.ribbon_tab("UTILITIES")
     h.ribbon("3D Print")
-
-
-a_open.wait_ms = 1200
 
 
 def a_dialog():
@@ -190,9 +184,6 @@ def c_medium_ok():
     i.dialog_button(d, "OK")
 
 
-c_medium_ok.wait_ms = 1500
-
-
 def c_check():
     path = os.path.join(OUT, "cyl.3mf")
     h.check("cyl.3mf written", os.path.isfile(path), os.listdir(OUT))
@@ -215,9 +206,6 @@ def d_open():
     h.ribbon("3D Print")
 
 
-d_open.wait_ms = 1200
-
-
 def d_send():
     d = dialog()
     if d is None:
@@ -226,9 +214,6 @@ def d_send():
     h.check("program row enabled", d.program.isEnabled())
     b.type_into(d.program, state["slicer"])
     i.dialog_button(d, "OK")
-
-
-d_send.wait_ms = 2500
 
 
 def d_check():
@@ -255,9 +240,6 @@ def d_check():
 def e_open():
     i.record_exports(save_path=os.path.join(OUT, "none.3mf"))
     h.ribbon("3D Print")
-
-
-e_open.wait_ms = 1200
 
 
 def e_untick_ok():
@@ -319,4 +301,5 @@ h.run(
         e_check,
         e_closed,
     ],
+    paced_by="state",
 )

@@ -437,4 +437,5 @@ h.run(
         two_sections,
         second_undone,
     ],
+    paced_by="state",
 )

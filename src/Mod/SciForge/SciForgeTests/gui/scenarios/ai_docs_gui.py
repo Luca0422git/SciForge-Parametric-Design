@@ -154,4 +154,8 @@ def handbook_saved():
     h.check("no pop-up left", not h.popups(), h.popups())
 
 
-h.run("ai_docs_gui", [gui_examples, docs_tools, open_add_ai, save_handbook, handbook_saved])
+h.run(
+    "ai_docs_gui",
+    [gui_examples, docs_tools, open_add_ai, save_handbook, handbook_saved],
+    paced_by="state",
+)

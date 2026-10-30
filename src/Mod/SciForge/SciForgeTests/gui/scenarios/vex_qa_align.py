@@ -68,9 +68,6 @@ def open_align():
     vx.menu("MODIFY", "Align")
 
 
-open_align.wait_ms = 1000
-
-
 def components():
     p = vx.panel()
     if h.check("Align dialog", p is not None and p.title == "Align", p):
@@ -88,15 +85,9 @@ def setup():
     S["a_place"] = App.Placement(S["a"].Placement)
 
 
-setup.wait_ms = 1500
-
-
 # -- A: B onto A ---------------------------------------------------------------------------------
 def a_open():
     open_align()
-
-
-a_open.wait_ms = 1000
 
 
 def a_components():
@@ -114,9 +105,6 @@ def a_click_from():
     h.click(S["pt"])
 
 
-a_click_from.wait_ms = 400
-
-
 def a_hover_to():
     p = vx.panel()
     h.check("B moves", p is not None and p.moving is S["b"], p and p.moving)
@@ -130,16 +118,10 @@ def a_click_to():
     h.click(S["pt"])
 
 
-a_click_to.wait_ms = 1500
-
-
 def a_preview():
     face_to_face("preview", "b", (1, 1), "a", (3, 1))
     h.shot("A-preview")
     vx.ok()
-
-
-a_preview.wait_ms = 1200
 
 
 def a_done():
@@ -148,9 +130,6 @@ def a_done():
     face_to_face("OK", "b", (1, 1), "a", (3, 1))
     h.check("A did not move", S["a"].Placement.isSame(S["a_place"], 1e-9), S["a"].Placement)
     vx.undo()
-
-
-a_done.wait_ms = 1500
 
 
 def a_undone():
@@ -163,9 +142,6 @@ def a_undone():
 # -- B: A onto B, from a hole's edge ---------------------------------------------------------------
 def b_open():
     open_align()
-
-
-b_open.wait_ms = 1000
 
 
 def b_components():
@@ -192,9 +168,6 @@ def b_click_edge():
     h.click(S["pt"])
 
 
-b_click_edge.wait_ms = 400
-
-
 def b_hover_to():
     p = vx.panel()
     h.check("A moves", p is not None and p.moving is S["a"], p and p.moving)
@@ -208,16 +181,10 @@ def b_click_to():
     h.click(S["pt"])
 
 
-b_click_to.wait_ms = 1500
-
-
 def b_preview():
     face_to_face("preview", "a", (0, 1), "b", (4, 1))
     h.shot("B-preview")
     vx.ok()
-
-
-b_preview.wait_ms = 1200
 
 
 def b_done():
@@ -227,17 +194,11 @@ def b_done():
     vx.undo()
 
 
-b_done.wait_ms = 1500
-
-
 def b_undone():
     h.check(
         "Undo: A back at the origin", S["a"].Placement.isSame(S["a_place"], 1e-7), S["a"].Placement
     )
     vx.redo()
-
-
-b_undone.wait_ms = 1500
 
 
 def b_redone():
@@ -271,4 +232,5 @@ h.run(
             b_redone,
         ]
     ),
+    paced_by="state",
 )

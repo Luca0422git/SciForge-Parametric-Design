@@ -197,9 +197,6 @@ def inside():
     hs.click_checkbox(p.modeled)
 
 
-inside.wait_ms = 3000  # FreeCAD blocks input while the thread is modeled
-
-
 def modeled():
     v = h.solid_volume()
     expect = s["v"] - inside_removed()
@@ -207,9 +204,6 @@ def modeled():
     h.check("valid solid", h.body().Shape.isValid())
     h.shot("2-inside")
     h.task_button("OK")
-
-
-modeled.wait_ms = 1500
 
 
 def after_ok():
@@ -222,18 +216,12 @@ def undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-undo.wait_ms = 1500
-
-
 def after_undo():
     h.check("Ctrl+Z removes the thread", hs.close(h.solid_volume(), s["v"]) and not hs.threads())
 
 
 def redo():
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-redo.wait_ms = 3000
 
 
 def after_redo():
@@ -272,4 +260,5 @@ h.run(
         redo,
         after_redo,
     ],
+    paced_by="state",
 )

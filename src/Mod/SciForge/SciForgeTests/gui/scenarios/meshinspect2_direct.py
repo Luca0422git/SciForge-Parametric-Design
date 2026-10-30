@@ -55,9 +55,6 @@ def a_open():
     s.menu("MODIFY", "Direct Edit")
 
 
-a_open.wait_ms = 1500
-
-
 def a_waits():
     p = e.direct_panel()
     h.check("Direct Edit dialog", p is not None and p.title == "Direct Edit", m.panel())
@@ -73,15 +70,9 @@ def a_waits():
     m.type_field(p.brush, "3")
 
 
-a_waits.wait_ms = 800
-
-
 # -- B ----------------------------------------------------------------------------------------
 def b_click():
     h.click(TOP)
-
-
-b_click.wait_ms = 1200
 
 
 def b_clicked():
@@ -95,18 +86,12 @@ def b_clicked():
     h.click(TOP, modifiers=QtCore.Qt.ControlModifier)
 
 
-b_clicked.wait_ms = 1200
-
-
 def b_unpainted():
     p = e.direct_panel()
     h.check("Ctrl+click took them off", p.selected == [], len(p.selected))
     # a stroke over the upper left of the sphere (well away from where C and D work)
     state["stroke_ends"] = (e.on_sphere(-0.75, 0.45), e.on_sphere(-0.55, 0.6))
     e.drag_screen(*state["stroke_ends"])
-
-
-b_unpainted.wait_ms = 1500
 
 
 def b_stroke():
@@ -122,9 +107,6 @@ def b_stroke():
         (state["stroke"], near_a, near_z),
     )
     e.key(QtCore.Qt.Key_Delete)
-
-
-b_stroke.wait_ms = 2000
 
 
 def b_deleted():
@@ -146,15 +128,9 @@ def b_deleted():
     e.choose(p, "selection", "Window")
 
 
-b_deleted.wait_ms = 800
-
-
 # -- C ----------------------------------------------------------------------------------------
 def c_box():
     e.drag_box(e.on_sphere(), 40)
-
-
-c_box.wait_ms = 1500
 
 
 def c_front_only():
@@ -166,14 +142,8 @@ def c_front_only():
     i.set_check(p.back_faces, True)
 
 
-c_front_only.wait_ms = 800
-
-
 def c_back_box():
     e.drag_box(e.on_sphere(), 40)
-
-
-c_back_box.wait_ms = 1500
 
 
 def c_with_back():
@@ -187,23 +157,14 @@ def c_with_back():
     i.set_check(p.back_faces, False)
 
 
-c_with_back.wait_ms = 800
-
-
 def c_box_again():
     e.drag_box(e.on_sphere(), 40)
-
-
-c_box_again.wait_ms = 1500
 
 
 def c_group():
     p = e.direct_panel()
     h.check("the same faces again", sorted(p.selected) == sorted(state["box"]), len(p.selected))
     e.press_button(p, "group")
-
-
-c_group.wait_ms = 1500
 
 
 def c_grouped():
@@ -221,24 +182,15 @@ def c_grouped():
     e.press_button(p, "clear")
 
 
-c_grouped.wait_ms = 800
-
-
 # -- D ----------------------------------------------------------------------------------------
 def d_click_one():
     h.click(e.on_sphere())
-
-
-d_click_one.wait_ms = 1200
 
 
 def d_one():
     p = e.direct_panel()
     h.check("a Window click takes one face", len(p.selected) == 1, len(p.selected))
     e.key(QtCore.Qt.Key_G, QtCore.Qt.AltModifier)
-
-
-d_one.wait_ms = 1000
 
 
 def d_group():
@@ -252,16 +204,10 @@ def d_group():
     e.press_button(p, "move")
 
 
-d_group.wait_ms = 1200
-
-
 def d_arrow():
     p = e.direct_panel()
     h.check("Move: the arrow shows", p.move_handle is not None)
     m.type_field(p.distance, "3")
-
-
-d_arrow.wait_ms = 2000
 
 
 def d_moved():
@@ -276,9 +222,6 @@ def d_moved():
     e.press_button(p, "apply_move")
 
 
-d_moved.wait_ms = 1500
-
-
 def d_applied():
     p = e.direct_panel()
     h.check("three edits", e.edits(p) == 3, e.edits(p))
@@ -288,18 +231,12 @@ def d_applied():
     e.key(QtCore.Qt.Key_Up, QtCore.Qt.ShiftModifier)
 
 
-d_applied.wait_ms = 1000
-
-
 # -- E ----------------------------------------------------------------------------------------
 def e_grown():
     p = e.direct_panel()
     h.check("Shift+Up grows the pick", len(p.selected) > len(state["box"]), len(p.selected))
     e.set_double(p.smoothness, 0.8)
     e.press_button(p, "smooth")
-
-
-e_grown.wait_ms = 2500
 
 
 def e_smoothed():
@@ -315,9 +252,6 @@ def e_smoothed():
     e.press_button(p, "remove_last")
 
 
-e_smoothed.wait_ms = 2000
-
-
 def e_removed():
     p = e.direct_panel()
     front = e.front_extent(step())
@@ -327,16 +261,10 @@ def e_removed():
     e.drag_box(e.on_sphere(), 70)
 
 
-e_removed.wait_ms = 2000
-
-
 def e_smooth_again():
     p = e.direct_panel()
     h.check("faces picked again", len(p.selected) > 10, len(p.selected))
     e.press_button(p, "smooth")
-
-
-e_smooth_again.wait_ms = 2500
 
 
 def e_four():
@@ -346,16 +274,10 @@ def e_four():
     e.press_button(p, "clear")
 
 
-e_four.wait_ms = 800
-
-
 # -- F ----------------------------------------------------------------------------------------
 def f_delete_nothing():
     state["before_f"] = m.facets(step())
     e.key(QtCore.Qt.Key_Delete)
-
-
-f_delete_nothing.wait_ms = 1000
 
 
 def f_refused():
@@ -365,9 +287,6 @@ def f_refused():
     h.check("nothing changed", m.facets(step()) == state["before_f"], m.facets(step()))
     h.check("still four edits", e.edits(p) == 4, e.edits(p))
     e.press_button(p, "finish")
-
-
-f_refused.wait_ms = 2000
 
 
 # -- G ----------------------------------------------------------------------------------------
@@ -392,17 +311,11 @@ def g_done():
     s.undo()
 
 
-g_done.wait_ms = 2000
-
-
 def g_undone():
     h.check("Undo: no Direct Edit step", m.steps("MeshDirectEdit") == [], m.steps("MeshDirectEdit"))
     h.check("the sphere as it was", m.facets(body()) == state["faces"], m.facets(body()))
     h.check("closed again", m.closed(body()))
     s.redo()
-
-
-g_undone.wait_ms = 2000
 
 
 def g_redone():
@@ -423,4 +336,5 @@ h.run(
     + [e_grown, e_smoothed, e_removed, e_smooth_again, e_four]
     + [f_delete_nothing, f_refused]
     + [g_done, g_undone, g_redone],
+    paced_by="state",
 )

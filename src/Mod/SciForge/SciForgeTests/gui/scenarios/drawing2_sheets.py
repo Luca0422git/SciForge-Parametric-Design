@@ -114,9 +114,6 @@ def b_plus():
     wi.click(bar().plus)
 
 
-b_plus.wait_ms = 2500
-
-
 def b_new():
     from sciforge import drawing_sheets
 
@@ -142,9 +139,6 @@ def c_base():
     h.ribbon("Base View")
 
 
-c_base.wait_ms = 1500
-
-
 def c_place():
     p = d.panel_of("BaseViewPanel")
     if not h.check("Base View on sheet 2", p is not None, d.panel()):
@@ -155,14 +149,8 @@ def c_place():
     d.set_combo_text(p.scale, "1:1")
 
 
-c_place.wait_ms = 1500
-
-
 def c_ok():
     d.ok()
-
-
-c_ok.wait_ms = 2500
 
 
 def c_section():
@@ -178,9 +166,6 @@ def c_cut():
     d.move_to(x + 90, y + 2)
 
 
-c_cut.wait_ms = 2500
-
-
 def c_put():
     x, y = w.at(0.0, 0.0)
     d.click_at(x + 90, y + 2)
@@ -188,9 +173,6 @@ def c_put():
 
 def c_ok2():
     d.ok()
-
-
-c_ok2.wait_ms = 2500
 
 
 def c_check():
@@ -213,18 +195,12 @@ def d_sheet1():
     click_tab("Sheet 1")
 
 
-d_sheet1.wait_ms = 2500
-
-
 def d_shown():
     page = d.page()
     h.check("sheet 1 shows", page is not None and page.Name == state["main"], page and page.Name)
     h.check("one tab for the drawing", len(drawing_tabs()) == 1, drawing_tabs())
     h.check("its bar: Sheet 1 current", bar() is not None and bar().tabs.currentIndex() == 0)
     click_tab("Sheet 2")
-
-
-d_shown.wait_ms = 2500
 
 
 def d_back():
@@ -237,9 +213,6 @@ def e_rename():
     menu_on_tab("Sheet 2", "Rename Sheet")
 
 
-e_rename.wait_ms = 1500
-
-
 def e_type():
     b = bar()
     editor = b.editor if b is not None else None
@@ -249,9 +222,6 @@ def e_type():
     QtTest.QTest.keyClick(editor, QtCore.Qt.Key_A, QtCore.Qt.ControlModifier)
     QtTest.QTest.keyClicks(editor, "Sections")
     QtTest.QTest.keyClick(editor, QtCore.Qt.Key_Return)
-
-
-e_type.wait_ms = 2000
 
 
 def e_renamed():
@@ -266,9 +236,6 @@ def f_move():
     menu_on_tab("Sections", "Move Left")
 
 
-f_move.wait_ms = 2000
-
-
 def f_moved():
     h.check("Sections first", tab_texts() == ["Sections", "Sheet 1"], tab_texts())
     main = doc().getObject(state["main"])
@@ -278,18 +245,12 @@ def f_moved():
     d.undo()
 
 
-f_moved.wait_ms = 2000
-
-
 def f_undone():
     order = [p.Name for p in sheets()]
     h.check("undo: the old order", order == [state["main"], state["sheet2"]], order)
     main = doc().getObject(state["main"])
     h.check("Sheet 1: 1 / 2 again", title_of(main) == "1 / 2", title_of(main))
     d.redo()
-
-
-f_undone.wait_ms = 2000
 
 
 def f_redone():
@@ -314,9 +275,6 @@ def g_pdf():
     h.ribbon("Export PDF")
 
 
-g_pdf.wait_ms = 1500
-
-
 def g_pdf_fill():
     dlg = export_dialog()
     if not h.check("the Export PDF dialog", dlg is not None):
@@ -328,9 +286,6 @@ def g_pdf_fill():
     d.type_into(dlg.name, "sheets_all")
     d.type_into(dlg.folder, OUT)
     wi.click(dlg.export_button)
-
-
-g_pdf_fill.wait_ms = 6000
 
 
 def g_pdf_check():
@@ -346,9 +301,6 @@ def g_pdf_check():
     h.ribbon("Export PDF")
 
 
-g_pdf_check.wait_ms = 1500
-
-
 def g_current():
     dlg = export_dialog()
     if not h.check("the dialog again", dlg is not None):
@@ -359,9 +311,6 @@ def g_current():
     d.type_into(dlg.name, "sheets_current")
     d.type_into(dlg.folder, OUT)
     wi.click(dlg.export_button)
-
-
-g_current.wait_ms = 4000
 
 
 def g_current_check():
@@ -375,9 +324,6 @@ def g_current_check():
     h.ribbon("Export DXF")
 
 
-g_current_check.wait_ms = 1500
-
-
 def g_dxf():
     dlg = export_dialog()
     if not h.check("the Export DXF dialog", dlg is not None):
@@ -385,9 +331,6 @@ def g_dxf():
     d.type_into(dlg.name, "sheets")
     d.type_into(dlg.folder, OUT)
     wi.click(dlg.export_button)
-
-
-g_dxf.wait_ms = 3000
 
 
 def g_dxf_check():
@@ -409,16 +352,10 @@ def h_plus():
     wi.click(bar().plus)
 
 
-h_plus.wait_ms = 2500
-
-
 def h_three():
     h.check("three sheets", len(sheets()) == 3, tab_texts())
     state["sheet3"] = d.page().Name
     menu_on_tab(tab_texts()[-1], "Delete Sheet")
-
-
-h_three.wait_ms = 2500
 
 
 def h_two():
@@ -428,15 +365,9 @@ def h_two():
     d.undo()
 
 
-h_two.wait_ms = 2500
-
-
 def h_undone():
     h.check("undo: three", len(sheets()) == 3, [p.Label for p in sheets()])
     d.redo()
-
-
-h_undone.wait_ms = 2500
 
 
 def h_redone():
@@ -446,9 +377,6 @@ def h_redone():
 # -- I ------------------------------------------------------------------------------------------
 def i_delete_first():
     menu_on_tab("Sheet 1", "Delete Sheet")
-
-
-i_delete_first.wait_ms = 3000
 
 
 def i_promoted():
@@ -464,9 +392,6 @@ def i_promoted():
     Gui_run("SciForge_DrawingDeleteSheet")
 
 
-i_promoted.wait_ms = 1500
-
-
 def Gui_run(name):
     import FreeCADGui as Gui
 
@@ -478,9 +403,6 @@ def i_refused():
     h.check("the last sheet stays", len(sheets()) == 1, tab_texts())
     h.check("and says why", "at least one sheet" in d.tooltip_text(), d.tooltip_text())
     d.undo()
-
-
-i_refused.wait_ms = 3000
 
 
 def i_undone():
@@ -505,4 +427,5 @@ h.run(
     + [g_pdf, g_pdf_fill, g_pdf_check, g_current, g_current_check, g_dxf, g_dxf_check]
     + [h_plus, h_three, h_two, h_undone, h_redone]
     + [i_delete_first, i_promoted, i_refused, i_undone],
+    paced_by="state",
 )

@@ -299,4 +299,5 @@ h.run(
             boss_edited,
         ]
     ),
+    paced_by="state",
 )

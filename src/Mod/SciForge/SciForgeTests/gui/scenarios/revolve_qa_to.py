@@ -635,4 +635,4 @@ STEPS = [
     p26_cancelled,
 ]
 
-h.run("revolve_qa_to", ti.watched(STEPS))
+h.run("revolve_qa_to", ti.watched(STEPS), paced_by="state")

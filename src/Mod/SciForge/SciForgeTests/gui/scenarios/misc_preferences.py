@@ -246,9 +246,6 @@ def p2_new_design():
     h.press(QtCore.Qt.Key_N, QtCore.Qt.ControlModifier)
 
 
-p2_new_design.wait_ms = 1200
-
-
 def p2_check():
     doc = App.ActiveDocument
     h.check("P2 Ctrl+N made a new design", doc is not None and doc.Name != s["first"])
@@ -355,9 +352,6 @@ def p5_new():
     h.press(QtCore.Qt.Key_N, QtCore.Qt.ControlModifier)
 
 
-p5_new.wait_ms = 1500
-
-
 def p5_check():
     from sciforge import direct
 
@@ -460,18 +454,12 @@ def p8_switch():
     Gui.activateWorkbench("PartWorkbench")
 
 
-p8_switch.wait_ms = 1500
-
-
 def p8_off():
     h.check(
         "P8 SciForge off: FreeCAD's own zoom direction back",
         "InvertZoom" not in App.ParamGet(VIEW).GetBools(),
     )
     Gui.activateWorkbench("SciForgeWorkbench")
-
-
-p8_off.wait_ms = 1500
 
 
 def p8_on():
@@ -523,4 +511,5 @@ h.run(
         p8_on,
         cleanup,
     ],
+    paced_by="state",
 )

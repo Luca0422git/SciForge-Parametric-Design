@@ -83,8 +83,6 @@ S = {}  # what the steps share: components by role, numbers measured on the way
 
 def step(fn, name, wait_ms=None):
     fn.__name__ = name
-    if wait_ms is not None:
-        fn.wait_ms = wait_ms
     return fn
 
 

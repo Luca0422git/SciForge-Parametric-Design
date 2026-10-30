@@ -132,9 +132,6 @@ def drag_out():
     s["drag"] = st.drag_arrow("distance", 25.0)
 
 
-drag_out.wait_ms = 2200
-
-
 def dragged():
     st.settle()
     d = s.get("drag")
@@ -353,4 +350,5 @@ h.run(
         solid_ok,
         solid_done,
     ],
+    paced_by="state",
 )

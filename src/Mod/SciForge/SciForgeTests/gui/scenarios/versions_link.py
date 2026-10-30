@@ -121,9 +121,6 @@ def p1_save_first():
     vi.click_save()
 
 
-p1_save_first.wait_ms = 2000
-
-
 def p1_inserted():
     cart = App.getDocument("Cart")
     s["cart"] = os.path.join(s["project"], "Cart.FCStd")
@@ -198,9 +195,6 @@ def p3_move():
     App.openDocument(s["cart2"])
 
 
-p3_move.wait_ms = 2000
-
-
 def p3_resolved():
     cart = App.getDocument("Cart")
     h.check("P3 Cart opened from the new place", cart is not None)
@@ -234,9 +228,6 @@ def p4_edit_wheel():
     App.openDocument(s["cart2"])
 
 
-p4_edit_wheel.wait_ms = 2000
-
-
 def p4_follows():
     cart = App.getDocument("Cart")
     h.check(
@@ -258,7 +249,6 @@ def p5_remove_wheel():
     App.openDocument(s["cart2"])
 
 
-p5_remove_wheel.wait_ms = 2500
 p5_remove_wheel.known = True  # FreeCAD prints its own 'file does not exist' error lines here
 
 
@@ -312,4 +302,5 @@ h.run(
         p5_message,
         cleanup,
     ],
+    paced_by="state",
 )

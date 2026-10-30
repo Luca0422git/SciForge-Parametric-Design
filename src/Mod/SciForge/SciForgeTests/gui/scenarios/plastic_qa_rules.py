@@ -533,4 +533,5 @@ h.run(
         abs_redone,
         row_menu_manage,
     ],
+    paced_by="state",
 )

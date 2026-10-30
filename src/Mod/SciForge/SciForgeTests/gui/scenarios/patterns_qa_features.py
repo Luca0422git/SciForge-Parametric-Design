@@ -202,9 +202,6 @@ def p15_shallower_ok():
     h.task_button("OK")
 
 
-p15_shallower_ok.wait_ms = 1500
-
-
 def p15_followed():
     # The hole and its copy are 5 deep now: each removes 20 pi instead of 40 pi.
     want = s["v"] + 2 * (HOLE - ps.hole(R, 5.0))
@@ -319,9 +316,6 @@ def p17_ok():
     h.task_button("OK")
 
 
-p17_ok.wait_ms = 1500
-
-
 def p17_delete_body():
     h.check("two bodies", len(ps.bodies()) == 2, [x.Label for x in ps.bodies()])
     from sciforge import browser_ui
@@ -331,9 +325,6 @@ def p17_delete_body():
     item = t.row("Body")
     if h.check("the body in the browser", item is not None, t.labels()):
         h.check("Delete in its menu", w.right_click(t.viewport(), t.label_point(item), "Delete"))
-
-
-p17_delete_body.wait_ms = 2000
 
 
 def p17_said():
@@ -351,9 +342,6 @@ def p17_said():
         h.check("no Python jargon", "Error" not in why and "NoneType" not in why, why)
         h.check("the copy body stays", len(ps.bodies()) == 1, [x.Label for x in ps.bodies()])
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
-
-
-p17_said.wait_ms = 1500
 
 
 def p17_back():
@@ -417,4 +405,5 @@ h.run(
         p17_said,
         p17_back,
     ],
+    paced_by="state",
 )

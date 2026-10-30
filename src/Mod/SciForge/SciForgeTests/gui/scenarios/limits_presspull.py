@@ -122,9 +122,6 @@ def pushed_far():
     h.shot("1-push-held")
 
 
-pushed_far.wait_ms = 3000
-
-
 def drag_up():
     held(4.0, "back up")
 
@@ -136,9 +133,6 @@ def back_up():
     h.check("the note went", note(p) == "", note(p))
     v = h.solid_volume()
     h.check("the preview follows", b.close(v, slab(d)), (v, slab(d)))
-
-
-back_up.wait_ms = 1500
 
 
 def type_minus_50():
@@ -156,9 +150,6 @@ def typed_minus_50():
     )
     h.check("no error", msg(p) == "", msg(p))
     h.task_button("OK")
-
-
-typed_minus_50.wait_ms = 1500
 
 
 def pushed():
@@ -195,9 +186,6 @@ def fillet_held():
     h.check("and said", note(p) == "50 mm does not fit: limited to %.2f mm" % r, note(p))
     h.check("no error", msg(p) == "", msg(p))
     h.task_button("OK")
-
-
-fillet_held.wait_ms = 2500
 
 
 def fillet_made():
@@ -238,9 +226,6 @@ def edit_held():
         ui.type_into(p.field.widget, "big")
 
 
-edit_held.wait_ms = 2500
-
-
 def formula_explained():
     p = panel()
     text = msg(p)
@@ -248,9 +233,6 @@ def formula_explained():
     h.check("explained", text.startswith("⚠"), text)
     h.check("with the limit", "Largest that fits here: %.2f mm" % s["r"] in text, text)
     h.task_button("Cancel")
-
-
-formula_explained.wait_ms = 3000
 
 
 def cancelled():
@@ -287,4 +269,5 @@ h.run(
         formula_explained,
         cancelled,
     ],
+    paced_by="state",
 )

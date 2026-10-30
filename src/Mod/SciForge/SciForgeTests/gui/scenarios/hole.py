@@ -545,4 +545,5 @@ h.run(
         undo_delete,
         after_undo_delete,
     ],
+    paced_by="state",
 )

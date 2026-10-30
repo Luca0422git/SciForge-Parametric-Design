@@ -66,9 +66,6 @@ def a_start():
     r.browser_menu(s["label"], ENTRY)
 
 
-a_start.wait_ms = 1500
-
-
 def a_started():
     from sciforge import bodies, components, rebuild
 
@@ -171,18 +168,12 @@ def b_undo():
     t.undo()
 
 
-b_undo.wait_ms = 1200
-
-
 def b_undone():
     doc = App.ActiveDocument
     h.check("undo: no reference", not r.references(), r.references())
     h.check("... no rebuilt body", doc.getObject(s.get("target_name") or "-") is None)
     h.check("... the original shows again", r.shown(s["plate"]))
     t.redo()
-
-
-b_undone.wait_ms = 1200
 
 
 def b_redone():
@@ -206,9 +197,6 @@ def c_again():
     Gui.runCommand("SciForge_RebuildWithTimeline")
 
 
-c_again.wait_ms = 1200
-
-
 def c_checked():
     h.check("the same body again: still one reference", len(r.references()) == 1, r.references())
     h.check("... nothing new in the design", len(App.ActiveDocument.Objects) == s["count"])
@@ -225,9 +213,6 @@ def d_second():
     App.ActiveDocument.recompute()
     r.select_body(s["second"])
     r.utilities_menu(ENTRY)
-
-
-d_second.wait_ms = 2000
 
 
 def d_chat():
@@ -286,9 +271,6 @@ def e_third():
     h.fit()
 
 
-e_third.wait_ms = 1500
-
-
 def e_empty_spot():
     from sciforge import marking_menu
 
@@ -318,9 +300,6 @@ def e_on_body():
         r.esc(menu)
 
 
-e_on_body.wait_ms = 1500
-
-
 def e_started():
     refs = [x for x in r.references() if x.SourceName == s["third"].Name]
     h.check("the marking menu started the third plate's rebuild", len(refs) == 1, r.references())
@@ -347,9 +326,6 @@ def e_on_rebuilt():
     )
 
 
-e_on_rebuilt.wait_ms = 1500
-
-
 def e_menu_rebuilt():
     menu = r.open_marking_menu(V(30, 20, 10))
     if menu is None:
@@ -374,9 +350,6 @@ def f_many():
     bodies.set_active_body(App.ActiveDocument.getObject("Body"))  # (the design's own body)
     commands._TOLD["msg"] = None
     r.utilities_menu("Compare with Reference")
-
-
-f_many.wait_ms = 1500
 
 
 def f_many_said():
@@ -406,9 +379,6 @@ def f_one():
     r.utilities_menu("Compare with Reference")
 
 
-f_one.wait_ms = 2000
-
-
 def f_open():
     box = r.dialog("SciForgeRebuildCompare")
     h.check("with the third rebuilt body active, Compare opens", box is not None, h.popups())
@@ -416,9 +386,6 @@ def f_open():
         h.check("... and compares", box.headline.text().startswith("Match"), box.headline.text())
     if s.get("third_target"):
         r.tool("delete_bodies", bodies=[s["third_target"]])  # (an AI deletes the rebuilt body)
-
-
-f_open.wait_ms = 1500
 
 
 def f_gone():
@@ -442,9 +409,6 @@ def f_gone():
     h.check("... and the differences drawn before are cleared", count == 0, count)
     App.ActiveDocument.undo()
     App.ActiveDocument.recompute()
-
-
-f_gone.wait_ms = 1500
 
 
 def f_back():
@@ -498,4 +462,5 @@ h.run(
         f_back,
         finish,
     ],
+    paced_by="state",
 )

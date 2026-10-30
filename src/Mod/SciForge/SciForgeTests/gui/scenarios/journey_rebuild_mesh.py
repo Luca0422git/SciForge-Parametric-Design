@@ -24,4 +24,5 @@ h.run(
     + j.reopen_steps("rebuild_finished", j.mesh_reopened_finished)
     + j.mesh_edit_steps()
     + [j.finish_scenario("the mesh rebuild journey")],
+    paced_by="state",
 )

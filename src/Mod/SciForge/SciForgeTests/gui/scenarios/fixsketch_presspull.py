@@ -152,4 +152,4 @@ steps += fs.circle("D", V(35, 25, 12), 2, s)
 steps += fs.finish_and_extrude("D", 3, s)
 steps += fs.edit_later("E", "B", s)
 
-h.run("fixsketch_presspull", steps)
+h.run("fixsketch_presspull", steps, paced_by="state")

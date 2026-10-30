@@ -207,4 +207,5 @@ h.run(
         fillet_open,
         fillet_cancelled,
     ],
+    paced_by="state",
 )

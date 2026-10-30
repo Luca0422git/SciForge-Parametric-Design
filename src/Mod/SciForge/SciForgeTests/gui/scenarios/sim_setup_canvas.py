@@ -167,4 +167,5 @@ h.run(
         d_leave,
         d_menu,
     ],
+    paced_by="state",
 )

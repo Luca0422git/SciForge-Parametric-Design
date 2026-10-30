@@ -305,4 +305,5 @@ h.run(
         redo,
         redone,
     ],
+    paced_by="state",
 )

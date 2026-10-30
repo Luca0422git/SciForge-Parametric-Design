@@ -14,7 +14,7 @@ Status: [x] 1 failures on the run page [x] 2 harness.wait_for / settle / ready /
 [x] 3 input helpers on it [x] 4 fresh profile per scenario [x] 5 hang watchdog [x] 6 gui_env.sh,
 both workflows on ubuntu-24.04 [x] 7 check_waits.py ratchet [x] stress mode + CI repeat input
 [ ] scenarios converted: batch 1 (the CI #277 - #287 ones), then CI part by part, each part
-proven 3 times in a row under `--stress` first (done: parts 1-3 of 9; the rest being proven;
+proven 3 times in a row under `--stress` first (done: parts 1-4 of 9; the rest being proven;
 every helper and scenario wait is named, `check_waits.py` counts what is left) [ ] five green
 full runs in a row [ ] build dry run [ ] merged into develop (Luca).
 Newest session log "GUI test rework".
@@ -1803,7 +1803,7 @@ branch off develop (a patch release was going out from develop). How it all work
   (`# on purpose`). After the mechanical conversion of the wait_ms, 0 fixed waits remain.
 - CI parts are converted one by one, each proven 3 of 3 under `--stress` in the sandbox first
   (4 workers on a queue of 8-scenario chunks; a chunk takes about an hour here). Part 1:
-  4834e82e; parts 2 and 3: the next commit. Trial #312 (every scenario forced onto state pacing,
+  4834e82e; parts 2 and 3: 02bebfaf; part 4: the commit after. Trial #312 (every scenario forced onto state pacing,
   3 times under `--stress` on CI) and the chunk proofs found, all in the tests:
   - extrude_presspull_qa2 P8: the app refuses a Join there and shows New Body again (its ⚠
     says why); `dialog_input.choose` read the box after that. It checks the list's

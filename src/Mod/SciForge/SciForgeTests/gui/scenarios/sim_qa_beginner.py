@@ -104,17 +104,11 @@ def a_adjusted():
     rs.big("Animate")
 
 
-a_adjusted.wait_ms = 400
-
-
 def a_animate():
     from sciforge import simulation_results_ui as ui
 
     h.check("A Animate runs", ui.animation_on())
     rs.big("Animate")
-
-
-a_animate.wait_ms = 1200
 
 
 def a_stop():
@@ -347,4 +341,5 @@ h.run(
         h.idle_step("wait_redo"),
         d_redone,
     ],
+    paced_by="state",
 )

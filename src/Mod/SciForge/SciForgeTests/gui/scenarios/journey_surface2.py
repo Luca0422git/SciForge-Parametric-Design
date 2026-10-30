@@ -504,9 +504,6 @@ def red_with_reason():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-red_with_reason.wait_ms = 2000
-
-
 def fixed_by_undo():
     st.settle()
     h.idle_step()()
@@ -569,4 +566,5 @@ h.run(
         red_with_reason,
         fixed_by_undo,
     ],
+    paced_by="state",
 )

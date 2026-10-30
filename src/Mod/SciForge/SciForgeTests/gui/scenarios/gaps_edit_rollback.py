@@ -138,9 +138,6 @@ def b_edit():
     )
 
 
-b_edit.wait_ms = 1500
-
-
 def b_editing():
     p = ri.panel()
     h.check("B: SciForge's Revolve dialog edits it", p is not None and p.editing)
@@ -166,4 +163,5 @@ h.run(
     + ps.make_boss("boss", (30, 22), 3, 4, V(36, 27, 10))
     + [a_edit, a_editing, a_after]
     + [b_part, b_edit, b_editing, b_after],
+    paced_by="state",
 )

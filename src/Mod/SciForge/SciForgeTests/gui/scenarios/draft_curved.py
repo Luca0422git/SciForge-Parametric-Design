@@ -244,9 +244,6 @@ def too_steep():
     h.check("no error", p is not None and p.message.text() == "", p and p.message.text())
 
 
-too_steep.wait_ms = 9000
-
-
 def ok_waits():
     p = sd.draft_panel()
     if p:
@@ -335,4 +332,5 @@ h.run(
         second_preview,
         after_cancel,
     ],
+    paced_by="state",
 )

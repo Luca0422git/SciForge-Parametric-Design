@@ -1092,9 +1092,6 @@ def export_step():
     b.click_widget(d.export_button)
 
 
-export_step.wait_ms = 1500
-
-
 def export_step_check():
     from SciForgeTests.gui import insert_steps as i
 
@@ -1122,9 +1119,6 @@ def export_stl():
     b.type_into(d.folder, export_dir())
     b.type_into(d.name, "pi5_case")
     b.click_widget(d.export_button)
-
-
-export_stl.wait_ms = 2500
 
 
 def export_stl_check():
@@ -1240,4 +1234,4 @@ STEPS += [
     export_stl_check,
 ]
 
-h.run("pi5_case", STEPS)
+h.run("pi5_case", STEPS, paced_by="state")

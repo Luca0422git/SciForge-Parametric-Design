@@ -244,4 +244,5 @@ h.run(
     + [w2_click_text_box, w2_focus, w2_type, w2_typed]
     + [w3_preview, w4_ok, w4_made]
     + [w5_old_text, w5_old_runs_past, w5_edit, w5_preview, w5_ok, w5_kept],
+    paced_by="state",
 )

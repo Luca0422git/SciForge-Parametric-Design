@@ -120,9 +120,6 @@ def p1_esc():
     h.press(QtCore.Qt.Key_Escape)
 
 
-p1_esc.wait_ms = 1200
-
-
 def p1_nothing_left():
     h.check("P1 Esc closed the Box", pi.no_dialog())
     h.check("P1 no box", not boxes(), [o.Name for o in doc().Objects])
@@ -168,9 +165,6 @@ def p1_length_kept():
     pl.click_on_plane(V(20, 15, 0))
 
 
-p1_length_kept.wait_ms = 1500
-
-
 def p1_placed():
     p = pi.panel("BoxPanel")
     box = p.target if p is not None else None
@@ -181,9 +175,6 @@ def p1_placed():
     h.check("P1 15 wide (clicked)", near(box.Width.Value, 15.0), box.Width.Value)
     h.check("P1 New Body (the first solid)", p.operation.currentText() == "New Body")
     ui.type_into(p.width.widget, "wdth")
-
-
-p1_placed.wait_ms = 1500
 
 
 def p1_typo():
@@ -199,16 +190,10 @@ def p1_typo_ok():
         ui.type_into(p.width.widget, "12")
 
 
-p1_typo_ok.wait_ms = 1200
-
-
 def p1_zero():
     p = pi.panel("BoxPanel")
     h.check("P1 the message went with the typo", msg(p) == "", msg(p))
     ui.type_into(p.height.widget, "0")
-
-
-p1_zero.wait_ms = 1200
 
 
 def p1_zero_said():
@@ -222,9 +207,6 @@ def p1_zero_ok():
     h.check("P1 OK waits for a height", p is not None)
     if p is not None:
         ui.type_into(p.height.widget, "10")
-
-
-p1_zero_ok.wait_ms = 1200
 
 
 def p1_ok():
@@ -241,16 +223,10 @@ def p1_kept():
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-p1_kept.wait_ms = 1200
-
-
 def p1_undone():
     h.check("P1 Ctrl+Z: no box", not boxes())
     h.check("P1 Ctrl+Z: no body either", not pi.bodies(), [b.Name for b in pi.bodies()])
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-p1_undone.wait_ms = 1200
 
 
 def p1_redone():
@@ -286,17 +262,11 @@ def p2_circle():
     h.click(V(18, 6, 10))
 
 
-p2_circle.wait_ms = 1500
-
-
 def p2_height_live():
     p = pi.panel("CylinderPanel")
     h.check("P2 d6", p is not None and near(p.diameter.value(), 6.0), p and p.diameter.value())
     if p is not None:
         type_live(p.height.widget, "-5")
-
-
-p2_height_live.wait_ms = 1500
 
 
 def p2_follows():
@@ -312,9 +282,6 @@ def p2_follows():
     ui.type_into(p.diameter.widget, "w2")
 
 
-p2_follows.wait_ms = 1200
-
-
 def p2_unknown():
     p = pi.panel("CylinderPanel")
     h.check("P2 the unknown name is said", "w2" in msg(p), msg(p))
@@ -328,18 +295,12 @@ def p2_waits():
         ui.type_into(p.diameter.widget, "8")
 
 
-p2_waits.wait_ms = 1200
-
-
 def p2_d8():
     p = pi.panel("CylinderPanel")
     h.check("P2 message gone", msg(p) == "", msg(p))
     h.check("P2 d8 h5 cut", near(vol(), 3600.0 - 80.0 * PI), vol())
     ui.choose(p.operation, "Intersect")
     type_live(p.height.widget, "-8")
-
-
-p2_d8.wait_ms = 1500
 
 
 def p2_both():
@@ -353,9 +314,6 @@ def p2_both():
     )
     h.check("P2 d8 h8 kept inside", near(vol(), 128.0 * PI), vol())
     h.task_button("OK")
-
-
-p2_both.wait_ms = 1500
 
 
 def p2_done():
@@ -384,9 +342,6 @@ def p3_c2():
     pl.click_on_plane(V(20, 10, 0))
 
 
-p3_c2.wait_ms = 1500
-
-
 def p3_length_negative():
     p = pi.panel("BoxPanel")
     h.check("P3 a 20 x 10 box", p is not None and p.target is not None)
@@ -395,9 +350,6 @@ def p3_length_negative():
         return
     h.fit()
     pi.drag_handle(p.handles["length"], -15.0)
-
-
-p3_length_negative.wait_ms = 1500
 
 
 def p3_flipped():
@@ -420,9 +372,6 @@ def p3_flipped():
     pi.drag_handle(p.handles["width"], 50.0)
 
 
-p3_flipped.wait_ms = 1500
-
-
 def p3_width():
     p = pi.panel("BoxPanel")
     if p is None:
@@ -430,9 +379,6 @@ def p3_width():
     bb = pi.bbox(p.target.Shape)
     h.check("P3 50 wide", near(bb[4] - bb[1], 50.0, 1e-3), bb)
     pi.drag_handle(p.handles["height"], -25.0)
-
-
-p3_width.wait_ms = 1500
 
 
 def p3_height():
@@ -444,9 +390,6 @@ def p3_height():
     h.check("P3 still New Body", p.operation.currentText() == "New Body")
     h.check("P3 no message", msg(p) == "", msg(p))
     h.task_button("OK")
-
-
-p3_height.wait_ms = 1500
 
 
 def p3_kept():
@@ -470,17 +413,11 @@ def p4_centre():
     pl.click_on_plane(V(-7.5, 25, 0))
 
 
-p4_centre.wait_ms = 1500
-
-
 def p4_size():
     p = pi.panel("SpherePanel")
     h.check("P4 a sphere", p is not None and p.target is not None)
     if p is not None:
         ui.type_into(p.diameter.widget, "10")
-
-
-p4_size.wait_ms = 1500
 
 
 def p4_ok():
@@ -505,9 +442,6 @@ def p4_cut():
         ui.choose(p.operation, "Cut")
 
 
-p4_cut.wait_ms = 1500
-
-
 def p4_cut_ok():
     h.check("P4 Cut: box - half sphere", near(vol(), 18750.0 - HALF, 1e-5), vol())
     h.task_button("OK")
@@ -529,9 +463,6 @@ def p4_intersect():
         ui.choose(p.operation, "Intersect")
 
 
-p4_intersect.wait_ms = 1500
-
-
 def p4_intersect_ok():
     h.check("P4 Intersect: the half sphere", near(vol(), HALF, 1e-5), vol())
     h.task_button("OK")
@@ -541,15 +472,9 @@ def p4_undo1():
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-p4_undo1.wait_ms = 1200
-
-
 def p4_undo2():
     h.check("P4 Ctrl+Z: the Cut again", near(vol(), 18750.0 - HALF, 1e-5), vol())
     h.press("z", QtCore.Qt.ControlModifier)
-
-
-p4_undo2.wait_ms = 1200
 
 
 def p4_redo1():
@@ -557,15 +482,9 @@ def p4_redo1():
     h.press("y", QtCore.Qt.ControlModifier)
 
 
-p4_redo1.wait_ms = 1200
-
-
 def p4_redo2():
     h.check("P4 Ctrl+Y: Cut", near(vol(), 18750.0 - HALF, 1e-5), vol())
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-p4_redo2.wait_ms = 1200
 
 
 def p4_noop_edit():
@@ -584,9 +503,6 @@ def p4_noop_undo():
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-p4_noop_undo.wait_ms = 1200
-
-
 def p4_end():
     h.check(
         "P4 an unchanged edit added no undo step: Ctrl+Z gives the Cut",
@@ -594,9 +510,6 @@ def p4_end():
         vol(),
     )
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-p4_end.wait_ms = 1200
 
 
 def p4_redo_kept():
@@ -670,4 +583,5 @@ h.run(
         p4_end,
         p4_redo_kept,
     ],
+    paced_by="state",
 )

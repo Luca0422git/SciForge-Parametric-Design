@@ -152,9 +152,6 @@ def setup():
     ui().show_panel()
 
 
-setup.wait_ms = 2500
-
-
 # -- P1 -----------------------------------------------------------------------------------------
 def p1_cards():
     listed = texts()
@@ -181,9 +178,6 @@ def p2_sort():
     QtWidgets.QApplication.processEvents()
 
 
-p2_sort.wait_ms = 800
-
-
 def p2_sorted():
     listed = texts()
     h.check(
@@ -205,9 +199,6 @@ def p3_search():
     QtWidgets.QApplication.processEvents()
 
 
-p3_search.wait_ms = 900
-
-
 def p3_found():
     found = panel().items()
     h.check(
@@ -225,9 +216,6 @@ def p3_found():
     h.check("P3 the status", panel().status.text() == '1 found for "whe"', panel().status.text())
     h.shot("P3-search")
     QtTest.QTest.keyClick(panel().search, QtCore.Qt.Key_Escape)
-
-
-p3_found.wait_ms = 800
 
 
 def p3_cleared():
@@ -257,9 +245,6 @@ def p5_cart():
     click_card("Cart")
 
 
-p5_cart.wait_ms = 800
-
-
 def p5_cart_details():
     d = details()
     h.check("P5 the details show", d.isVisible())
@@ -278,14 +263,8 @@ def p5_cart_details():
     double_click_card("Parts")
 
 
-p5_cart_details.wait_ms = 800
-
-
 def p5_wheel():
     click_card("Wheel")
-
-
-p5_wheel.wait_ms = 800
 
 
 def p5_wheel_details():
@@ -302,9 +281,6 @@ def p5_wheel_details():
     wi.click(d.close_button)
     h.check("P5 the X closes the details", not d.isVisible())
     wi.click(panel().up)
-
-
-p5_wheel_details.wait_ms = 800
 
 
 # -- P6 -----------------------------------------------------------------------------------------
@@ -373,9 +349,6 @@ def p6_drop():
     h.check("P6 (design_insert can copy)", hasattr(design_insert, "insert_copy"))
 
 
-p6_drop.wait_ms = 3000
-
-
 def comps(document):
     from sciforge import components
 
@@ -421,15 +394,9 @@ def p6_copied():
     h.task_button("Cancel")  # leaves it where it came in
 
 
-p6_copied.wait_ms = 1200
-
-
 def p6_undo():
     h.check("P6 Cancel closed the Move dialog", not Gui.Control.activeDialog())
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
-
-
-p6_undo.wait_ms = 1200
 
 
 def p6_undone():
@@ -449,17 +416,11 @@ def p7_browser():
     h.check("P7 a copy is asked for", pending is not None and pending[0] == "browser", pending)
 
 
-p7_browser.wait_ms = 3000
-
-
 def p7_copied():
     found = comps(target())
     h.check("P7 a component Arm in Target", "Arm" in found, list(found))
     if Gui.Control.activeDialog():
         h.task_button("Cancel")
-
-
-p7_copied.wait_ms = 800
 
 
 # -- P8 -----------------------------------------------------------------------------------------
@@ -471,9 +432,6 @@ def p8_move():
     pos = lst.visualItemRect(folder).center()
     accepted, _pending = drop(lst.viewport(), pos, [s["cart"]], session=False)
     h.check("P8 the folder card takes Cart", accepted == [True] * 3, accepted)
-
-
-p8_move.wait_ms = 2500
 
 
 def p8_moved():
@@ -506,9 +464,6 @@ def p9_outside():
     h.check("P9 the panel takes a file from outside", accepted == [True] * 3, accepted)
 
 
-p9_outside.wait_ms = 2500
-
-
 def p9_uploaded():
     copied = os.path.join(s["project"], "Gear.FCStd")
     h.check("P9 Gear is copied into the folder", os.path.isfile(copied))
@@ -523,9 +478,6 @@ def p9_uploaded():
 def p10_elsewhere():
     shutil.copy(s["arm"], os.path.join(s["project"], "Arm Spare.FCStd"))
     s["put_at"] = time.monotonic()
-
-
-p10_elsewhere.wait_ms = 6000
 
 
 def arm_spare_listed():
@@ -555,17 +507,11 @@ def p11_enter():
     QtTest.QTest.keyClick(panel().list, QtCore.Qt.Key_Return)
 
 
-p11_enter.wait_ms = 800
-
-
 def p11_inside():
     h.check("P11 Enter opens the folder", "Robots" in panel().crumbs.text(), panel().crumbs.text())
     h.check("P11 Cart is in it", [t for t in texts() if t.startswith("Cart")] != [], texts())
     panel().list.setFocus()
     QtTest.QTest.keyClick(panel().list, QtCore.Qt.Key_Backspace)
-
-
-p11_inside.wait_ms = 800
 
 
 def p11_up():
@@ -617,4 +563,5 @@ h.run(
         p11_up,
         cleanup,
     ],
+    paced_by="state",
 )

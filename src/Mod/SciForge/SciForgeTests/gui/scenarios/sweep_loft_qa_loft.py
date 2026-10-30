@@ -418,9 +418,6 @@ def p3_line_first():
     h.check("P3 the line's sketch dragged before Loft 1", ti.drag_step(title, "Loft 1"), title)
 
 
-p3_line_first.wait_ms = 1500
-
-
 def p3_edit():
     titles = st.timeline_titles()
     from SciForgeTests.gui import bodies_steps as bs
@@ -541,9 +538,6 @@ def p4_save():
 def p4_reopen():
     h.check("P4 the design is closed", App.ActiveDocument is None or not st.features("loft"))
     App.openDocument(s["path"])
-
-
-p4_reopen.wait_ms = 2000
 
 
 def p4_reopened():
@@ -714,4 +708,5 @@ h.run(
             p5_done,
         ]
     ),
+    paced_by="state",
 )

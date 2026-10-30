@@ -324,4 +324,5 @@ h.run(
         preselected_taken,
         esc_closed,
     ],
+    paced_by="state",
 )

@@ -382,4 +382,5 @@ h.run(
     + [h.idle_step("f_settle"), f_record]
     + [f_click_row, f_selection, f_delete_key, f_deleted, f_undo, g_click_row, f_selection]
     + [g_delete_in_view, g_deleted],
+    paced_by="state",
 )

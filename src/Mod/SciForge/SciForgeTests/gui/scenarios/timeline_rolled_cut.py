@@ -155,4 +155,4 @@ STEPS = [
     all_there,
 ]
 
-h.run("timeline_rolled_cut", t.watched(STEPS))
+h.run("timeline_rolled_cut", t.watched(STEPS), paced_by="state")

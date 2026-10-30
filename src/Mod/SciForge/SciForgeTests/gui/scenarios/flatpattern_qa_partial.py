@@ -296,4 +296,5 @@ h.run(
         redo_delete,
         delete_redone,
     ],
+    paced_by="state",
 )

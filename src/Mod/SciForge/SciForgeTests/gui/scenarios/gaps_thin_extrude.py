@@ -87,8 +87,6 @@ def l_wall(t):
 
 def step(fn, name, wait_ms=None):
     fn.__name__ = name
-    if wait_ms:
-        fn.wait_ms = wait_ms
     return fn
 
 
@@ -475,4 +473,5 @@ h.run(
             t4_done,
         ]
     ),
+    paced_by="state",
 )

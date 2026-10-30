@@ -102,4 +102,5 @@ def grown():
 h.run(
     "extrude_from_edited_sketch",
     [setup, edit_sketch_a, press_e, extrude_takes_a, type_minus_4, ok, grown],
+    paced_by="state",
 )

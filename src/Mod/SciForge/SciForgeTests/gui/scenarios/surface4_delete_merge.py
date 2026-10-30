@@ -274,4 +274,5 @@ h.run(
         solid_fillet_took_it,
         solid_unchanged,
     ],
+    paced_by="state",
 )

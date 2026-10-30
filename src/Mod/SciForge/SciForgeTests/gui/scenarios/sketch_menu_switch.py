@@ -199,4 +199,5 @@ h.run(
         d_right_click,
         d_menu,
     ],
+    paced_by="state",
 )

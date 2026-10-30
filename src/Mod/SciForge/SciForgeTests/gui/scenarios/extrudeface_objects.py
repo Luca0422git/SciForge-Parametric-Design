@@ -382,4 +382,5 @@ h.run(
         o2_reached,
         o2_done,
     ],
+    paced_by="state",
 )

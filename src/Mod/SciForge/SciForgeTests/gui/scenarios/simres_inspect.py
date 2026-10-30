@@ -290,9 +290,6 @@ def c_hover():
     h.move(h.screen_point(_iso_centre()))
 
 
-c_hover.wait_ms = 400
-
-
 def c_hover_check():
     sess = s.session()
     hover = s.tags("hover")
@@ -396,9 +393,6 @@ def c_back_check():
     state["before_grip"] = tuple(sess.points[0]["at"])
     start = ai.head_point(grips[0])
     h.drag_points(start, start + V(10, 0, 0))
-
-
-c_back_check.wait_ms = 900
 
 
 def c_grip_check():
@@ -611,9 +605,6 @@ def g_measure():
     s.menu("INSPECT", "Measure")
 
 
-g_measure.wait_ms = 600
-
-
 def g_measure_check():
     from sciforge import measure_ui, taskui
 
@@ -688,4 +679,5 @@ h.run(
         g_measure_check,
         g_esc_check,
     ],
+    paced_by="state",
 )
