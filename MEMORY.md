@@ -14,10 +14,13 @@ Status: [x] 1 failures on the run page [x] 2 harness.wait_for / settle / ready /
 [x] 3 input helpers on it [x] 4 fresh profile per scenario [x] 5 hang watchdog [x] 6 gui_env.sh,
 both workflows on ubuntu-24.04 [x] 7 check_waits.py ratchet [x] stress mode + CI repeat input
 [x] scenarios converted (batch 1, then CI part by part, each proven 3 times in a row under
-`--stress` first; f158198e: 0 fixed waits, 0 timer-paced scenarios) [ ] five green full runs
-in a row (2026-10-30: 5 runs side by side on ee57bdd2, 1 all green, 4 with one flaky scenario
-each; next set on 727e6908; see the session log) [~] build dry run (build #15 on the branch,
-ee57bdd2, started 2026-10-30 13:05 UTC) [ ] merged into develop (Luca).
+`--stress` first; f158198e: 0 fixed waits, 0 timer-paced scenarios) [x] five green full runs
+on one commit (ae69b62a, 2026-10-30: CI #340 - #344, all green; the sets before found races,
+see the session log) [~] build dry run (build #15 on the branch, ee57bdd2: Linux compiled,
+then appimagetool refused the AppDir's icon, Known issues "BEFORE THE NEXT FULL BUILD";
+Windows was still building at 16:25 UTC) [ ] merged into develop (Luca) [ ] delete the
+branches sf/gui-tests-proof-1/2/3 (copies of the branch for runs side by side; this sandbox
+may not delete branches: HTTP 403).
 Newest session log "GUI test rework".
 
 **2026-10-26: Luca's beta 3 list, split in two** (newest session log "Beta 3 list"):
@@ -633,7 +636,7 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
 
 ## Known issues / findings
 
-- **BEFORE THE NEXT FULL BUILD: appimagetool's "continuous" build changed (2026-10-29, build 333) and now refuses an AppDir whose files other users cannot read** ("has mode 0700 ... found 3330 problem(s)": folders of the bundled conda environment such as usr/ssl, usr/var/cache/fontconfig, usr/cmake). It broke the 0.1.0-beta.3.1.3 patch release (run #10, linux job, nothing published). `tools/sciforge/repack_module.sh` now runs `chmod -R a+rX` on the unpacked AppImage before packing (reproduced locally: a 0700 folder is refused, after the chmod it packs). `package/rattler-build/linux/create_bundle.sh` (the full build) downloads the same continuous tool and needs the same `chmod -R a+rX AppDir` before its appimagetool call, with a SCIFORGE comment and a core-patches.md entry: not done yet because that file counts in the core id (it would have refused the patch release). Do it as the first commit of the next full build.
+- **BEFORE THE NEXT FULL BUILD: appimagetool's "continuous" build changed (2026-10-29, build 333) and now refuses an AppDir whose files other users cannot read** ("has mode 0700 ... found 3330 problem(s)": folders of the bundled conda environment such as usr/ssl, usr/var/cache/fontconfig, usr/cmake). It broke the 0.1.0-beta.3.1.3 patch release (run #10, linux job, nothing published). `tools/sciforge/repack_module.sh` now runs `chmod -R a+rX` on the unpacked AppImage before packing (reproduced locally: a 0700 folder is refused, after the chmod it packs). `package/rattler-build/linux/create_bundle.sh` (the full build) downloads the same continuous tool and needs the same `chmod -R a+rX AppDir` before its appimagetool call, with a SCIFORGE comment and a core-patches.md entry: not done yet because that file counts in the core id (it would have refused the patch release). Do it as the first commit of the next full build. **Confirmed by the build dry run #15 (2026-10-30, `sf/gui-tests-rework`, ee57bdd2): the Linux build compiled and passed its smoke test, then appimagetool build 333 refused the AppDir for its icon first** ("org.sciforge.SciForge{.png,.xpm} defined in desktop file but not found", "No valid .DirIcon": create_bundle.sh copies only the .svg). The fix, for Luca to decide (core id): in create_bundle.sh, next to the .svg copy, a 256 px PNG as `AppDir/org.sciforge.SciForge.png` (src/Gui/Icons/sciforge-icon-256.png) with `.DirIcon` linked to it, plus the chmod above; or pin appimagetool to a fixed release instead of `continuous`.
 - **A left release SciForge keeps from FreeCAD left its navigation thinking the button was held (Luca, 2026-10-29; fixed in 0.1.0-beta.3.1.3).** `selection_ui._ViewFilter` lets FreeCAD see every left press (a click, a box or a Component Drag cannot be told apart yet) but kept the Component Drag's moves and release: FreeCAD's `NavigationStyle.button1down` stayed true, and in the Revit style a middle-drag (pan: BUTTON3 alone) and Shift + middle-drag (orbit) matched no case until the next real left click. Now `_release_for_freecad` hands FreeCAD a release with the selection node's `selectionMode` OFF (the scene graph root IS the SoFCUnifiedSelection; AUTO 0, ON 1, OFF 2) and Ctrl (no "click on nothing clears the selection"), on every release the filter keeps (drag, box, cancelled, Select Other). FreeCAD fixed the same class itself for its ClarifySelection (gh #29090, `resetButtonState()`, not reachable from Python; a navigation-style switch would reset it but loses ZoomAtCursor and the like). Same day: the ViewCube kept turning after a release that went to another widget; a move without the left button now ends its press. Scenario `navigation_stuck_buttons` (4 checks fail on the old code).
 - **The Windows installer left NO SciForge when updating over a SciForge whose AI connector ran (Luca, 2026-10-28; fixed in 0.1.0-beta.3.1.2, core patch #19).** Claude Desktop (Gemini CLI, Claude Code) keeps SciForge's AI connector running: SciForge's own `bin\python.exe`. FreeCAD's installer checks only for `SciForge.exe` / `SciForgeCmd.exe`, then `RMDir /r` deleted file after file, stopped at the connector's open files ("Failed to remove ... no files are in use") and aborted. Now (`include/utils.nsh`): programs running from the folder are found by path (`Get-CimInstance Win32_Process`); the connector is stopped after asking, others get Retry / Cancel; the folder is moved aside to `<folder>.old` in ONE step (refused while a file is open: Retry / Cancel, nothing changed) and only then deleted; the uninstaller stops the connector too. Windows test `tools/sciforge/test_installer.ps1` (installs over a running connector, with a file held open, uninstall) in the patch release and the full build. The quick update (`install_update.ps1`) already stopped the connector. Lesson: never delete in place what cannot be put back; move first, delete after.
 - **Open (CI #307, 2026-10-30): `vex_shaft` once found the shaft turned 0.0175 degrees after OK**
@@ -1889,7 +1892,13 @@ branch off develop (a patch release was going out from develop). How it all work
   journey_vex_sim (the same file dialog race) and inspect_qa L twice (a click 0.2 s after a
   handle drag was let go: `press_pace` now waits for `handles3d.just_used()`, e230f503).
   Comparison: scratchpad `github_vs_sandbox_2.txt` (in the report to Luca). Build dry run #15
-  (manual, on the branch: publishes nothing) started on ee57bdd2.
+  (manual, on the branch: publishes nothing) started on ee57bdd2. 727e6908's set: #337 found
+  the same rename race in the browser ("Body2Bracket": keys typed before the field took the
+  keyboard back); the field now never sees the focus out in its grace period (ae69b62a).
+  **ae69b62a: five full runs side by side, CI #340 - #344, all green** (the finish line's five
+  green runs on one commit). Still open, with diagnostics in place: the INSERT file dialog
+  race, mesh_separate_combine 1240, vex_shaft's turn (Known issues). The build dry run found
+  appimagetool's new icon check (Known issues): Luca decides the create_bundle.sh fix.
 
 ### Session log: quick patch 0.1.0-beta.3.1.3, stuck buttons (`develop`, 2026-10-29)
 
