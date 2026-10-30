@@ -303,7 +303,12 @@ def f_check():
     h.check(
         "the cube still 1180 mm3",
         cube is not None and near(m.volume(cube), 1180.0, 2.0),
-        cube and m.volume(cube),
+        {  # 1240 once on CI #333 (passed again in a fresh profile): what the Join was made of
+            "volume": cube and m.volume(cube),
+            "bar": bar and (m.volume(bar), tuple(round(c, 4) for c in bar.Placement.Base)),
+            "bar's box": bar and str(bar.Mesh.BoundBox),
+            "tools": cube and [t.Label for t in getattr(cube, "Tools", [])],
+        },
     )
     h.shot("end")
 

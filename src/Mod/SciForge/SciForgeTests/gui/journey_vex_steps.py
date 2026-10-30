@@ -220,7 +220,15 @@ def answer_file_dialog(paths, report):
             QtTest.QTest.keyClicks(edit, names if len(paths) > 1 else os.path.basename(paths[0]))
             report["typed"] = names
             report["folder"] = dlg.directory().absolutePath()
+            # what the dialog does from the Enter on, for a failure to say (CI #332 and the
+            # sandbox: the dialog stayed open, its name box empty, the file selected in the
+            # list)
+            trace = report["trace"] = ["at the Enter: %s" % _dialog_state(dlg, edit)]
+            edit.textChanged.connect(lambda text: trace.append("name box: %r" % text))
+            edit.returnPressed.connect(lambda: trace.append("the box took the Enter"))
+            dlg.finished.connect(lambda code: trace.append("dialog finished %s" % code))
             QtTest.QTest.keyClick(edit, QtCore.Qt.Key_Return)
+            trace.append("after the Enter: %s" % _dialog_state(dlg, edit))
             report["done"] = True
         except Exception as exc:  # never leave the dialog open
             report["error"] = str(exc)
@@ -229,10 +237,28 @@ def answer_file_dialog(paths, report):
         h.when(
             lambda: not h._alive(dlg) or not dlg.isVisible(),
             lambda: None,
-            "the file dialog to close after Enter",
+            lambda: "the file dialog to close after Enter (%s; now: %s)"
+            % ("; ".join(report["trace"][-8:]), _dialog_state(dlg, edit)),
         )
 
     h.when(lambda: dialog() is not None, opened, "the file dialog to open")
+
+
+def _dialog_state(dlg, edit):
+    """The file dialog's folder, name box, selected files, the window Qt counts active and
+    the keyboard focus, in a line."""
+    try:
+        win = QtWidgets.QApplication.activeWindow()
+        focus = QtWidgets.QApplication.focusWidget()
+        return "in %s, box %r, selected %s, active %s, focus %s" % (
+            dlg.directory().dirName(),
+            edit.text(),
+            [os.path.basename(f) for f in dlg.selectedFiles()],
+            win and (win.windowTitle() or win.metaObject().className()),
+            focus and (focus.objectName() or focus.metaObject().className()),
+        )
+    except RuntimeError:  # the dialog is gone
+        return "the dialog is gone"
 
 
 def insert_step(names, report):

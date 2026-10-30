@@ -870,10 +870,13 @@ def caught_up(panel=None, what="the dialog's preview to catch up", extra=None):
 def when(condition, action, what, timeout_s=None):
     """Run action() once condition() holds, without blocking: for input into something
     that opens and runs its own loop (a menu, a modal dialog), set up before the call that
-    opens it. After timeout_s: the failure as in wait_for, the menu or dialog closed."""
+    opens it. After timeout_s: the failure as in wait_for, the menu or dialog closed.
+    `what` may be a function: what it says at the failure goes into the message (what the
+    dialog did meanwhile)."""
     limit = WAIT_S if timeout_s is None else timeout_s
     end = time.monotonic() + limit
     box = {"error": None, "cancelled": False}
+    said = what if callable(what) else (lambda: what)
 
     def look():
         if box["cancelled"]:
@@ -888,10 +891,10 @@ def when(condition, action, what, timeout_s=None):
             except WaitTimeout:
                 pass
             except Exception:
-                check("No exception in the action after %s" % what, False, traceback.format_exc())
+                check("No exception in the action after %s" % said(), False, traceback.format_exc())
                 close_modals()
         elif time.monotonic() >= end:
-            _timed_out(what, limit, box["error"])
+            _timed_out(said(), limit, box["error"])
         else:
             _later(POLL_MS, look)
 

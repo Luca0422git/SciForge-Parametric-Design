@@ -13,6 +13,7 @@ class InlineEditor(QtCore.QObject):
         super().__init__(parent)
         self.on_commit = on_commit
         self._done = False
+        self._keep = (-1, 0)  # the selection a focus bounce took away
         self._clock = QtCore.QElapsedTimer()
         self._clock.start()
         self.field = QtWidgets.QLineEdit(parent)
@@ -49,6 +50,10 @@ class InlineEditor(QtCore.QObject):
                 QtCore.Qt.ActiveWindowFocusReason,
                 QtCore.Qt.MenuBarFocusReason,
             ):
+                # Qt drops the field's selection as it loses the focus: the name stays
+                # selected when the field takes it back (typing right after Rename replaced
+                # nothing and went after the name: "Extrude 2Boss", CI #331)
+                self._keep = (self.field.selectionStart(), len(self.field.selectedText()))
                 QtCore.QTimer.singleShot(0, self._refocus)
             else:
                 QtCore.QTimer.singleShot(0, self.commit)
@@ -58,6 +63,9 @@ class InlineEditor(QtCore.QObject):
         if not self._done:
             try:
                 self.field.setFocus()
+                start, length = self._keep
+                if start >= 0 and length and not self.field.hasSelectedText():
+                    self.field.setSelection(start, length)
             except RuntimeError:
                 pass
 
