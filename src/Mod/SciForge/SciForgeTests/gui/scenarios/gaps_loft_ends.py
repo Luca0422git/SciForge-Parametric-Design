@@ -400,4 +400,5 @@ h.run(
         dome,
         dome_kept,
     ],
+    paced_by="state",
 )

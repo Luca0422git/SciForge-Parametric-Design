@@ -105,9 +105,6 @@ def p11_ok():
     h.task_button("OK")
 
 
-p11_ok.wait_ms = 1200
-
-
 def p11_pulled():
     pp = press_pull()
     h.check("Press Pull made", pp is not None)
@@ -133,9 +130,6 @@ def p11_wall_taken():
     objs = p.options["objects"] if p else []
     h.check("the hole's wall is the object", len(objs) == 1 and objs[0][1].startswith("Face"), objs)
     h.task_button("OK")
-
-
-p11_wall_taken.wait_ms = 1500
 
 
 def p11_after():
@@ -198,9 +192,6 @@ def p12_preview():
     h.task_button("OK")
 
 
-p12_preview.wait_ms = 1200
-
-
 def p12_edit_first():
     h.check("6 holes", ps.close(h.solid_volume(), PULLED - 6 * HOLE), h.solid_volume())
     ps.timeline_double_click("Rectangular Pattern 1")
@@ -214,9 +205,6 @@ def p12_quantity_2():
 
 def p12_edit_ok():
     h.task_button("OK")
-
-
-p12_edit_ok.wait_ms = 1500
 
 
 def p12_both_rows():
@@ -346,4 +334,5 @@ h.run(
         p13_full,
         p13_cancelled,
     ],
+    paced_by="state",
 )

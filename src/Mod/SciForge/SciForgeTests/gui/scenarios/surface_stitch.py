@@ -413,4 +413,5 @@ h.run(
         refused,
         closed_again,
     ],
+    paced_by="state",
 )

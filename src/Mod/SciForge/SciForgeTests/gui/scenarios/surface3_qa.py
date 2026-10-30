@@ -341,9 +341,6 @@ def enter_keeps():
     sk.enter()
 
 
-enter_keeps.wait_ms = 900
-
-
 def kept():
     found = _isos()
     h.check("kept: one Isoparametric Curves", len(found) == 1, found)
@@ -565,4 +562,5 @@ h.run(
         extend_undone,
         extend_redone,
     ],
+    paced_by="state",
 )

@@ -59,8 +59,6 @@ def round_steps(tag, label, kind, freecad_type, setup=(), motion=None, after_ok=
         if label != "Rigid":
             j.choose_type(p, label)
 
-    choose.wait_ms = 2600  # the new motion plays once (1.8 s) and comes back
-
     def typed():
         p = j.panel()
         joint = the_joint()
@@ -413,4 +411,4 @@ steps += round_steps(
     after_ok=r6_after,
 )
 
-h.run("joints_types", steps)
+h.run("joints_types", steps, paced_by="state")

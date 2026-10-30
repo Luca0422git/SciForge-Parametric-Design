@@ -284,9 +284,6 @@ def p4_after():
     s["play_tip"] = getattr(h.body().Tip, "Name", None)  # None: Play starts empty
 
 
-p4_after.wait_ms = 1500  # playback would have moved on by now
-
-
 def p4_still():
     h.check(
         "playback stopped: the design does not change under the dialog",
@@ -294,9 +291,6 @@ def p4_still():
         (getattr(h.body().Tip, "Name", None), s.get("play_tip")),
     )
     h.task_button("Cancel")
-
-
-p4_still.wait_ms = 1500
 
 
 def p4_cancelled():
@@ -394,4 +388,4 @@ STEPS = b.box_steps("TimelineQA") + [
     end,
 ]
 
-h.run("timeline_browser_qa", t.watched(STEPS))
+h.run("timeline_browser_qa", t.watched(STEPS), paced_by="state")

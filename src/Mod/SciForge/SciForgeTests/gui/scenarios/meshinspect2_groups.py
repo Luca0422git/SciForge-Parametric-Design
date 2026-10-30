@@ -75,16 +75,10 @@ def a_open():
     s.menu("PREPARE", "Generate Face Groups")
 
 
-a_open.wait_ms = 1500
-
-
 def a_ok():
     p = m.panel()
     h.check("Generate Face Groups dialog", p is not None and p.title == "Generate Face Groups", p)
     h.task_button("OK")
-
-
-a_ok.wait_ms = 2000
 
 
 def a_done():
@@ -92,9 +86,6 @@ def a_done():
     h.check("six face groups", groups_of(body()) == 6, groups_of(body()))
     s.click_browser_row(NAME)
     s.menu("PREPARE", "Create Face Group")
-
-
-a_done.wait_ms = 1500
 
 
 # -- B ----------------------------------------------------------------------------------------
@@ -105,9 +96,6 @@ def b_refused():
         return
     h.check("the Faces box waits", p.active == "faces", p.active)
     h.task_button("OK")
-
-
-b_refused.wait_ms = 1200
 
 
 def b_says():
@@ -122,18 +110,12 @@ def b_says():
     m.click_body(body(), TOP)
 
 
-b_says.wait_ms = 2000
-
-
 def b_picked():
     p = m.panel()
     state["patch"] = len(p.picked_faces)
     h.check("a few faces picked", 2 <= state["patch"] <= 12, state["patch"])
     h.check("seven groups in the preview", groups_of(last("MeshCreateFaceGroup")) == 7)
     h.task_button("OK")
-
-
-b_picked.wait_ms = 1500
 
 
 def b_done():
@@ -143,9 +125,6 @@ def b_done():
     h.check("the body has seven face groups", groups_of(body()) == 7, groups_of(body()))
     s.click_browser_row(NAME)
     s.menu("PREPARE", "Combine Face Groups")
-
-
-b_done.wait_ms = 1500
 
 
 # -- C ----------------------------------------------------------------------------------------
@@ -158,14 +137,8 @@ def c_patch():
     m.click_body(body(), TOP)
 
 
-c_patch.wait_ms = 1200
-
-
 def c_right():
     m.click_body(body(), RIGHT)
-
-
-c_right.wait_ms = 2000
 
 
 def c_refused():
@@ -176,25 +149,16 @@ def c_refused():
     h.task_button("OK")
 
 
-c_refused.wait_ms = 1500
-
-
 def c_waits():
     p = m.panel()
     h.check("OK waits", p is not None and p.title == "Combine Face Groups", p)
     m.click_body(body(), TOP)  # drops the patch
 
 
-c_waits.wait_ms = 1200
-
-
 def c_dropped():
     p = m.panel()
     h.check("a click on the patch dropped it", len(p.chosen) == 1, p.chosen)
     m.click_body(body(), TOP_EDGE)
-
-
-c_dropped.wait_ms = 2000
 
 
 def c_combined():
@@ -206,18 +170,12 @@ def c_combined():
     h.task_button("OK")
 
 
-c_combined.wait_ms = 1500
-
-
 def c_done():
     st = last("MeshCombineFaceGroups")
     h.check("timeline: Combine Face Groups 1", title(st) == "Combine Face Groups 1", title(st))
     h.check("the body is that step", body() is st, (body(), st))
     h.check("six face groups", groups_of(body()) == 6, groups_of(body()))
     t.drag_marker("Combine Face Groups 1")
-
-
-c_done.wait_ms = 2000
 
 
 # -- D ----------------------------------------------------------------------------------------
@@ -249,9 +207,6 @@ def d_rolled():
     s.menu("MODIFY", "Direct Edit")
 
 
-d_rolled.wait_ms = 1500
-
-
 # -- E ----------------------------------------------------------------------------------------
 def e_paint():
     p = e.direct_panel()
@@ -262,9 +217,6 @@ def e_paint():
     h.click(FRONT)
 
 
-e_paint.wait_ms = 1500
-
-
 def e_delete():
     p = e.direct_panel()
     state["deleted"] = len(p.selected)
@@ -272,16 +224,10 @@ def e_delete():
     e.key(QtCore.Qt.Key_Delete)
 
 
-e_delete.wait_ms = 1500
-
-
 def e_finish():
     p = e.direct_panel()
     h.check("one edit", e.edits(p) == 1, e.edits(p))
     e.press_button(p, "finish")
-
-
-e_finish.wait_ms = 2000
 
 
 def e_placed():
@@ -316,9 +262,6 @@ def e_placed():
     t.drag_marker(to_end=True)
 
 
-e_placed.wait_ms = 2000
-
-
 # -- F ----------------------------------------------------------------------------------------
 def f_end():
     states = t.states()
@@ -330,9 +273,6 @@ def f_end():
     h.check("Combine Face Groups 1 shown", m.shown(combine))
     h.check("the Direct Edit hidden (used up)", not m.shown(last("MeshDirectEdit")))
     s.undo()
-
-
-f_end.wait_ms = 2500
 
 
 # -- G ----------------------------------------------------------------------------------------
@@ -349,15 +289,9 @@ def g_undone():
     s.redo()
 
 
-g_undone.wait_ms = 2500
-
-
 def g_redone():
     h.check("Redo: the Direct Edit is back", len(m.steps("MeshDirectEdit")) == 1)
     h.check("the hole is back", holes(body()) == 1, holes(body()))
-
-
-g_redone.wait_ms = 1000
 
 
 # -- H ----------------------------------------------------------------------------------------
@@ -369,9 +303,6 @@ def h_save_reopen():
     App.closeDocument(App.ActiveDocument.Name)
     App.openDocument(state["file"])
     h.fit()
-
-
-h_save_reopen.wait_ms = 3000
 
 
 def h_check():
@@ -405,4 +336,5 @@ h.run(
     + [e_paint, e_delete, e_finish, e_placed]
     + [f_end, g_undone, g_redone]
     + [h_save_reopen, h_check],
+    paced_by="state",
 )

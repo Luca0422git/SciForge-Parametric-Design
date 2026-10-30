@@ -67,9 +67,6 @@ def a_open():
     h.ribbon("3D Print")
 
 
-a_open.wait_ms = 1500
-
-
 def a_dialog():
     d = print_dialog()
     h.check("3D Print dialog", d is not None, d)
@@ -84,17 +81,11 @@ def a_dialog():
     b.choose(d.refinement.level, "Low")
 
 
-a_dialog.wait_ms = 1500
-
-
 def a_low():
     d = print_dialog()
     h.check("Low: still 12", count(d) == 12, count(d))
     b.choose(d.send_to, "Save file only")
     i.dialog_button(d, "OK")
-
-
-a_low.wait_ms = 2000
 
 
 def a_check():
@@ -116,9 +107,6 @@ def b_open():
     h.ribbon("Export")
 
 
-b_open.wait_ms = 1500
-
-
 def b_step():
     d = export_dialog()
     h.check("Export dialog", d is not None, d)
@@ -135,9 +123,6 @@ def b_step():
     b.click_widget(d.export_button)
 
 
-b_step.wait_ms = 1500
-
-
 def b_refused():
     d = export_dialog()
     h.check("the dialog stays", d is not None)
@@ -152,9 +137,6 @@ def b_refused():
     h.check("nothing written", not os.path.exists(os.path.join(OUT, "part.step")), listing(OUT))
     b.choose(d.type, "STL (Binary)")
     b.click_widget(d.export_button)
-
-
-b_refused.wait_ms = 1500
 
 
 def b_check():
@@ -180,9 +162,6 @@ def c_export():
     # (a step of its own: what the save sets going, the version note and the tab's new name,
     # closed the menu under the pointer when it opened in the same step)
     i.menu("MAKE", "Export Everything")
-
-
-c_export.wait_ms = 2500
 
 
 def c_check():
@@ -218,4 +197,5 @@ h.run(
     + m.insert_file(part_file())
     + [a_open, a_dialog, a_low, a_check, b_open, b_step, b_refused, b_check, c_save,
         c_export, c_check],
+    paced_by="state",
 )

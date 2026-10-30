@@ -14,7 +14,7 @@ Status: [x] 1 failures on the run page [x] 2 harness.wait_for / settle / ready /
 [x] 3 input helpers on it [x] 4 fresh profile per scenario [x] 5 hang watchdog [x] 6 gui_env.sh,
 both workflows on ubuntu-24.04 [x] 7 check_waits.py ratchet [x] stress mode + CI repeat input
 [ ] scenarios converted: batch 1 (the CI #277 - #287 ones), then CI part by part, each part
-proven 3 times in a row under `--stress` first (done: parts 1-4 and 9 of 9; the rest being proven;
+proven 3 times in a row under `--stress` first (done: parts 1-5, 8 and 9 of 9; the rest being proven;
 every helper and scenario wait is named, `check_waits.py` counts what is left) [ ] five green
 full runs in a row [ ] build dry run [ ] merged into develop (Luca).
 Newest session log "GUI test rework".

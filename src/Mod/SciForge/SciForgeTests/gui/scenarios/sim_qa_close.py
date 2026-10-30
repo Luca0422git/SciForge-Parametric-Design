@@ -48,9 +48,6 @@ def b_closed():
     h.check("B no undo step left open", not App.getActiveTransaction(), App.getActiveTransaction())
 
 
-b_closed.wait_ms = 1200
-
-
 def b_beam_new_study():
     h.check(
         "B the beam is in front",
@@ -125,4 +122,5 @@ h.run(
         s.wait_solved(),
         b_solved,
     ],
+    paced_by="state",
 )

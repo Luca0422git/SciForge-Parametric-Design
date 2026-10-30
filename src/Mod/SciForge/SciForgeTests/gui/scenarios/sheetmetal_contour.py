@@ -139,9 +139,6 @@ def drag():
     s["drag"] = sm.drag_arrow("distance", 30.0)
 
 
-drag.wait_ms = 2200
-
-
 def dragged():
     sm.settle()
     d = s.get("drag")
@@ -420,4 +417,5 @@ h.run(
         ok_on_edge,
         on_edge_done,
     ],
+    paced_by="state",
 )

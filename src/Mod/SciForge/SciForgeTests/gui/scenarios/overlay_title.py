@@ -70,4 +70,4 @@ def closed():
     h.check("no overlay title after Cancel", not titles(), titles())
 
 
-h.run("overlay_title", [new_design, nothing_open, start_press_pull, dialog_open, closed])
+h.run("overlay_title", [new_design, nothing_open, start_press_pull, dialog_open, closed], paced_by="state")

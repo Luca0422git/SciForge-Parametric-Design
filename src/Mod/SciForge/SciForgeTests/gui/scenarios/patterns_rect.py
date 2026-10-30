@@ -449,4 +449,5 @@ h.run(
         faces_preview,
         faces_ok,
     ],
+    paced_by="state",
 )

@@ -135,4 +135,5 @@ h.run(
         c_tab,
         c_check,
     ],
+    paced_by="state",
 )

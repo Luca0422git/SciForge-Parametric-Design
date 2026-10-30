@@ -53,7 +53,6 @@ def open_view(view_fn):
         half_w, half_h = drawing.view_extent(view)
         d.double_click_at(x + half_w - 3.0, y - half_h + 1.0)
 
-    open_.wait_ms = 1500
     open_.__name__ = "open_%s" % view_fn.__name__
     return open_
 
@@ -69,16 +68,10 @@ def p_place():
     d.move_to(x, y - 55)
 
 
-p_place.wait_ms = 2000
-
-
 def p_click():
     x, y = w.at(0.0, 0.0)
     d.click_at(x, y - 55)
     d.key(QtCore.Qt.Key_Return)
-
-
-p_click.wait_ms = 2500
 
 
 def p_made():
@@ -92,9 +85,6 @@ def a_holes():
         w.toggle(p.auto_boxes["holes"])
 
 
-a_holes.wait_ms = 2500
-
-
 def a_marks():
     marks = auto(w.base()).get("marks", [])
     centres = sorted((round(m[0], 3), round(m[1], 3)) for m in marks)
@@ -103,23 +93,14 @@ def a_marks():
     d.ok()
 
 
-a_marks.wait_ms = 1500
-
-
 def a_undo():
     d.undo()
-
-
-a_undo.wait_ms = 2500
 
 
 def a_undone():
     tags = list(getattr(w.base(), "SciForgeAutoTags", []) or [])
     h.check("undo: no automatic marks", not tags, tags)
     d.redo()
-
-
-a_undone.wait_ms = 2500
 
 
 def a_redone():
@@ -132,9 +113,6 @@ def b_holes():
     p = d.panel_of("EditViewPanel")
     if h.check("the projected view's dialog", p is not None, d.panel()):
         w.toggle(p.auto_boxes["holes"])
-
-
-b_holes.wait_ms = 2500
 
 
 def b_lines():
@@ -151,16 +129,10 @@ def b_lines():
     w.toggle(d.panel_of("EditViewPanel").auto_boxes["extrudes"])
 
 
-b_lines.wait_ms = 2500
-
-
 def b_extrudes():
     lines = auto(projected()).get("lines", [])
     h.check("no bosses: still two", len(lines) == 2, lines)
     d.choose(d.panel_of("EditViewPanel").style, "Visible and Hidden Edges")
-
-
-b_extrudes.wait_ms = 1500
 
 
 def b_hidden():
@@ -168,15 +140,9 @@ def b_hidden():
     d.ok()
 
 
-b_hidden.wait_ms = 2500
-
-
 # -- C ------------------------------------------------------------------------------------------
 def c_command():
     w.menu("GEOMETRY", "Edge Extension")
-
-
-c_command.wait_ms = 1200
 
 
 def c_edges():
@@ -185,9 +151,6 @@ def c_edges():
         return
     w.click(0.0, 25.0)
     w.click(40.0, 0.0)
-
-
-c_edges.wait_ms = 2500
 
 
 def c_made():
@@ -214,9 +177,6 @@ def c_made():
     d.key(QtCore.Qt.Key_Escape)
 
 
-c_made.wait_ms = 1500
-
-
 def c_measured():
     from sciforge import drawing
 
@@ -239,30 +199,18 @@ def d_label():
     w.toggle(p.show_label)
 
 
-d_label.wait_ms = 1500
-
-
 def d_shown():
     h.check("written under the view", w.base().Caption == "TOP VIEW", w.base().Caption)
     d.ok()
-
-
-d_shown.wait_ms = 1500
 
 
 def d_undo():
     d.undo()
 
 
-d_undo.wait_ms = 1500
-
-
 def d_undone():
     h.check("undo: no label", w.base().Caption == "", w.base().Caption)
     d.redo()
-
-
-d_undone.wait_ms = 1500
 
 
 # -- E ------------------------------------------------------------------------------------------
@@ -280,9 +228,6 @@ def e_drag():
     wi.drag(view.viewport(), a, view.viewport().mapToGlobal(b), 12)
 
 
-e_drag.wait_ms = 1500
-
-
 def e_typed():
     p = d.panel_of("TextPanel")
     if not h.check("a text box from the drag", p is not None and p.note is not None):
@@ -295,9 +240,6 @@ def e_typed():
     )
     d.type_into(p.text, "MATERIAL: STEEL")
     d.ok()
-
-
-e_typed.wait_ms = 1500
 
 
 def e_done():
@@ -313,9 +255,6 @@ def f_move():
     hole = doc.getObject("Hole1")
     hole.Placement.Base = App.Vector(25.0, 15.0, 0)
     doc.recompute()
-
-
-f_move.wait_ms = 3500
 
 
 def f_followed():
@@ -346,4 +285,5 @@ h.run(
     + [open_view(base_view), d_label, d_shown, d_undo, d_undone]
     + [e_command, e_drag, e_typed, e_done]
     + [f_move, f_followed],
+    paced_by="state",
 )

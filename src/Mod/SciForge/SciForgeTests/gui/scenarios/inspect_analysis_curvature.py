@@ -360,9 +360,6 @@ def comb_redone():
     a.inspect("Isocurve Analysis")
 
 
-comb_redone.wait_ms = 900
-
-
 # -- Isocurve ----------------------------------------------------------------------------------
 def iso_pick():
     h.click(HOLE_WALL)
@@ -420,9 +417,6 @@ def iso_deleted():
     st["path"] = a.save_reopen("inspect_analysis_curvature.FCStd")
 
 
-iso_deleted.wait_ms = 1500
-
-
 def reopened():
     h.check(
         "after reopening: the map (hidden) and the comb",
@@ -474,4 +468,5 @@ h.run(
         iso_deleted,
         reopened,
     ],
+    paced_by="state",
 )

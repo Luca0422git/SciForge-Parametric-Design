@@ -363,4 +363,5 @@ h.run(
         q6_reached,
         q6_done,
     ],
+    paced_by="state",
 )

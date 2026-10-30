@@ -498,4 +498,5 @@ h.run(
         thin_rim,
         same_name_in_components,
     ],
+    paced_by="state",
 )

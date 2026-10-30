@@ -255,4 +255,5 @@ h.run(
         reopened,
         deleted,
     ],
+    paced_by="state",
 )

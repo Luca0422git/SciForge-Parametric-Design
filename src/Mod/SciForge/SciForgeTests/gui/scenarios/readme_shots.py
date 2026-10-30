@@ -109,9 +109,6 @@ def make_designs():
         close_all()
 
 
-make_designs.wait_ms = 2500
-
-
 def show_home():
     from sciforge import home_ui
 
@@ -124,16 +121,10 @@ def show_home():
     h.check("Recent lists the designs", len(s["rows"]) >= 3, s["rows"])
 
 
-show_home.wait_ms = 2500
-
-
 def shoot_home():
     page = home()
     h.check("the pictures of the tiles are loaded", page.loading() == 0, page.loading())
     h.shot("home")
-
-
-shoot_home.wait_ms = 1500
 
 
 # -- 2 the sketch ---------------------------------------------------------------------------
@@ -169,9 +160,6 @@ def draw():
     h.fit(iso=False)
 
 
-draw.wait_ms = 1500
-
-
 def shoot_sketch():
     sk = h.in_sketch()
     h.check("still in the sketch", sk is not None)
@@ -179,9 +167,6 @@ def shoot_sketch():
     h.view().fitAll()
     QtWidgets.QApplication.processEvents()
     h.shot("sketch")
-
-
-shoot_sketch.wait_ms = 1500
 
 
 def finish_sketch():
@@ -200,9 +185,6 @@ def open_example():
     h.fit()
 
 
-open_example.wait_ms = 3000
-
-
 def shoot_timeline():
     from sciforge import timeline_ui
 
@@ -212,9 +194,6 @@ def shoot_timeline():
     hide_overlay_frames()
     h.shot("timeline")
     show_overlay_frames()
-
-
-shoot_timeline.wait_ms = 2000
 
 
 # -- 4 Press Pull ---------------------------------------------------------------------------
@@ -245,15 +224,9 @@ def type_distance():
         ui.type_into(p.field.widget, "6")
 
 
-type_distance.wait_ms = 2500
-
-
 def shoot_presspull():
     h.check("the preview made the box 16 high", h.solid_volume() > 40 * 20 * 15, h.solid_volume())
     h.shot("presspull")
-
-
-shoot_presspull.wait_ms = 1500
 
 
 def cancel_presspull():
@@ -288,9 +261,6 @@ def shoot_ai():
     hide_overlay_frames()
     h.shot("ai")
     show_overlay_frames()
-
-
-shoot_ai.wait_ms = 2000
 
 
 def overlay_frames():
@@ -362,4 +332,5 @@ h.run(
         shoot_ai,
         tidy,
     ],
+    paced_by="state",
 )

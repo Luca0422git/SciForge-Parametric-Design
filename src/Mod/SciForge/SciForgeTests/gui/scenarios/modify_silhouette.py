@@ -72,9 +72,6 @@ def sphere_centre():
     pl.click_on_plane(V(0, 0, 0))
 
 
-sphere_centre.wait_ms = 1200
-
-
 def sphere_diameter():
     p = pi.panel("SpherePanel")
     if h.check("the sphere is placed", p is not None and p.state == "ready", p and p.state):
@@ -429,4 +426,5 @@ h.run(
             e_one_ball,
         ]
     ),
+    paced_by="state",
 )

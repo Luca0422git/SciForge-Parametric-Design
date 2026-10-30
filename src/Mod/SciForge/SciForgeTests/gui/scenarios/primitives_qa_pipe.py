@@ -114,9 +114,6 @@ def q2_said():
     h.click_edge(FRONT)
 
 
-q2_said.wait_ms = 1000
-
-
 def q2_front():
     p = panel()
     h.check("Q2 one edge", p is not None and len(p.path) == 1, p and p.path)
@@ -130,9 +127,6 @@ def q2_front():
     ui.choose(p.operation, "Cut")
 
 
-q2_front.wait_ms = 2000
-
-
 def q2_hollow():
     h.check("Q2 Cut: - 10 pi", near(vol(), 12000.0 - 10.0 * PI, 1e-5), vol())
     p = panel()
@@ -140,17 +134,11 @@ def q2_hollow():
         pi.tick(p.hollow)
 
 
-q2_hollow.wait_ms = 2000
-
-
 def q2_wall():
     p = panel()
     h.check("Q2 the wall field shows", p is not None and p.thickness.widget.isVisible())
     if p is not None:
         ui.type_into(p.thickness.widget, "1")
-
-
-q2_wall.wait_ms = 2000
 
 
 def q2_wall_said():
@@ -163,16 +151,10 @@ def q2_wall_said():
     h.check("Q2 no error", msg(p) == "", msg(p))
 
 
-q2_wall_said.wait_ms = 1500
-
-
 def q2_wall_waits():
     p = panel()
     if p is not None:
         ui.type_into(p.thickness.widget, "0.5")
-
-
-q2_wall_waits.wait_ms = 2000
 
 
 def q2_hollow_cut():
@@ -180,9 +162,6 @@ def q2_hollow_cut():
     h.check("Q2 the message went", msg(p) == "", msg(p))
     h.check("Q2 a hollow groove: - 7.5 pi", near(vol(), 12000.0 - 7.5 * PI, 1e-5), vol())
     h.click_edge(RIGHT)
-
-
-q2_hollow_cut.wait_ms = 2000
 
 
 def q2_corner():
@@ -199,9 +178,6 @@ def q2_corner():
     h.click_edge(RIGHT)
 
 
-q2_corner.wait_ms = 2500
-
-
 def q2_dropped():
     p = panel()
     h.check("Q2 clicked again: dropped", p is not None and len(p.path) == 1, p and p.path)
@@ -209,9 +185,6 @@ def q2_dropped():
     pi.hover(V(20, -10, 10))
     s["camera"] = tuple(round(q, 6) for q in h.view().getCameraOrientation().Q)
     h.press("5")
-
-
-q2_dropped.wait_ms = 2500
 
 
 def q2_size_typed():
@@ -235,14 +208,8 @@ def q2_size_typed():
     si.key(QtCore.Qt.Key_Return)  # where the keyboard is: the box
 
 
-q2_size_typed.wait_ms = 2500
-
-
 def q2_ok():
     h.check("Q2 Enter in the box took the 5 and was OK", pi.no_dialog())
-
-
-q2_ok.wait_ms = 1500
 
 
 def q2_kept():
@@ -263,14 +230,8 @@ def q3_twenty():
         ui.type_into(p.distance.widget, "20")
 
 
-q3_twenty.wait_ms = 1500
-
-
 def q3_ok():
     h.task_button("OK")
-
-
-q3_ok.wait_ms = 2500
 
 
 def q3_followed():
@@ -285,9 +246,6 @@ def q3_followed():
     h.fit()
     h.shot("q3")
     h.press("z", QtCore.Qt.ControlModifier)
-
-
-q3_followed.wait_ms = 1500
 
 
 def q3_undone():
@@ -321,9 +279,6 @@ def q4_shows():
     ui.click(p.path_field.clear)
 
 
-q4_shows.wait_ms = 2000
-
-
 def q4_cleared():
     p = panel()
     h.check("Q4 cleared: said", p is not None and "curve" in msg(p).lower(), msg(p))
@@ -337,18 +292,12 @@ def q4_waits():
     h.click_edge(FRONT)
 
 
-q4_waits.wait_ms = 1500
-
-
 def q4_again():
     p = panel()
     h.check("Q4 the edge again", p is not None and len(p.path) == 1, p and p.path)
     h.check("Q4 the message went", msg(p) == "", msg(p))
     if p is not None:
         ui.choose(p.section, "Triangular")
-
-
-q4_again.wait_ms = 2000
 
 
 def q4_ok():
@@ -362,9 +311,6 @@ def q4_ok():
     h.task_button("OK")
 
 
-q4_ok.wait_ms = 1500
-
-
 def q4_done():
     h.check("Q4 OK closed it", pi.no_dialog())
     h.check("Q4 still one Pipe 1", ti.titles().count("Pipe 1") == 1, ti.titles())
@@ -372,15 +318,9 @@ def q4_done():
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-q4_done.wait_ms = 1200
-
-
 def q4_undone():
     h.check("Q4 Ctrl+Z: the round groove", near(vol(), 12000.0 - 22.5 * PI, 1e-5), vol())
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-q4_undone.wait_ms = 1500
 
 
 def q4_redone():
@@ -422,4 +362,5 @@ h.run(
         q4_undone,
         q4_redone,
     ],
+    paced_by="state",
 )

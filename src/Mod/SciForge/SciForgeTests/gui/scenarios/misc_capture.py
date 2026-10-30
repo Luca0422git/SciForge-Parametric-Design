@@ -80,9 +80,6 @@ def p1_open():
     s["menu"] = m.app_menu_item(["File", "Capture Image"])
 
 
-p1_open.wait_ms = 1500
-
-
 def p1_check():
     d = options()
     h.check("P1 the Image Options window", d is not None, h.popups())
@@ -119,9 +116,6 @@ def p2_custom():
     w.click(ok_button(d))
 
 
-p2_custom.wait_ms = 2500
-
-
 def p2_check():
     path = s["saved"][-1] if s["saved"] else ""
     h.check("P2 the window closed", options() is None)
@@ -146,9 +140,6 @@ def p3_hd():
     m.app_menu_item(["File", "Capture Image"])
 
 
-p3_hd.wait_ms = 1500
-
-
 def p3_choose():
     d = options()
     if not h.check("P3 the window again", d is not None):
@@ -156,9 +147,6 @@ def p3_choose():
     di.choose(d.preset, "1920 x 1080 (Full HD)")
     h.check("P3 1920 x 1080", (d.width.value(), d.height.value()) == (1920, 1080))
     w.click(ok_button(d))
-
-
-p3_choose.wait_ms = 3000
 
 
 def p3_check():
@@ -174,9 +162,6 @@ def p3_check():
 def p4_cancel():
     s["count"] = len(s["saved"])
     m.app_menu_item(["File", "Capture Image"])
-
-
-p4_cancel.wait_ms = 1500
 
 
 def p4_check():
@@ -220,4 +205,5 @@ h.run(
         p5_no_design,
         cleanup,
     ],
+    paced_by="state",
 )

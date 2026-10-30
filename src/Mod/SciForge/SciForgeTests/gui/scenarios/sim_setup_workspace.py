@@ -348,4 +348,5 @@ h.run(
         i_check,
         i_new,
     ],
+    paced_by="state",
 )

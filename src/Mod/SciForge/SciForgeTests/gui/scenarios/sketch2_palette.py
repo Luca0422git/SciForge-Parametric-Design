@@ -122,9 +122,6 @@ def b_setup():
     sketch_ui.edit_sketch(sk)
 
 
-b_setup.wait_ms = 2000
-
-
 def b_overlay():
     """What FreeCAD's overlay does to every widget in it but its own task boxes, on Luca's
     Windows (Gui/OverlayWidgets.cpp, _setOverlayMode): the palette came out white, or
@@ -139,9 +136,6 @@ def b_overlay():
     for w in palette.findChildren(QtWidgets.QWidget):
         if not w.isHidden() or w.parentWidget() is palette:
             w.show()
-
-
-b_overlay.wait_ms = 500
 
 
 def b_overlay_undone():
@@ -281,9 +275,6 @@ def d_b():
     st.click(V(10, 0, 0))
 
 
-d_b.wait_ms = 900
-
-
 def d_flat():
     from sciforge import sketch3d
 
@@ -322,9 +313,6 @@ def d_up():
     plane = sketch3d_ui.layer(st.session(), create=False).plane
     h.check("D the ZX plane is the drawing plane", plane == "ZX", plane)
     st.click(V(10, 0, 10))
-
-
-d_up.wait_ms = 900
 
 
 def d_check():
@@ -387,4 +375,5 @@ h.run(
             d_check,
         ]
     ),
+    paced_by="state",
 )

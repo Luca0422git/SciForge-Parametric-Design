@@ -309,4 +309,5 @@ h.run(
         redo_after_esc,
         redone_after_esc,
     ],
+    paced_by="state",
 )

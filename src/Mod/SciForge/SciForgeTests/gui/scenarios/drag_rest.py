@@ -209,9 +209,6 @@ def pp_open():
     h.ribbon("Press Pull")
 
 
-pp_open.wait_ms = 5000
-
-
 def pp_arrow(p):
     d = p.dragger
     place = d.root.getChild(0)
@@ -233,7 +230,6 @@ def pp_drag(key, segments, hold_ms):
         start_drag(key, p, h.screen_point(head), plan, hold_ms, lambda: p.field.value())
 
     step.__name__ = "pp_drag_" + key
-    step.wait_ms = 3500
     return step
 
 
@@ -283,10 +279,7 @@ def draft_open():
     Gui.Control.showDialog(draft_ui.DraftPanel(S["doc"], picks=picks, body=body))
 
 
-draft_open.wait_ms = 5000
-
-
-def draft_drag(key, segments, hold_ms, wait_ms):
+def draft_drag(key, segments, hold_ms, wait_ms=None):
     def step():
         p = sd.draft_panel()
         if p is None or p.handle is None:
@@ -297,7 +290,6 @@ def draft_drag(key, segments, hold_ms, wait_ms):
         start_drag(key, p, here, plan, hold_ms, lambda: p.options.get("angle", 0.0))
 
     step.__name__ = "draft_drag_" + key.replace(" ", "_")
-    step.wait_ms = wait_ms
     return step
 
 
@@ -384,18 +376,18 @@ h.run(
         pp_quick_check,
         lambda: h.task_button("Cancel"),
         draft_open,
-        draft_drag("draft first", [(0, 6, 30, 0)], 900, 3000),
+        draft_drag("draft first", [(0, 6, 30, 0)], 900),
         draft_settle_check,
         draft_drag(
             "draft hesitant",
             [(6, 5.4, 12, 0), (5.4, 4.8, 12, 320), (4.8, 4.2, 12, 320), (4.2, 3.6, 12, 320)],
             50,
-            3000,
         ),
         draft_hesitant_check,
         set_back(3.9),
-        draft_drag("draft back", [(3.6, 20, 20, 0), (20, 3.9, 8, 1200)], 300, 9000),
+        draft_drag("draft back", [(3.6, 20, 20, 0), (20, 3.9, 8, 1200)], 300),
         draft_back_check,
         close_all,
     ],
+    paced_by="state",
 )

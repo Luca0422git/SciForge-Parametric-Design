@@ -238,4 +238,5 @@ h.run(
             t5_end,
         ]
     ),
+    paced_by="state",
 )

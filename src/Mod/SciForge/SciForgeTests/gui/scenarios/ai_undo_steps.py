@@ -97,4 +97,5 @@ h.run(
     "ai_undo_steps",
     [build, suppress_then_undo_last_ai, roll_then_undo_last_ai, group_is_one_step,
      show_hide_leaves_nothing_open],
+    paced_by="state",
 )

@@ -107,9 +107,6 @@ def press_export():
         b.click_widget(d.export_button)
 
 
-press_export.wait_ms = 2000
-
-
 # -- A ----------------------------------------------------------------------------------------
 def a_stl():
     d = dialog()
@@ -244,4 +241,5 @@ h.run(
         press_export,
         d_check,
     ],
+    paced_by="state",
 )

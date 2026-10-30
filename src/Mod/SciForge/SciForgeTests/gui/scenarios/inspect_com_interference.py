@@ -190,7 +190,6 @@ def com_edit_dialog():
 
 # The pick is applied from a timer; on a loaded machine the next check came too early and
 # read the centre of body 1 alone (full suite with other suites running; passes alone).
-com_edit_dialog.wait_ms = 1200
 
 
 def com_edit_both():
@@ -505,4 +504,5 @@ h.run(
         int2_kept,
         int2_undone,
     ],
+    paced_by="state",
 )

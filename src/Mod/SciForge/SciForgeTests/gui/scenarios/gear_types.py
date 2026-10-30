@@ -70,9 +70,6 @@ def i_centre():
     pl.click_on_plane(V(0, 0, 0))
 
 
-i_centre.wait_ms = 2000
-
-
 def i_type():
     p = panel()
     if p is None:
@@ -89,9 +86,6 @@ def i_internal():
     ui.type_into(p.teeth.widget, "40")
 
 
-i_internal.wait_ms = 2000
-
-
 def i_forty():
     expected = area(**INTERNAL) * 10.0
     h.check("40 teeth, rim 5", near(vol(), expected), (vol(), expected))
@@ -102,9 +96,6 @@ def i_forty():
     h.fit()
     h.shot("1-internal")
     h.task_button("OK")
-
-
-i_forty.wait_ms = 2000
 
 
 def i_kept():
@@ -129,9 +120,6 @@ def r_centre():
     pl.click_on_plane(V(0, 80, 0))
 
 
-r_centre.wait_ms = 2000
-
-
 def r_type():
     p = panel()
     if p is None:
@@ -139,9 +127,6 @@ def r_type():
         return
     h.check("a second body", len(pi.bodies()) == 2, len(pi.bodies()))
     h.check("Rack", ui.choose(p.type, "Rack"))
-
-
-r_type.wait_ms = 1000
 
 
 def r_rack():
@@ -156,17 +141,11 @@ def r_rack():
     ui.type_into(p.teeth.widget, "10")
 
 
-r_rack.wait_ms = 2000
-
-
 def r_ten():
     p = panel()
     expected = area(type="rack", teeth=10) * 10.0
     h.check("a rack of 10 teeth", near(vol() - s["internal"], expected), vol() - s["internal"])
     h.check("Size by Length", ui.choose(p.rack_size, "Length"))
-
-
-r_ten.wait_ms = 2000
 
 
 def r_length():
@@ -176,9 +155,6 @@ def r_length():
     )
     h.check("teeth field hidden", not p.teeth.widget.isVisible())
     ui.type_into(p.rack_length.widget, "50")
-
-
-r_length.wait_ms = 2000
 
 
 def r_fifty():
@@ -192,9 +168,6 @@ def r_fifty():
     h.fit()
     h.shot("2-rack")
     h.task_button("OK")
-
-
-r_fifty.wait_ms = 2000
 
 
 def r_kept():
@@ -219,9 +192,6 @@ def e_centre():
     pl.click_on_plane(V(120, 0, 0))
 
 
-e_centre.wait_ms = 2000
-
-
 def e_spur():
     p = panel()
     if p is None:
@@ -230,15 +200,9 @@ def e_spur():
     h.check("Spur", ui.choose(p.type, "Spur"))
 
 
-e_spur.wait_ms = 1000
-
-
 def e_english():
     p = panel()
     h.check("English", ui.choose(p.standard, "English"))
-
-
-e_english.wait_ms = 1500
 
 
 def e_dp():
@@ -251,15 +215,9 @@ def e_dp():
     ui.type_into(p.dp.widget, "10")
 
 
-e_dp.wait_ms = 1500
-
-
 def e_teeth():
     p = panel()
     ui.type_into(p.teeth.widget, "20")
-
-
-e_teeth.wait_ms = 1500
 
 
 def e_symmetric():
@@ -270,9 +228,6 @@ def e_symmetric():
         p.pitch_value.text(),
     )
     pi.tick(p.symmetric)
-
-
-e_symmetric.wait_ms = 1500
 
 
 def e_check():
@@ -290,9 +245,6 @@ def e_check():
     h.fit()
     h.shot("3-english")
     h.task_button("OK")
-
-
-e_check.wait_ms = 2000
 
 
 def e_kept():
@@ -320,9 +272,6 @@ def reopen():
     h.fit()
 
 
-reopen.wait_ms = 2500
-
-
 def reopened():
     h.check("reopened: same volume", near(vol(), s["volume"]), (vol(), s["volume"]))
     doc().recompute()
@@ -330,9 +279,6 @@ def reopened():
     broken = [o.Label for o in doc().Objects if "Invalid" in list(o.State)]
     h.check("nothing broken", not broken, broken)
     h.check("double-click Gear 2", ui.double_click_timeline("Gear 2"), ui.timeline_titles())
-
-
-reopened.wait_ms = 2500
 
 
 def rack_editing():
@@ -351,18 +297,12 @@ def rack_teeth():
     ui.type_into(p.teeth.widget, "12")
 
 
-rack_teeth.wait_ms = 1500
-
-
 def rack_ok():
     rack = area(type="rack", teeth=12) * 10.0
     # Fusion: the steps after the edited one (the third gear) wait until OK
     expected = s["internal"] + rack
     h.check("12-tooth rack", near(vol(), expected), (vol(), expected))
     h.task_button("OK")
-
-
-rack_ok.wait_ms = 2000
 
 
 def rack_kept():
@@ -410,4 +350,5 @@ h.run(
         rack_ok,
         rack_kept,
     ],
+    paced_by="state",
 )

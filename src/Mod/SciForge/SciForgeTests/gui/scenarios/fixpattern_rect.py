@@ -12,4 +12,4 @@ save and reopen.
 from SciForgeTests.gui import fixpattern_steps as f
 from SciForgeTests.gui import harness as h
 
-h.run("fixpattern_rect", f.main_steps("rectangular", "FixPatternRect"))
+h.run("fixpattern_rect", f.main_steps("rectangular", "FixPatternRect"), paced_by="state")

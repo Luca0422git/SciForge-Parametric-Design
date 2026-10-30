@@ -66,9 +66,6 @@ def a_click_xy():
     pl.click_on_plane(i.XY_CLICK)
 
 
-a_click_xy.wait_ms = 1200
-
-
 def a_check():
     h.check("one sketch with 5 curves", counts() and counts()[0][1] == 5, counts())
     sk = i.sketches()[0] if i.sketches() else None
@@ -105,9 +102,6 @@ def c_per_layer():
         b.choose(p.mode, "One Sketch per Layer")
 
 
-c_per_layer.wait_ms = 1200
-
-
 def c_check_per_layer():
     got = sorted(counts())
     h.check("two sketches, one per layer", got == [("plate Holes", 1), ("plate Outline", 4)], got)
@@ -117,9 +111,6 @@ def c_single():
     p = i.panel()
     if p is not None:
         b.choose(p.mode, "Single Sketch")
-
-
-c_single.wait_ms = 1200
 
 
 def c_check_single():
@@ -154,9 +145,6 @@ def e_ok():
     h.task_button("OK")
 
 
-e_ok.wait_ms = 1200
-
-
 def e_finish():
     h.check("dialog closed", i.panel() is None)
     h.check("sketch open for editing", h.in_sketch() is not None)
@@ -181,9 +169,6 @@ def e_distance():
         from PySide6 import QtTest
 
         QtTest.QTest.keyClick(field, QtCore.Qt.Key_Tab)
-
-
-e_distance.wait_ms = 1200
 
 
 def e_extrude_ok():
@@ -249,4 +234,5 @@ h.run(
         f_redo_twice,
         f_check_redo,
     ],
+    paced_by="state",
 )

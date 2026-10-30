@@ -340,4 +340,5 @@ h.run(
         s.wait_solved("wait_loose"),
         f_check,
     ],
+    paced_by="state",
 )

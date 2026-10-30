@@ -210,7 +210,6 @@ def p4_other_computer():
     shutil.copyfile(s["big"], s["moved"])  # Wheel saved again elsewhere (the NAS)
 
 
-p4_other_computer.wait_ms = 2600
 p4_other_computer.done = p2.out_of_date_shown
 p4_other_computer.done_what = p2.OUT_OF_DATE_READ
 
@@ -234,7 +233,6 @@ def p4_latest():
     h.check("P4 nothing is out of date now", not ui().out_of_date(cart), ui().out_of_date(cart))
 
 
-p4_latest.wait_ms = 2600
 p4_latest.done = p2.out_of_date_shown
 p4_latest.done_what = p2.OUT_OF_DATE_READ
 
@@ -251,7 +249,6 @@ def p5_open_older():
     s["older"] = ui().open_version(s["moved"], info)
 
 
-p5_open_older.wait_ms = 2600
 p5_open_older.done = p2.out_of_date_shown
 p5_open_older.done_what = p2.OUT_OF_DATE_READ
 
@@ -293,4 +290,4 @@ STEPS = [
     p5_newest,
 ]
 
-h.run("polish2_data_panel", STEPS)
+h.run("polish2_data_panel", STEPS, paced_by="state")

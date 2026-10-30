@@ -120,9 +120,6 @@ def second_corner():
     pl.click_on_plane(V(40, 20, 0))
 
 
-second_corner.wait_ms = 1200
-
-
 def first_box():
     p = panel()
     if p is None:
@@ -154,9 +151,6 @@ def drag_height():
     h.check("height handle at 10", handle is not None and near(handle.value(), 10.0), handle)
     if handle is not None:
         pi.drag_handle(handle, 15.0)
-
-
-drag_height.wait_ms = 1200
 
 
 def dragged():
@@ -288,9 +282,6 @@ def corner_b():
     h.click(V(20, 15, 12))
 
 
-corner_b.wait_ms = 1200
-
-
 def on_top():
     p = panel()
     if p is None:
@@ -308,9 +299,6 @@ def drag_down():
     handle = p.handles.get("height")
     if handle is not None:
         pi.drag_handle(handle, -4.0)
-
-
-drag_down.wait_ms = 1500
 
 
 def cut_by_itself():
@@ -356,9 +344,6 @@ def cancel_corner():
 
 def cancel_corner2():
     h.click(V(15, 12, 12))
-
-
-cancel_corner2.wait_ms = 1200
 
 
 def cancel_now():
@@ -438,4 +423,5 @@ h.run(
         esc_now,
         after_esc,
     ],
+    paced_by="state",
 )

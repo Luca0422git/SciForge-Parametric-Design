@@ -170,9 +170,6 @@ def e_inch():
     h.task_button("OK")
 
 
-e_inch.wait_ms = 600
-
-
 def e_check():
     sess = s.session()
     disp = s.stats("displacement")
@@ -233,4 +230,5 @@ h.run(
         e_stress_check,
         e_details_check,
     ],
+    paced_by="state",
 )

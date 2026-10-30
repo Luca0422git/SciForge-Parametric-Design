@@ -93,9 +93,6 @@ def make_motion():
     j.choose_type(p, "Revolute")
 
 
-make_motion.wait_ms = 2600
-
-
 def make_ok():
     j.ok()
 
@@ -277,9 +274,6 @@ def g5_press_j():
     j.press_j()
 
 
-g5_press_j.wait_ms = 900
-
-
 def prompt_button(text):
     from sciforge import joints_ui
 
@@ -298,9 +292,6 @@ def prompt_button(text):
 def g5_prompted():
     h.check("no Joint dialog before the answer", j.panel() is None, j.panel())
     prompt_button("Capture Position")
-
-
-g5_prompted.wait_ms = 1200
 
 
 def g5_captured():
@@ -329,14 +320,8 @@ def g5_press_j_again():
     j.press_j()
 
 
-g5_press_j_again.wait_ms = 900
-
-
 def g5_revert():
     prompt_button("Revert")
-
-
-g5_revert.wait_ms = 1200
 
 
 def g5_reverted():
@@ -460,4 +445,4 @@ steps += [
 steps += [g6_untick, g6_drag, g6_boxed, g6_tick, g6_on]
 steps += [g7_save_close, g7_open, g7_reopened, g7_drag, g7_dragged, g7_undo, g7_undone]
 
-h.run("joints2_drag", steps)
+h.run("joints2_drag", steps, paced_by="state")

@@ -22,4 +22,5 @@ h.run(
     + j.reopen_steps("bracket_finished", j.bracket_reopened_finished)
     + j.edit_steps()
     + [j.finish_scenario("the rebuild journey with save and reopen")],
+    paced_by="state",
 )

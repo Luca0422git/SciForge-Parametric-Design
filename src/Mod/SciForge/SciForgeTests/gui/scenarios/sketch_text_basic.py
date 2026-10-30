@@ -297,4 +297,5 @@ h.run(
         t7_ok,
         t7_done,
     ],
+    paced_by="state",
 )

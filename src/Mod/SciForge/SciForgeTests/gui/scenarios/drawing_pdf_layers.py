@@ -93,14 +93,8 @@ def dim_pick():
     d.move_to(*at(2, -30))
 
 
-dim_pick.wait_ms = 1000
-
-
 def dim_place():
     d.click_at(*at(0, -32))
-
-
-dim_place.wait_ms = 1000
 
 
 def dim_end():
@@ -131,9 +125,6 @@ def scripted():
     page.Document.recompute()
 
 
-scripted.wait_ms = 4000
-
-
 def dims():
     from sciforge import drawing
 
@@ -158,9 +149,6 @@ def a_dialog():
     d.type_into(dlg.name, "layers")
     d.type_into(dlg.folder, OUT)
     click(dlg.export_button)
-
-
-a_dialog.wait_ms = 4000
 
 
 def summary(path):
@@ -376,9 +364,6 @@ def b_rendered():
     )
 
 
-b_rendered.wait_ms = 2000
-
-
 # -- C --------------------------------------------------------------------------------------
 def c_sheet():
     from sciforge import drawing, drawing_sheets
@@ -408,9 +393,6 @@ def c_sheet():
     from sciforge import drawing_ui
 
     drawing_ui.open_drawing(page)
-
-
-c_sheet.wait_ms = 5000
 
 
 def c_command():
@@ -443,9 +425,6 @@ def c_dialog():
     d.type_into(dlg.name, "both")
     d.type_into(dlg.folder, OUT)
     click(dlg.export_button)
-
-
-c_dialog.wait_ms = 6000
 
 
 def c_written():
@@ -483,4 +462,5 @@ h.run(
     + [dim_start, dim_pick, dim_place, dim_end, scripted]
     + [a_command, a_dialog, a_written, b_rendered]
     + [c_sheet, c_command, c_dialog, c_written],
+    paced_by="state",
 )

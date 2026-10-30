@@ -149,15 +149,9 @@ def p2_undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-p2_undo.wait_ms = 1000
-
-
 def p2_undone():
     h.check("P2 Ctrl+Z took the script's box away in one step", script_bodies() == [])
     h.press(QtCore.Qt.Key_S, QtCore.Qt.ShiftModifier)
-
-
-p2_undone.wait_ms = 1000
 
 
 # -- P3 ----------------------------------------------------------------------------------------
@@ -418,4 +412,5 @@ h.run(
         p8_bad_name,
         cleanup,
     ],
+    paced_by="state",
 )

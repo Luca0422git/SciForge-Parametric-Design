@@ -295,9 +295,6 @@ def box_refused():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-box_refused.wait_ms = 2000
-
-
 def box_undone():
     st.settle()
     h.idle_step()()
@@ -381,4 +378,5 @@ h.run(
         reopen,
         reopened,
     ],
+    paced_by="state",
 )

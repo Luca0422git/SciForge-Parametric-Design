@@ -393,4 +393,5 @@ h.run(
             part_followed,
         ]
     ),
+    paced_by="state",
 )

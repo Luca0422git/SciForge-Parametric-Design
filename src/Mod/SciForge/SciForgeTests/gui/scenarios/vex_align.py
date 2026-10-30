@@ -109,9 +109,6 @@ def setup():
     S["steps"] = [o.Name for o in vx.body_of(standoff()).Group]
 
 
-setup.wait_ms = 1500
-
-
 def open_align():
     h.click_empty()
     vx.fit()
@@ -141,9 +138,6 @@ def click_top():
     sn = snaps()
     vx.lit(sn, "the standoff's top", TOP_KINDS, S["top"])
     h.click(S["hover"])
-
-
-click_top.wait_ms = 300
 
 
 def top_taken():
@@ -181,9 +175,6 @@ def a_click_top():
     click_top()
 
 
-a_click_top.wait_ms = 300
-
-
 def a_taken():
     top_taken()
     h.shot("A-from")
@@ -211,9 +202,6 @@ def b_lit():
     h.check("only the dots near the mouse are drawn (not the web's hundreds)", 0 < n <= 30, n)
     h.shot("B-hole-lit")
     h.click(S["hover"])
-
-
-b_lit.wait_ms = 300
 
 
 def b_preview():
@@ -270,9 +258,6 @@ def d_click_top():
     click_top()
 
 
-d_click_top.wait_ms = 300
-
-
 def d_shift_hover():
     top_taken()
     c = vx.hole_centre(*SECOND)
@@ -293,9 +278,6 @@ def d_no_dots():
     h.click(S["hover"], modifiers=QtCore.Qt.ShiftModifier)
 
 
-d_no_dots.wait_ms = 300
-
-
 def d_plain_pick():
     point, frame = frame_point("to")
     centre = web_centre()
@@ -311,9 +293,6 @@ def d_plain_pick():
 def d_dots_back():
     vx.lit(snaps(), "Shift let go", "loop", vx.hole_centre(*SECOND))
     h.press(QtCore.Qt.Key_Escape)
-
-
-d_dots_back.wait_ms = 300
 
 
 def d_cancelled():
@@ -340,9 +319,6 @@ def e_click_top():
     click_top()
 
 
-e_click_top.wait_ms = 300
-
-
 def e_hover_edge():
     top_taken()
     c = vx.hole_centre(*SECOND)
@@ -363,9 +339,6 @@ def e_lit():
     )
     h.shot("E-edge")
     h.click(S["hover"])
-
-
-e_lit.wait_ms = 300
 
 
 def e_preview():
@@ -418,4 +391,5 @@ h.run(
             e_done,
         ]
     ),
+    paced_by="state",
 )

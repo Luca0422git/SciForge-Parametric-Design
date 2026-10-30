@@ -169,4 +169,4 @@ def report():
     h.check("report written", os.path.exists(path))
 
 
-h.run("sketch_enter_perf", [first_enter, rounds, no_switch_experiment, report])
+h.run("sketch_enter_perf", [first_enter, rounds, no_switch_experiment, report], paced_by="state")

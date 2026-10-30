@@ -80,16 +80,10 @@ def a_corner2():
     pl.click_on_plane(V(10, 10, 0))
 
 
-a_corner2.wait_ms = 1200
-
-
 def a_formula():
     p = pi.panel("BoxPanel")
     h.check("10 x 10 x 10", near(vol(), 1000.0), vol())
     ui.type_into(p.length.widget, "w")
-
-
-a_formula.wait_ms = 1200
 
 
 def a_follows():
@@ -134,17 +128,11 @@ def b_circle():
     h.click(V(23, 5, 10))
 
 
-b_circle.wait_ms = 1200
-
-
 def b_ctrl_z():
     p = pi.panel("CylinderPanel")
     h.check("a cylinder preview", p is not None and p.target is not None)
     s["count"] = len(doc().Objects)
     h.press("z", QtCore.Qt.ControlModifier)
-
-
-b_ctrl_z.wait_ms = 1200
 
 
 def b_undone():
@@ -169,9 +157,6 @@ def c_centre():
 
 def c_circle():
     h.click(V(23, 5, 10))
-
-
-c_circle.wait_ms = 1200
 
 
 def c_ok():
@@ -249,17 +234,11 @@ def c_planes_shown():
     pl.click_square("XY_Plane")  # where the XY square shows
 
 
-c_planes_shown.wait_ms = 1500
-
-
 def c_moved():
     p = pi.panel("CylinderPanel")
     h.check("now on XY", p.plane_field.button.text() == "XY Plane", p.plane_field.button.text())
     h.check("inside the box: nothing sticks out", near(vol(), 8000.0), vol())
     h.task_button("OK")
-
-
-c_moved.wait_ms = 1500
 
 
 def c_kept():
@@ -283,9 +262,6 @@ def d_pipe():
     pi.menu("Pipe")
 
 
-d_pipe.wait_ms = 1500
-
-
 def d_intersect():
     p = pi.pipe_panel()
     h.check("the edge taken", p is not None and len(p.path) == 1)
@@ -294,22 +270,13 @@ def d_intersect():
     ui.type_into(p.size.widget, "2")
 
 
-d_intersect.wait_ms = 1500
-
-
 def d_choose():
     h.check("Intersect", ui.choose(pi.pipe_panel().operation, "Intersect"))
-
-
-d_choose.wait_ms = 1500
 
 
 def d_pipe_ok():
     h.check("Intersect: a quarter tube", near(vol(), 10.0 * PI, 1e-5), vol())
     h.task_button("OK")
-
-
-d_pipe_ok.wait_ms = 1500
 
 
 def d_coil():
@@ -338,9 +305,6 @@ def d_coil_circle():
     pl.click_on_plane(V(-70, 0, 0))
 
 
-d_coil_circle.wait_ms = 2500
-
-
 def d_coil_ok():
     p = pi.panel("CoilPanel")
     h.check(
@@ -348,9 +312,6 @@ def d_coil_ok():
     )
     h.check("coil 90 pi^2", near(vol() - s["pipe"], 90.0 * PI * PI, 1e-5), vol())
     h.task_button("OK")
-
-
-d_coil_ok.wait_ms = 2500
 
 
 def d_save():
@@ -371,9 +332,6 @@ def d_open():
     h.fit()
 
 
-d_open.wait_ms = 2500
-
-
 def d_reopened():
     h.check("reopened: same volume", near(vol(), s["volume"], 1e-6), (vol(), s["volume"]))
     h.check("same bodies", len(pi.bodies()) == s["bodies"])
@@ -386,9 +344,6 @@ def d_reopened():
         titles,
     )
     h.check("double-click Coil 1", ui.double_click_timeline("Coil 1"))
-
-
-d_reopened.wait_ms = 2500
 
 
 def d_coil_editing():
@@ -405,9 +360,6 @@ def d_coil_edit_ok():
     h.task_button("OK")
 
 
-d_coil_edit_ok.wait_ms = 2500
-
-
 def d_pipe_edit():
     h.check("double-click Pipe 1", ui.double_click_timeline("Pipe 1"))
 
@@ -421,24 +373,15 @@ def d_pipe_editing():
     ui.type_into(p.size.widget, "4")
 
 
-d_pipe_editing.wait_ms = 1500
-
-
 def d_pipe_edit_ok():
     # the coil (made after the pipe) waits while the pipe is edited (Fusion)
     h.check("d4: 40 pi", near(vol(), 40.0 * PI, 1e-5), vol())
     h.task_button("OK")
 
 
-d_pipe_edit_ok.wait_ms = 1500
-
-
 def d_delete_pipe():
     h.check("d4 kept: 40 pi + the coil", near(vol(), 40.0 * PI + 54.0 * PI * PI, 1e-5), vol())
     ti.menu("Pipe 1", "Delete")
-
-
-d_delete_pipe.wait_ms = 1500
 
 
 def d_pipe_deleted():
@@ -453,9 +396,6 @@ def d_pipe_deleted():
     ti.menu("Coil 1", "Delete")
 
 
-d_pipe_deleted.wait_ms = 1500
-
-
 def d_coil_deleted():
     h.check("the coil is gone", near(vol(), 8000.0, 1e-6), vol())
     roles = [getattr(o, "SciForgeRole", "") for o in doc().Objects]
@@ -463,9 +403,6 @@ def d_coil_deleted():
     h.check("the pipe's section went with it", "PipeSection" not in roles, roles)
     s["orphans"] = roles.count("PipePath")
     pi.menu("Box")
-
-
-d_coil_deleted.wait_ms = 1500
 
 
 def d_tidied():
@@ -507,23 +444,14 @@ def e_circle():
     pl.click_on_plane(V(10, 0, 0))
 
 
-e_circle.wait_ms = 1500
-
-
 def e_inner():
     p = pi.panel("TorusPanel")
     h.check("torus placed", p is not None and p.target is not None)
     ui.type_into(p.inner.widget, "d")
 
 
-e_inner.wait_ms = 1500
-
-
 def e_tube():
     ui.type_into(pi.panel("TorusPanel").tube.widget, "d / 4")
-
-
-e_tube.wait_ms = 1500
 
 
 def e_torus_ok():
@@ -534,9 +462,6 @@ def e_torus_ok():
     h.check("R10 r2.5: 125 pi^2", near(vol(), 125.0 * PI * PI), vol())
     h.check("both formulas listed", p.formulas.text().count("= d") == 2, p.formulas.text())
     h.task_button("OK")
-
-
-e_torus_ok.wait_ms = 1500
 
 
 def e_d40():
@@ -566,9 +491,6 @@ def e_torus_outside():
     h.task_button("OK")
 
 
-e_torus_outside.wait_ms = 1500
-
-
 def e_torus_kept():
     s["torus"] = vol()
     h.click_empty()
@@ -589,14 +511,8 @@ def e_coil_circle():
     pl.click_on_plane(V(10, 0, 0))
 
 
-e_coil_circle.wait_ms = 2500
-
-
 def e_coil_type():
     h.check("Height and Pitch", ui.choose(pi.panel("CoilPanel").type, "Height and Pitch"))
-
-
-e_coil_type.wait_ms = 2000
 
 
 def e_coil_height():
@@ -604,14 +520,8 @@ def e_coil_height():
     ui.type_into(p.pitch.widget, "4")
 
 
-e_coil_height.wait_ms = 2000
-
-
 def e_coil_formula():
     ui.type_into(pi.panel("CoilPanel").height.widget, "d / 2")
-
-
-e_coil_formula.wait_ms = 2000
 
 
 def e_coil_ok():
@@ -622,17 +532,11 @@ def e_coil_ok():
     h.task_button("OK")
 
 
-e_coil_ok.wait_ms = 2500
-
-
 def e_d60():
     from sciforge import parameters
 
     parameters.set_user(doc(), "d", "60")
     doc().recompute()
-
-
-e_d60.wait_ms = 2500
 
 
 def e_coil_follows():
@@ -668,18 +572,12 @@ def f_edit():
     h.check("double-click Coil 1", ui.double_click_timeline("Coil 1"))
 
 
-f_edit.wait_ms = 2500
-
-
 def f_type():
     p = pi.panel("CoilPanel")
     h.check("editing the coil", p is not None and p.editing)
     if p is None:
         return
     h.check("Revolution and Height", ui.choose(p.type, "Revolution and Height"))
-
-
-f_type.wait_ms = 2000
 
 
 def f_turns():
@@ -689,9 +587,6 @@ def f_turns():
     shown = p.revolutions.value()
     h.check("the same coil: 7.5 revolutions", near(shown, 7.5, 1e-3), shown)
     ui.type_into(p.revolutions.widget, "n")
-
-
-f_turns.wait_ms = 2000
 
 
 def f_ok():
@@ -704,9 +599,6 @@ def f_ok():
     h.task_button("OK")
 
 
-f_ok.wait_ms = 2500
-
-
 def f_n5():
     from sciforge import parameters
 
@@ -715,15 +607,9 @@ def f_n5():
     doc().recompute()
 
 
-f_n5.wait_ms = 2500
-
-
 def f_follows():
     h.check("the coil follows n: 5 turns", near(coil_volume(), 90.0 * PI * PI, 1e-5), coil_volume())
     h.check("double-click Coil 1 again", ui.double_click_timeline("Coil 1"))
-
-
-f_follows.wait_ms = 2500
 
 
 def f_shown_again():
@@ -734,9 +620,6 @@ def f_shown_again():
     h.check("still Revolutions = n", "Revolutions = n" in p.formulas.text(), p.formulas.text())
     h.check("5 revolutions shown", near(p.revolutions.value(), 5.0), p.revolutions.value())
     h.press(QtCore.Qt.Key_Escape)
-
-
-f_shown_again.wait_ms = 2000
 
 
 def f_closed():
@@ -833,4 +716,5 @@ h.run(
         f_shown_again,
         f_closed,
     ],
+    paced_by="state",
 )

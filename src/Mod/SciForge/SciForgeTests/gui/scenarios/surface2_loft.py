@@ -605,4 +605,5 @@ h.run(
         l4_merged,
         l4_done,
     ],
+    paced_by="state",
 )

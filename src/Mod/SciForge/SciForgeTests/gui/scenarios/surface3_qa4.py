@@ -185,4 +185,5 @@ h.run(
         envmap_undone,
         envmap_redone,
     ],
+    paced_by="state",
 )

@@ -548,4 +548,5 @@ h.run(
         g_pin_and_key,
         g_rebuild,
     ],
+    paced_by="state",
 )

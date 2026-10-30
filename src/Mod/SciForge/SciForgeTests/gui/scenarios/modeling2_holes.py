@@ -414,14 +414,6 @@ def after_esc():
     hs.no_popups("taper and clearance holes")
 
 
-taper_fields.wait_ms = 800
-normal_fit.wait_ms = 800
-counterbore.wait_ms = 800
-hex_head.wait_ms = 800
-close_fit.wait_ms = 800
-edit_size.wait_ms = 800
-bspt_sizes.wait_ms = 800
-
 h.run(
     "modeling2_holes",
     b.box_steps("M2Holes", height=20)
@@ -460,4 +452,5 @@ h.run(
         bspt_sizes,
         after_esc,
     ],
+    paced_by="state",
 )

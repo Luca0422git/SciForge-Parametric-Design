@@ -225,9 +225,6 @@ def thread_untick_full():
         hs.click_checkbox(p.full_length)
 
 
-thread_untick_full.wait_ms = 2000
-
-
 def thread_box():
     p = hs.thread_panel()
     h.check("Thread: the length arrow is there", p is not None and "length" in p.draggers,
@@ -243,9 +240,6 @@ def thread_typed():
     box_followed("Thread")
     if p is not None:
         type_in_box("5", p.length)
-
-
-thread_typed.wait_ms = 2000
 
 
 def thread_five():
@@ -292,4 +286,5 @@ h.run(
         thread_five,
         thread_gone,
     ],
+    paced_by="state",
 )

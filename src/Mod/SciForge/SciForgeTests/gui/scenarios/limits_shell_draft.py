@@ -129,9 +129,6 @@ def shell_dragged_far():
     h.shot("1-shell-held")
 
 
-shell_dragged_far.wait_ms = 3000
-
-
 def shell_drag_back():
     p = sd.shell_panel()
     if p is None or not p.arrows:
@@ -156,9 +153,6 @@ def shell_dragged_back():
     h.check("the preview follows", sd.close(v, sd.open_top(t)), (v, sd.open_top(t)))
 
 
-shell_dragged_back.wait_ms = 1500
-
-
 def shell_type_50():
     p = sd.shell_panel()
     if p:
@@ -177,9 +171,6 @@ def shell_typed_50():
     v = h.solid_volume()
     h.check("the preview has the thickest wall", sd.close(v, sd.open_top(s["t"])), v)
     h.task_button("OK")
-
-
-shell_typed_50.wait_ms = 1500
 
 
 def shell_made():
@@ -256,9 +247,6 @@ def draft_turned_far():
     h.shot("3-draft-held")
 
 
-draft_turned_far.wait_ms = 5000
-
-
 def draft_type_80():
     p = sd.draft_panel()
     if p:
@@ -276,9 +264,6 @@ def draft_typed_80():
     h.check("no error", msg(p) == "", msg(p))
     if p:
         QtTest.QTest.keyClick(p.angle.widget, QtCore.Qt.Key_Tab)  # leave the box
-
-
-draft_typed_80.wait_ms = 1500
 
 
 def draft_box_left():
@@ -314,9 +299,6 @@ def draft_formula_explained():
         text,
     )
     h.task_button("OK")
-
-
-draft_formula_explained.wait_ms = 3000
 
 
 def draft_formula_ok_waits():
@@ -370,4 +352,5 @@ h.run(
         draft_ok,
         draft_made,
     ],
+    paced_by="state",
 )

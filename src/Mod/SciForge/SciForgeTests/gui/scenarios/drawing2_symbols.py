@@ -47,9 +47,6 @@ def a_command():
     w.menu("TEXT", "Leader")
 
 
-a_command.wait_ms = 1200
-
-
 def a_paper():
     p = d.panel_of("LeaderPanel")
     if h.check("the Leader dialog", p is not None, d.panel()):
@@ -69,9 +66,6 @@ def a_place():
     w.click(40.0, -45.0)
 
 
-a_place.wait_ms = 1200
-
-
 def a_type():
     p = d.panel_of("LeaderPanel")
     if h.check("a leader was made", one("leader") is not None and p is not None):
@@ -82,9 +76,6 @@ def a_ok():
     obj = one("leader")
     h.check("its text", data(obj).get("lines") == ["BREAK ALL SHARP EDGES"], data(obj))
     w.ok()
-
-
-a_ok.wait_ms = 1500
 
 
 def a_check():
@@ -111,9 +102,6 @@ def b_command():
     w.menu("SYMBOLS", "Feature Control Frame")
 
 
-b_command.wait_ms = 1200
-
-
 def b_fields():
     p = d.panel_of("FeatureControlPanel")
     if not h.check("the frame's dialog", p is not None, d.panel()):
@@ -127,9 +115,6 @@ def b_fields():
     d.type_into(row["datums"][1][0], "B")
 
 
-b_fields.wait_ms = 1200
-
-
 def b_pick():
     w.click(*w.hole_top(w.HOLE1))
 
@@ -137,9 +122,6 @@ def b_pick():
 def b_place():
     w.move(-55.0, 15.0)
     w.click(-70.0, 20.0)
-
-
-b_place.wait_ms = 1200
 
 
 def b_made():
@@ -166,9 +148,6 @@ def b_stays():
         w.ok()
 
 
-b_stays.wait_ms = 1500
-
-
 def b_done():
     h.check("closed", d.panel() is None)
     h.check("still 0.05", "0.05" in w.describe(one("fcf")), w.describe(one("fcf")))
@@ -178,8 +157,6 @@ def b_done():
 def datum_steps(name, edge_point, place, letter):
     def command():
         w.menu("SYMBOLS", "Datum Identifier")
-
-    command.wait_ms = 1200
 
     def pick():
         p = d.panel_of("DatumPanel")
@@ -194,12 +171,8 @@ def datum_steps(name, edge_point, place, letter):
     def put():
         w.click(*place)
 
-    put.wait_ms = 1200
-
     def close():
         w.ok()
-
-    close.wait_ms = 1200
 
     def made():
         found = [o for o in w.annotations("datum") if data(o).get("letter") == letter]
@@ -223,9 +196,6 @@ def d_command():
     w.menu("SYMBOLS", "Surface Texture")
 
 
-d_command.wait_ms = 1200
-
-
 def d_fields():
     p = d.panel_of("SurfaceTexturePanel")
     if not h.check("the texture's dialog", p is not None, d.panel()):
@@ -235,21 +205,12 @@ def d_fields():
     w.click(-10.0, 25.0)  # the top edge
 
 
-d_fields.wait_ms = 1200
-
-
 def d_place():
     w.click(-9.6, 25.5)  # next to where the edge was clicked: on the edge
 
 
-d_place.wait_ms = 1200
-
-
 def d_ok():
     w.ok()
-
-
-d_ok.wait_ms = 1200
 
 
 def d_check():
@@ -270,9 +231,6 @@ def d_check():
 # -- E ------------------------------------------------------------------------------------------
 def e_open():
     d.double_click_at(*w.annotation_point(one("fcf")))
-
-
-e_open.wait_ms = 1500
 
 
 def e_dialog():
@@ -303,14 +261,8 @@ def e_ok():
     w.ok()
 
 
-e_ok.wait_ms = 1500
-
-
 def e_undo():
     d.undo()
-
-
-e_undo.wait_ms = 1500
 
 
 def e_undone():
@@ -318,9 +270,6 @@ def e_undone():
         "undo: one row", w.describe(one("fcf")) == "Position|⌀0.05(M)|A|B", w.describe(one("fcf"))
     )
     d.redo()
-
-
-e_undone.wait_ms = 1500
 
 
 def e_redone():
@@ -335,17 +284,11 @@ def f_undo():
     d.undo()  # datum B
 
 
-f_undo.wait_ms = 2000
-
-
 def f_undone():
     h.check("undo: datum B gone", len(w.annotations("datum")) == state["datums"] - 1)
     d.redo()
     d.redo()
     d.redo()
-
-
-f_undone.wait_ms = 2000
 
 
 def f_redone():
@@ -357,9 +300,6 @@ def f_redone():
     x, y = state["base"]
     # by its frame, just outside the outline (drawing_views does the same)
     d.drag_page((x + 41.5, y + 26.5), (x + 56.5, y + 36.5))
-
-
-f_redone.wait_ms = 2500
 
 
 def f_moved():
@@ -410,4 +350,5 @@ h.run(
     + [e_open, e_dialog, e_row2, e_ok, e_undo, e_undone, e_redone]
     + [f_undo, f_undone, f_redone, f_moved]
     + [g_dxf],
+    paced_by="state",
 )

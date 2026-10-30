@@ -332,9 +332,6 @@ def f7_made():
     h.check("F7 0.5 mm there", depth is not None and abs(depth - 0.5) < 1e-9, depth)
 
 
-for step in (f3_preview, f3_check, f4_check, f5_off_the_face, f5_back_on, f7_projected):
-    step.wait_ms = 1500
-
 h.run(
     "emboss_flat",
     [
@@ -364,4 +361,5 @@ h.run(
         f7_projected,
         f7_made,
     ],
+    paced_by="state",
 )

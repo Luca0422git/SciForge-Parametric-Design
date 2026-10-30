@@ -277,9 +277,6 @@ def p3_reopen():
     App.openDocument(s["path"])
 
 
-p3_reopen.wait_ms = 2000
-
-
 def p3_reopened():
     h.check(
         "P3 reopened: the half ring and the Press Pull",
@@ -395,4 +392,5 @@ h.run(
             p4_done,
         ]
     ),
+    paced_by="state",
 )

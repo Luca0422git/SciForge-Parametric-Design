@@ -113,7 +113,6 @@ def close_all():
 
 def wait_tiles(step):
     """Run once the tiles have their pictures (the worker thread answers)."""
-    step.wait_ms = 1500
     return step
 
 
@@ -192,9 +191,6 @@ def save_arm():
     _doc, s["arm"] = save_new("Arm", 10)
 
 
-save_arm.wait_ms = 1500
-
-
 def close_arm():
     close_all()
 
@@ -263,9 +259,6 @@ wait_tiles(home_back)
 def save_base():
     close_all()
     _doc, s["base"] = save_new("Base", 20)
-
-
-save_base.wait_ms = 1500
 
 
 def base_first():
@@ -438,9 +431,6 @@ def save_elsewhere():
     versions_ui._first_save(doc.Name, s["bracket"])  # the Save dialog's save, in another folder
 
 
-save_elsewhere.wait_ms = 1500
-
-
 def new_save_starts_in_this_computer():
     from sciforge import versions_ui
 
@@ -580,4 +570,5 @@ h.run(
         close_with_option_off,
         no_home_with_option_off,
     ],
+    paced_by="state",
 )

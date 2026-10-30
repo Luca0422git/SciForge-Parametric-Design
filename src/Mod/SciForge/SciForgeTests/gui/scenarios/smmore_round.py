@@ -258,4 +258,5 @@ h.run(
         edit_ok,
         after_edit,
     ],
+    paced_by="state",
 )

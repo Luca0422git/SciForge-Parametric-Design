@@ -451,4 +451,5 @@ h.run(
         p19_double_click_own,
         p19_done,
     ],
+    paced_by="state",
 )

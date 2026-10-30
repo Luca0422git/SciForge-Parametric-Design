@@ -403,4 +403,5 @@ h.run(
             x3_done,
         ]
     ),
+    paced_by="state",
 )

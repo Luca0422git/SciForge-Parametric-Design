@@ -74,9 +74,6 @@ def press_ok():
     d.ok()
 
 
-press_ok.wait_ms = 2000
-
-
 def base_view_top():
     p = d.panel_of("BaseViewPanel")
     h.check("Base View dialog open", p is not None, d.panel())
@@ -86,9 +83,6 @@ def base_view_top():
 
 def place():
     d.click_at(200, 150)
-
-
-place.wait_ms = 1500
 
 
 def placed():
@@ -113,9 +107,6 @@ def done():
 
 def bend_table():
     d.group_menu("TABLES", "Bend Table")
-
-
-bend_table.wait_ms = 1500
 
 
 def table_made():
@@ -195,9 +186,6 @@ def _notes():
 
 def bend_note():
     d.group_menu("TEXT", "Bend Note")
-
-
-bend_note.wait_ms = 1500
 
 
 def click_b1():
@@ -295,9 +283,6 @@ def change_k():
     doc.recompute()
 
 
-change_k.wait_ms = 3000
-
-
 def table_follows():
     from sciforge import drawing, flatpattern_drawing as fpd
 
@@ -361,4 +346,5 @@ h.run(
         change_k,
         table_follows,
     ],
+    paced_by="state",
 )

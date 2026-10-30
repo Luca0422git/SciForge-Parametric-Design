@@ -262,9 +262,6 @@ def e_held():
     h.check("E: 50 is held at the largest radius that fits", text.startswith("50 mm does not fit"), text)
 
 
-e_held.wait_ms = 1500
-
-
 def e_edited():
     fillet = t.obj("Fillet 1")
     radius = fillet.Radius.Value if fillet is not None else 0.0
@@ -390,7 +387,6 @@ def fast_since(what, label):
         S["stats"] = stats()
 
     step.__name__ = "fast_" + what.split(":")[0].replace(" ", "_")
-    step.wait_ms = 800
     return step
 
 
@@ -454,7 +450,6 @@ def g_change(text):
         dialog.accept()
 
     step.__name__ = "g_change_%s" % text
-    step.wait_ms = 1500
     return step
 
 
@@ -501,7 +496,6 @@ def h_change(text):
         dialog.accept()
 
     step.__name__ = "h_change_%s" % text
-    step.wait_ms = 1500
     return step
 
 
@@ -611,4 +605,5 @@ h.run(
         a_redo, h.idle_step(),
         expect("edited_h", True, "H Ctrl+Y of a user parameter"),
     ],
+    paced_by="state",
 )

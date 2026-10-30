@@ -55,23 +55,14 @@ def a_repair():
     h.ribbon("Repair")
 
 
-a_repair.wait_ms = 1500
-
-
 def a_preview():
     p = m.panel()
     h.check("Repair dialog with the body", p is not None and p.body is not None, p)
     m.tick(p.preview, True)
 
 
-a_preview.wait_ms = 1500
-
-
 def a_ok():
     h.task_button("OK")
-
-
-a_ok.wait_ms = 1200
 
 
 def a_done():
@@ -89,9 +80,6 @@ def b_open():
     s.menu("MODIFY", "Shell")
 
 
-b_open.wait_ms = 1500
-
-
 def b_too_thick():
     p = m.panel()
     h.check("Shell dialog", p is not None and p.title == "Shell", p)
@@ -102,9 +90,6 @@ def b_too_thick():
     m.type_field(p.thickness.widget, "3")
 
 
-b_too_thick.wait_ms = 2000
-
-
 def b_refused():
     p = m.panel()
     text = p.message.text()
@@ -112,16 +97,10 @@ def b_refused():
     h.task_button("OK")
 
 
-b_refused.wait_ms = 1200
-
-
 def b_waits():
     p = m.panel()
     h.check("OK waits", p is not None and p.title == "Shell", p)
     m.type_field(p.thickness.widget, "1")
-
-
-b_waits.wait_ms = 2000
 
 
 def b_check():
@@ -131,9 +110,6 @@ def b_check():
     h.check("closed, two shells", info["closed"] and info["shells"] == 2, info)
     h.check("no warning", m.panel().message.text() == "", m.panel().message.text())
     h.task_button("OK")
-
-
-b_check.wait_ms = 1500
 
 
 def b_done():
@@ -155,9 +131,6 @@ def c_save_reopen():
     App.openDocument(state["file"])
     m.mesh_tab()
     h.fit()
-
-
-c_save_reopen.wait_ms = 3000
 
 
 def c_check():
@@ -193,9 +166,6 @@ def c_check():
     m.click_body(b)
 
 
-c_check.wait_ms = 1200
-
-
 def c_picked():
     picked = [x.Object.Name for x in Gui.Selection.getSelectionEx()]
     h.check("a click on it picks it", body() is not None and body().Name in picked, picked)
@@ -207,9 +177,6 @@ def d_edit():
     s.timeline_double_click(shell_step())
 
 
-d_edit.wait_ms = 2000
-
-
 def d_dialog():
     p = m.panel()
     h.check("Edit Shell after reopen", p is not None and p.title == "Shell", p)
@@ -219,14 +186,8 @@ def d_dialog():
     m.type_field(p.thickness.widget, "2")
 
 
-d_dialog.wait_ms = 2000
-
-
 def d_ok():
     h.task_button("OK")
-
-
-d_ok.wait_ms = 1500
 
 
 def d_check():
@@ -237,9 +198,6 @@ def d_check():
 # -- E ----------------------------------------------------------------------------------------
 def e_delete():
     hs.timeline_menu("Repair 1", "Delete")
-
-
-e_delete.wait_ms = 2000
 
 
 def e_check():
@@ -275,9 +233,6 @@ def e_undo():
     i.undo()
 
 
-e_undo.wait_ms = 2000
-
-
 def e_check_undo():
     h.check("Ctrl+Z: Repair 1 back", len(m.steps("MeshRepair")) == 1)
     step = shell_step()
@@ -297,15 +252,9 @@ def f_save():
     h.press(QtCore.Qt.Key_S, QtCore.Qt.ControlModifier)
 
 
-f_save.wait_ms = 1500
-
-
 def f_describe():
     h.check("the Save dialog asks for a description", vi.version_dialog() is not None)
     vi.accept_save()
-
-
-f_describe.wait_ms = 1500
 
 
 def f_reopen():
@@ -313,9 +262,6 @@ def f_reopen():
     App.closeDocument(App.ActiveDocument.Name)
     App.openDocument(state["file"])
     h.fit()
-
-
-f_reopen.wait_ms = 3000
 
 
 def f_check():
@@ -342,4 +288,5 @@ h.run(
     + [c_save_reopen, c_check, c_picked]
     + [d_edit, d_dialog, d_ok, d_check, e_delete, e_check, e_undo, e_check_undo]
     + [f_save, f_describe, f_reopen, f_check],
+    paced_by="state",
 )

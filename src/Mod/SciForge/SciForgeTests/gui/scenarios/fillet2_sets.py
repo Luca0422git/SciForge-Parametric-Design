@@ -190,9 +190,6 @@ def too_big():
     h.check("no error", p is not None and p.message.text() == "", p and p.message.text())
 
 
-too_big.wait_ms = 2500
-
-
 def ok_refused():
     p = b.blend_panel()
     if p:
@@ -300,4 +297,5 @@ h.run(
         reopened_edit,
         end,
     ],
+    paced_by="state",
 )

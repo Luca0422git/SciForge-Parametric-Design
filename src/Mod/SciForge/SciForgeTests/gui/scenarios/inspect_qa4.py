@@ -651,4 +651,4 @@ STEPS = (
     + [u_start, u_front, u_15, u_press_q, u_kept, u_pull_5, u_ok, u_pulled, u_undone, the_end]
 )
 
-h.run("inspect_qa4", ti.watched(STEPS))
+h.run("inspect_qa4", ti.watched(STEPS), paced_by="state")

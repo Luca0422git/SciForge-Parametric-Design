@@ -540,4 +540,5 @@ h.run(
         fillet_after_reopen,
         closed_again,
     ],
+    paced_by="state",
 )

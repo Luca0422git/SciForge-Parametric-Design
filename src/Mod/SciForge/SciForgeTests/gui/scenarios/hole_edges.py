@@ -248,4 +248,5 @@ h.run(
         block_ok2,
         after_block,
     ],
+    paced_by="state",
 )

@@ -430,4 +430,5 @@ h.run(
         untrim_undone,
         untrim_redone,
     ],
+    paced_by="state",
 )

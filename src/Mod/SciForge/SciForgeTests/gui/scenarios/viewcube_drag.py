@@ -190,4 +190,5 @@ h.run(
         shaky_click,
         shaky_done,
     ],
+    paced_by="state",
 )

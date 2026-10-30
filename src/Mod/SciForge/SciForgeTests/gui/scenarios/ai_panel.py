@@ -253,4 +253,5 @@ h.run(
         preferences_open,
         browser_back,
     ],
+    paced_by="state",
 )

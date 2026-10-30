@@ -133,9 +133,6 @@ def n1_type():
     j.choose_type(p, "Revolute")
 
 
-n1_type.wait_ms = 2600
-
-
 def n1_ok():
     j.ok()
 
@@ -205,9 +202,6 @@ def n4_type():
     s.type_value(j.panel().angle.widget, "45")
 
 
-n4_type.wait_ms = 1500
-
-
 def n4_driven():
     h.check("at 45", abs(angle_now() - 45) < 1e-6, angle_now())
     h.check("Base stayed", base().Placement.isSame(state["base"], 1e-9))
@@ -235,4 +229,4 @@ steps += [n2_drag, n2_turned]
 steps += [n3_drag_base, n3_moved, n3_undo, n3_undone]
 steps += [n4_drive, n4_type, n4_driven, n4_ok, n4_undo, n4_undone]
 
-h.run("joints2_nested", steps)
+h.run("joints2_nested", steps, paced_by="state")

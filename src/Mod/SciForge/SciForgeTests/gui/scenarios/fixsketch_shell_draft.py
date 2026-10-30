@@ -109,4 +109,4 @@ steps += fs.sketch_on(
 steps += fs.circle("D", V(25, 15, 10), 5, s2)
 steps += fs.finish_and_extrude("D", 4, s2)
 
-h.run("fixsketch_shell_draft", steps)
+h.run("fixsketch_shell_draft", steps, paced_by="state")

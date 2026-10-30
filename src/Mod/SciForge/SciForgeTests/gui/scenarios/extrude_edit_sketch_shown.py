@@ -221,4 +221,5 @@ h.run(
         cut_hidden_after_ok,
         cut_undone,
     ],
+    paced_by="state",
 )

@@ -111,9 +111,6 @@ def drag_side_two():
         ri.drag_handle(handle, -150.0)
 
 
-drag_side_two.wait_ms = 1200
-
-
 def side_two_dragged():
     p = ri.panel()
     a2 = p.angle2.value()
@@ -318,4 +315,5 @@ h.run(
         undone,
         redone,
     ],
+    paced_by="state",
 )

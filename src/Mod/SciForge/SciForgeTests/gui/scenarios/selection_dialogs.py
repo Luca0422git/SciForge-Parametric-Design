@@ -302,4 +302,4 @@ steps = b.box_steps("SelDialogs") + [
     e_undone,
 ]
 
-h.run("selection_dialogs", steps)
+h.run("selection_dialogs", steps, paced_by="state")

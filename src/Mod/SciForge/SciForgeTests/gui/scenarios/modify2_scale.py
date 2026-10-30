@@ -365,4 +365,5 @@ h.run(
         delete_step,
         after_delete,
     ],
+    paced_by="state",
 )

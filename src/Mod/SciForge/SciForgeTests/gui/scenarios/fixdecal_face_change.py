@@ -79,9 +79,6 @@ def press_pull(tag, point, distance):
         if h.check("%s: the face picked" % tag, p is not None and p.target is not None, p):
             ui.type_into(p.field.widget, distance)
 
-    start.wait_ms = 1200
-    click.wait_ms = 1200
-    type_.wait_ms = 1500
     steps = [start, click, type_]
     for step in steps:
         step.__name__ = "%s_%s" % (tag, step.__name__.strip("_"))
@@ -96,9 +93,6 @@ def ok():
 def f2_live():
     f.follows("F2 while pushing", f.flat(), st["flat"], App.Placement(V(0, 0, 5), App.Rotation()))
     ok()
-
-
-f2_live.wait_ms = 1500
 
 
 def f2_check():
@@ -118,9 +112,6 @@ def f3_live():
         radii and (min(radii), max(radii)),
     )
     ok()
-
-
-f3_live.wait_ms = 1500
 
 
 def f3_check():
@@ -154,9 +145,6 @@ def f4_edit():
     b.timeline_double_click("Extrude 1")
 
 
-f4_edit.wait_ms = 1500
-
-
 def f4_type():
     p = s.panel()
     field = getattr(getattr(p, "distance", None), "widget", None)
@@ -164,14 +152,8 @@ def f4_type():
         s.type_value(field, "20")
 
 
-f4_type.wait_ms = 1500
-
-
 def f4_ok():
     h.task_button("OK")
-
-
-f4_ok.wait_ms = 1500
 
 
 def f4_check():
@@ -192,15 +174,9 @@ def f5_undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-f5_undo.wait_ms = 1500
-
-
 def f5_undone():
     f.follows("F5 Ctrl+Z (z 15)", f.flat(), st["flat"], App.Placement(V(0, 0, 5), App.Rotation()))
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-f5_undone.wait_ms = 1500
 
 
 def f5_redone():
@@ -217,9 +193,6 @@ def f6_check():
     ok()
 
 
-f6_check.wait_ms = 1500
-
-
 def f6_ok():
     f.follows("F6 after OK", f.flat(), st["f5"], App.Placement())
     h.shot("F6-grown")
@@ -234,9 +207,6 @@ def f7_live():
         App.Placement(V(0, 0, 10), App.Rotation()),
     )
     h.press(QtCore.Qt.Key_Escape)
-
-
-f7_live.wait_ms = 1500
 
 
 def f7_check():
@@ -267,4 +237,5 @@ h.run(
     + [f6_check, f6_ok]
     + press_pull("f7", V(20, 15, 25), "10")
     + [f7_live, f7_check, cleanup],
+    paced_by="state",
 )

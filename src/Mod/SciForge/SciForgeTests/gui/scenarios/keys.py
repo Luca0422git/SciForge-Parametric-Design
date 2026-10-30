@@ -118,4 +118,5 @@ h.run(
         redo_after_cancel,
         after_redo_after_cancel,
     ],
+    paced_by="state",
 )

@@ -92,9 +92,6 @@ def b_pick_top():
     h.click(V(30, 15, 10))
 
 
-b_pick_top.wait_ms = 1500
-
-
 def b_sketch_and_dialog():
     sk = h.in_sketch()
     h.check("B a sketch opened", sk is not None)
@@ -161,4 +158,4 @@ def d_cut():
 steps = [new_part, a_open, a_waits, a_cancelled, b_open, b_pick_top, b_sketch_and_dialog]
 steps += ti.text_steps(s, corner(5, 5), corner(55, 25), "SF", 12)[1:]  # (the dialog is open)
 steps += [d_finish, d_extrude, d_distance, d_ok, d_cut]
-h.run("text_on_face", steps)
+h.run("text_on_face", steps, paced_by="state")

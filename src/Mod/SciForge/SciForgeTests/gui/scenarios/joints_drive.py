@@ -71,9 +71,6 @@ def make_motion():
     j.choose_type(p, "Revolute")
 
 
-make_motion.wait_ms = 2600
-
-
 def make_ok():
     j.ok()
 
@@ -450,4 +447,4 @@ steps += [
 ]
 steps += [d9_delete, d9_deleted, d9_undo, d9_back]
 
-h.run("joints_drive", steps)
+h.run("joints_drive", steps, paced_by="state")

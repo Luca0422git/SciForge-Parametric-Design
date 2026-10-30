@@ -214,4 +214,5 @@ h.run(
         after_redo,
         lays_flat,
     ],
+    paced_by="state",
 )

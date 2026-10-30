@@ -561,4 +561,5 @@ h.run(
         finish,
         finished,
     ],
+    paced_by="state",
 )

@@ -610,4 +610,5 @@ h.run(
             p7_undo,
         ]
     ),
+    paced_by="state",
 )

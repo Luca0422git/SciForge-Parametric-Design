@@ -42,15 +42,9 @@ def setup():
     vx.fit()
 
 
-setup.wait_ms = 1500
-
-
 # -- A: inches -------------------------------------------------------------------------------------
 def a_units():
     ti.click_row("Units: mm")
-
-
-a_units.wait_ms = 800
 
 
 def a_inch():
@@ -63,9 +57,6 @@ def a_inch():
     combo = panel.form.findChild(QtWidgets.QComboBox, "SciForgeUnitType")
     di.choose(combo, "Inch")
     h.task_button("OK")
-
-
-a_inch.wait_ms = 800
 
 
 def a_inches():
@@ -96,9 +87,6 @@ def b_click_top():
     h.click(S["pt"])
 
 
-b_click_top.wait_ms = 400
-
-
 def b_hover_hole():
     c = vx.hole_centre(*HOLE)
     vx.look_at(c, 40.0)
@@ -111,9 +99,6 @@ def b_click_hole():
     h.click(S["pt"])
 
 
-b_click_hole.wait_ms = 1500
-
-
 def b_type():
     box = vx.bbox(S["shaft"])
     h.check("the shaft stands on the web", abs(box.ZMin - vx.T) < 1e-3, box)
@@ -121,9 +106,6 @@ def b_type():
     if h.check("the Joint dialog stays open", p is not None, p):
         S["field"] = p.offset_fields["z"]
         s.type_value(S["field"].widget, "-1.5")
-
-
-b_type.wait_ms = 1500
 
 
 def b_inches():
@@ -139,9 +121,6 @@ def b_inches():
     vx.ok()
 
 
-b_inches.wait_ms = 1200
-
-
 def b_made():
     h.check("one joint", len(vx.joints_list()) == 1, [o.Label for o in vx.joints_list()])
     box = vx.bbox(S["shaft"])
@@ -154,18 +133,12 @@ def c_units():
     ti.click_row("Units: in")
 
 
-c_units.wait_ms = 800
-
-
 def c_mm():
     from sciforge import browser_ui
 
     combo = browser_ui.UnitsPanel.last.form.findChild(QtWidgets.QComboBox, "SciForgeUnitType")
     di.choose(combo, "Millimeter")
     h.task_button("OK")
-
-
-c_mm.wait_ms = 800
 
 
 def c_edit():
@@ -181,25 +154,16 @@ def c_edit():
         j.browser_menu(joint.Label, "Edit Joint")
 
 
-c_edit.wait_ms = 2000
-
-
 def c_type():
     p = vx.joint_panel()
     if h.check("the joint's dialog open", p is not None, p):
         s.type_value(p.offset_fields["z"].widget, "-20")
 
 
-c_type.wait_ms = 1500
-
-
 def c_mm_value():
     box = vx.bbox(S["shaft"])
     h.check("a plain -20 in a millimetre design: 20 mm", abs(box.ZMin - (vx.T - 20.0)) < 1e-3, box)
     vx.ok()
-
-
-c_mm_value.wait_ms = 1200
 
 
 def c_done():
@@ -230,4 +194,5 @@ h.run(
         c_mm_value,
         c_done,
     ],
+    paced_by="state",
 )

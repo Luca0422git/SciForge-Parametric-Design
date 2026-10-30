@@ -1002,4 +1002,4 @@ STEPS = (
     + [j_offset_dialog, j_offset_esc, j_offset_unchanged, the_end]
 )
 
-h.run("inspect_qa", ti.watched(STEPS))
+h.run("inspect_qa", ti.watched(STEPS), paced_by="state")

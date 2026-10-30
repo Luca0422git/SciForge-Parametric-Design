@@ -367,14 +367,8 @@ def p15_modeled():
         hs.click_checkbox(p.modeled)
 
 
-p15_modeled.wait_ms = 2500
-
-
 def p15_ok():
     h.task_button("OK")
-
-
-p15_ok.wait_ms = 2500
 
 
 def removed(length):
@@ -408,14 +402,10 @@ def p15_taller():
 
 # The preview rebuilds the modeled thread (a second or two): a person waits for the busy
 # cursor before clicking OK (FreeCAD swallows clicks meanwhile, a test's timer does not).
-p15_taller.wait_ms = 4000
 
 
 def p15_taller_ok():
     h.task_button("OK")
-
-
-p15_taller_ok.wait_ms = 3000
 
 
 def p15_followed():
@@ -481,4 +471,5 @@ h.run(
             p15_followed,
         ]
     ),
+    paced_by="state",
 )

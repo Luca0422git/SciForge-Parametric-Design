@@ -431,4 +431,5 @@ h.run(
         i_squares,
         i_on_xy,
     ],
+    paced_by="state",
 )

@@ -132,4 +132,5 @@ h.run(
     + [a_hide_block, a_hidden, a_hover, a_ghost]
     + [b_plate, b_no_ghost, b_back, b_same_ghost, b_leave, b_gone]
     + [c_hover, c_eye, c_shown],
+    paced_by="state",
 )

@@ -99,14 +99,8 @@ def dim_pick():
     d.move_to(*at(2, -30))
 
 
-dim_pick.wait_ms = 1000
-
-
 def dim_place():
     d.click_at(*at(0, -32))
-
-
-dim_place.wait_ms = 1000
 
 
 def dim_end():
@@ -119,9 +113,6 @@ def mark_start():
 
 def mark_pick():
     d.click_at(*at(0, 6))
-
-
-mark_pick.wait_ms = 1000
 
 
 def mark_end():
@@ -137,9 +128,6 @@ def scripted():
     state["section"] = drawing.add_section(base(), (0, 26), (0, -26), (10, 0), SECTION_AT)
     drawing.add_text(page, ["NOTE 1"], (60.0, 60.0))
     page.Document.recompute()
-
-
-scripted.wait_ms = 3000
 
 
 def dims():
@@ -164,9 +152,6 @@ def a_dialog():
     d.type_into(dlg.name, "exp_sheet")
     d.type_into(dlg.folder, OUT)
     click(dlg.export_button)
-
-
-a_dialog.wait_ms = 2500
 
 
 def render(path, dpi):
@@ -256,9 +241,6 @@ def b_dialog():
     d.type_into(dlg.name, "exp_sheet")
     d.type_into(dlg.folder, OUT)
     click(dlg.export_button)
-
-
-b_dialog.wait_ms = 2000
 
 
 def b_written():
@@ -399,9 +381,6 @@ def d_dialog():
     click(dlg.export_button)
 
 
-d_dialog.wait_ms = 2000
-
-
 def d_written():
     path = os.path.join(OUT, "exp_inches.dxf")
     if not h.check("the inch DXF is written", os.path.isfile(path), os.listdir(OUT)):
@@ -427,4 +406,5 @@ h.run(
         style="Visible Edges",
     )
     + [d_check_units, dim_start, dim_pick, dim_place, dim_end, d_dim, d_dialog, d_written],
+    paced_by="state",
 )

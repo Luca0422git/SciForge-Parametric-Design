@@ -270,4 +270,5 @@ h.run(
         shell_other_followed,
         shell_other_cancelled,
     ],
+    paced_by="state",
 )

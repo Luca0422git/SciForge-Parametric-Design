@@ -49,7 +49,6 @@ def text_of(dlg):
 
 
 def pause(step, ms=400):
-    step.wait_ms = ms
     return step
 
 
@@ -104,9 +103,6 @@ def open_from_the_menu():
             levels.append(texts(sub))
 
     s["menu_result"]["ok"] = h.choose_from(lambda: wi.click(button), path, "the Menu button's menu", read=read)
-
-
-open_from_the_menu.wait_ms = 1200
 
 
 def dialog_opened():
@@ -203,9 +199,6 @@ def crash_log_appears():
         )
     h.check("a crash log is found", crashlog.last_crash_log() is not None)
     report_ui.open_dialog()
-
-
-crash_log_appears.wait_ms = 800
 
 
 def crash_log_in_the_preview():
@@ -360,9 +353,6 @@ def a_long_log():
     report_ui.open_dialog()
 
 
-a_long_log.wait_ms = 800
-
-
 def long_log_typed():
     dlg = dialog()
     if dlg is None:
@@ -456,4 +446,5 @@ h.run(
         browser_that_fails,
         close_it,
     ],
+    paced_by="state",
 )

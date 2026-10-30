@@ -184,4 +184,5 @@ h.run(
         no_formula,
         stays_10,
     ],
+    paced_by="state",
 )

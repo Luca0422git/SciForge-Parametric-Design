@@ -129,9 +129,6 @@ def setup():
     home().refresh()
 
 
-setup.wait_ms = 2500
-
-
 # -- Path 1 -------------------------------------------------------------------------------------
 def p1_delete():
     h.check("P1 Arm is in Recent", "Arm" in names(), names())
@@ -142,9 +139,6 @@ def p1_delete():
     answer(True, s["p1"])
     ok = wi.right_click(tiles.viewport(), tiles.visualItemRect(item).center(), "Delete")
     h.check("P1 right-click Arm > Delete", ok)
-
-
-p1_delete.wait_ms = 2000
 
 
 def p1_gone():
@@ -177,9 +171,6 @@ def p2_more():
     )
 
 
-p2_more.wait_ms = 2000
-
-
 def p2_kept():
     h.check("P2 the ... button opened the menu with Delete", s["p2_menu"]["ok"], s["p2_menu"])
     h.check("P2 the question was asked", s["p2"].get("answered"), s["p2"])
@@ -195,9 +186,6 @@ def p3_key():
     s["p3"] = {}
     answer(True, s["p3"])
     wi.key(tiles, QtCore.Qt.Key_Delete)
-
-
-p3_key.wait_ms = 2000
 
 
 def p3_gone():
@@ -220,9 +208,6 @@ def p4_open():
     home_ui.show()
 
 
-p4_open.wait_ms = 1500
-
-
 def p4_delete():
     tiles, item = tile("Base")
     if not h.check("P4 Base in Recent", item is not None, names()):
@@ -230,9 +215,6 @@ def p4_delete():
     s["p4"] = {}
     answer(True, s["p4"])
     wi.right_click(tiles.viewport(), tiles.visualItemRect(item).center(), "Delete")
-
-
-p4_delete.wait_ms = 2000
 
 
 def p4_closed():
@@ -274,9 +256,6 @@ def p5_details():
     wi.click(lst.viewport(), lst.visualItemRect(item).center())
 
 
-p5_details.wait_ms = 1000
-
-
 def p5_delete():
     details = panel().details
     h.check("P5 a click on Bolt shows its details", details.isVisible() and details.path)
@@ -286,9 +265,6 @@ def p5_delete():
     s["p5"] = {}
     answer(True, s["p5"])
     wi.click(button)
-
-
-p5_delete.wait_ms = 2000
 
 
 def p5_gone():
@@ -310,9 +286,6 @@ def p6_step():
     answer(True, s["p6"])
     ok = wi.right_click(lst.viewport(), lst.visualItemRect(item).center(), "Delete")
     h.check("P6 right-click > Delete", ok)
-
-
-p6_step.wait_ms = 2000
 
 
 def p6_gone():
@@ -352,4 +325,5 @@ h.run(
         p6_gone,
         cleanup,
     ],
+    paced_by="state",
 )

@@ -248,4 +248,5 @@ h.run(
             d_redone,
         ]
     ),
+    paced_by="state",
 )

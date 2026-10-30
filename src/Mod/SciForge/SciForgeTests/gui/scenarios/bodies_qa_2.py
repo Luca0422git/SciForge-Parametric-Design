@@ -176,9 +176,6 @@ def i_delete_body1():
     s.menu("MODIFY", "Delete")
 
 
-i_delete_body1.wait_ms = 1200
-
-
 def i_deleted():
     found = s.bodies()
     h.check("three bodies left", len(found) == 3, [x.Label for x in found])
@@ -205,9 +202,6 @@ def i_edit_extrude():
     s.timeline_double_click(extrude_of(s.bodies()[0]))
 
 
-i_edit_extrude.wait_ms = 1200
-
-
 def i_height():
     p = b.active_panel()
     field = getattr(getattr(p, "distance", None), "widget", None)
@@ -217,9 +211,6 @@ def i_height():
 
 def i_height_ok():
     h.task_button("OK")
-
-
-i_height_ok.wait_ms = 1200
 
 
 def i_followed():
@@ -263,9 +254,6 @@ def j_edit_box():
     s.timeline_double_click(extrude_of(s.bodies()[0]))
 
 
-j_edit_box.wait_ms = 1200
-
-
 def j_height():
     p = b.active_panel()
     field = getattr(getattr(p, "distance", None), "widget", None)
@@ -275,9 +263,6 @@ def j_height():
 
 def j_height_ok():
     h.task_button("OK")
-
-
-j_height_ok.wait_ms = 1500
 
 
 def j_followed():
@@ -560,9 +545,6 @@ def m_reopen():
     QtWidgets.QApplication.processEvents()
 
 
-m_reopen.wait_ms = 1500
-
-
 def m_sketch():
     state["m_volume"] = s.total_volume()
     h.check("reopened: 21000 shown", s.close(state["m_volume"], 21000), state["m_volume"])
@@ -627,9 +609,6 @@ def n_pick_used_up_row():
 def n_del_key():
     h.check("the used-up body is selected", s.selected_names() == [s.bodies()[0].Name])
     h.press(QtCore.Qt.Key_Delete)
-
-
-n_del_key.wait_ms = 1500
 
 
 def n_deleted():
@@ -910,9 +889,6 @@ def q_move_ok():
     h.task_button("OK")
 
 
-q_move_ok.wait_ms = 1200
-
-
 def q_moved_blue():
     box = bbox(s.bodies()[0])
     h.check("moved (z 5..15)", s.close(box.ZMin, 5) and s.close(box.ZMax, 15), box)
@@ -980,9 +956,6 @@ def r_presspull_ok():
     h.task_button("OK")
 
 
-r_presspull_ok.wait_ms = 1200
-
-
 def r_pulled():
     got = s.volume(s.bodies()[0])
     h.check("pulled up 5: 21000 + 70 x 30 x 5", s.close(got, 31500), got)
@@ -1001,9 +974,6 @@ def r_cut():
 
 def r_cut_ok():
     h.task_button("OK")
-
-
-r_cut_ok.wait_ms = 1500
 
 
 def r_followed():
@@ -1209,4 +1179,5 @@ h.run(
         r_undo,
         r_undone,
     ],
+    paced_by="state",
 )

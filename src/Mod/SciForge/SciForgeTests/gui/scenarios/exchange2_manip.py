@@ -179,9 +179,6 @@ def p1_click_xy():
     pl.click_on_plane(i.XY_CLICK)
 
 
-p1_click_xy.wait_ms = 1500
-
-
 def p1_check():
     p = panel()
     sk = sketch()
@@ -207,9 +204,6 @@ def p1_check():
 def p2_drag_x():
     h.fit()
     drag_arrow("x", 8.0)
-
-
-p2_drag_x.wait_ms = 1500
 
 
 def p2_check():
@@ -239,9 +233,6 @@ def p3_turn():
     drag_turn(40.0)
 
 
-p3_turn.wait_ms = 1500
-
-
 def p3_check():
     p = panel()
     sk = sketch()
@@ -269,9 +260,6 @@ def p4_scale():
     drag_arrow("scale", 6.0)
 
 
-p4_scale.wait_ms = 1500
-
-
 def p4_check():
     p = panel()
     sk = sketch()
@@ -296,9 +284,6 @@ def p5_type():
     box = p.value_boxes.boxes.get("x")
     if h.check("P5 the X value box", box is not None and box.isVisible()):
         ai.type_in_box(box, "12")
-
-
-p5_type.wait_ms = 1200
 
 
 def p5_check():
@@ -331,22 +316,13 @@ def p6_finish():
         h.ribbon("Finish Sketch")
 
 
-p6_finish.wait_ms = 1000
-
-
 def p6_undo():
     t.ctrl("z")
-
-
-p6_undo.wait_ms = 1200
 
 
 def p6_redo():
     h.check("P6 Ctrl+Z: no sketch", sketch() is None, [o.Label for o in i.sketches()])
     t.ctrl("y")
-
-
-p6_redo.wait_ms = 1200
 
 
 def p6_check():
@@ -371,9 +347,6 @@ def p7_click_xy():
     pl.click_on_plane(i.XY_CLICK)
 
 
-p7_click_xy.wait_ms = 1500
-
-
 def p7_turn():
     p = panel()
     canvases = i.canvases()
@@ -390,23 +363,14 @@ def p7_turn():
     drag_turn(35.0)
 
 
-p7_turn.wait_ms = 1500
-
-
 def p7_fit():
     h.fit()
-
-
-p7_fit.wait_ms = 800
 
 
 def p7_move_y():
     obj = i.canvases()[0]
     h.check("P7 the curved handle turned it (counter-clockwise)", obj.ZAngle > 10.0, obj.ZAngle)
     drag_arrow("y", 6.0)
-
-
-p7_move_y.wait_ms = 1500
 
 
 def p7_ok():
@@ -417,17 +381,11 @@ def p7_ok():
     h.task_button("OK")
 
 
-p7_ok.wait_ms = 1200
-
-
 # -- P8 ----------------------------------------------------------------------------------------
 def p8_edit():
     obj = i.canvases()[0]
     h.check("P8 OK kept the canvas", panel() is None and obj.ZAngle == s["canvas"][2])
     t.row_menu(obj.Label, "Edit Canvas")
-
-
-p8_edit.wait_ms = 1500
 
 
 def p8_scale():
@@ -446,16 +404,10 @@ def p8_scale():
     drag_arrow("scale", 8.0)
 
 
-p8_scale.wait_ms = 1500
-
-
 def p8_fit():
     # a step of its own: the value boxes follow the handles to their new place on the
     # screen before the drag (a box left where the arrow was would take the press)
     h.fit()
-
-
-p8_fit.wait_ms = 800
 
 
 def p8_escape():
@@ -468,9 +420,6 @@ def p8_escape():
     )
     h.check("P8 in proportion", abs(obj.ScaleX - obj.ScaleY) < 1e-9, (obj.ScaleX, obj.ScaleY))
     h.press(QtCore.Qt.Key_Escape)
-
-
-p8_escape.wait_ms = 1200
 
 
 def p8_check():
@@ -491,9 +440,6 @@ def p9_click_xy():
     pl.click_on_plane(i.XY_CLICK)
 
 
-p9_click_xy.wait_ms = 1500
-
-
 def p9_drag():
     p = panel()
     h.check("P9 four handles", p is not None and len(getattr(p, "handles", [])) == 4)
@@ -508,18 +454,12 @@ def p9_drag():
     h.fit()
 
 
-p9_drag.wait_ms = 800
-
-
 def p9_drag_x():
     # a step of its own after the fit (as P8's): the value boxes follow the handles to
     # their new place first; dragged in the fit's step, a box left where the arrow was
     # took the press and X stayed 0 (CI #136 re-run, #137, with FreeCAD's own layout)
     if panel() is not None and panel().handles:
         drag_arrow("x", 6.0)
-
-
-p9_drag_x.wait_ms = 1500
 
 
 def p9_cancel():
@@ -535,9 +475,6 @@ def p9_cancel():
             (dx, box),
         )
     h.task_button("Cancel")
-
-
-p9_cancel.wait_ms = 1200
 
 
 def p9_check():
@@ -596,4 +533,5 @@ h.run(
         p9_check,
         cleanup,
     ],
+    paced_by="state",
 )

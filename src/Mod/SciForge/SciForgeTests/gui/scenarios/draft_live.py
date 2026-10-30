@@ -274,9 +274,6 @@ def box_open():
     open_draft(faces_where(plane_facing(0, -1, 0)))
 
 
-box_open.wait_ms = 1500
-
-
 def box_drag():
     drag(8.0, "box front")
 
@@ -288,9 +285,6 @@ def box_dragged():
     import math
 
     exact_ok("box front", sd.BOX - 40 * 100.0 * math.tan(math.radians(angle)) / 2.0)
-
-
-box_dragged.wait_ms = 1000
 
 
 # -- box, its four sides, typed ----------------------------------------------------------------------
@@ -305,9 +299,6 @@ def four_sides():
     p._picks_updated()
 
 
-four_sides.wait_ms = 1500
-
-
 def four_typed():
     p = panel()
     h.check("four sides picked", p is not None and len(p.names()) == 4, p and p.names())
@@ -316,9 +307,6 @@ def four_typed():
     sd.type_into(p.angle.widget, "4")
     # at once (the exact solid follows a moment later): the picture at 4 deg
     picture_matches("four sides, typed 4")
-
-
-four_typed.wait_ms = 1500
 
 
 def four_exact():
@@ -336,9 +324,6 @@ def negative_dragged():
     h.task_button("Cancel")
 
 
-negative_dragged.wait_ms = 1000
-
-
 # -- a body moved and turned -----------------------------------------------------------------------
 def moved_build():
     place = App.Placement(V(15, -10, 4), App.Rotation(V(0, 0, 1), 30))
@@ -349,9 +334,6 @@ def moved_open():
     open_draft(faces_where(sides))
 
 
-moved_open.wait_ms = 1500
-
-
 def moved_drag():
     drag(6.0, "moved body")
 
@@ -360,9 +342,6 @@ def moved_dragged():
     dragged("moved body", "up")
     exact_ok("moved body")
     h.task_button("Cancel")
-
-
-moved_dragged.wait_ms = 1000
 
 
 # -- Two Side, Symmetric, Parting Line ----------------------------------------------------------------
@@ -380,17 +359,11 @@ def sym_open():
     open_draft(faces_where(sides))
 
 
-sym_open.wait_ms = 1500
-
-
 def two_side():
     p = panel()
     if p is None:
         return
     sd.choose(p.sides, "Two Side")
-
-
-two_side.wait_ms = 1500
 
 
 def two_typed():
@@ -399,9 +372,6 @@ def two_typed():
         return
     sd.type_into(p.angle2.widget, "2")
     picture_matches("Two Side, angle 2 typed")
-
-
-two_typed.wait_ms = 1500
 
 
 def two_drag():
@@ -413,17 +383,11 @@ def two_dragged():
     exact_ok("Two Side")
 
 
-two_dragged.wait_ms = 1000
-
-
 def symmetric():
     p = panel()
     if p is None:
         return
     sd.choose(p.sides, "Symmetric")
-
-
-symmetric.wait_ms = 1500
 
 
 def sym_typed():
@@ -432,9 +396,6 @@ def sym_typed():
         return
     sd.type_into(p.angle.widget, "3")
     picture_matches("Symmetric, typed 3")
-
-
-sym_typed.wait_ms = 1500
 
 
 def sym_exact():
@@ -451,9 +412,6 @@ def parting():
     p._picks_updated()
 
 
-parting.wait_ms = 1500
-
-
 def parting_typed():
     p = panel()
     if p is None:
@@ -461,9 +419,6 @@ def parting_typed():
     h.check("Parting Line with the XY plane", p.type.currentData() == "parting" and p.parting)
     sd.type_into(p.angle.widget, "4")
     picture_matches("Parting Line One Side, typed 4")
-
-
-parting_typed.wait_ms = 1500
 
 
 def parting_exact():
@@ -502,9 +457,6 @@ def pocket_open():
     open_draft(walls, plane=(S["b"].body.Tip, top[0]))
 
 
-pocket_open.wait_ms = 1500
-
-
 def pocket_drag():
     drag(6.0, "pocket walls")
 
@@ -513,9 +465,6 @@ def pocket_dragged():
     dragged("pocket walls")
     exact_ok("pocket walls")
     h.task_button("Cancel")
-
-
-pocket_dragged.wait_ms = 1000
 
 
 # -- a curved wall ------------------------------------------------------------------------------------
@@ -533,9 +482,6 @@ def curved_open():
     open_draft(faces_where(lambda f: f.Surface.__class__.__name__ != "Plane"))
 
 
-curved_open.wait_ms = 2500
-
-
 def curved_drag():
     drag(4.0, "elliptical wall")
 
@@ -544,9 +490,6 @@ def curved_dragged():
     dragged("elliptical wall", "up")
     exact_ok("elliptical wall")
     h.task_button("Cancel")
-
-
-curved_dragged.wait_ms = 2000
 
 
 # -- edited from the timeline ---------------------------------------------------------------------------
@@ -585,9 +528,6 @@ def edit_open():
         sd.timeline_double_click(draft[0])
 
 
-edit_open.wait_ms = 2000
-
-
 def edit_drag():
     p = panel()
     h.check("editing the Draft", p is not None and p.editing)
@@ -603,9 +543,6 @@ def edit_dragged():
     h.task_button("OK")
 
 
-edit_dragged.wait_ms = 1000
-
-
 def edit_done():
     h.check("Draft closed", not Gui.Control.activeDialog())
     fillet = S["fillet"]
@@ -618,14 +555,8 @@ def steep_build():
     build("LiveSteep", parts.PART)
 
 
-steep_build.wait_ms = 1500
-
-
 def steep_open():
     open_draft(parts.outer_sides(S["b"].body.Tip.Shape))
-
-
-steep_open.wait_ms = 3000
 
 
 def steep_drag():
@@ -651,9 +582,6 @@ def steep_dragged():
     h.check("moved during the drag", len(rec.get("samples", [])) > 10)
     # dragged past it again: the picture stops where the angles are known not to work
     drag(25.0, "past the steepest angle again", hold_ms=300, check=False)
-
-
-steep_dragged.wait_ms = 2000
 
 
 def steep_again():
@@ -685,9 +613,6 @@ def steep_again():
         except Exception:
             pass
     h.task_button("OK")
-
-
-steep_again.wait_ms = 2000
 
 
 def steep_done():
@@ -744,4 +669,5 @@ h.run(
         steep_again,
         steep_done,
     ],
+    paced_by="state",
 )

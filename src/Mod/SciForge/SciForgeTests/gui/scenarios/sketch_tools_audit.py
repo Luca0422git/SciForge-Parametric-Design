@@ -134,9 +134,6 @@ def fit_enter():
     st.enter()
 
 
-fit_enter.wait_ms = 1000
-
-
 def fit_check():
     found = splines()
     h.check("Enter made the spline", len(found) == s["splines"] + 1, len(found))
@@ -193,9 +190,6 @@ def fit_esc():
     st.esc()
 
 
-fit_esc.wait_ms = 1000
-
-
 def fit_esc_check():
     h.check("the spline tool had placed its points", s["mid_count"] > s["count"], s["mid_count"])
     h.check(
@@ -241,9 +235,6 @@ def cp_clicks():
 def cp_ok():
     h.click(st.g(V(65, -55, 0)), button=QtCore.Qt.RightButton)
     si.marking_choose("OK")
-
-
-cp_ok.wait_ms = 1200
 
 
 def cp_check():
@@ -296,9 +287,6 @@ def _click_trim_row():
     menu.close()
 
 
-marking_trim.wait_ms = 1200
-
-
 def marking_trim_check():
     h.check(
         "Trim in the right-click menu runs SciForge's Trim",
@@ -345,4 +333,5 @@ h.run(
             finish,
         ]
     ),
+    paced_by="state",
 )

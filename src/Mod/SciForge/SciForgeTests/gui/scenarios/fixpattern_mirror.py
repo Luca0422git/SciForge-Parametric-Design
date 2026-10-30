@@ -12,4 +12,4 @@ save and reopen.
 from SciForgeTests.gui import fixpattern_steps as f
 from SciForgeTests.gui import harness as h
 
-h.run("fixpattern_mirror", f.main_steps("mirror", "FixPatternMirror"))
+h.run("fixpattern_mirror", f.main_steps("mirror", "FixPatternMirror"), paced_by="state")

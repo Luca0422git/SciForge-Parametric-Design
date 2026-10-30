@@ -52,9 +52,6 @@ def circle():
     pl.click_on_plane(V(20, 0, 0))
 
 
-circle.wait_ms = 1500
-
-
 def built():
     p = panel()
     h.check("inner 40, On Center", p is not None and pi.near(p.inner.value(), 40.0))
@@ -68,9 +65,6 @@ def drag_far():
     h.check("the Torus Diameter arrow", handle is not None, p and list(p.handles))
     if handle is not None:
         pi.drag_handle(handle, 80.0, steps=30)
-
-
-drag_far.wait_ms = 2000
 
 
 def dragged_far():
@@ -101,9 +95,6 @@ def dragged_far():
         pi.drag_handle(handle, 10.0, steps=20)
 
 
-dragged_far.wait_ms = 2000
-
-
 def dragged_back():
     p = panel()
     d = p.options["torus_diameter"] if p else 0
@@ -116,9 +107,6 @@ def dragged_back():
     h.task_button("OK")
 
 
-dragged_back.wait_ms = 1500
-
-
 def made():
     h.check("OK closed it", pi.no_dialog())
     v = pi.total_volume()
@@ -128,4 +116,5 @@ def made():
 h.run(
     "limits_primitives",
     [new_design, xy, centre, circle, built, drag_far, dragged_far, dragged_back, made],
+    paced_by="state",
 )

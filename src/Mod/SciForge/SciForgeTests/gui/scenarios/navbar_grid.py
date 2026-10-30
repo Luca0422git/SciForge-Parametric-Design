@@ -63,9 +63,6 @@ def zoom_in():
     h.press(QtCore.Qt.Key_Escape)
 
 
-zoom_in.wait_ms = 900
-
-
 def finer():
     step = grid().current_step()
     h.check("zoomed in: a finer grid", step < st["step"], (st["step"], step))
@@ -76,9 +73,6 @@ def finer():
 def locked():
     h.check("Layout Grid Lock ticked", n.entry_state(GS, "Layout Grid Lock") == (True, True))
     h.fit()
-
-
-locked.wait_ms = 900
 
 
 def lock_holds():
@@ -327,4 +321,5 @@ h.run(
         grid_off,
         gone,
     ],
+    paced_by="state",
 )
