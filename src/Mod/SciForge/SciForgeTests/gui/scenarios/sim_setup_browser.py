@@ -375,4 +375,5 @@ h.run(
         s.wait_solved("wait_solved_j"),
         j_check,
     ],
+    paced_by="state",
 )

@@ -203,4 +203,5 @@ h.run(
         dropped,
         end,
     ],
+    paced_by="state",
 )

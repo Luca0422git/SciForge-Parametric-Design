@@ -176,9 +176,6 @@ def d_turn():
     h.ribbon("Structural Loads")
 
 
-d_turn.wait_ms = 1500  # (the view turns with an animation)
-
-
 def d_second():
     other = state.get("other")
     if not h.check("the other end can be clicked now", other is not None):
@@ -305,4 +302,5 @@ h.run(
         e_rows,
         e_shown,
     ],
+    paced_by="state",
 )

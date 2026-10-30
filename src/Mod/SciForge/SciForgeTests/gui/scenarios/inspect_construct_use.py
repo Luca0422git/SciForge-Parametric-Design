@@ -379,4 +379,5 @@ h.run(
         edit_redone,
         the_end,
     ],
+    paced_by="state",
 )

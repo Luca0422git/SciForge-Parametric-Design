@@ -205,7 +205,6 @@ def drag_into_part():
 
 # A pocket is rebuilt on the way: on a busy machine the drag's moves wait for the
 # rebuilds (2.3 s for the whole drag on a shared 4-CPU box), so the step has room.
-drag_into_part.wait_ms = 40 * 20 + 300 + 2500
 
 
 def dragged_red():
@@ -368,9 +367,6 @@ def pp_zero_enter_field():
     type_enter(ppanel().field.widget, "0")
 
 
-pp_zero_enter_field.wait_ms = 1000  # well past the preview's next rebuild
-
-
 def zero_still_said(where):
     p = ppanel()
     h.check("R5: 0 + Enter in %s keeps Press Pull open" % where, p is not None)
@@ -396,9 +392,6 @@ def pp_zero_enter_box():
     boxes = a.value_boxes()
     if h.check("the value box is there", len(boxes) == 1, len(boxes)):
         a.type_in_box(boxes[0], "0", enter=True)
-
-
-pp_zero_enter_box.wait_ms = 1000
 
 
 def pp_zero_said_box():
@@ -430,9 +423,6 @@ def pp_drag_down():
 
     s["pp_drag"] = drag = a.HeldDrag(start, end, moves=40, every_ms=20, hold_ms=300, sample=sample)
     drag.run()
-
-
-pp_drag_down.wait_ms = 40 * 20 + 300 + 2500  # as drag_into_part
 
 
 def pp_dragged():
@@ -469,9 +459,6 @@ def pp_type_in_box():
     if not h.check("the value box is there", len(boxes) == 1, len(boxes)):
         return
     a.type_in_box(boxes[0], "5", enter=True)
-
-
-pp_type_in_box.wait_ms = 1200
 
 
 def pp_done():
@@ -530,4 +517,5 @@ h.run(
         pp_type_in_box,
         pp_done,
     ],
+    paced_by="state",
 )

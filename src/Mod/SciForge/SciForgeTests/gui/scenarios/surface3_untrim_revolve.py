@@ -461,4 +461,5 @@ h.run(
         reopened_reads_back,
         reopened_cancelled,
     ],
+    paced_by="state",
 )

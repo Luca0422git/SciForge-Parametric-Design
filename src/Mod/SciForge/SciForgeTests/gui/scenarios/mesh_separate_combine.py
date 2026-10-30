@@ -66,9 +66,6 @@ def b_open():
     s.menu("MODIFY", "Separate")
 
 
-b_open.wait_ms = 2000
-
-
 def b_dialog():
     p = m.panel()
     h.check("Separate dialog", p is not None and p.title == "Separate", p)
@@ -100,9 +97,6 @@ def b_dialog():
     h.task_button("OK")
 
 
-b_dialog.wait_ms = 1500
-
-
 def b_done():
     h.check("dialog closed", m.panel() is None)
     labels = sorted(x.Label for x in m.bodies())
@@ -124,9 +118,6 @@ def c_undo():
     i.undo()
 
 
-c_undo.wait_ms = 1500
-
-
 def c_check_undo():
     h.check(
         "Ctrl+Z: one body again",
@@ -138,9 +129,6 @@ def c_check_undo():
 
 def c_redo():
     i.redo()
-
-
-c_redo.wait_ms = 1500
 
 
 def c_check_redo():
@@ -159,9 +147,6 @@ def d_open():
     s.menu("MODIFY", "Combine")
 
 
-d_open.wait_ms = 1500
-
-
 def d_waits():
     p = m.panel()
     h.check("Combine dialog", p is not None and p.title == "Combine", p)
@@ -171,9 +156,6 @@ def d_waits():
     h.check("Operation Join", p.operation.currentText() == "Join")
     h.check("Keep Tools off", not p.keep.isChecked())
     m.click_body(m.body("two_boxes"))
-
-
-d_waits.wait_ms = 1500
 
 
 def d_target():
@@ -189,9 +171,6 @@ def d_target():
     h.click(V(14.0, 5.0, 8.0))  # the end of the bar outside the cube
 
 
-d_target.wait_ms = 2500
-
-
 def d_join():
     p = m.panel()
     h.check("the bar is the tool", [t.Label for t in p.tools] == ["bar"], p.tools)
@@ -203,9 +182,6 @@ def d_join():
     m.choose(p.operation, "Cut")
 
 
-d_join.wait_ms = 2500
-
-
 def d_cut():
     step = m.steps("MeshCombine")[0]
     h.check("Cut: 820 mm3", near(m.volume(step), 820.0, 2.0), m.volume(step))
@@ -213,16 +189,10 @@ def d_cut():
     m.choose(m.panel().operation, "Intersect")
 
 
-d_cut.wait_ms = 2500
-
-
 def d_intersect():
     step = m.steps("MeshCombine")[0]
     h.check("Intersect: 180 mm3", near(m.volume(step), 180.0, 2.0), m.volume(step))
     m.choose(m.panel().operation, "Merge")
-
-
-d_intersect.wait_ms = 2500
 
 
 def d_merge():
@@ -232,14 +202,8 @@ def d_merge():
     m.choose(m.panel().operation, "Join")
 
 
-d_merge.wait_ms = 2500
-
-
 def d_ok():
     h.task_button("OK")
-
-
-d_ok.wait_ms = 1500
 
 
 def d_done():
@@ -271,14 +235,8 @@ def e_open():
     s.menu("MODIFY", "Combine")
 
 
-e_open.wait_ms = 1500
-
-
 def e_target():
     s.click_browser_row("two_boxes (2)")
-
-
-e_target.wait_ms = 1500
 
 
 def e_tool():
@@ -291,9 +249,6 @@ def e_tool():
     s.click_browser_row("sheet")
 
 
-e_tool.wait_ms = 2500
-
-
 def e_refused():
     p = m.panel()
     text = p.message.text() if p else ""
@@ -301,16 +256,10 @@ def e_refused():
     h.task_button("OK")
 
 
-e_refused.wait_ms = 1200
-
-
 def e_waits():
     p = m.panel()
     h.check("OK waits", p is not None and p.title == "Combine", p)
     h.task_button("Cancel")
-
-
-e_waits.wait_ms = 1500
 
 
 def e_check():
@@ -330,9 +279,6 @@ def f_edit():
     s.timeline_double_click(m.steps("MeshCombine")[0])
 
 
-f_edit.wait_ms = 2500
-
-
 def f_keep():
     p = m.panel()
     h.check("Combine edit dialog", p is not None and p.title == "Combine", p)
@@ -342,16 +288,10 @@ def f_keep():
     m.tick(p.keep, True)
 
 
-f_keep.wait_ms = 2500
-
-
 def f_ok():
     bar = m.doc().getObject(state["bar"])
     h.check("Keep Tools: the bar shown", bar is not None and m.shown(bar))
     h.task_button("OK")
-
-
-f_ok.wait_ms = 1500
 
 
 def f_check():
@@ -377,4 +317,5 @@ h.run(
     + [d_open, d_waits, d_target, d_join, d_cut, d_intersect, d_merge, d_ok, d_done]
     + m.insert_file(sheet_file())
     + [e_open, e_target, e_tool, e_refused, e_waits, e_check, f_edit, f_keep, f_ok, f_check],
+    paced_by="state",
 )

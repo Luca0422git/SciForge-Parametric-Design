@@ -920,9 +920,6 @@ def g_box():
     si.type_text("4")
 
 
-g_box.wait_ms = 700
-
-
 def g_rounded():
     arcs = [g for g in s["sk"].Geometry if g.TypeId == "Part::GeomArcOfCircle"]
     h.check("G: the corner is rounded", len(arcs) == 1, s["sk"].Geometry)
@@ -1315,4 +1312,5 @@ h.run(
             l_fixed,
         ]
     ),
+    paced_by="state",
 )

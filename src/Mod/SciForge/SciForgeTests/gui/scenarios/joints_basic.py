@@ -111,9 +111,6 @@ def a_joined():
     h.shot("A-joined")
 
 
-a_joined.wait_ms = 2600  # let the motion preview play out (1.8 s) and come back
-
-
 def a_preview_done():
     p = j.panel()
     h.check("the preview animation ran (rigid: none)", not state["anim"], state["anim"])
@@ -125,9 +122,6 @@ def a_revolute():
     p = j.panel()
     j.click_tab(p, "Motion")
     j.choose_type(p, "Revolute")
-
-
-a_revolute.wait_ms = 2600  # the new motion plays once (Fusion) and comes back
 
 
 def a_revolute_set():
@@ -301,9 +295,6 @@ def c_moved():
     h.check("the block moved", j.block().Shape.BoundBox.XMin != 10, j.block().Shape.BoundBox)
 
 
-c_moved.wait_ms = 2600
-
-
 def c_cancel():
     j.cancel()
 
@@ -404,4 +395,5 @@ h.run(
         c_j_refused,
         c_close_second,
     ],
+    paced_by="state",
 )

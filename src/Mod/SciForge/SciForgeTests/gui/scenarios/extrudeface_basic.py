@@ -315,4 +315,5 @@ h.run(
         p6_block,
         p6_done,
     ],
+    paced_by="state",
 )

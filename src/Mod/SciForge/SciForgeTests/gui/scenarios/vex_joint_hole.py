@@ -72,9 +72,6 @@ def setup():
     h.check("the screw stands upside down", abs(box.ZMax - 12.7) < 1e-3, box)
 
 
-setup.wait_ms = 1500
-
-
 # -- A: the hover ----------------------------------------------------------------------------------
 def a_press_j():
     h.click_empty()
@@ -178,9 +175,6 @@ def b_locked():
     h.click(underside_point(3.43), modifiers=QtCore.Qt.ControlModifier)
 
 
-b_locked.wait_ms = 500
-
-
 def b_taken():
     vx.ctrl(False)
     p = vx.joint_panel()
@@ -232,9 +226,6 @@ def d_hole():
     h.click(web_point(3, 1))
 
 
-d_hole.wait_ms = 1200
-
-
 def d_moved():
     box = vx.bbox(screw())
     c = vx.hole_centre(3, 1)
@@ -277,9 +268,6 @@ def e_hole():
     vx.hover(web_point(*HOLE))
     vx.lit(hover(), "component 2: next to the hole", "loop", vx.hole_centre(*HOLE))
     h.click(web_point(*HOLE))
-
-
-e_hole.wait_ms = 1500
 
 
 def in_hole(where):
@@ -353,9 +341,6 @@ def f_edit_channel():
     doc.recompute()
 
 
-f_edit_channel.wait_ms = 2000
-
-
 def f_still_in_hole():
     body = vx.body_of(channel())
     h.check(
@@ -370,9 +355,6 @@ def f_still_in_hole():
     in_hole("after the edit")
 
 
-f_still_in_hole.wait_ms = 1000
-
-
 # -- G: save, reopen -------------------------------------------------------------------------------
 def g_save():
     S["path"] = vx.save_as("vex_joint_hole")
@@ -384,9 +366,6 @@ def g_save():
 def g_reopen():
     App.openDocument(S["path"])
     vx.fit()
-
-
-g_reopen.wait_ms = 2500
 
 
 def g_reopened():
@@ -440,4 +419,5 @@ h.run(
         g_reopen,
         g_reopened,
     ],
+    paced_by="state",
 )

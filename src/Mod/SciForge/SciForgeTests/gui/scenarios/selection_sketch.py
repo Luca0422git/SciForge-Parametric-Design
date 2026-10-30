@@ -25,8 +25,7 @@ RECT = (10, 10, 30, 20)  # sketch coordinates on the top face
 st = {}
 
 
-def step(fn, wait_ms):
-    fn.wait_ms = wait_ms
+def step(fn, wait_ms=None):
     return fn
 
 
@@ -175,7 +174,7 @@ steps = b.box_steps("SelSketch") + [
     a_draw,
     a_drag_in_sketch,
     a_check,
-    step(b_hold_on_line, 1500),
+    step(b_hold_on_line),
     b_no_list,
     c_keys,
     c_check,
@@ -185,4 +184,4 @@ steps = b.box_steps("SelSketch") + [
     d_curves_off_check,
 ]
 
-h.run("selection_sketch", steps)
+h.run("selection_sketch", steps, paced_by="state")

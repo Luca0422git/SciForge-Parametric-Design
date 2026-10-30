@@ -265,9 +265,6 @@ def p4_too_big():
     h.shot("p4-too-big")
 
 
-p4_too_big.wait_ms = 1500  # the dialog works out the largest radius that fits
-
-
 def p4_full_message():
     p = b.blend_panel()
     if p is None:
@@ -679,4 +676,5 @@ h.run(
         p7_edit_ok,
         p7_edited,
     ],
+    paced_by="state",
 )

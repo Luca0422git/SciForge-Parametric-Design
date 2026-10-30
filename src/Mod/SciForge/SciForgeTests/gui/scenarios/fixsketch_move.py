@@ -221,4 +221,4 @@ steps += fs.circle("D", V(85, 15, 15), 2, s)
 steps += fs.finish_and_extrude("D", 3, s)
 steps += [original_kept]
 
-h.run("fixsketch_move", steps)
+h.run("fixsketch_move", steps, paced_by="state")

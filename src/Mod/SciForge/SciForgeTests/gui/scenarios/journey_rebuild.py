@@ -27,4 +27,5 @@ h.run(
     + j.finish_steps()
     + j.edit_steps()
     + [j.finish_scenario("the rebuild journey")],
+    paced_by="state",
 )

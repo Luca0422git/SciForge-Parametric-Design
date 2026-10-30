@@ -63,9 +63,6 @@ def b_open():
     h.ribbon("Tessellate")
 
 
-b_open.wait_ms = 1500
-
-
 def b_waits():
     p = m.panel()
     h.check("Tessellate dialog", p is not None and p.title == "Tessellate", p)
@@ -75,9 +72,6 @@ def b_waits():
     h.check("Refinement Medium", p.refinement.currentText() == "Medium")
     h.check("Preview off", not p.preview.isChecked())
     h.click(V(20.0, 15.0, 10.0))
-
-
-b_waits.wait_ms = 1500
 
 
 def b_taken():
@@ -91,9 +85,6 @@ def b_taken():
     m.tick(p.preview, True)
 
 
-b_taken.wait_ms = 2500
-
-
 def b_preview():
     p = m.panel()
     step = m.steps("Tessellate")[0]
@@ -103,9 +94,6 @@ def b_preview():
     h.check("closed", m.closed(step))
     h.check("12000 mm3", near(m.volume(step), 12000.0), m.volume(step))
     m.type_field(p.max_edge.widget, "5")
-
-
-b_preview.wait_ms = 3000
 
 
 def b_custom():
@@ -124,9 +112,6 @@ def b_custom():
     h.check("still 6 face groups", groups_of(step) == 6, groups_of(step))
     state["fine"] = m.facets(step)
     h.task_button("OK")
-
-
-b_custom.wait_ms = 1500
 
 
 def b_done():
@@ -171,9 +156,6 @@ def c_undo():
     i.undo()
 
 
-c_undo.wait_ms = 1500
-
-
 def c_check_undo():
     h.check("Ctrl+Z: no Tessellate", not m.steps("Tessellate"))
     solid = m.doc().getObject(state["solid"])
@@ -182,9 +164,6 @@ def c_check_undo():
 
 def c_redo():
     i.redo()
-
-
-c_redo.wait_ms = 1500
 
 
 def c_check_redo():
@@ -213,9 +192,6 @@ def d_flagged():
     s.menu("MODIFY", "Reverse Normal")
 
 
-d_flagged.wait_ms = 2000
-
-
 def d_dialog():
     p = m.panel()
     h.check("Reverse Normal dialog", p is not None and p.title == "Reverse Normal", p)
@@ -233,9 +209,6 @@ def d_dialog():
     )
     h.check("closed", m.closed(step))
     h.task_button("OK")
-
-
-d_dialog.wait_ms = 1500
 
 
 def d_done():
@@ -260,9 +233,6 @@ def e_open():
     h.ribbon("Generate Face Groups")
 
 
-e_open.wait_ms = 1500
-
-
 def e_dialog():
     p = m.panel()
     h.check("Generate Face Groups dialog", p is not None and p.title == "Generate Face Groups", p)
@@ -273,9 +243,6 @@ def e_dialog():
     m.tick(p.preview, True)
 
 
-e_dialog.wait_ms = 2000
-
-
 def e_check():
     step = m.steps("MeshFaceGroups")[0]
     h.check("6 face groups", groups_of(step) == 6, groups_of(step))
@@ -283,9 +250,6 @@ def e_check():
         "the info line says so", "6 face groups" in m.panel().info.text(), m.panel().info.text()
     )
     h.task_button("OK")
-
-
-e_check.wait_ms = 1500
 
 
 def e_done():
@@ -304,9 +268,6 @@ def f_open():
     s.menu("MODIFY", "Reverse Normal")
 
 
-f_open.wait_ms = 1500
-
-
 def f_waits():
     p = m.panel()
     h.check("Reverse Normal dialog", p is not None and p.title == "Reverse Normal", p)
@@ -314,9 +275,6 @@ def f_waits():
         return
     h.check("the Face Groups box waits", p.active == "groups", p.active)
     m.click_body(m.steps("MeshReverseNormal")[-1])
-
-
-f_waits.wait_ms = 2000
 
 
 def f_check():
@@ -333,9 +291,6 @@ def f_check():
     h.check("not closed any more", not m.closed(step), m.analysis(step))
     h.check("the dialog says so", "flipped" in p.info.text(), p.info.text())
     h.task_button("Cancel")
-
-
-f_check.wait_ms = 1500
 
 
 def f_done():
@@ -355,18 +310,12 @@ def g_open():
     s.menu("MODIFY", "Separate")
 
 
-g_open.wait_ms = 1500
-
-
 def g_type():
     p = m.panel()
     h.check("Separate dialog", p is not None and p.title == "Separate", p)
     if p is None:
         return
     m.choose(p.separate_type, "Select Face Groups")
-
-
-g_type.wait_ms = 1500
 
 
 def g_click():
@@ -376,9 +325,6 @@ def g_click():
         "the dialog says to pick them", "Pick the face groups" in p.message.text(), p.message.text()
     )
     m.click_body(m.steps("MeshSeparate")[0].Source)
-
-
-g_click.wait_ms = 2500
 
 
 def g_check():
@@ -397,9 +343,6 @@ def g_check():
             [m.facets(x) for x in pieces],
         )
     h.task_button("OK")
-
-
-g_check.wait_ms = 1500
 
 
 def g_done():
@@ -424,4 +367,5 @@ h.run(
     + m.insert_file(inside_out_file())
     + [d_flagged, d_dialog, d_done, e_open, e_dialog, e_check, e_done]
     + [f_open, f_waits, f_check, f_done, g_open, g_type, g_click, g_check, g_done],
+    paced_by="state",
 )

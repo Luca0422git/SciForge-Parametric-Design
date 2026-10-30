@@ -257,9 +257,6 @@ def p22_undo_twice():
     t.ctrl("z")
 
 
-p22_undo_twice.wait_ms = 1200
-
-
 def p22_undone():
     titles = t.titles()
     h.check(
@@ -498,4 +495,4 @@ STEPS = (
     + [p24_in_view, p24_wheel, p24_scrolled, p24_rolled, p24_end]
 )
 
-h.run("timeline_browser_qa4", t.watched(STEPS))
+h.run("timeline_browser_qa4", t.watched(STEPS), paced_by="state")

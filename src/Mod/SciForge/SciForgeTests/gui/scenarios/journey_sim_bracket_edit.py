@@ -28,4 +28,5 @@ h.run(
     + j.probe_steps("p2")
     + [j.step(j.ratio_check, "ratio_check")]
     + j.reopen_steps(folder),
+    paced_by="state",
 )

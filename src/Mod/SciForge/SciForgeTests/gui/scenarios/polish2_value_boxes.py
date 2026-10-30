@@ -121,9 +121,6 @@ def a_no_box_yet():
         hover(triad.center + V(1, 0, 0) * (0.6 * triad.size))
 
 
-a_no_box_yet.wait_ms = 500
-
-
 def a_x_box():
     p = panel()
     triad = p.triad
@@ -172,9 +169,6 @@ def a_typed():
         "A the body at x 25..65", close(bb.XMin, 25.0) and close(bb.XMax, 65.0), (bb.XMin, bb.XMax)
     )
     hover(p.triad.center + V(0, 0, 1) * (0.6 * p.triad.size))
-
-
-a_typed.wait_ms = 500
 
 
 # -- B: the Z arrow, digits typed over the view ----
@@ -234,9 +228,6 @@ def b_moved():
         "B the body at z 12..22", close(bb.ZMin, 12.0) and close(bb.ZMax, 22.0), (bb.ZMin, bb.ZMax)
     )
     hover(p.triad.ball_point(2))
-
-
-b_moved.wait_ms = 500
 
 
 # -- C: the Z turn handle ----
@@ -413,18 +404,12 @@ def f_insert():
     h.ribbon("Insert Mesh")
 
 
-f_insert.wait_ms = 800
-
-
 def f_hover():
     p = ins.panel()
     triad = getattr(p, "triad", None)
     h.check("F Insert Mesh with its manipulator", triad is not None, p)
     if triad is not None:
         hover(triad.center + V(0, 0, 1) * (0.6 * triad.size))
-
-
-f_hover.wait_ms = 500
 
 
 def f_box():
@@ -495,4 +480,4 @@ STEPS = sd.box_steps("Polish2Boxes") + [
     f_cancelled,
 ]
 
-h.run("polish2_value_boxes", STEPS)
+h.run("polish2_value_boxes", STEPS, paced_by="state")

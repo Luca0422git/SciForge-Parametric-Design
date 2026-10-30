@@ -238,9 +238,6 @@ def p6_left_out():
     h.task_button("OK")
 
 
-p6_left_out.wait_ms = 1200
-
-
 def p6_after():
     pat = the_pattern()
     h.check(
@@ -266,9 +263,6 @@ def p6_taller():
 
 def p6_taller_ok():
     h.task_button("OK")
-
-
-p6_taller_ok.wait_ms = 1500
 
 
 def p6_boss_rides_up():
@@ -307,9 +301,6 @@ def p7_ctrl_s():
     h.press(QtCore.Qt.Key_S, QtCore.Qt.ControlModifier)
 
 
-p7_ctrl_s.wait_ms = 2500
-
-
 def p7_describe():
     """Fusion's Save asks for a version description on a saved design; Enter skips it."""
     h.check("P7 the Save dialog asks for a version description", vi.version_dialog() is not None)
@@ -326,9 +317,6 @@ def p7_saved():
     App.openDocument(s["path"])
     doc().recompute()
     h.fit()
-
-
-p7_saved.wait_ms = 2500
 
 
 def p7_reopened():
@@ -351,9 +339,6 @@ def p7_edit_again():
 def p7_untick_ok():
     h.check("every copy back: 8, 16, 24", xs() == [8, 16, 24], centres())
     h.task_button("OK")
-
-
-p7_untick_ok.wait_ms = 1200
 
 
 def p7_native_again():
@@ -435,4 +420,5 @@ h.run(
         p7_undone,
         p7_redone,
     ],
+    paced_by="state",
 )

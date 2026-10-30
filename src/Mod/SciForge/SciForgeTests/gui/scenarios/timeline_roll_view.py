@@ -61,4 +61,4 @@ def click_top():
     )
 
 
-h.run("timeline_roll_view", [setup, roll_back, rolled, click_top])
+h.run("timeline_roll_view", [setup, roll_back, rolled, click_top], paced_by="state")

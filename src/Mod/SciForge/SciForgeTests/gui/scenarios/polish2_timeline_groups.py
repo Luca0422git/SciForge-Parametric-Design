@@ -425,4 +425,4 @@ STEPS = b.box_steps("Polish2Groups") + [
     p7_reopened,
 ]
 
-h.run("polish2_timeline_groups", STEPS)
+h.run("polish2_timeline_groups", STEPS, paced_by="state")

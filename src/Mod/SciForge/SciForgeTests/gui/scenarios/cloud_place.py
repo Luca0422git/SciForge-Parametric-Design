@@ -188,9 +188,6 @@ def model_and_save():
     ctrl_s()
 
 
-model_and_save.wait_ms = 1500
-
-
 def save_in_dropbox():
     d = vi.save_dialog()
     h.check("the Save dialog opened", d is not None)
@@ -213,9 +210,6 @@ def save_in_dropbox():
     )
     vi.fill_save_dialog(name="Bracket")
     vi.click_save()
-
-
-save_in_dropbox.wait_ms = 2000
 
 
 def saved_in_dropbox():
@@ -261,9 +255,6 @@ def changed_elsewhere():
     ctrl_s()
 
 
-changed_elsewhere.wait_ms = 1500
-
-
 def asks_keep_both():
     d = dialog("SciForgeChangedDialog")
     h.check("saving asks: changed on another computer", d is not None)
@@ -273,9 +264,6 @@ def asks_keep_both():
     h.check("Keep both is the default", keep is not None and keep.isDefault())
     h.shot("changed")
     wi.click(keep)
-
-
-asks_keep_both.wait_ms = 1500
 
 
 def both_kept():
@@ -322,9 +310,6 @@ def conflict_tile():
     )
 
 
-conflict_tile.wait_ms = 2000
-
-
 def compare_open():
     d = vi.compare_dialog()
     h.check("Compare opened the comparison", d is not None)
@@ -344,9 +329,6 @@ def note_from_desktop():
         json.dump(locations_core.make_note("DESKTOP-AB12C", "luca", time.time() - 600), handle)
     viewport, pos = tile(s["copy"])
     wi.double_click(viewport, pos)
-
-
-note_from_desktop.wait_ms = 2000
 
 
 def asks_open_elsewhere():
@@ -373,9 +355,6 @@ def read_only_save():
     docs[0].getObject("Box").Length = 30
     docs[0].recompute()
     ctrl_s()
-
-
-read_only_save.wait_ms = 1500
 
 
 def nothing_saved():
@@ -469,4 +448,5 @@ h.run(
         disconnect,
         disconnected,
     ],
+    paced_by="state",
 )

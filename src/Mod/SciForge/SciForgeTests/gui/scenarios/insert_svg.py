@@ -73,9 +73,6 @@ def a_click_xy():
     pl.click_on_plane(i.XY_CLICK)
 
 
-a_click_xy.wait_ms = 1200
-
-
 def a_check():
     sk = sketch()
     h.check("a sketch", sk is not None)
@@ -151,9 +148,6 @@ def c_ok():
     h.task_button("OK")
 
 
-c_ok.wait_ms = 1200
-
-
 def c_check():
     h.check("dialog closed", i.panel() is None)
     sk = sketch()
@@ -183,9 +177,6 @@ def d_distance():
         from PySide6 import QtTest
 
         QtTest.QTest.keyClick(field, QtCore.Qt.Key_Tab)
-
-
-d_distance.wait_ms = 1200
 
 
 def d_ok():
@@ -235,9 +226,6 @@ def f_insert_in_sketch():
     i.menu("INSERT", "Insert SVG")
 
 
-f_insert_in_sketch.wait_ms = 1200
-
-
 def f_check_in_sketch():
     p = i.panel()
     doc = App.ActiveDocument
@@ -256,9 +244,6 @@ def f_check_in_sketch():
 
 def f_ok():
     h.task_button("OK")
-
-
-f_ok.wait_ms = 1200
 
 
 def f_check_ok():
@@ -311,4 +296,5 @@ h.run(
         f_check_ok,
         f_finish,
     ],
+    paced_by="state",
 )

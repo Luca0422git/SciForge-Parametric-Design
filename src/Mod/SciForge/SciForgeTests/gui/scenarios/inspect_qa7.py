@@ -276,9 +276,6 @@ def s_edit_drag():
     h.drag(s.screen(grab), s.screen(V(25, 10, 3)), steps=16)
 
 
-s_edit_drag.wait_ms = 1000
-
-
 def s_dragged():
     p = section_panel()
     if p is None:
@@ -488,4 +485,4 @@ STEPS = (
     + [i_kept, i_edit_extrude, i_extrude_ok, i_follows, i_undone]
 )
 
-h.run("inspect_qa7", ti.watched(STEPS))
+h.run("inspect_qa7", ti.watched(STEPS), paced_by="state")

@@ -610,4 +610,5 @@ h.run(
         p9_edit_ok,
         p9_done,
     ],
+    paced_by="state",
 )

@@ -42,9 +42,6 @@ def a_export():
     i.menu("MAKE", "Export Everything")
 
 
-a_export.wait_ms = 2500
-
-
 def a_check():
     folder = os.path.join(OUT, "Bracket-export")
     found = listing(folder)
@@ -97,9 +94,6 @@ def b_export():
     i.menu("MAKE", "Export Everything")
 
 
-b_export.wait_ms = 2500
-
-
 def b_check():
     label = App.ActiveDocument.Label
     folder = os.path.join(state["where"], label + "-export")
@@ -123,9 +117,6 @@ def c_empty():
     i.menu("MAKE", "Export Everything")
 
 
-c_empty.wait_ms = 1500
-
-
 def c_check():
     h.check("empty design: no folder opened", not i.opened_folders, i.opened_folders)
     from sciforge import RECENT
@@ -143,4 +134,5 @@ h.run(
     + s.box_steps("box2", (0, 0, 40, 30), 10, i.XY_CLICK)
     + [b_unsaved, b_export, b_check]
     + [i.new_design("Empty"), c_empty, c_check],
+    paced_by="state",
 )

@@ -193,4 +193,5 @@ h.run(
         press_pull_ok,
         end,
     ],
+    paced_by="state",
 )

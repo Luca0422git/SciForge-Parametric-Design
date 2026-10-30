@@ -56,9 +56,6 @@ def open_sketch():
     sketch_ui.edit_sketch(s["sk"])
 
 
-open_sketch.wait_ms = 1500
-
-
 def projected():
     return [o for o in App.ActiveDocument.Objects if o.Name.startswith("ProjectedCurves")]
 
@@ -155,9 +152,6 @@ def pt_curve_check():
     press_button("SciForgeProjectOK")
 
 
-pt_curve_check.wait_ms = 800
-
-
 def pt_check():
     found = projected()
     h.check("OK made Projected Curves", len(found) == s["before"] + 1, [o.Label for o in found])
@@ -209,9 +203,6 @@ def av_curve():
 
 def av_ok():
     st.enter()  # OK
-
-
-av_ok.wait_ms = 800
 
 
 def av_check():
@@ -269,4 +260,5 @@ h.run(
             finish,
         ]
     ),
+    paced_by="state",
 )

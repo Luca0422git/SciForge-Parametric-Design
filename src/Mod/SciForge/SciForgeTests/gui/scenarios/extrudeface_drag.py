@@ -87,9 +87,6 @@ def d1_drag():
     held_drag("d1", "distance", TOWER_TOP, "d1_samples")
 
 
-d1_drag.wait_ms = 30 * 20 + 300 + 1500
-
-
 def d1_checks():
     drag = s.get("d1")
     h.check(
@@ -151,9 +148,6 @@ def d3_drag():
     held_drag("d3", "distance", QtCore.QPoint(start.x() + 4, max(start.y() - 70, 20)), "d3_samples")
 
 
-d3_drag.wait_ms = 30 * 20 + 300 + 1500
-
-
 def d3_checks():
     held = last_held("d3_samples")
     h.check("D3 the arrow was held", held is not None, s.get("d3_samples", [])[:3])
@@ -174,9 +168,6 @@ def d3_checks():
 # -- D4: a corner -----------------------------------------------------------------------------
 def d4_drag():
     held_drag("d4", "distance", CORNER, "d4_samples")
-
-
-d4_drag.wait_ms = 30 * 20 + 300 + 2000
 
 
 def d4_checks():
@@ -218,9 +209,6 @@ def d5_drag():
     held_drag("d5", "distance2", CORNER, "d5_samples")
 
 
-d5_drag.wait_ms = 30 * 20 + 300 + 2000
-
-
 def d5_checks():
     held = last_held("d5_samples")
     h.check("D5 side two's arrow was held", held is not None, s.get("d5_samples", [])[:3])
@@ -258,9 +246,6 @@ def d6_drag():
         "D6 Extrude on the new square", p is not None and len(p.profiles) == 1, p and p.profiles
     )
     held_drag("d6", "distance", TOWER_TOP, "d6_samples")
-
-
-d6_drag.wait_ms = 30 * 20 + 300 + 1500
 
 
 def d6_escape():
@@ -305,4 +290,5 @@ h.run(
         d6_escape,
         d6_done,
     ],
+    paced_by="state",
 )

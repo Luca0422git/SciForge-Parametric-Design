@@ -204,9 +204,6 @@ def too_steep_reported():
     h.shot("6-too-steep")
 
 
-too_steep_reported.wait_ms = 4000
-
-
 def ok_refused():
     p = sd.draft_panel()
     if p:
@@ -427,4 +424,5 @@ h.run(
         second_enter,
         after_second,
     ],
+    paced_by="state",
 )

@@ -12,4 +12,4 @@ save and reopen.
 from SciForgeTests.gui import fixpattern_steps as f
 from SciForgeTests.gui import harness as h
 
-h.run("fixpattern_circ", f.main_steps("circular", "FixPatternCirc"))
+h.run("fixpattern_circ", f.main_steps("circular", "FixPatternCirc"), paced_by="state")

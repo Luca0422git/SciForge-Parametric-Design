@@ -123,18 +123,12 @@ def m1_circle():
     pl.click_on_plane(V(10, 0, 0))
 
 
-m1_circle.wait_ms = 2000
-
-
 def m1_ready():
     p = coil_panel()
     h.check("M1 a coil d20", p is not None and near(p.diameter.value(), 20.0), p and p.state)
     h.check("M1 5 turns: 90 pi^2", near(vol(), 90.0 * PI * PI, 1e-5), vol())
     if p is not None:
         ui.choose(p.type, "Revolution and Pitch")
-
-
-m1_ready.wait_ms = 1500
 
 
 def m1_rev_pitch():
@@ -157,17 +151,11 @@ def m1_rev_pitch():
     ui.type_into(p.revolutions.widget, "4")
 
 
-m1_rev_pitch.wait_ms = 1500
-
-
 def m1_four():
     h.check("M1 4 turns: 72 pi^2", near(vol(), 72.0 * PI * PI, 1e-5), vol())
     p = coil_panel()
     if p is not None:
         ui.type_into(p.pitch.widget, "5")
-
-
-m1_four.wait_ms = 1500
 
 
 def m1_pitch():
@@ -176,9 +164,6 @@ def m1_pitch():
     p = coil_panel()
     if p is not None:
         ui.type_into(p.angle.widget, "-10")
-
-
-m1_pitch.wait_ms = 1500
 
 
 def m1_narrows():
@@ -195,9 +180,6 @@ def m1_narrows():
         ui.type_into(p.angle.widget, "-60")
 
 
-m1_narrows.wait_ms = 2500
-
-
 def m1_too_steep():
     """Luca, 2026-10-21: an angle that closes the coil is held at the steepest that works
     (it was refused, and OK waited)."""
@@ -207,9 +189,6 @@ def m1_too_steep():
     h.check("M1 -60 is held at the steepest angle that still rises", -60.0 < a < -10.0, a)
     h.check("M1 and said", note == "-60° does not fit: limited to %.1f°" % a, note)
     h.check("M1 no error", msg(p) == "", msg(p))
-
-
-m1_too_steep.wait_ms = 1500
 
 
 def m1_waits():
@@ -223,9 +202,6 @@ def m1_ok():
     h.check("M1 the message went", msg(p) == "", msg(p))
     h.check("M1 the narrowing coil again", near(vol(), NARROW, 1e-4), vol())
     h.task_button("OK")
-
-
-m1_ok.wait_ms = 2500
 
 
 def m1_done():
@@ -255,16 +231,10 @@ def m1_edit():
     ui.choose(p.section, "Triangular (Internal)")
 
 
-m1_edit.wait_ms = 2000
-
-
 def m1_triangle():
     p = coil_panel()
     if p is not None:
         ui.choose(p.section_position, "Outside")
-
-
-m1_triangle.wait_ms = 2000
 
 
 def m1_outside():
@@ -279,24 +249,15 @@ def m1_outside():
     h.task_button("OK")
 
 
-m1_outside.wait_ms = 1500
-
-
 def m1_undo():
     h.check("M1 OK closed it", pi.no_dialog())
     s["tri"] = vol()
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-m1_undo.wait_ms = 1200
-
-
 def m1_undone():
     h.check("M1 Ctrl+Z: the round section again", near(vol(), s["narrow"], 1e-6), vol())
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-m1_undone.wait_ms = 1500
 
 
 def m1_redone():
@@ -316,18 +277,12 @@ def m1_open():
     h.fit()
 
 
-m1_open.wait_ms = 2500
-
-
 def m1_reopened():
     h.check("M1 reopened: the same spring", near(vol(), s["tri"], 1e-6), (vol(), s["tri"]))
     doc().recompute()
     h.check("M1 a recompute keeps it", near(vol(), s["tri"], 1e-6), vol())
     h.check("M1 above the plane after reopening", above_plane(), coil_z())
     h.check("M1 double-click Coil 1 after reopening", ti.double_click("Coil 1"))
-
-
-m1_reopened.wait_ms = 2000
 
 
 def m1_reedit():
@@ -348,16 +303,10 @@ def m1_reedit():
     ui.type_into(p.angle.widget, "10")
 
 
-m1_reedit.wait_ms = 2000
-
-
 def m1_widens():
     h.check("M1 Angle 10: it widens", near(vol(), TRI_WIDE, 1e-4), (vol(), TRI_WIDE))
     h.check("M1 widening, still above the plane", above_plane(), coil_z())
     h.task_button("OK")
-
-
-m1_widens.wait_ms = 2000
 
 
 def m1_widened():
@@ -384,9 +333,6 @@ def m2_corner2():
     pl.click_on_plane(V(70, 20, 0))
 
 
-m2_corner2.wait_ms = 1500
-
-
 def m2_height():
     p = pi.panel("BoxPanel")
     h.check(
@@ -401,15 +347,9 @@ def m2_height():
         ui.type_into(p.height.widget, "10")
 
 
-m2_height.wait_ms = 1500
-
-
 def m2_box_ok():
     h.check("M2 the block", near(vol() - s["coil"], BLOCK, 1e-6), vol() - s["coil"])
     h.task_button("OK")
-
-
-m2_box_ok.wait_ms = 1000
 
 
 def m2_top():
@@ -431,9 +371,6 @@ def m2_centre():
 
 def m2_inner():
     pl.click_on_plane(V(58, 0, 10))
-
-
-m2_inner.wait_ms = 2000
 
 
 def m2_ready():
@@ -458,9 +395,6 @@ def m2_ready():
     ui.type_into(p.tube.widget, "4")
 
 
-m2_ready.wait_ms = 2000
-
-
 def m2_four():
     h.check(
         "M2 d4: + 32 pi^2", near(vol() - s["coil"], BLOCK + 32.0 * PI * PI, 1e-6), vol() - s["coil"]
@@ -468,9 +402,6 @@ def m2_four():
     p = torus_panel()
     if p is not None:
         ui.choose(p.position, "Inside")
-
-
-m2_four.wait_ms = 1500
 
 
 def m2_inside():
@@ -484,9 +415,6 @@ def m2_inside():
         ui.choose(p.operation, "Cut")
 
 
-m2_inside.wait_ms = 1500
-
-
 def m2_cut():
     p = torus_panel()
     h.check(
@@ -498,9 +426,6 @@ def m2_cut():
     h.check("M2 a torus diameter arrow", handle is not None, p and list(p.handles))
     if handle is not None:
         pi.drag_handle(handle, 3.0)
-
-
-m2_cut.wait_ms = 1500
 
 
 def m2_dragged():
@@ -518,9 +443,6 @@ def m2_dragged():
     ui.type_into(p.tube.widget, "4")
 
 
-m2_dragged.wait_ms = 2000
-
-
 def m2_ok():
     h.check(
         "M2 4 again: - 24 pi^2",
@@ -528,9 +450,6 @@ def m2_ok():
         vol() - s["coil"],
     )
     h.task_button("OK")
-
-
-m2_ok.wait_ms = 1500
 
 
 def m2_edit():
@@ -554,9 +473,6 @@ def m2_edit_shows():
     ui.choose(p.position, "Outside")
 
 
-m2_edit_shows.wait_ms = 2000
-
-
 def m2_outside():
     h.check(
         "M2 Outside (R 10): - 40 pi^2",
@@ -566,15 +482,9 @@ def m2_outside():
     h.task_button("OK")
 
 
-m2_outside.wait_ms = 1500
-
-
 def m2_undo():
     h.check("M2 OK closed it", pi.no_dialog())
     h.press("z", QtCore.Qt.ControlModifier)
-
-
-m2_undo.wait_ms = 1200
 
 
 def m2_undone():
@@ -584,9 +494,6 @@ def m2_undone():
         vol() - s["coil"],
     )
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-m2_undone.wait_ms = 1500
 
 
 def m2_redone():
@@ -621,9 +528,6 @@ def m3_path():
     h.press("e")
 
 
-m3_path.wait_ms = 2000
-
-
 def m3_extrude():
     from sciforge import extrude_ui
 
@@ -635,17 +539,11 @@ def m3_extrude():
     h.press(QtCore.Qt.Key_Escape)
 
 
-m3_extrude.wait_ms = 2000
-
-
 def m3_esc():
     h.check("M3 Esc closed Extrude", pi.no_dialog())
     h.check("M3 the pipe stays", near(vol(), s["part"] + 30.0 * PI, 1e-6), vol())
     h.check("M3 one step for it", ti.titles().count("Pipe 1") == 1, ti.titles())
     h.shot("m3")
-
-
-m3_esc.wait_ms = 1000
 
 
 h.run(
@@ -702,4 +600,5 @@ h.run(
         m3_extrude,
         m3_esc,
     ],
+    paced_by="state",
 )

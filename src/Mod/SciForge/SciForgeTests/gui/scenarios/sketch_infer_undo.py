@@ -154,9 +154,6 @@ def u1_arc():
     release_at(pos)
 
 
-u1_arc.wait_ms = 1200
-
-
 def u1_undo():
     arcs = [i for i, geo in enumerate(s["sk"].Geometry) if geo.TypeId == "Part::GeomArcOfCircle"]
     h.check(
@@ -165,9 +162,6 @@ def u1_undo():
         (arcs, App.ActiveDocument.UndoNames[:2]),
     )
     h.press("z", CTRL)
-
-
-u1_undo.wait_ms = 1200
 
 
 def u1_click1():
@@ -220,14 +214,8 @@ def u2_undo1():
     h.press("z", CTRL)
 
 
-u2_undo1.wait_ms = 1200
-
-
 def u2_undo2():
     h.press("z", CTRL)
-
-
-u2_undo2.wait_ms = 1200
 
 
 def u2_click1():
@@ -483,4 +471,5 @@ h.run(
             finished,
         ]
     ),
+    paced_by="state",
 )

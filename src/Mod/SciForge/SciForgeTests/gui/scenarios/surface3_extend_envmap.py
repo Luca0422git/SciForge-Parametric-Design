@@ -337,4 +337,5 @@ h.run(
         envmap_escaped,
         reopened,
     ],
+    paced_by="state",
 )

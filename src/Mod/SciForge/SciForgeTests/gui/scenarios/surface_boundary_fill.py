@@ -400,4 +400,5 @@ h.run(
         solid_tab_dialog,
         solid_tab_closed,
     ],
+    paced_by="state",
 )

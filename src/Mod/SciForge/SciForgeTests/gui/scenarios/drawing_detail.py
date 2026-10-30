@@ -83,15 +83,9 @@ def a_place():
     d.move_to(310, 210)
 
 
-a_place.wait_ms = 1500
-
-
 def a_click():
     h.check("a detail follows the mouse", len(details()) == 1, details())
     d.click_at(310, 210)
-
-
-a_click.wait_ms = 1500
 
 
 def a_placed():
@@ -133,18 +127,12 @@ def a_placed():
     del drawing
 
 
-a_placed.wait_ms = 1200
-
-
 def a_label():
     det = details()[0]
     h.check(
         "caption DETAIL C (2:1)", det.Reference == "C" and det.Label == "DETAIL C (2:1)", det.Label
     )
     d.ok()
-
-
-a_label.wait_ms = 1200
 
 
 def a_undo():
@@ -155,9 +143,6 @@ def a_undo():
 def a_undone():
     h.check("undo: no detail", not details(), details())
     d.redo()
-
-
-a_undone.wait_ms = 1500
 
 
 def a_redone():
@@ -202,9 +187,6 @@ def c_clicks():
     d.click_at(x + 15, y + 2)
 
 
-c_clicks.wait_ms = 2000
-
-
 def c_broken():
     from sciforge import drawing
 
@@ -222,14 +204,8 @@ def c_broken():
         QtCore.QTimer.singleShot(0, lambda: None)
 
 
-c_broken.wait_ms = 1500
-
-
 def c_ok():
     d.ok()
-
-
-c_ok.wait_ms = 2000
 
 
 def c_gap():
@@ -258,9 +234,6 @@ def d_delete():
     selected = [o.Name for o in __import__("FreeCADGui").Selection.getSelection()]
     h.check("the broken view is selected", of_type(drawing.BROKEN)[0].Name in selected, selected)
     d.key(QtCore.Qt.Key_Delete)
-
-
-d_delete.wait_ms = 1500
 
 
 def d_back():
@@ -300,4 +273,5 @@ h.run(
         d_delete,
         d_back,
     ],
+    paced_by="state",
 )

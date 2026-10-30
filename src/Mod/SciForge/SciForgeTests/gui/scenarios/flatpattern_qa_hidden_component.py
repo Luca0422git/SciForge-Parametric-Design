@@ -70,4 +70,5 @@ def finished():
 h.run(
     "flatpattern_qa_hidden_component",
     [setup, hide_component, open_flat, flat_shown, finish, finished],
+    paced_by="state",
 )

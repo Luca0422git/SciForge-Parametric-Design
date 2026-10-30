@@ -49,9 +49,6 @@ def open_freecad_tools():
     h.check("... choosing Part Design", wi.click_menu(button, "Part Design"))
 
 
-open_freecad_tools.wait_ms = 1500
-
-
 def in_freecad():
     from sciforge import shell
 
@@ -72,9 +69,6 @@ def in_freecad():
         wi.click(button)
 
 
-in_freecad.wait_ms = 1500
-
-
 # -- Path 2 -------------------------------------------------------------------------------
 def back_in_sciforge():
     from sciforge import shell
@@ -85,9 +79,6 @@ def back_in_sciforge():
     h.check("... the bar gone", back_bar() is None or not back_bar().isVisible())
     h.check("... the same design open", s["doc"] in App.listDocuments())
     h.check("FreeCAD's menu bar hidden again", not Gui.getMainWindow().menuBar().isVisible())
-
-
-back_in_sciforge.wait_ms = 1500
 
 
 # -- Path 3 -------------------------------------------------------------------------------
@@ -118,4 +109,5 @@ def app_menu_has_it():
 h.run(
     "freecad_tools",
     [setup, open_freecad_tools, in_freecad, back_in_sciforge, app_menu_has_it],
+    paced_by="state",
 )

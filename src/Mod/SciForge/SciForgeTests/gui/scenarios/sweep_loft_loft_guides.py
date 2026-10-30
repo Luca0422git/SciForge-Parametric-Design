@@ -193,9 +193,6 @@ def rails_box():
     h.check("clicked rail 1", h.click_edge(V(8, 0, 22)))
 
 
-rails_box.wait_ms = 2500  # fitting sections to the rail takes a moment (under load > 1 s)
-
-
 def one_rail():
     p = panel()
     h.check("one rail picked", len(p.rails) == 1, p.rails)
@@ -213,9 +210,6 @@ def one_rail():
     h.check("it leans out to the rail", abs(bb[3] - 8.0) < 0.05 and abs(bb[0] + 5.0) < 0.05, bb)
     h.shot("1-one-rail")
     h.check("clicked rail 2", h.click_edge(V(-8, 0, 22)))
-
-
-one_rail.wait_ms = 3000  # fitting sections to two rails takes a moment
 
 
 def two_rails():
@@ -332,4 +326,5 @@ h.run(
         edit_cancel,
         cancelled,
     ],
+    paced_by="state",
 )

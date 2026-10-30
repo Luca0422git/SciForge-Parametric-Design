@@ -122,4 +122,5 @@ h.run(
     b.box_steps("CoveredClick")
     + [v_start, v_hide, v_p1, v_p2, v_p3, v_plane]
     + [f_start, f_hide, f_click, f_picked, f_closed],
+    paced_by="state",
 )

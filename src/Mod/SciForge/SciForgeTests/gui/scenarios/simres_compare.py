@@ -140,17 +140,11 @@ def a_turn():
     cmp.panes[0]["view"].viewTop()
 
 
-a_turn.wait_ms = 600
-
-
 def a_turn_check():
     cmp = _compare()
     first, second = _orientation(cmp.panes[0]["view"]), _orientation(cmp.panes[1]["view"])
     h.check("the second pane turned with the first", first == second and second != state["before"])
     cmp.panes[1]["view"].viewRight()
-
-
-a_turn_check.wait_ms = 600
 
 
 def a_turn_back_check():
@@ -210,9 +204,6 @@ def d_third():
     state["third"] = third.Name
 
 
-d_third.wait_ms = 1000
-
-
 def d_again():
     s.menu("RESULT TOOLS", "Compare")
 
@@ -248,9 +239,6 @@ def d_tick():
     s.click_widget(go)
 
 
-d_tick.wait_ms = 1500
-
-
 def d_check_three():
     cmp = _compare()
     h.check("comparing three", cmp is not None and len(cmp.items) == 3)
@@ -272,9 +260,6 @@ def d_check_three():
 def d_setup():
     h.check("comparing again", _compare() is not None)
     s.click_tab("sim_setup")
-
-
-d_setup.wait_ms = 1000
 
 
 def d_check():
@@ -314,16 +299,10 @@ def e_tick():
     s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimCompareGo"))
 
 
-e_tick.wait_ms = 1500
-
-
 def e_single():
     cmp = _compare()
     h.check("comparing two in two panes", cmp is not None and len(cmp.panes) == 2, cmp)
     Gui.runCommand("SciForge_ViewportSingle", 0)  # (Navigation bar > Viewports > Single View)
-
-
-e_single.wait_ms = 1500
 
 
 def e_check():
@@ -345,9 +324,6 @@ def f_go():
     h.check("Compare dialog open", dialog is not None)
     if dialog is not None:
         e_tick()
-
-
-f_go.wait_ms = 1500
 
 
 def f_check():
@@ -383,17 +359,11 @@ def g_go():
     e_tick()
 
 
-g_go.wait_ms = 1500
-
-
 def g_solved():
     from sciforge import simulation_results_ui as ui
 
     h.check("comparing in split views", _compare() is not None and _compare().split)
     ui.show(s.doc().getObject(state["second"]))  # (what sim-ui's Solve dialog does at the end)
-
-
-g_solved.wait_ms = 1500
 
 
 def g_check():
@@ -413,9 +383,6 @@ def h_change():
     box.Length = 120.0
     doc.recompute()
     s.solve(doc.getObject(state["third"]))
-
-
-h_change.wait_ms = 1500
 
 
 def h_compare():
@@ -443,9 +410,6 @@ def h_tick_all():
     s.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimCompareGo"))
 
 
-h_tick_all.wait_ms = 1500
-
-
 def h_check():
     cmp = _compare()
     h.check("comparing three", cmp is not None and len(cmp.items) == 3)
@@ -469,9 +433,6 @@ def h_back():
     doc.recompute()
 
 
-h_back.wait_ms = 1500
-
-
 def h_back_check():
     cmp = _compare()
     h.check("still comparing", cmp is not None)
@@ -488,9 +449,6 @@ def h_back_check():
 
 def i_finish():
     s.big("Finish Results")
-
-
-i_finish.wait_ms = 1000
 
 
 def i_check():
@@ -546,4 +504,5 @@ h.run(
         i_finish,
         i_check,
     ],
+    paced_by="state",
 )

@@ -135,9 +135,6 @@ def a_up():
     click_global(V(0, 0, 20))
 
 
-a_up.wait_ms = 900
-
-
 def a_plane_xy():
     obj = curves()
     h.check(
@@ -156,9 +153,6 @@ def a_plane_xy():
 def a_along():
     h.check("A the XY plane is the drawing plane again", layer().plane == "XY", layer().plane)
     click_global(V(15, 0, s["top"][2]))
-
-
-a_along.wait_ms = 900
 
 
 def a_check():
@@ -206,9 +200,6 @@ def b_type():
     st.keys("5\n")
 
 
-b_type.wait_ms = 900
-
-
 def b_check():
     pts = points()
     want = (s["end"][0], s["end"][1], s["end"][2] + 5)
@@ -246,9 +237,6 @@ def c_drag():
     tip = v.screen(b)
     end = QtCore.QPoint(int(tip[0] + (tip[0] - mid[0])), int(tip[1] + (tip[1] - mid[1])))
     h.drag(start, end, steps=12)
-
-
-c_drag.wait_ms = 900
 
 
 def c_check():
@@ -295,14 +283,8 @@ def d_third():
     click_global(V(-40, 10, 10))
 
 
-d_third.wait_ms = 900
-
-
 def d_enter():
     st.enter()
-
-
-d_enter.wait_ms = 900
 
 
 def d_check():
@@ -348,21 +330,12 @@ def i_b():
     click_global(V(30, -20, 0))
 
 
-i_b.wait_ms = 700
-
-
 def i_c():
     click_global(V(10, -30, 0))
 
 
-i_c.wait_ms = 700
-
-
 def i_close():
     click_global(V(10, -20, 0))
-
-
-i_close.wait_ms = 900
 
 
 def i_check():
@@ -414,9 +387,6 @@ def i_corner():
 def i_up():
     h.check("I the ZX plane is the drawing plane", layer().plane == "ZX", layer().plane)
     click_global(V(10, -20, 15))
-
-
-i_up.wait_ms = 900
 
 
 def i_up_check():
@@ -506,9 +476,6 @@ def f_sweep():
     sw.menu("Sweep")
 
 
-f_sweep.wait_ms = 1200
-
-
 def f_path():
     p = sw.panel("sweep")
     h.check(
@@ -519,9 +486,6 @@ def f_path():
     h.check("F clicked the 3D line", h.click_edge(V(0, 0, 10)))
 
 
-f_path.wait_ms = 1200
-
-
 def f_ok():
     p = sw.panel("sweep")
     h.check(
@@ -530,9 +494,6 @@ def f_ok():
         p and p.path,
     )
     h.task_button("OK")
-
-
-f_ok.wait_ms = 1500
 
 
 def f_check():
@@ -577,9 +538,6 @@ def h_open():
     from sciforge import sketch_ui
 
     sketch_ui.edit_sketch(s["sk3d"])
-
-
-h_open.wait_ms = 1500
 
 
 def h_on():
@@ -672,4 +630,5 @@ h.run(
             h_check,
         ]
     ),
+    paced_by="state",
 )

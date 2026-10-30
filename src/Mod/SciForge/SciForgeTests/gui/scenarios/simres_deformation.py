@@ -116,9 +116,6 @@ def b_animate():
     s.big("Animate")
 
 
-b_animate.wait_ms = 900
-
-
 def b_animate_check():
     sess = s.session()
     bar = sess.bar
@@ -126,9 +123,6 @@ def b_animate_check():
     h.check("playing", sess.anim["playing"])
     state["f1"] = sess.display.factor
     h.check("the menu ticks Animate", s.results_ui().animation_on())
-
-
-b_animate_check.wait_ms = 450
 
 
 def b_moving():
@@ -157,9 +151,6 @@ def b_options():
     ui.choose(bar.findChild(QtWidgets.QComboBox, "SciForgeSimSpeed"), "2x")
     ui.choose(bar.findChild(QtWidgets.QComboBox, "SciForgeSimPlayMode"), "Mirror Loop")
     s.click_widget(bar.findChild(QtWidgets.QToolButton, "SciForgeSimPlay"))
-
-
-b_options.wait_ms = 600
 
 
 def b_options_check():
@@ -353,9 +344,6 @@ def e_animate():
     s.big("Animate")
 
 
-e_animate.wait_ms = 500
-
-
 def e_setup():
     s.click_tab("sim_setup")
 
@@ -370,9 +358,6 @@ def e_setup_check():
 
 def e_back():
     s.click_tab("sim_results")
-
-
-e_back.wait_ms = 900
 
 
 def e_back_check():
@@ -436,4 +421,5 @@ h.run(
         e_back,
         e_back_check,
     ],
+    paced_by="state",
 )

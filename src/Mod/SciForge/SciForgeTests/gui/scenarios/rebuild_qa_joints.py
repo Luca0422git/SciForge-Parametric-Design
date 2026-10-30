@@ -135,17 +135,11 @@ def setup():
     h.fit()
 
 
-setup.wait_ms = 2000
-
-
 # -- A ------------------------------------------------------------------------------------------
 def a_start():
     entries = r.browser_entries(s["arm_label"])
     h.check("the arm's right-click has %s" % ENTRY, ENTRY in entries, entries)
     r.browser_menu(s["arm_label"], ENTRY)
-
-
-a_start.wait_ms = 2000
 
 
 def a_started():
@@ -189,16 +183,10 @@ def a_started():
     r.tool("drive_joint", joint="Joint", angle=30)
 
 
-a_started.wait_ms = 2000
-
-
 # -- B ------------------------------------------------------------------------------------------
 def b_finish():
     s["undo_before"] = len(App.ActiveDocument.UndoNames)
     r.utilities_menu("Finish Rebuild")
-
-
-b_finish.wait_ms = 1500
 
 
 def b_press():
@@ -207,9 +195,6 @@ def b_press():
     if box is not None:
         h.check("deleting the original is the default", box.delete_original.isChecked())
         r.click_button(box, "SciForgeRebuildFinishOK")
-
-
-b_press.wait_ms = 2000
 
 
 def b_finished():
@@ -256,14 +241,8 @@ def b_finished():
     t.undo()  # the drive
 
 
-b_finished.wait_ms = 1500
-
-
 def b_undo_finish():
     t.undo()
-
-
-b_undo_finish.wait_ms = 1500
 
 
 def b_undone():
@@ -275,9 +254,6 @@ def b_undone():
         joint_subs(),
     )
     t.redo()
-
-
-b_undone.wait_ms = 1500
 
 
 def b_redone():
@@ -292,9 +268,6 @@ def b_redone():
 def c_start_base():
     s["base_name"], s["base_label"] = s["base"].Name, s["base"].Label
     r.browser_menu(s["base_label"], ENTRY)
-
-
-c_start_base.wait_ms = 2000
 
 
 def c_half_way():
@@ -320,9 +293,6 @@ def c_half_way():
     h.press(QtCore.Qt.Key_S, QtCore.Qt.ControlModifier)
 
 
-c_half_way.wait_ms = 1500
-
-
 def c_describe():
     vi.accept_save()
 
@@ -334,9 +304,6 @@ def c_close():
 def c_reopen():
     App.openDocument(s["path"])
     h.fit()
-
-
-c_reopen.wait_ms = 3000
 
 
 def c_reopened():
@@ -367,9 +334,6 @@ def c_reopened():
     )
     answer = r.tool("finish_rebuild")
     h.check("finish_rebuild", not answer["is_error"], answer["text"][:400])
-
-
-c_reopened.wait_ms = 2500
 
 
 def c_both_rebuilt():
@@ -403,9 +367,6 @@ def d_start_again():
     r.browser_menu(s["base_again_label"], ENTRY)
 
 
-d_start_again.wait_ms = 2000
-
-
 def d_two_rebuilds():
     """The base's block built in its rebuilt body, then the arm's rebuild started too (its
     rebuilt body is the active one now)."""
@@ -434,9 +395,6 @@ def d_two_rebuilds():
     s["undo_before_stop"] = len(doc.UndoNames)
 
 
-d_two_rebuilds.wait_ms = 2000
-
-
 def d_browser_entries():
     """The browser's right-click on the rebuilt base (the arm's rebuilt body is active)."""
     target = App.ActiveDocument.getObject(s["stop_target"])
@@ -452,9 +410,6 @@ def d_browser_entries():
     r.browser_menu(label, "Compare with Reference")
 
 
-d_browser_entries.wait_ms = 2500
-
-
 def d_browser_compare():
     import FreeCADGui as Gui
 
@@ -466,9 +421,6 @@ def d_browser_compare():
     )
     r.close_dialogs()
     Gui.Selection.clearSelection()
-
-
-d_browser_compare.wait_ms = 1500
 
 
 def _base_point():
@@ -497,9 +449,6 @@ def d_compare_click():
         r.click_marking_row(menu, "Compare with Reference")
 
 
-d_compare_click.wait_ms = 2500
-
-
 def d_compare_shown():
     box = r.dialog("SciForgeRebuildCompare")
     h.check(
@@ -515,9 +464,6 @@ def d_compare_shown():
         r.click_marking_row(menu, "Finish Rebuild")
 
 
-d_compare_shown.wait_ms = 2500
-
-
 def d_finish_shown():
     box = r.dialog("SciForgeRebuildFinish")
     h.check(
@@ -527,9 +473,6 @@ def d_finish_shown():
     )
     if box is not None:
         r.click_button(box, "SciForgeRebuildFinishCancel")
-
-
-d_finish_shown.wait_ms = 1500
 
 
 def d_right_click():
@@ -542,9 +485,6 @@ def d_right_click():
         "the rebuilt base's right-click list has Stop Rebuild...", "Stop Rebuild..." in rows, rows
     )
     r.click_marking_row(menu, "Stop Rebuild...")
-
-
-d_right_click.wait_ms = 1500
 
 
 def d_stop_press():
@@ -560,9 +500,6 @@ def d_stop_press():
         )
         h.check("deleting the rebuilt body is the default", box.delete_rebuilt.isChecked())
         r.click_button(box, "SciForgeRebuildStopOK")
-
-
-d_stop_press.wait_ms = 2000
 
 
 def d_stopped():
@@ -593,9 +530,6 @@ def d_stopped():
     t.undo()
 
 
-d_stopped.wait_ms = 1500
-
-
 def d_undone():
     from sciforge import rebuild
 
@@ -615,9 +549,6 @@ def d_undone():
     t.redo()
 
 
-d_undone.wait_ms = 1500
-
-
 def d_redone():
     from sciforge import rebuild
 
@@ -630,17 +561,11 @@ def d_redone():
     r.utilities_menu("Stop Rebuild...")  # the one left: the arm's
 
 
-d_redone.wait_ms = 1500
-
-
 def d_stop_arm():
     box = r.dialog("SciForgeRebuildStop")
     h.check("UTILITIES > AI > Stop Rebuild... opened its window", box is not None, h.popups())
     if box is not None:
         r.click_button(box, "SciForgeRebuildStopOK")
-
-
-d_stop_arm.wait_ms = 2000
 
 
 def d_arm_stopped():
@@ -694,4 +619,5 @@ h.run(
         d_arm_stopped,
         finish,
     ],
+    paced_by="state",
 )

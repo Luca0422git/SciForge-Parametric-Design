@@ -111,9 +111,6 @@ def p1_open():
     si.menu_item("MODIFY", "Manage Materials")
 
 
-p1_open.wait_ms = 1500
-
-
 def p1_check():
     d = browser()
     h.check(
@@ -199,9 +196,6 @@ def p3_check():
         leaves(t, "In This Design"),
     )
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
-
-
-p3_check.wait_ms = 1000
 
 
 def p3_undone():
@@ -361,9 +355,6 @@ def p8_save():
     App.openDocument(s["path"])
 
 
-p8_save.wait_ms = 2500
-
-
 def p8_reopened():
     from sciforge import appearance, material
 
@@ -425,4 +416,5 @@ h.run(
         p8_reopened,
         cleanup,
     ],
+    paced_by="state",
 )

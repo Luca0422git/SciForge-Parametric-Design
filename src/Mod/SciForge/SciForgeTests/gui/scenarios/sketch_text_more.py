@@ -197,9 +197,6 @@ def x4_delete():
     bs.menu("MODIFY", "Delete")
 
 
-x4_delete.wait_ms = 1200
-
-
 def x4_deleted():
     from sciforge import text
 
@@ -244,4 +241,5 @@ h.run(
         x4_deleted,
         x4_back,
     ],
+    paced_by="state",
 )

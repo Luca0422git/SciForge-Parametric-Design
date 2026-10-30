@@ -183,9 +183,6 @@ def box_corner2():
     pl.click_on_plane(V(40, 30, 0))
 
 
-box_corner2.wait_ms = 1200
-
-
 def box_height():
     p = pi.panel("BoxPanel")
     if p is None:
@@ -781,4 +778,5 @@ h.run(
         patch_after_reopen,
         closed_again,
     ],
+    paced_by="state",
 )

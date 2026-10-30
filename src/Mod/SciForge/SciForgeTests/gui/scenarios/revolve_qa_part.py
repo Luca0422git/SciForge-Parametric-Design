@@ -741,4 +741,4 @@ STEPS = [
     p10_done,
 ]
 
-h.run("revolve_qa_part", ti.watched(STEPS))
+h.run("revolve_qa_part", ti.watched(STEPS), paced_by="state")

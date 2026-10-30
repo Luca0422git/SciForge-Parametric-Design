@@ -13,8 +13,10 @@ time. The brief said to work on a branch off develop (another session was releas
 Status: [x] 1 failures on the run page [x] 2 harness.wait_for / settle / ready / done
 [x] 3 input helpers on it [x] 4 fresh profile per scenario [x] 5 hang watchdog [x] 6 gui_env.sh,
 both workflows on ubuntu-24.04 [x] 7 check_waits.py ratchet [x] stress mode + CI repeat input
-[ ] scenarios converted (batch 1 done: the CI #277 - #287 ones; see the session log for the
-count left) [ ] five green full runs in a row [ ] build dry run [ ] merged into develop (Luca).
+[ ] scenarios converted: batch 1 (the CI #277 - #287 ones), then CI part by part, each part
+proven 3 times in a row under `--stress` first (done: parts 1-3 of 9; the rest being proven;
+every helper and scenario wait is named, `check_waits.py` counts what is left) [ ] five green
+full runs in a row [ ] build dry run [ ] merged into develop (Luca).
 Newest session log "GUI test rework".
 
 **2026-10-26: Luca's beta 3 list, split in two** (newest session log "Beta 3 list"):
@@ -656,6 +658,18 @@ Plan `docs/sciforge/plan-beta3.md`; briefs `docs/sciforge/dev/briefs/beta3-*.md`
   for good, touching nothing of the view, once that design is closed (5 of 5 under stress after).
   Other polled handles (handles3d, move_ui's Triad, revolve_ui, hole_ui ...) may have the same
   weakness; none was seen crashing. Needs a CHANGELOG line in the next patch after the merge.
+- **Closing a design while its drawing tab was the active one could crash FreeCAD (fixed
+  2026-10-30 on `sf/gui-tests-rework`; not released yet).** Found by drawing2_breakout under
+  `--stress` (1 run in 6). FreeCAD 1.1.4 takes the closing design's tabs away and deletes them
+  a moment later (`deleteLater`); until then the main window still calls the drawing tab its
+  active view (a QPointer, cleared only when the tab is deleted), and `MDIViewPage::onHasMsg`
+  answers "Undo"/"Redo" from `getAppDocument()` without a null check. FreeCAD's command update
+  (every 150 ms) coming in between segfaulted (`App::Document::getAvailableRedos`). Asking at
+  once crashed it every time. `drawing_ui._drop_closed_tabs` (App observer, after FreeCAD's
+  own handling) deletes the drawing tabs FreeCAD has just put up for deletion; drawing_close
+  path D now asks for Redo right after the close (crashed 2 of 2 without the fix, passes with
+  it). A core patch could also null-check `MDIViewPage::onHasMsg` for the compiled build (not
+  done: not testable here). Needs a CHANGELOG line in the next patch after the merge.
 - **Work a dialog posts for later (`QTimer.singleShot(0, ...)`) can run after OK / Cancel
   (2026-10-28, patch 0.1.0-beta.3.1.1).** A dialog's debounce timer and a click (or the test
   robot's step timer) can be due in the same event-loop pass: the update runs, posts its
@@ -1787,6 +1801,22 @@ branch off develop (a patch release was going out from develop). How it all work
 - Every helper and scenario wait was named (about 230 of them); what is left are the marked
   ones: a hand's pace (`# input pace`), timing that is itself tested or a fake server's delay
   (`# on purpose`). After the mechanical conversion of the wait_ms, 0 fixed waits remain.
+- CI parts are converted one by one, each proven 3 of 3 under `--stress` in the sandbox first
+  (4 workers on a queue of 8-scenario chunks; a chunk takes about an hour here). Part 1:
+  4834e82e; parts 2 and 3: the next commit. Trial #312 (every scenario forced onto state pacing,
+  3 times under `--stress` on CI) and the chunk proofs found, all in the tests:
+  - extrude_presspull_qa2 P8: the app refuses a Join there and shows New Body again (its ⚠
+    says why); `dialog_input.choose` read the box after that. It checks the list's
+    `activated` now. (Putting the pointer on the drop-down first kept bodies_combine's list
+    from opening at all: not done.)
+  - Polls added to `h.busy()`: the SKETCH PALETTE's construction-mode read (sketch_qa F), the
+    sketch's floating finish check (polish2_sketch_check), the AI chat panel taking its
+    worker's messages (ai_chat Stop), TechDraw drawing in its thread and a section's depth
+    lines worked out from what it drew (drawing2_sections E).
+  - versions_recovery P1 waited 3.5 s for the 2 s recovery timer: it waits for the copy.
+  - A real crash (app side, fixed): closing a design while its drawing tab was the active one
+    (drawing2_breakout under `--stress`; Known issues, "Closing a design while its drawing
+    tab...").
 
 ### Session log: quick patch 0.1.0-beta.3.1.3, stuck buttons (`develop`, 2026-10-29)
 

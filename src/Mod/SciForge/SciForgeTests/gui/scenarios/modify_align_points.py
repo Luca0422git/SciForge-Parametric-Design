@@ -151,9 +151,6 @@ def a_lit():
     h.shot("A-dots")
 
 
-a_lit.wait_ms = 400
-
-
 def a_click():
     click_hovered()
 
@@ -179,9 +176,6 @@ def b_hover_middle():
 
 def b_lit():
     lit("table top", "midpoint", V(30, 0, 10))
-
-
-b_lit.wait_ms = 400
 
 
 def b_click():
@@ -250,9 +244,6 @@ def d_centre_lit():
     lit("table top, far from the dots", "centre", V(30, 20, 10))
 
 
-d_centre_lit.wait_ms = 400
-
-
 def d_click():
     click_hovered()
 
@@ -288,9 +279,6 @@ def e_lit():
     lit("block top", "vertex", V(50, 20, 15))
 
 
-e_lit.wait_ms = 400
-
-
 def e_click():
     click_hovered()
 
@@ -306,9 +294,6 @@ def e_hover_edge():
 
 def e_end_lit():
     lit("the table's right edge", "vertex", V(60, 40, 10))
-
-
-e_end_lit.wait_ms = 400
 
 
 def e_click_edge():
@@ -375,9 +360,6 @@ def f_locked():
     )
     lit("the kept face", "vertex", V(30, 10, 15))
     h.click(V(30, 10, 15), modifiers=QtCore.Qt.ControlModifier)
-
-
-f_locked.wait_ms = 400
 
 
 def f_taken():
@@ -449,4 +431,5 @@ h.run(
             g_cancelled,
         ]
     ),
+    paced_by="state",
 )

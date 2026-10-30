@@ -53,9 +53,6 @@ def a_two_designs():
     QtWidgets.QApplication.processEvents()
 
 
-a_two_designs.wait_ms = 1200
-
-
 def a_tabs():
     names = texts()
     h.check("a tab for Alpha", index_of("Alpha") >= 0, names)
@@ -100,9 +97,6 @@ def c_close_beta():
         QtWidgets.QApplication.processEvents()
 
 
-c_close_beta.wait_ms = 1000
-
-
 def c_closed():
     h.check("Beta is closed", "Beta" not in App.listDocuments(), list(App.listDocuments()))
     h.check("no tab for Beta", index_of("Beta") < 0, texts())
@@ -114,17 +108,11 @@ def d_other_workbench():
     QtWidgets.QApplication.processEvents()
 
 
-d_other_workbench.wait_ms = 1200
-
-
 def d_freecad_bar():
     bar = mdi_bar()
     h.check("SciForge off: FreeCAD's tab bar is back", bar is not None and bar.isVisible())
     Gui.activateWorkbench("SciForgeWorkbench")
     QtWidgets.QApplication.processEvents()
-
-
-d_freecad_bar.wait_ms = 1200
 
 
 def d_back():
@@ -146,4 +134,5 @@ h.run(
         d_freecad_bar,
         d_back,
     ],
+    paced_by="state",
 )

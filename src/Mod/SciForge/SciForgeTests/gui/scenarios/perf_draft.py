@@ -383,9 +383,6 @@ def box_open():
     open_draft(front)
 
 
-box_open.wait_ms = 1500
-
-
 def box_drag():
     drag_handle(8.0)
 
@@ -395,9 +392,6 @@ def box_dragged():
     if s is not None:
         h.check("box: the angle went up to about 8 deg", 6.0 < s["final"] < 9.0, s["final"])
     same_solid("box")
-
-
-box_dragged.wait_ms = 1000
 
 
 def box_close():
@@ -410,14 +404,8 @@ def part_build():
     h.check("the part has ~180 faces", S["part_faces"] > 150, S["part_faces"])
 
 
-part_build.wait_ms = 1500
-
-
 def part_open():
     open_draft(parts.outer_sides(S["b"].body.Tip.Shape))
-
-
-part_open.wait_ms = 3000
 
 
 def part_drag():
@@ -429,9 +417,6 @@ def part_dragged():
     if s is not None:
         h.check("part: the angle went up to about 6 deg", 4.5 < s["final"] < 7.0, s["final"])
     same_solid("part")
-
-
-part_dragged.wait_ms = 1500
 
 
 def part_profile():
@@ -469,9 +454,6 @@ def part_profile():
     S["profile_trial"] = [ln for ln in out.getvalue().splitlines() if ln.strip()][:40]
 
 
-part_profile.wait_ms = 1500
-
-
 def part_drag_far():
     drag_handle(20.0, hold_ms=3500)
 
@@ -487,9 +469,6 @@ def part_dragged_far():
         )
         h.check("part: the note says so", p.limits.note.startswith("Largest"), p.limits.note)
     same_solid("part, at the limit")
-
-
-part_dragged_far.wait_ms = 2000
 
 
 def part_close():
@@ -556,4 +535,5 @@ h.run(
         part_close,
         report,
     ],
+    paced_by="state",
 )

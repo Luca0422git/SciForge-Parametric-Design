@@ -52,9 +52,6 @@ def a_refused():
     r.browser_menu("Broken", ENTRY)
 
 
-a_refused.wait_ms = 1500
-
-
 def a_said():
     box = r.dialog("SciForgeRebuildRefused")
     h.check("the refusal is said in a window", box is not None, h.popups())
@@ -82,9 +79,6 @@ def b_mesh():
     App.ActiveDocument.recompute()
     s["mesh_label"] = s["mesh"].Label
     r.browser_menu(s["mesh_label"], ENTRY)
-
-
-b_mesh.wait_ms = 2500
 
 
 def b_started():
@@ -121,9 +115,6 @@ def c_base():
     answer = r.tool("extrude", profile="Sketch1", distance=10)
     h.check("the AI's base plate", not answer["is_error"], answer["text"])
     r.utilities_menu("Compare with Reference")
-
-
-c_base.wait_ms = 2500
 
 
 def c_esc():
@@ -164,9 +155,6 @@ def d_reopen():
     h.fit()
 
 
-d_reopen.wait_ms = 2500
-
-
 def d_reopened():
     from sciforge import rebuild
 
@@ -188,9 +176,6 @@ def d_reopened():
     h.check("the mesh is still hidden", mesh is not None and not r.shown(mesh))
     s["ref"] = ref
     r.utilities_menu("Compare with Reference")
-
-
-d_reopened.wait_ms = 2500
 
 
 def d_compare():
@@ -228,4 +213,5 @@ h.run(
         d_compare,
         finish,
     ],
+    paced_by="state",
 )

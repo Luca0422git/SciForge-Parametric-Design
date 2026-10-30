@@ -421,4 +421,5 @@ h.run(
         g_ok,
         g_kept,
     ],
+    paced_by="state",
 )

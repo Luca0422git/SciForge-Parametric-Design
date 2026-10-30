@@ -178,4 +178,5 @@ h.run(
         hem_moved,
         hem_esc,
     ],
+    paced_by="state",
 )

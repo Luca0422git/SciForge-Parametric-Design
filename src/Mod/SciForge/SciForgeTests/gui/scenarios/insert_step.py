@@ -55,9 +55,6 @@ def a_insert():
     i.menu("INSERT", "Insert STEP")
 
 
-a_insert.wait_ms = 2000
-
-
 def a_check():
     bodies = s.bodies()
     h.check("two bodies", len(bodies) == 2, [b.Label for b in bodies])
@@ -102,9 +99,6 @@ def a_check():
     h.press(QtCore.Qt.Key_Escape)
 
 
-a_check.wait_ms = 1000
-
-
 # -- B ----------------------------------------------------------------------------------------
 def b_undo():
     h.check("Esc closed the Move dialog", move_panel() is None)
@@ -140,9 +134,6 @@ def c_again():
     i.menu("INSERT", "Insert STEP")
 
 
-c_again.wait_ms = 2000
-
-
 def c_check():
     h.press(QtCore.Qt.Key_Escape)
     labels = x.labels()
@@ -159,9 +150,6 @@ def c_check():
         second is not None and instances.source_of(second) is x.comp("two_parts"),
     )
     h.check("four bodies", len(s.bodies()) == 4, [b.Label for b in s.bodies()])
-
-
-c_check.wait_ms = 1000
 
 
 # -- D ----------------------------------------------------------------------------------------
@@ -213,4 +201,5 @@ h.run(
         d_check,
         d_finish,
     ],
+    paced_by="state",
 )

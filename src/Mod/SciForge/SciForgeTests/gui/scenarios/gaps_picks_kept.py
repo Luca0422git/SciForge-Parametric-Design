@@ -111,9 +111,6 @@ def k2_ok():
     h.task_button("OK")
 
 
-k2_ok.wait_ms = 1500
-
-
 def k2_kept():
     h.check("dialog closed", not Gui.Control.activeDialog())
     h.check("the round is not red", fillet_ok(), t.states())
@@ -193,4 +190,5 @@ h.run(
         k4_open,
         k4_opened,
     ],
+    paced_by="state",
 )

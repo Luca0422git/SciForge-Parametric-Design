@@ -95,9 +95,6 @@ def setup():
     S["channel_box"] = vx.bbox(channel())
 
 
-setup.wait_ms = 1500
-
-
 # -- A: the shaft's end onto the hole's centre, then down through it -------------------------------
 def a_press_j():
     h.click_empty()
@@ -125,9 +122,6 @@ def a_top_lit():
     h.click(S["hover"])
 
 
-a_top_lit.wait_ms = 300
-
-
 def a_hover_hole():
     p = vx.joint_panel()
     h.check("component 1 taken", p is not None and p.picks["comp1"] is not None, p and p.picks)
@@ -142,9 +136,6 @@ def a_hole_lit():
     h.click(S["hover"])
 
 
-a_hole_lit.wait_ms = 300
-
-
 def a_on_web():
     through("joined", vx.T)
     h.shot("A-on-web")
@@ -153,15 +144,9 @@ def a_on_web():
         s.type_value(p.offset_fields["z"].widget, "%.2f" % DOWN)
 
 
-a_on_web.wait_ms = 1500
-
-
 def a_through():
     through("Offset Z -1.5 in", vx.T + DOWN)
     h.shot("A-through")
-
-
-a_through.wait_ms = 800
 
 
 # -- B: Revolute, OK -------------------------------------------------------------------------------
@@ -169,9 +154,6 @@ def b_revolute():
     p = vx.joint_panel()
     j.click_tab(p, "Motion")
     j.choose_type(p, "Revolute")
-
-
-b_revolute.wait_ms = 2600
 
 
 def b_ok():
@@ -205,9 +187,6 @@ def c_type():
     )
     if p is not None:
         s.type_value(p.angle.widget, "45")
-
-
-c_type.wait_ms = 1500
 
 
 def c_turned():
@@ -252,17 +231,11 @@ def d_hide():
     t.row_menu(shaft().Label, "Hide")  # (Show/Hide reads Hide on a shown row)
 
 
-d_hide.wait_ms = 800
-
-
 def d_hidden():
     from SciForgeTests.gui import timeline_input as t
 
     h.check("Hide: the shaft is hidden", not shaft().ViewObject.Visibility)
     t.row_menu(shaft().Label, "Show")
-
-
-d_hidden.wait_ms = 800
 
 
 def d_shown():
@@ -292,4 +265,5 @@ h.run(
         d_hidden,
         d_shown,
     ],
+    paced_by="state",
 )

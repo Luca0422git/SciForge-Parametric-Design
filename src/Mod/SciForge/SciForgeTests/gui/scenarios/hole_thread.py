@@ -106,9 +106,6 @@ def tick_modeled():
         hs.click_checkbox(p.modeled)
 
 
-tick_modeled.wait_ms = 2500  # a modeled thread takes a moment
-
-
 def modeled():
     v = h.solid_volume()
     expect = BOSS - removed(12)
@@ -124,9 +121,6 @@ def untick_full():
         hs.click_checkbox(p.full_length)
 
 
-untick_full.wait_ms = 2500  # FreeCAD blocks input while a modeled thread is computed
-
-
 def partial_fields():
     p = hs.thread_panel()
     h.check(
@@ -136,9 +130,6 @@ def partial_fields():
     if p:
         hs.type_into(p.length.widget, "8")
         hs.type_into(p.offset.widget, "2")
-
-
-partial_fields.wait_ms = 2500
 
 
 def partial():
@@ -188,9 +179,6 @@ def drag_length():
     hs.drag_arrow(p.length_origin, p.length_direction, arrow.distance(), -2.0, arrow=arrow)
 
 
-drag_length.wait_ms = 2500
-
-
 def dragged():
     p = hs.thread_panel()
     length = p.length.value() if p else 0
@@ -206,16 +194,10 @@ def dragged():
         hs.type_into(p.length.widget, "8")
 
 
-dragged.wait_ms = 2500
-
-
 def fine_pitch():
     p = hs.thread_panel()
     if p:
         b.choose(p.designation, "M6x0.75")
-
-
-fine_pitch.wait_ms = 2500
 
 
 def fine():
@@ -225,9 +207,6 @@ def fine():
     p = hs.thread_panel()
     if p:
         b.choose(p.direction, "Left hand")
-
-
-fine.wait_ms = 2500
 
 
 def left():
@@ -241,9 +220,6 @@ def left():
 
 def ok():
     h.task_button("OK")
-
-
-ok.wait_ms = 1500
 
 
 def after_ok():
@@ -264,9 +240,6 @@ def undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-undo.wait_ms = 1500
-
-
 def after_undo():
     h.check(
         "Ctrl+Z removes the thread",
@@ -277,9 +250,6 @@ def after_undo():
 
 def redo():
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-redo.wait_ms = 2500
 
 
 def after_redo():
@@ -311,9 +281,6 @@ def edit_open():
     )
     h.check("its face is picked", len(p.faces) == 1, p.faces)
     hs.click_checkbox(p.modeled)
-
-
-edit_open.wait_ms = 2000
 
 
 def edit_ok():
@@ -388,4 +355,5 @@ h.run(
         cancel_preview,
         after_cancel,
     ],
+    paced_by="state",
 )

@@ -467,4 +467,4 @@ steps = bs.box_steps("AreasMore") + [
     hole_extruded,
     worst_case,
 ]
-h.run("sketch_areas_more", si.watched(steps))
+h.run("sketch_areas_more", si.watched(steps), paced_by="state")

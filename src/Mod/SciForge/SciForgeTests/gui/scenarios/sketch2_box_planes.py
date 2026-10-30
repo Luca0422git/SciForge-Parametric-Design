@@ -64,15 +64,9 @@ def a_window():
     box_of(s["plane"])
 
 
-a_window.wait_ms = 900
-
-
 def a_check():
     h.check("A a window round the offset plane selects it", picked() == [s["plane_name"]], picked())
     h.ribbon("Create Sketch")
-
-
-a_check.wait_ms = 1500
 
 
 def a_sketch():
@@ -82,9 +76,6 @@ def a_sketch():
         z = sk.getGlobalPlacement().Base.z
         h.check("A ...on the offset plane (20 up)", abs(z - 20.0) < 1e-6, z)
     h.ribbon("Finish Sketch")
-
-
-a_sketch.wait_ms = 900
 
 
 # -- B ----------------------------------------------------------------------------------------
@@ -106,9 +97,6 @@ def b_window():
     box_of(s["planes"]["XY_Plane"], margin=2)
 
 
-b_window.wait_ms = 900
-
-
 def b_check():
     h.check(
         "B a window round the XY plane's square selects the XY plane",
@@ -122,9 +110,6 @@ def b_check():
     # a small crossing box over the axis's outer end, beyond the XY plane's square
     tip = V(box.XMax - 1.0, 0, 0)
     sel.box_at(tip, half=4, crossing=True)
-
-
-b_check.wait_ms = 900
 
 
 def b_axis_check():
@@ -149,9 +134,6 @@ def c_window():
     box_of(s["planes"]["XY_Plane"], margin=2)
 
 
-c_window.wait_ms = 900
-
-
 def c_check():
     h.check("C with Work Geometry off the window selects no plane", not picked(), picked())
     sel.choose_select(["Selection Filters", "Work Geometry"])
@@ -171,9 +153,6 @@ def d_hide_origin():
 
 def d_window():
     box_of(s["planes"]["XY_Plane"], margin=2)
-
-
-d_window.wait_ms = 900
 
 
 def d_check():
@@ -201,4 +180,5 @@ h.run(
             d_check,
         ]
     ),
+    paced_by="state",
 )

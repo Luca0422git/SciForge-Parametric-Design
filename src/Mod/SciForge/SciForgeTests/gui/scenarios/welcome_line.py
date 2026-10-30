@@ -71,9 +71,6 @@ def fresh_profile():
     reopen_home()
 
 
-fresh_profile.wait_ms = 1200
-
-
 def line_shown():
     import sciforge
 
@@ -135,9 +132,6 @@ def cheat_sheet():
         wi.click(page.welcome.buttons["SciForgeHomeWelcomeSheet"])
 
 
-cheat_sheet.wait_ms = 1200
-
-
 def cheat_sheet_open():
     from sciforge import home_notices_ui
 
@@ -169,9 +163,6 @@ def cheat_sheet_missing():
     s["warned"] = h.new_errors()
 
 
-cheat_sheet_missing.wait_ms = 800
-
-
 def cheat_sheet_on_github():
     from sciforge import home_notices_ui, notices_core
 
@@ -194,9 +185,6 @@ def example():
     page = notices()
     if page is not None:
         wi.click(page.welcome.buttons["SciForgeHomeWelcomeExample"])
-
-
-example.wait_ms = 4000
 
 
 def example_open():
@@ -237,9 +225,6 @@ def example_again():
     s["example_stamp"] = (path, stamp)
 
 
-example_again.wait_ms = 1500
-
-
 def example_again_checked():
     path, stamp = s["example_stamp"]
     h.check(
@@ -253,9 +238,6 @@ def example_again_checked():
         App.closeDocument(name)
 
 
-example_again_checked.wait_ms = 1200
-
-
 # -- Path 4 -------------------------------------------------------------------------------
 def report_button():
     from sciforge import home_ui
@@ -267,9 +249,6 @@ def report_button():
     )
     if page is not None:
         wi.click(page.welcome.buttons["SciForgeHomeWelcomeReport"])
-
-
-report_button.wait_ms = 1500
 
 
 def report_opened():
@@ -288,17 +267,11 @@ def the_x():
         wi.click(page.welcome.buttons["SciForgeHomeWelcomeClose"])
 
 
-the_x.wait_ms = 600
-
-
 def the_x_done():
     page = notices()
     h.check("the x hides the line", page is not None and not page.welcome.isVisible())
     h.check("... the rest of Home is untouched", home().new_button.isVisible())
     reopen_home()
-
-
-the_x_done.wait_ms = 1000
 
 
 def still_hidden():
@@ -312,9 +285,6 @@ def next_start():
 
     home_notices_ui.welcome().reset()  # (a new session: the preference is all that is left)
     reopen_home()
-
-
-next_start.wait_ms = 1000
 
 
 def next_start_checked():
@@ -333,9 +303,6 @@ def shown_but_not_closed():
     reopen_home()
 
 
-shown_but_not_closed.wait_ms = 1000
-
-
 def shown_but_not_closed_checked():
     page = notices()
     h.check(
@@ -351,9 +318,6 @@ def example_missing():
     home_notices_ui.ROOT_OF_MODULE = os.path.join(os.path.dirname(__file__), "nowhere")
     home_notices_ui.reset_for_tests(False)
     reopen_home()
-
-
-example_missing.wait_ms = 1000
 
 
 def example_missing_checked():
@@ -396,4 +360,5 @@ h.run(
         example_missing,
         example_missing_checked,
     ],
+    paced_by="state",
 )

@@ -66,9 +66,6 @@ def setup():
         s[name] = path
 
 
-setup.wait_ms = 1500
-
-
 def close_all():
     for name in list(App.listDocuments()):
         Gui.getDocument(name).Modified = False
@@ -264,4 +261,5 @@ h.run(
         p5_shown,
         cleanup,
     ],
+    paced_by="state",
 )

@@ -140,9 +140,6 @@ def setup():
     h.check("setup: the sketch solves", s0.solve() == 0 and not s0.RedundantConstraints)
 
 
-setup.wait_ms = 1500
-
-
 def expect_refused(tag, title, words):
     state(tag)
     text = told()
@@ -191,7 +188,6 @@ def checker(tag, title, words):
         expect_refused(tag, title, words)
 
     step.__name__ = "check_" + tag
-    step.wait_ms = 1500
     return step
 
 
@@ -220,9 +216,6 @@ def f_check():
     h.check("F: no conflict", not sk().ConflictingConstraints)
 
 
-f_check.wait_ms = 1200
-
-
 # G: palette and padlock
 def g_redundant():
     import Sketcher
@@ -238,9 +231,6 @@ def g_palette():
     state("redundant")
     h.check("G: the palette says so", freedom_text() == "Redundant constraints", freedom_text())
     st.undo()
-
-
-g_palette.wait_ms = 1200
 
 
 def g_padlock():
@@ -337,9 +327,6 @@ def h_setup():
     h.check("H: the big sketch solves", s0.solve() == 0 and not s0.RedundantConstraints)
 
 
-h_setup.wait_ms = 3000
-
-
 def h_check():
     state("big")
     text = told()
@@ -352,9 +339,6 @@ def h_check():
     # one solve of this sketch takes about 0.2 s here: the check stays within about 1.2 s
     # (its own solve plus at most PROBE_SECONDS), with room for a loaded machine
     h.check("H: within the time limit", took < 2.0 * h.SLOWDOWN, took)
-
-
-h_check.wait_ms = 6000
 
 
 h.run(
@@ -395,4 +379,5 @@ h.run(
         clicker(V(15, Y0 + 10, 0), "h_top"),
         h_check,
     ],
+    paced_by="state",
 )

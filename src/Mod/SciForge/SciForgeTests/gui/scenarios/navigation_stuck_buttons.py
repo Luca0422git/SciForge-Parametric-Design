@@ -85,9 +85,6 @@ def setup():
     Gui.Selection.clearSelection()
 
 
-setup.wait_ms = 1200
-
-
 # -- N1 -----------------------------------------------------------------------------------------
 def n1_pan():
     remember()
@@ -113,9 +110,6 @@ def n2_drag():
     st["place"] = App.Placement(App.ActiveDocument.getObject(st["part"]).Placement)
     a = h.screen_point(V(10, 10, 20))
     h.drag(a, QtCore.QPoint(a.x() + 60, a.y()), steps=14)
-
-
-n2_drag.wait_ms = 400
 
 
 def n2_pan():
@@ -157,9 +151,6 @@ def n2_orbited():
 def n3_box():
     a = empty_pixel()
     h.drag(a, QtCore.QPoint(a.x() - 60, a.y() - 40), steps=10)
-
-
-n3_box.wait_ms = 400
 
 
 def n3_pan():
@@ -209,9 +200,6 @@ def n4_still():
     vc.click("front")
 
 
-n4_still.wait_ms = 1200
-
-
 def n4_front():
     h.check(
         "N4 a click on the cube's FRONT still turns to FRONT",
@@ -245,4 +233,5 @@ h.run(
         n4_front,
         cleanup,
     ],
+    paced_by="state",
 )

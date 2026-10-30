@@ -97,4 +97,5 @@ def restored_elsewhere():
 h.run(
     "viewer_settings_restart",
     [start, before_sciforge, sciforge_on, restored_after_restart, on_again, restored_elsewhere],
+    paced_by="state",
 )

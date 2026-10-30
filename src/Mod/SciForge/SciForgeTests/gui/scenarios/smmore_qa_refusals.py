@@ -390,4 +390,5 @@ h.run(
         lofted_escape,
         lofted_gone,
     ],
+    paced_by="state",
 )

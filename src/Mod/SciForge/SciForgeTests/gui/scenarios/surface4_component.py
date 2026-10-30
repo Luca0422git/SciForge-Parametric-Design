@@ -180,4 +180,5 @@ h.run(
         redo_3,
         all_redone,
     ],
+    paced_by="state",
 )

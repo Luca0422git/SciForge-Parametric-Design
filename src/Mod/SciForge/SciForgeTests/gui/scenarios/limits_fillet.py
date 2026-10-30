@@ -138,9 +138,6 @@ def dragged_far():
     h.shot("1-held-at-limit")
 
 
-dragged_far.wait_ms = 2500
-
-
 def drag_back():
     # 4 mm of radius back (the diagonal arrow moves per_unit mm per mm of radius)
     p = panel()
@@ -156,9 +153,6 @@ def dragged_back():
     v = h.solid_volume()
     h.check("the preview follows", b.close(v, one_edge(r)), (v, one_edge(r)))
     h.check("no new search coming back", p.limits.searches == 1, p and p.limits.searches)
-
-
-dragged_back.wait_ms = 1500
 
 
 def type_50():
@@ -183,9 +177,6 @@ def typed_50():
     )
     v = h.solid_volume()
     h.check("the preview shows the largest round", b.close(v, one_edge(s["limit"])), v)
-
-
-typed_50.wait_ms = 1500
 
 
 def ok_at_once():
@@ -227,7 +218,6 @@ def type_formula():
 
 # the hint of the largest radius comes with the error after the rest and a search (a few
 # hundred ms each): the next check waits for it (timing is judged by Luca, not here)
-type_formula.wait_ms = 4000
 
 
 def formula_explained():
@@ -242,9 +232,6 @@ def formula_explained():
     )
     h.check("no note (nothing was held)", note(p) == "", note(p))
     h.task_button("OK")
-
-
-formula_explained.wait_ms = 2500
 
 
 def formula_ok_waits():
@@ -293,9 +280,6 @@ def chamfer_dragged():
     h.shot("3-chamfer-held")
 
 
-chamfer_dragged.wait_ms = 2500
-
-
 def chamfer_ok():
     h.task_button("OK")
 
@@ -335,9 +319,6 @@ def angle_limited():
         b.choose(p.ctype, "Equal Distance")
 
 
-angle_limited.wait_ms = 4000
-
-
 h.run(
     "limits_fillet",
     b.box_steps("LimitsFillet")
@@ -370,4 +351,5 @@ h.run(
         chamfer_ok,
         chamfer_made,
     ],
+    paced_by="state",
 )

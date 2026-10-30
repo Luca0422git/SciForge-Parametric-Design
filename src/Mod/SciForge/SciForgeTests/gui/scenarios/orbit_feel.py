@@ -617,4 +617,5 @@ h.run(
         off_click_done,
         back_on,
     ],
+    paced_by="state",
 )

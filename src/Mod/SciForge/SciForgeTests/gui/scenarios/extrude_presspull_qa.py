@@ -824,4 +824,5 @@ h.run(
         p6_pp_ok,
         p6_done,
     ],
+    paced_by="state",
 )

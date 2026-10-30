@@ -127,4 +127,4 @@ steps += fs.finish_and_extrude("C", 3, s)
 steps += fs.undo_redo("D", "C", s)
 steps += fs.edit_later("E", "B", s)
 
-h.run("fixsketch_join", steps)
+h.run("fixsketch_join", steps, paced_by="state")

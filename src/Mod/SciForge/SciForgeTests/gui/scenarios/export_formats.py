@@ -87,9 +87,6 @@ def a_export():
         b.click_widget(d.export_button)
 
 
-a_export.wait_ms = 1500
-
-
 def a_check():
     path = os.path.join(OUT, "two.step")
     h.check("two.step written", os.path.isfile(path), files("*"))
@@ -120,9 +117,6 @@ def b_stl_high():
     set_location_and_name("two")
 
 
-b_stl_high.wait_ms = 1200
-
-
 def b_count_shown():
     d = dialog()
     if d is not None:
@@ -135,9 +129,6 @@ def b_export():
     d = dialog()
     if d is not None:
         b.click_widget(d.export_button)
-
-
-b_export.wait_ms = 1500
 
 
 def b_check():
@@ -174,9 +165,6 @@ def c_export():
         b.click_widget(d.export_button)
 
 
-c_export.wait_ms = 1500
-
-
 def c_check():
     found = files("two-*.3mf")
     h.check("one 3MF per body", len(found) == 2, found)
@@ -211,9 +199,6 @@ def d_export():
     d = dialog()
     if d is not None:
         b.click_widget(d.export_button)
-
-
-d_export.wait_ms = 1500
 
 
 def d_check():
@@ -270,4 +255,5 @@ h.run(
         e_cancel,
         e_check,
     ],
+    paced_by="state",
 )

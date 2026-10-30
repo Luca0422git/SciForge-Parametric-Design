@@ -69,4 +69,4 @@ def diagnostics_and_manifest():
     h.check("Diagnostics starts with the version", first.startswith("SciForge " + VERSION), first)
 
 
-h.run("version_label", [label_on_home, title_bar_untouched, diagnostics_and_manifest])
+h.run("version_label", [label_on_home, title_bar_untouched, diagnostics_and_manifest], paced_by="state")

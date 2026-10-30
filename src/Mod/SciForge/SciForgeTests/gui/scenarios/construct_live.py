@@ -125,4 +125,5 @@ h.run(
     "construct_live",
     b.box_steps("ConstructLive")
     + [start, click_top, preview, a_press_and_drag, a_check_during, b_released, b_made],
+    paced_by="state",
 )

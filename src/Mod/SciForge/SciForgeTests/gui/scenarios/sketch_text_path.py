@@ -318,4 +318,5 @@ h.run(
         p6_type,
         p6_followed,
     ],
+    paced_by="state",
 )

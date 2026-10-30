@@ -203,4 +203,5 @@ h.run(
         extrude_3_ok,
         check_3,
     ],
+    paced_by="state",
 )

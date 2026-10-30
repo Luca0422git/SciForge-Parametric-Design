@@ -160,4 +160,5 @@ h.run(
         b_note,
         b_closed,
     ],
+    paced_by="state",
 )

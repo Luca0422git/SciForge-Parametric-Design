@@ -104,4 +104,4 @@ def cleanup():
         App.closeDocument(name)
 
 
-h.run("vex_placement_indicator", [setup, p1_none_yet, p2_shown, p3_hidden, cleanup])
+h.run("vex_placement_indicator", [setup, p1_none_yet, p2_shown, p3_hidden, cleanup], paced_by="state")

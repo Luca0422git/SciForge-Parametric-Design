@@ -155,9 +155,6 @@ def a_open():
     open_print()
 
 
-a_open.wait_ms = 1500
-
-
 def a_dialog():
     d = dialog()
     h.check("A 3D Print dialog", d is not None and d.windowTitle() == "3D Print", d)
@@ -178,9 +175,6 @@ def a_dialog():
     b.choose(d.send_to, "Other... (pick the program)")
 
 
-a_dialog.wait_ms = 1000
-
-
 def a_ok():
     d = dialog()
     if d is None:
@@ -188,9 +182,6 @@ def a_ok():
     h.check("A Program field empty (picker cancelled)", d.program.text() == "", d.program.text())
     h.check("A Program field can be typed in", d.program.isEnabled())
     i.dialog_button(d, "OK")
-
-
-a_ok.wait_ms = 1200
 
 
 def a_check():
@@ -220,9 +211,6 @@ def b_install():
     fake_slicer(os.path.join(BIN, "prusa-slicer"), PRUSA_LOG)
     export_ui.SLICER_ENV = {"PATH": BIN, "HOME": EMPTY}
     open_print()
-
-
-b_install.wait_ms = 1500
 
 
 def b_dialog():
@@ -259,16 +247,10 @@ def b_dialog():
     h.shot("B-dialog")
 
 
-b_dialog.wait_ms = 1000
-
-
 def b_ok():
     d = dialog()
     if d is not None:
         i.dialog_button(d, "OK")
-
-
-b_ok.wait_ms = 2500
 
 
 def b_check():
@@ -318,9 +300,6 @@ def c_open():
     open_print()
 
 
-c_open.wait_ms = 1500
-
-
 def c_other():
     d = dialog()
     h.check("C 3D Print dialog", d is not None, d)
@@ -329,9 +308,6 @@ def c_other():
     h.check("C starts at PrusaSlicer (remembered)", d.send_to.currentText() == "PrusaSlicer")
     h.check("C Save a copy remembered", d.save_copy.isChecked())
     b.choose(d.send_to, "Other... (pick the program)")
-
-
-c_other.wait_ms = 1000
 
 
 def c_one_body_stl():
@@ -346,9 +322,6 @@ def c_one_body_stl():
     b.choose(d.format, "STL (Binary)")
     h.check("C Unit Type still millimetres", d.unit.currentText() == "Millimeter")
     i.dialog_button(d, "OK")
-
-
-c_one_body_stl.wait_ms = 2500
 
 
 def c_check():
@@ -384,9 +357,6 @@ def d_open():
     open_print()
 
 
-d_open.wait_ms = 1500
-
-
 def d_file_only():
     d = dialog()
     h.check("D 3D Print dialog", d is not None, d)
@@ -403,9 +373,6 @@ def d_file_only():
     h.check("D Unit Type back on", d.unit.isEnabled())
     h.check("D Program greyed", not d.program.isEnabled())
     i.dialog_button(d, "Cancel")
-
-
-d_file_only.wait_ms = 1200
 
 
 def d_check():
@@ -434,9 +401,6 @@ def e_open():
     i.ribbon_tab("UTILITIES")
     h.ribbon("Preferences")
     m.process()
-
-
-e_open.wait_ms = 1500
 
 
 def e_page():
@@ -478,18 +442,12 @@ def e_page():
         m.process()
 
 
-e_page.wait_ms = 1200
-
-
 def e_print():
     from sciforge import export
 
     h.check("E Preferences closed", prefs() is None)
     h.check("E kept", export.print_send_to() == "file", export.print_send_to())
     open_print()
-
-
-e_print.wait_ms = 1500
 
 
 def e_check():
@@ -545,4 +503,5 @@ h.run(
         e_check,
         cleanup,
     ],
+    paced_by="state",
 )

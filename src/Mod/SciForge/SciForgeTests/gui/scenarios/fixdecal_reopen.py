@@ -86,10 +86,6 @@ def move_steps(tag, value_key, value):
         h.check("%s: the box moved" % tag, not place.isIdentity(), place)
         f.follows("%s: the decal followed" % tag, f.flat(), st[tag], place)
 
-    press.wait_ms = 1200
-    click.wait_ms = 1200
-    type_.wait_ms = 1500
-    ok.wait_ms = 1500
     steps = [press, click, type_, ok, check]
     for step in steps:
         step.__name__ = "%s_%s" % (tag, step.__name__.strip("_"))
@@ -107,7 +103,6 @@ def save_reopen(tag, before=None):
             App.closeDocument(name)
         App.openDocument(path)
 
-    save.wait_ms = 2500
     save.__name__ = "%s_save_reopen" % tag
     return save
 
@@ -167,15 +162,9 @@ def r3_undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-r3_undo.wait_ms = 1500
-
-
 def r3_undone():
     f.follows("R3 Ctrl+Z", f.flat(), st["r3"], App.Placement())
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-r3_undone.wait_ms = 1500
 
 
 def r3_redone():
@@ -202,4 +191,5 @@ h.run(
     + [r3_undo, r3_undone, r3_redone, save_reopen("r4", make_old), r4_check]
     + move_steps("r4", "rz", "90")
     + [cleanup],
+    paced_by="state",
 )

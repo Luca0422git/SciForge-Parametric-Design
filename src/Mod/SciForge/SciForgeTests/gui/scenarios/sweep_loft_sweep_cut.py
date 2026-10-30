@@ -358,4 +358,5 @@ h.run(
         tapered,
         taper_kept,
     ],
+    paced_by="state",
 )

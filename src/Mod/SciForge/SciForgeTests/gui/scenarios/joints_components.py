@@ -105,9 +105,6 @@ def k1_type():
     j.choose_type(p, "Revolute")
 
 
-k1_type.wait_ms = 2600
-
-
 def k1_ok():
     j.ok()
 
@@ -211,4 +208,4 @@ steps += [k2_drive, k2_type, k2_turned, k2_ok]
 steps += [k3_out, k3_rerooted, k3_undo, k3_back]
 steps += [k4_delete, k4_deleted, k4_undo, k4_back]
 
-h.run("joints_components", steps)
+h.run("joints_components", steps, paced_by="state")

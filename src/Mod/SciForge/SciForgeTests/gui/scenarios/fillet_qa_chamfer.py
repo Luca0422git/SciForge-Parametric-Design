@@ -149,9 +149,6 @@ def p12_angle_90():
     h.shot("p12-angle-90")
 
 
-p12_angle_90.wait_ms = 2000
-
-
 def p12_angle_refused():
     p = b.blend_panel()
     if p:
@@ -478,4 +475,5 @@ h.run(
         p14_fillet_open,
         p14_done,
     ],
+    paced_by="state",
 )

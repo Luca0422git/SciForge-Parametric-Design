@@ -147,9 +147,6 @@ def a_session_that_crashed():
     reopen_home()
 
 
-a_session_that_crashed.wait_ms = 1200
-
-
 def the_line_is_shown():
     page = notices()
     h.check("Home has its slim lines", page is not None)
@@ -190,9 +187,6 @@ def report_it():
         wi.click(page.crash.buttons["SciForgeHomeCrashReport"])
 
 
-report_it.wait_ms = 1500
-
-
 def report_opened():
     from sciforge import report_ui
 
@@ -220,9 +214,6 @@ def dismiss():
         wi.click(page.crash.buttons["SciForgeHomeCrashDismiss"])
 
 
-dismiss.wait_ms = 800
-
-
 def dismissed():
     from sciforge import crashlog
 
@@ -233,9 +224,6 @@ def dismissed():
     h.check("... the other window's marker is untouched", os.path.exists(s["other"]["marker"]))
     h.check("... nothing is pending", crashlog.pending() == [])
     reopen_home()
-
-
-dismissed.wait_ms = 1000
 
 
 def not_again():
@@ -253,9 +241,6 @@ def a_session_that_was_killed():
     reopen_home()
 
 
-a_session_that_was_killed.wait_ms = 1000
-
-
 def killed_shown():
     page = notices()
     h.check(
@@ -264,9 +249,6 @@ def killed_shown():
     )
     if page is not None:
         wi.click(page.crash.buttons["SciForgeHomeCrashDismiss"])
-
-
-killed_shown.wait_ms = 800
 
 
 def killed_dismissed():
@@ -304,4 +286,5 @@ h.run(
         killed_dismissed,
         tidy,
     ],
+    paced_by="state",
 )

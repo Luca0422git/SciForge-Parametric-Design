@@ -78,9 +78,6 @@ def choose_light():
     wi.click(dialog.findChild(QtWidgets.QPushButton, "SciForgePreferencesOK"))
 
 
-choose_light.wait_ms = 1500
-
-
 def light_now():
     from sciforge import home_ui, shell, theme, ui_icon_path
 
@@ -106,9 +103,6 @@ def light_now():
     h.shot("home-light")
 
 
-light_now.wait_ms = 1500
-
-
 # -- Path 2 -------------------------------------------------------------------------------
 def design_light():
     from sciforge import ai_panel_ui, commands
@@ -126,9 +120,6 @@ def design_shown():
     h.check("the AI panel is light too", "#f0f2f5" in style and "#3b4453" not in style, style[:120])
     h.fit()
     h.shot("design-light")
-
-
-design_shown.wait_ms = 1000
 
 
 # -- Path 3 -------------------------------------------------------------------------------
@@ -170,4 +161,5 @@ h.run(
         back_to_dark,
         dark_again,
     ],
+    paced_by="state",
 )

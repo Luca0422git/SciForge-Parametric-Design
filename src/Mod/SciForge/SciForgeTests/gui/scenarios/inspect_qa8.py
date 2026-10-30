@@ -383,9 +383,6 @@ def p_drag():
     h.drag(start, s.screen(V(34, 15, 10)), steps=16)  # let go over the top face
 
 
-p_drag.wait_ms = 1000
-
-
 def p_dragged():
     p = s.construct_panel()
     if p is None or p.datum is None:
@@ -502,4 +499,4 @@ STEPS = (
     + [y_move, y_top, y_type, y_cut, y_end]
 )
 
-h.run("inspect_qa8", ti.watched(STEPS))
+h.run("inspect_qa8", ti.watched(STEPS), paced_by="state")

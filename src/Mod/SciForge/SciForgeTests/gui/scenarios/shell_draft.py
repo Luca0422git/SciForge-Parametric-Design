@@ -231,9 +231,6 @@ def too_thick_reported():
     h.shot("7-too-thick")
 
 
-too_thick_reported.wait_ms = 1500  # the thickest wall that fits is worked out
-
-
 def ok_refused():
     p = sd.shell_panel()
     if p:
@@ -470,4 +467,5 @@ h.run(
         esc_press,
         after_esc,
     ],
+    paced_by="state",
 )

@@ -310,4 +310,5 @@ h.run(
             part_updated,
         ]
     ),
+    paced_by="state",
 )

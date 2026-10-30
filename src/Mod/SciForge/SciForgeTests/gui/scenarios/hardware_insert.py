@@ -155,9 +155,6 @@ def a_waits():
     h.click(V(12, 8, 10))
 
 
-a_waits.wait_ms = 2500
-
-
 def a_placed():
     p = panel()
     h.check("the screw is made at once", p is not None and p.target is not None)
@@ -182,9 +179,6 @@ def a_placed():
     h.task_button("OK")
 
 
-a_placed.wait_ms = 2000
-
-
 def a_kept():
     h.check("dialog closed", panel() is None)
     h.check("kept", close(block_volume(), BOX - SCREW_HOLE), block_volume())
@@ -195,9 +189,6 @@ def a_kept():
     s.undo()
 
 
-a_kept.wait_ms = 1500
-
-
 # -- B ---------------------------------------------------------------------------------------------
 def b_undone():
     h.check("Undo: no screw", not parts(), len(parts()))
@@ -206,18 +197,12 @@ def b_undone():
     s.redo()
 
 
-b_undone.wait_ms = 1500
-
-
 def b_redone():
     h.check("Redo: the screw", len(parts()) == 1)
     h.check("Redo: its component", "M3x10 ISO 4762" in component_labels(), component_labels())
     h.check("Redo: the hole", close(block_volume(), BOX - SCREW_HOLE), block_volume())
     state["screw"] = parts()[0].Name if parts() else None
     open_hardware()
-
-
-b_redone.wait_ms = 1500
 
 
 # -- C ---------------------------------------------------------------------------------------------
@@ -235,9 +220,6 @@ def c_click():
     h.click(V(30, 20, 10))
 
 
-c_click.wait_ms = 2500
-
-
 def c_placed():
     v = block_volume()
     want = BOX - SCREW_HOLE - INSERT_HOLE
@@ -253,9 +235,6 @@ def c_placed():
     h.check("component M3 Heat-set insert", "M3 Heat-set insert" in component_labels())
     h.shot("3-insert")
     h.task_button("OK")
-
-
-c_placed.wait_ms = 2000
 
 
 # -- D ---------------------------------------------------------------------------------------------
@@ -277,9 +256,6 @@ def d_click():
     h.click(V(30, 8, 10))
 
 
-d_click.wait_ms = 2500
-
-
 def d_placed():
     v = block_volume()
     want = BOX - SCREW_HOLE - INSERT_HOLE - MAGNET_HOLE
@@ -298,9 +274,6 @@ def d_placed():
     h.task_button("OK")
 
 
-d_placed.wait_ms = 2000
-
-
 # -- E ---------------------------------------------------------------------------------------------
 def e_edit():
     h.check("three parts", panel() is None and len(parts()) == 3, len(parts()))
@@ -309,9 +282,6 @@ def e_edit():
     state["screw_volume"] = screw.Shape.Volume if screw is not None else 0.0
     if screw is not None:
         s.timeline_double_click(screw)
-
-
-e_edit.wait_ms = 2000
 
 
 def e_editing():
@@ -344,9 +314,6 @@ def e_longer():
     h.task_button("OK")
 
 
-e_longer.wait_ms = 2000
-
-
 def e_kept():
     h.check("edit kept", panel() is None and "M3x16 ISO 4762" in component_labels())
     h.check("still three parts and three holes", len(parts()) == 3 and len(holes()) == 3)
@@ -369,9 +336,6 @@ def f_rim():
     h.check("click the pocket's rim", h.click_edge(V(30 + 3.1, 8, 10)), h.state.get("last_click"))
 
 
-f_rim.wait_ms = 2500
-
-
 def f_on_rim():
     p = panel()
     h.check("placed on the rim", p is not None and p.target is not None)
@@ -387,9 +351,6 @@ def f_on_rim():
         h.check("on the pocket's axis", (c - pocket).Length < 1e-6, (c, pocket))
     h.shot("6-rim")
     h.task_button("Cancel")
-
-
-f_on_rim.wait_ms = 2000
 
 
 def f_cancelled():
@@ -426,4 +387,5 @@ h.run(
         f_on_rim,
         f_cancelled,
     ],
+    paced_by="state",
 )

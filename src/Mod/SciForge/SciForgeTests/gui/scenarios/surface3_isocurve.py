@@ -140,9 +140,6 @@ def three_circles():
     st.enter()
 
 
-three_circles.wait_ms = 900
-
-
 def kept():
     from sciforge import sketch_companions, surface_iso
 
@@ -194,4 +191,5 @@ h.run(
         follow,
         followed,
     ],
+    paced_by="state",
 )

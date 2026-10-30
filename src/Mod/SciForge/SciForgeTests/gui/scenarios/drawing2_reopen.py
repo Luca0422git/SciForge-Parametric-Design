@@ -57,18 +57,12 @@ def setup():
     state["main"] = d.page().Name
 
 
-setup.wait_ms = 4000
-
-
 def plus():
     from sciforge import drawing_sheets_ui
 
     bar = drawing_sheets_ui.bar_of(d.page())
     if h.check("the sheet bar", bar is not None):
         wi.click(bar.plus)
-
-
-plus.wait_ms = 2500
 
 
 def rename():
@@ -98,16 +92,10 @@ def a_save():
     d.key(QtCore.Qt.Key_S, QtCore.Qt.ControlModifier)
 
 
-a_save.wait_ms = 1500
-
-
 def a_dialog():
     if h.check("Ctrl+S on the sheet: the Save dialog", vi.save_dialog() is not None, h.popups()):
         vi.fill_save_dialog(name="Reo2", location=OUT)
         vi.click_save()
-
-
-a_dialog.wait_ms = 4000
 
 
 def a_saved():
@@ -120,14 +108,8 @@ def b_close():
     App.closeDocument(doc().Name)
 
 
-b_close.wait_ms = 1500
-
-
 def b_open():
     App.openDocument(state["file"])
-
-
-b_open.wait_ms = 5000
 
 
 def b_browser():
@@ -142,9 +124,6 @@ def b_browser():
     item = tree.row(state["label"])
     if h.check("browser row of the drawing", item is not None, tree.labels()):
         wi.double_click(tree.viewport(), tree.label_point(item))
-
-
-b_browser.wait_ms = 5000
 
 
 def b_whole():
@@ -192,15 +171,9 @@ def b_whole():
     h.shot("b-reopened")
 
 
-b_whole.wait_ms = 1500
-
-
 # -- C ------------------------------------------------------------------------------------------
 def c_open():
     d.double_click_at(*w.label_point(obj("dim")))
-
-
-c_open.wait_ms = 1500
 
 
 def c_class():
@@ -219,14 +192,8 @@ def c_ok():
     d.ok()
 
 
-c_ok.wait_ms = 1500
-
-
 def c_undo():
     d.undo()
-
-
-c_undo.wait_ms = 1500
 
 
 def c_undone():
@@ -234,9 +201,6 @@ def c_undone():
         "undo: the limits", obj("dim").FormatSpec.startswith(DIA + "10.015"), obj("dim").FormatSpec
     )
     d.redo()
-
-
-c_undone.wait_ms = 1500
 
 
 def c_redone():
@@ -248,9 +212,6 @@ def d_move():
     hole = doc().getObject("Hole2")
     hole.Placement.Base = App.Vector(65.0, 35.0, 0)
     doc().recompute()
-
-
-d_move.wait_ms = 4000
 
 
 def d_followed():
@@ -269,4 +230,5 @@ h.run(
     + [b_close, b_open, b_browser, b_whole]
     + [c_open, c_class, c_ok, c_undo, c_undone, c_redone]
     + [d_move, d_followed],
+    paced_by="state",
 )

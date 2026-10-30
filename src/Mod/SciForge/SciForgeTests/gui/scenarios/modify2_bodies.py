@@ -452,4 +452,5 @@ h.run(
         undo,
         shell_undone,
     ],
+    paced_by="state",
 )

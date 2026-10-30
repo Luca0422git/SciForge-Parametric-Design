@@ -92,8 +92,6 @@ def dimension(name, pick, place):
     def end():
         d.key(QtCore.Qt.Key_Escape)
 
-    picked.wait_ms = 1000
-    placed.wait_ms = 1000
     steps = [start, picked, placed, end]
     for step in steps:
         step.__name__ = "%s_%s" % (name, step.__name__)
@@ -106,9 +104,6 @@ def mark_start():
 
 def mark_pick():
     d.click_at(*at(0, 6))
-
-
-mark_pick.wait_ms = 1000
 
 
 def mark_end():
@@ -134,16 +129,10 @@ def a_design():
     d.workspace("Design")
 
 
-a_design.wait_ms = 1200
-
-
 def a_edit():
     h.check("the design's tab", d.page() is None)
     h.fit()
     b.timeline_double_click("Fillet 1")
-
-
-a_edit.wait_ms = 1500
 
 
 def a_radius():
@@ -152,14 +141,8 @@ def a_radius():
         b.type_into(p.radius.widget, "8")
 
 
-a_radius.wait_ms = 1500
-
-
 def a_ok():
     h.task_button("OK")
-
-
-a_ok.wait_ms = 1500
 
 
 def a_done():
@@ -175,9 +158,6 @@ def a_done():
 # -- B ------------------------------------------------------------------------------------------
 def b_open():
     d.workspace("Drawing", state["label"])
-
-
-b_open.wait_ms = 2500
 
 
 def b_followed():
@@ -205,9 +185,6 @@ def c_design():
     d.workspace("Design")
 
 
-c_design.wait_ms = 1200
-
-
 def undo_stats():
     from sciforge import undo_fast
 
@@ -219,18 +196,12 @@ def c_undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-c_undo.wait_ms = 1500
-
-
 def c_undone():
     body = App.ActiveDocument.getObject("Body")
     h.check(
         "the fillets are R5 again", abs(body.Shape.Volume - fx.VOLUME) < 1e-3, body.Shape.Volume
     )
     d.workspace("Drawing", state["label"])
-
-
-c_undone.wait_ms = 2500
 
 
 def fast(what):
@@ -255,9 +226,6 @@ def c_redo():
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
 
 
-c_redo.wait_ms = 1500
-
-
 def c_redone():
     import math
 
@@ -267,9 +235,6 @@ def c_redone():
         "the fillets are R8 again", abs(body.Shape.Volume - (fx.VOLUME - extra)) < 1e-3, body.Shape.Volume
     )
     d.workspace("Drawing", state["label"])
-
-
-c_redone.wait_ms = 2500
 
 
 def c_followed_redo():
@@ -286,9 +251,6 @@ def d_move():
     hole = doc.getObject("Hole")
     hole.Placement.Base = App.Vector(fx.LENGTH / 2.0 + 10.0, fx.WIDTH / 2.0, 0)
     doc.recompute()
-
-
-d_move.wait_ms = 2500
 
 
 def d_followed():
@@ -318,4 +280,5 @@ h.run(
     + [c_design, c_undo, c_undone, c_followed]
     + [c_design, c_redo, c_redone, c_followed_redo]
     + [d_move, d_followed],
+    paced_by="state",
 )

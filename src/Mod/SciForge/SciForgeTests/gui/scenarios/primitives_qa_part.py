@@ -100,16 +100,10 @@ def p5_circle():
     h.click(V(13, 10, 10))
 
 
-p5_circle.wait_ms = 1500
-
-
 def p5_depth():
     p = pi.panel("CylinderPanel")
     if p is not None:
         ui.type_into(p.height.widget, "-10")
-
-
-p5_depth.wait_ms = 1500
 
 
 def p5_hole():
@@ -144,16 +138,10 @@ def p5_box_c2():
     h.click(V(35, 25, 10))
 
 
-p5_box_c2.wait_ms = 1500
-
-
 def p5_box_height():
     p = pi.panel("BoxPanel")
     if p is not None:
         ui.type_into(p.height.widget, "5")
-
-
-p5_box_height.wait_ms = 1500
 
 
 def p5_box_ok():
@@ -192,9 +180,6 @@ def p5_pull_distance():
         ui.type_into(p.field.widget, "5")
 
 
-p5_pull_distance.wait_ms = 1500
-
-
 def p5_pull_ok():
     h.check("P5 pulled 5", near(vol(), 13000.0 - 90.0 * PI), vol())
     h.task_button("OK")
@@ -212,14 +197,8 @@ def p5_block_20():
         ui.type_into(p.distance.widget, "20")
 
 
-p5_block_20.wait_ms = 1500
-
-
 def p5_block_ok():
     h.task_button("OK")
-
-
-p5_block_ok.wait_ms = 1500
 
 
 def p5_rode_up():
@@ -227,9 +206,6 @@ def p5_rode_up():
     h.check("P5 the hole, the box and the pull rode up", near(vol(), 25000.0 - 90.0 * PI), vol())
     h.check("P5 the pulled top at 30", near(top_z(), 30.0, 1e-3), top_z())
     ti.menu("Cylinder 1", "Delete")
-
-
-p5_rode_up.wait_ms = 1500
 
 
 def p5_deleted():
@@ -244,15 +220,9 @@ def p5_deleted():
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-p5_deleted.wait_ms = 1500
-
-
 def p5_undone():
     h.check("P5 Ctrl+Z: the hole is back", near(vol(), 25000.0 - 90.0 * PI), vol())
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-p5_undone.wait_ms = 1500
 
 
 def p5_redone():
@@ -276,14 +246,8 @@ def p5_boss_distance():
         ui.type_into(p.distance.widget, "4")
 
 
-p5_boss_distance.wait_ms = 1500
-
-
 def p5_boss_ok():
     h.task_button("OK")
-
-
-p5_boss_ok.wait_ms = 1500
 
 
 def p5_boss_done():
@@ -300,14 +264,8 @@ def p5_box_8():
         ui.type_into(p.height.widget, "8")
 
 
-p5_box_8.wait_ms = 1500
-
-
 def p5_box_8_ok():
     h.task_button("OK")
-
-
-p5_box_8_ok.wait_ms = 1500
 
 
 def p5_followed():
@@ -320,9 +278,6 @@ def p5_followed():
     h.check("P5 the boss's top at 37", near(top_z(), 37.0, 1e-3), top_z())
     h.shot("p5")
     h.press("z", QtCore.Qt.ControlModifier)
-
-
-p5_followed.wait_ms = 1500
 
 
 def p5_back():
@@ -344,9 +299,6 @@ def p5_plane_box():
         ui.click(p.plane_field.button)
 
 
-p5_plane_box.wait_ms = 1500
-
-
 def p5_click_block_top():
     p = pi.panel("BoxPanel")
     h.check(
@@ -363,9 +315,6 @@ def p5_replaned():
     h.check("P5 on Extrude 1's face", text == "Face of Extrude 1", text)
     h.check("P5 the part unchanged", near(vol(), s["p5_open"]), (vol(), s["p5_open"]))
     h.press(QtCore.Qt.Key_Escape)
-
-
-p5_replaned.wait_ms = 1500
 
 
 def p5_replane_esc():
@@ -393,9 +342,6 @@ def p6_c2():
     pl.click_on_plane(V(55, -25, 0))
 
 
-p6_c2.wait_ms = 1500
-
-
 def p6_cut():
     p = pi.panel("BoxPanel")
     h.check(
@@ -405,9 +351,6 @@ def p6_cut():
     )
     if p is not None:
         ui.choose(p.operation, "Cut")
-
-
-p6_cut.wait_ms = 1500
 
 
 def p6_cut_said():
@@ -424,9 +367,6 @@ def p6_cut_waits():
         ui.choose(p.operation, "Join")
 
 
-p6_cut_waits.wait_ms = 1500
-
-
 def p6_join_said():
     p = pi.panel("BoxPanel")
     # Fusion: a Join that touches no body makes a new body (never a separate piece).
@@ -440,9 +380,6 @@ def p6_join_waits():
     h.check("P6 the dialog is still open", p is not None)
     if p is not None:
         ui.choose(p.operation, "Intersect")
-
-
-p6_join_waits.wait_ms = 1500
 
 
 def p6_intersect_said():
@@ -462,17 +399,11 @@ def p6_intersect_waits():
         ui.choose(p.operation, "New Body")
 
 
-p6_intersect_waits.wait_ms = 1500
-
-
 def p6_new_body():
     p = pi.panel("BoxPanel")
     h.check("P6 New Body: no message", msg(p) == "", msg(p))
     h.check("P6 a new body of 1000", near(vol(), s["vol"] + 1000.0), vol())
     h.press(QtCore.Qt.Key_Escape)
-
-
-p6_new_body.wait_ms = 1200
 
 
 def p6_esc():
@@ -494,17 +425,11 @@ def p6_all_c2():
     pl.click_on_plane(V(50, 40, 0))
 
 
-p6_all_c2.wait_ms = 1500
-
-
 def p6_all_cut():
     p = pi.panel("BoxPanel")
     h.check("P6 a box round the part", p is not None and p.target is not None)
     if p is not None:
         ui.choose(p.operation, "Cut")
-
-
-p6_all_cut.wait_ms = 1500
 
 
 def p6_all_said():
@@ -516,9 +441,6 @@ def p6_all_said():
 def p6_all_waits():
     h.check("P6 OK waits", pi.panel("BoxPanel") is not None)
     h.press(QtCore.Qt.Key_Escape)
-
-
-p6_all_waits.wait_ms = 1200
 
 
 def p6_all_esc():
@@ -558,9 +480,6 @@ def p7_placing():
     h.check("P7 the top is taken", p is not None and p.state == "place", p and p.state)
     h.check("P7 the message went", msg(p) == "", msg(p))
     h.press(QtCore.Qt.Key_Escape)
-
-
-p7_placing.wait_ms = 1200
 
 
 def p7_done():
@@ -672,4 +591,5 @@ h.run(
         p7_placing,
         p7_done,
     ],
+    paced_by="state",
 )

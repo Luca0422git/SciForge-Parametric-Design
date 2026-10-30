@@ -68,9 +68,6 @@ def a_below():
     d.move_to(BASE[0] + 3, BASE[1] - 60)
 
 
-a_below.wait_ms = 1200
-
-
 def a_top_preview():
     h.check("preview: the Top view (first angle: below)", kinds() == ["Top"], kinds())
     d.click_at(BASE[0] + 3, BASE[1] - 60)
@@ -80,9 +77,6 @@ def a_right():
     d.move_to(BASE[0] + 90, BASE[1] - 4)
 
 
-a_right.wait_ms = 1200
-
-
 def a_left_preview():
     h.check("preview: the Left view on the right", kinds() == ["Left", "Top"], kinds())
     d.click_at(BASE[0] + 90, BASE[1] - 4)
@@ -90,9 +84,6 @@ def a_left_preview():
 
 def a_corner():
     d.move_to(BASE[0] + 90, BASE[1] - 60)
-
-
-a_corner.wait_ms = 1200
 
 
 def a_corner_click():
@@ -107,9 +98,6 @@ def a_over_base():
 def a_still_three():
     h.check("over the base view: no preview", len(kinds()) == 3, kinds())
     d.key(QtCore.Qt.Key_Return)
-
-
-a_still_three.wait_ms = 1500
 
 
 def a_done():
@@ -146,9 +134,6 @@ def b_redo():
     d.redo()
 
 
-b_redo.wait_ms = 1500
-
-
 def b_redone():
     h.check("redo: three again", len(kinds()) == 3, kinds())
 
@@ -168,9 +153,6 @@ def c_drag():
     point = (x + half_w + 1.5, y + half_h + 1.5)
     state["grab"] = point
     d.drag_page(point, (point[0] + 15, point[1] + 10))
-
-
-c_drag.wait_ms = 1500
 
 
 def c_moved():
@@ -205,18 +187,12 @@ def d_double_click():
     d.double_click_at(x, y)
 
 
-d_double_click.wait_ms = 1200
-
-
 def d_dialog():
     p = d.panel_of("BaseViewPanel")
     if not h.check("the base view's dialog", p is not None, d.panel()):
         return
     h.check("editing, not a new view", p.editing)
     d.choose(p.orientation, "Top")
-
-
-d_dialog.wait_ms = 1500
 
 
 def d_turned():
@@ -231,9 +207,6 @@ def d_turned():
     d.cancel()
 
 
-d_turned.wait_ms = 1500
-
-
 def d_restored():
     b = base()
     h.check("Cancel: Front again", vclose(b.Direction, (0, -1, 0)), b.Direction)
@@ -245,9 +218,6 @@ def d_restored():
 # -- E ------------------------------------------------------------------------------------------
 def e_design_tab():
     d.workspace("Design")
-
-
-e_design_tab.wait_ms = 800
 
 
 def e_automatic():
@@ -274,9 +244,6 @@ def e_automatic():
     h.check("title block scale filled", bool(title.get("Scale")), title)
     h.check("sheet B", title.get("Size") == "B", title)
     h.shot("e-automatic")
-
-
-e_automatic.wait_ms = 1500
 
 
 h.run(
@@ -308,4 +275,5 @@ h.run(
     ]
     + d.drawing_steps("auto", standard="ASME", views="Automatic (base, projected, iso)")
     + [e_automatic],
+    paced_by="state",
 )

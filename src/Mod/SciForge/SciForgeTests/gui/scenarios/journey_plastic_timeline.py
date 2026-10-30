@@ -12,4 +12,5 @@ from SciForgeTests.gui import journey_plastic_steps as j
 h.run(
     "journey_plastic_timeline",
     j.build_steps() + j.timeline_steps(),
+    paced_by="state",
 )

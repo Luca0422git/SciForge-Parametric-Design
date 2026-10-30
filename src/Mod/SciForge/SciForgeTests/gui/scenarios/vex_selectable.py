@@ -116,9 +116,6 @@ def setup():
     browser()
 
 
-setup.wait_ms = 1500
-
-
 # -- Path 1 -------------------------------------------------------------------------------------
 def p1_before():
     hit, names = picked(RAIL)
@@ -132,9 +129,6 @@ def p1_before():
     )
     h.check("P1 no mark on Frame yet", not marked("Frame"))
     t.row_menu("Frame", ENTRY)
-
-
-p1_before.wait_ms = 800
 
 
 def p1_unselectable():
@@ -158,9 +152,6 @@ def p1_unselectable():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-p1_unselectable.wait_ms = 800
-
-
 # -- Path 2 -------------------------------------------------------------------------------------
 def p2_undone():
     from sciforge import selectable
@@ -169,9 +160,6 @@ def p2_undone():
     hit, names = picked(RAIL)
     h.check("P2 Ctrl+Z: a click picks Rail again", names == [s["rail_box"]], (hit, names))
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-p2_undone.wait_ms = 800
 
 
 def p2_redone():
@@ -186,9 +174,6 @@ def p3_new_step():
     doc().recompute()
 
 
-p3_new_step.wait_ms = 1000
-
-
 def p3_unpickable():
     h.check("P3 the new step's switch is off", switches("rail") == (False, [False, False]))
     hit, names = picked(RAIL_STEP)
@@ -198,9 +183,6 @@ def p3_unpickable():
 # -- Path 4 -------------------------------------------------------------------------------------
 def p4_screw():
     t.row_menu("Screw", ENTRY)
-
-
-p4_screw.wait_ms = 800
 
 
 def p4_unselectable():
@@ -215,15 +197,9 @@ def p4_unselectable():
     Gui.Selection.clearSelection()
 
 
-p4_unselectable.wait_ms = 600
-
-
 # -- Path 5 -------------------------------------------------------------------------------------
 def p5_frame_back():
     t.row_menu("Frame", ENTRY)
-
-
-p5_frame_back.wait_ms = 800
 
 
 def p5_selectable():
@@ -247,9 +223,6 @@ def p6_save():
     App.closeDocument(s["doc"])
     reopened = App.openDocument(s["file"])
     s["doc"] = reopened.Name
-
-
-p6_save.wait_ms = 2000
 
 
 def p6_reopened():
@@ -292,4 +265,5 @@ h.run(
         p6_reopened,
         cleanup,
     ],
+    paced_by="state",
 )

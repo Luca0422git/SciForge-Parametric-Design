@@ -262,9 +262,6 @@ def delete_from_timeline():
         h.check("Delete in the right-click menu", w.right_click(button, w.center(button), "Delete"))
 
 
-delete_from_timeline.wait_ms = 1500
-
-
 def deleted():
     found = ps.bodies()
     h.check("the copy body went with its pattern", len(found) == 1, [x.Label for x in found])
@@ -287,9 +284,6 @@ def save_and_reopen():
     App.openDocument(path)
     App.ActiveDocument.recompute()
     h.fit()
-
-
-save_and_reopen.wait_ms = 2000
 
 
 def reopened():
@@ -369,4 +363,5 @@ h.run(
         reopened_edit,
         end,
     ],
+    paced_by="state",
 )

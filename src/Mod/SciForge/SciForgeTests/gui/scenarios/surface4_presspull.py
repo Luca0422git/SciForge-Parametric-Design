@@ -341,4 +341,5 @@ h.run(
         edit_after_reopen,
         closed_again,
     ],
+    paced_by="state",
 )

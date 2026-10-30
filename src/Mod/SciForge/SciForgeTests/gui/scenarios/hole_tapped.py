@@ -118,9 +118,6 @@ def through():
         hs.click_checkbox(p.modeled)
 
 
-through.wait_ms = 3000  # FreeCAD blocks input while it models the thread
-
-
 def modeled():
     shape = h.body().Shape
     slab = shape.common(Part.makeBox(40, 30, 1, V(0, 0, 4))).Volume
@@ -137,9 +134,6 @@ def modeled():
     p = hs.hole_panel()
     if p:
         hs.click_checkbox(p.modeled)
-
-
-modeled.wait_ms = 1500
 
 
 def blind():
@@ -334,4 +328,5 @@ h.run(
         edit_open,
         after_cancel,
     ],
+    paced_by="state",
 )

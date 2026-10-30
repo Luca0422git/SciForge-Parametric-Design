@@ -70,9 +70,6 @@ def a_line():
         w.click(u, v)
 
 
-a_line.wait_ms = 1200
-
-
 def a_enter():
     p = d.panel_of("SectionPanel")
     h.check("four points", p is not None and len(p.points) == 4, p and p.points)
@@ -85,9 +82,6 @@ def a_place():
     d.move_to(x + 90, y + 5)
 
 
-a_place.wait_ms = 2500
-
-
 def a_click():
     found = sections()
     h.check("the section follows the mouse", len(found) == 1, found)
@@ -95,16 +89,10 @@ def a_click():
     d.click_at(x + 90, y + 5)
 
 
-a_click.wait_ms = 1000
-
-
 def a_ok():
     p = d.panel_of("SectionPanel")
     h.check("its type: Offset", p is not None and p.kind.text() == "Offset", p and p.kind.text())
     d.ok()
-
-
-a_ok.wait_ms = 2500
 
 
 def a_check():
@@ -133,15 +121,9 @@ def a_check():
     h.shot("a-offset")
 
 
-a_check.wait_ms = 1000
-
-
 # -- B ------------------------------------------------------------------------------------------
 def b_undo():
     d.undo()
-
-
-b_undo.wait_ms = 1500
 
 
 def b_undone():
@@ -149,9 +131,6 @@ def b_undone():
     doc = d.page().Document
     h.check("its cut line went too", doc.getObject(state["profile"]) is None)
     d.redo()
-
-
-b_undone.wait_ms = 2500
 
 
 def b_redone():
@@ -170,16 +149,10 @@ def c_line():
         w.click(u, v)
 
 
-c_line.wait_ms = 1200
-
-
 def c_away():
     x, y = base_pos()
     d.move_to(x - 70, y + 4)
     d.move_to(x - 90, y + 2)
-
-
-c_away.wait_ms = 2500
 
 
 def c_place():
@@ -189,16 +162,10 @@ def c_place():
     d.click_at(x - 90, y + 2)
 
 
-c_place.wait_ms = 1000
-
-
 def c_ok():
     p = d.panel_of("SectionPanel")
     h.check("type Half", p is not None and p.kind.text() == "Half", p and p.kind.text())
     d.ok()
-
-
-c_ok.wait_ms = 2500
 
 
 def c_check():
@@ -245,22 +212,13 @@ def e_line():
     d.move_to(x + 2, y - 70)
 
 
-e_line.wait_ms = 2500
-
-
 def e_place():
     x, y = base_pos()
     d.click_at(x + 2, y - 70)
 
 
-e_place.wait_ms = 1000
-
-
 def e_ok():
     d.ok()
-
-
-e_ok.wait_ms = 2500
 
 
 def e_open():
@@ -273,9 +231,6 @@ def e_open():
     x, y = drawing.view_position(sec)
     half_w, _half_h = drawing.view_extent(sec)
     d.double_click_at(x + half_w - 1.0, y)
-
-
-e_open.wait_ms = 1500
 
 
 def hole1_lines_off():
@@ -298,9 +253,6 @@ def e_slice():
     h.check("no distance yet", not p.distance.isVisibleTo(p.form))
     d.choose(p.style, "Visible and Hidden Edges")
     d.choose(p.depth, "Slice")
-
-
-e_slice.wait_ms = 4000
 
 
 def e_sliced():
@@ -331,17 +283,11 @@ def e_sliced():
     d.choose(p.depth, "Distance")
 
 
-e_sliced.wait_ms = 1000
-
-
 def e_distance():
     p = d.panel_of("SectionPanel")
     h.check("the distance box shows", p is not None and p.distance.isVisibleTo(p.form))
     d.type_into(p.distance, "30")
     QtTest.QTest.keyClick(p.distance, QtCore.Qt.Key_Tab)  # (leaving the box keeps it)
-
-
-e_distance.wait_ms = 3000
 
 
 def e_deeper():
@@ -357,9 +303,6 @@ def e_deeper():
     QtTest.QTest.keyClick(p.distance, QtCore.Qt.Key_Tab)
 
 
-e_deeper.wait_ms = 3000
-
-
 def e_shallow():
     from sciforge import drawing
 
@@ -369,9 +312,6 @@ def e_shallow():
     )
     h.check("hole 1 is off again (20 mm deep)", len(hole1_lines_off()) >= 2, hole1_lines_off())
     w.toggle(d.panel_of("SectionPanel").show_label)
-
-
-e_shallow.wait_ms = 1500
 
 
 def e_style():
@@ -384,9 +324,6 @@ def e_label():
     sec = section("C")
     h.check("label shown again", sec.Caption == "SECTION C-C", sec.Caption)
     d.ok()
-
-
-e_label.wait_ms = 2500
 
 
 def e_done():
@@ -409,16 +346,10 @@ def f_open():
     d.double_click_at(x + half_w - 1.0, y)
 
 
-f_open.wait_ms = 1500
-
-
 def f_slice():
     p = d.panel_of("SectionPanel")
     if h.check("the offset section's dialog", p is not None, d.panel()):
         d.choose(p.depth, "Slice")
-
-
-f_slice.wait_ms = 1000
 
 
 def f_refused():
@@ -432,9 +363,6 @@ def f_refused():
     )
     h.check("still whole", drawing.section_depth(section("A"))[0] == "Full")
     d.cancel()
-
-
-f_refused.wait_ms = 1500
 
 
 def f_done():
@@ -452,9 +380,6 @@ def g_line():
         w.click(u, v)
 
 
-g_line.wait_ms = 1200
-
-
 def g_enter():
     d.key(QtCore.Qt.Key_Return)
 
@@ -463,9 +388,6 @@ def g_place():
     x, y = base_pos()
     d.move_to(x + 3, y + 60)
     d.move_to(x + 2, y + 72)
-
-
-g_place.wait_ms = 3000
 
 
 def g_click():
@@ -477,9 +399,6 @@ def g_ok():
     p = d.panel_of("SectionPanel")
     h.check("type Aligned", p is not None and p.kind.text() == "Aligned", p and p.kind.text())
     d.ok()
-
-
-g_ok.wait_ms = 3000
 
 
 def g_check():
@@ -505,22 +424,13 @@ def h_line():
     d.move_to(x + 160, y + 2)
 
 
-h_line.wait_ms = 2500
-
-
 def h_place():
     x, y = base_pos()
     d.click_at(x + 160, y + 2)
 
 
-h_place.wait_ms = 1000
-
-
 def h_ok():
     d.ok()
-
-
-h_ok.wait_ms = 4000
 
 
 def h_check():
@@ -563,4 +473,5 @@ h.run(
     + [f_open, f_slice, f_refused, f_done]
     + [g_command, g_line, g_enter, g_place, g_click, g_ok, g_check]
     + [h_command, h_line, h_place, h_ok, h_check],
+    paced_by="state",
 )

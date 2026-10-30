@@ -127,9 +127,6 @@ def digit_in_box():
     keys_to_focus("5", enter=True)  # typing goes on in the box; Enter is OK
 
 
-digit_in_box.wait_ms = 1500
-
-
 def done_15():
     h.check("Enter finished the extrude", xpanel() is None and not Gui.Control.activeDialog())
     h.check("15 typed: 40 x 30 x 15", near(h.solid_volume(), AREA * 15), h.solid_volume())
@@ -160,9 +157,6 @@ def pp_digit_in_box():
     h.check("4 typed over the view goes into Press Pull's box", box is not None and
             box.text() == "4", (a.focus_name(), box and box.text()))
     keys_to_focus("", enter=True)
-
-
-pp_digit_in_box.wait_ms = 1500
 
 
 def pp_done():
@@ -252,9 +246,6 @@ def digit_in_taper_box():
     keys_to_focus("", enter=True)
 
 
-digit_in_taper_box.wait_ms = 1500
-
-
 def tapered_done():
     from sciforge import extrude
 
@@ -296,4 +287,5 @@ h.run(
         digit_in_taper_box,
         tapered_done,
     ],
+    paced_by="state",
 )

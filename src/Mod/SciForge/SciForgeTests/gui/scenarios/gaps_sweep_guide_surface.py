@@ -211,9 +211,6 @@ def surface_box():
     h.click(V(10, -17.3205, 10))
 
 
-surface_box.wait_ms = 1500
-
-
 def hugging():
     p = panel()
     if p is None:
@@ -238,9 +235,6 @@ def hugging():
     h.fit()
     h.shot("1-guide-surface")
     h.task_button("OK")
-
-
-hugging.wait_ms = 2000
 
 
 def kept():
@@ -322,4 +316,5 @@ h.run(
         undone,
         redone,
     ],
+    paced_by="state",
 )

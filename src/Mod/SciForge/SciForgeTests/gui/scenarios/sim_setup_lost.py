@@ -275,4 +275,5 @@ h.run(
         f_dof,
         f_mesh,
     ],
+    paced_by="state",
 )

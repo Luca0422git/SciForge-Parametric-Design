@@ -816,4 +816,4 @@ STEPS = [
     p16_first_esc,
 ]
 
-h.run("revolve_qa_more", ti.watched(STEPS))
+h.run("revolve_qa_more", ti.watched(STEPS), paced_by="state")
