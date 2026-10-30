@@ -237,6 +237,12 @@ def hover_then_digit():
     h.press("3")
 
 
+# A handle looks whether the mouse is on it every HOVER_EVERY-th poll: the hover counts a
+# moment after the move (CI #317 typed before it).
+hover_then_digit.ready = lambda: xpanel() is not None and xpanel().value_boxes.last == "taper"
+hover_then_digit.ready_what = "the taper handle to take the hover (its box gets the keys)"
+
+
 def digit_in_taper_box():
     p = xpanel()
     box = focused_box()
