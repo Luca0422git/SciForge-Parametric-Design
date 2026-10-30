@@ -234,4 +234,5 @@ h.run(
             redone,
         ]
     ),
+    paced_by="state",
 )

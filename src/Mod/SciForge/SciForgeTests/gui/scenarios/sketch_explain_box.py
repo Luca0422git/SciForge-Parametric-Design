@@ -63,9 +63,6 @@ def r_done():
     st.esc()
 
 
-r_done.wait_ms = 900
-
-
 def d_dim():
     h.press("d")
 
@@ -88,9 +85,6 @@ def d_check():
     h.check("setup: =w gives a 30 wide rectangle", xs == [0.0, 30.0], xs)
 
 
-d_check.wait_ms = 1200
-
-
 def e_setup():
     import Part
     import Sketcher
@@ -108,9 +102,6 @@ def e_setup():
     d.recompute()
     s["exprs"] = dict(s0.ExpressionEngine)
     h.check("setup: the sketch solves", s0.solve() == 0 and not s0.RedundantConstraints)
-
-
-e_setup.wait_ms = 1000
 
 
 def opener(tag):
@@ -147,16 +138,12 @@ def checker(tag, words):
         st.esc()
 
     step.__name__ = "check_" + tag
-    step.wait_ms = 1200
     return step
 
 
 def f_finish():
     st.esc()
     h.ribbon("Finish Sketch")
-
-
-f_finish.wait_ms = 1500
 
 
 def f_trial():
@@ -190,4 +177,4 @@ for tag, text, words in (
     steps += [opener(tag), typer(tag, text), checker(tag, words)]
 steps += [f_finish, f_trial]
 
-h.run("sketch_explain_box", st.start_steps("ExplainBox") + steps)
+h.run("sketch_explain_box", st.start_steps("ExplainBox") + steps, paced_by="state")

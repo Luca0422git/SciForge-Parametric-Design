@@ -130,9 +130,6 @@ def trim_drag():
     st.release(end)
 
 
-trim_drag.wait_ms = 1000
-
-
 def trim_drag_check():
     after = [spans(lines_on_x(x), "y") for x in (15, 25, 35)]
     h.check(
@@ -313,4 +310,5 @@ h.run(
             finish,
         ]
     ),
+    paced_by="state",
 )

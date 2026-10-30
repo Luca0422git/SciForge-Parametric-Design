@@ -60,9 +60,6 @@ def a_command():
     w.menu("DIMENSIONS", "Ordinate Dimension")
 
 
-a_command.wait_ms = 1200
-
-
 def a_origin():
     p = d.panel_of("OrdinatePanel")
     if h.check("the Ordinate dialog", p is not None, d.panel()):
@@ -80,9 +77,6 @@ def a_place1():
     w.click(-20.0, 35.0)
 
 
-a_place1.wait_ms = 1200
-
-
 def a_first():
     h.check("0 and 20 across", values() == [("x", 0.0), ("x", 20.0)], values())
     w.click(*w.hole_top(w.HOLE2))
@@ -91,9 +85,6 @@ def a_first():
 
 def a_place2():
     w.click(20.0, 37.5)  # near the first one's line: lined up with it
-
-
-a_place2.wait_ms = 1200
 
 
 def a_second():
@@ -108,9 +99,6 @@ def a_second():
 
 def a_place3():
     w.click(-55.0, -10.0)
-
-
-a_place3.wait_ms = 1200
 
 
 def a_third():
@@ -134,15 +122,9 @@ def a_ended():
     d.undo()
 
 
-a_ended.wait_ms = 1500
-
-
 def a_undone():
     h.check("undo: the 15 and its 0 go", len(ordinates()) == 3, values())
     d.redo()
-
-
-a_undone.wait_ms = 1500
 
 
 def a_redone():
@@ -153,9 +135,6 @@ def a_redone():
 # -- B ------------------------------------------------------------------------------------------
 def b_command():
     w.menu("DIMENSIONS", "Baseline Dimension")
-
-
-b_command.wait_ms = 1200
 
 
 def b_pick():
@@ -179,9 +158,6 @@ def b_next():
     w.click(*w.hole_top(w.HOLE2))
 
 
-b_next.wait_ms = 1500
-
-
 def b_made():
     new = [x for x in linear() if x.Name not in state["before"]]
     if not h.check("one more", len(new) == 1, [x.Name for x in new]):
@@ -202,9 +178,6 @@ def c_command():
     w.menu("DIMENSIONS", "Chain Dimension")
 
 
-c_command.wait_ms = 1200
-
-
 def c_pick():
     from sciforge import drawing_annot
 
@@ -220,14 +193,8 @@ def c_hole2():
     w.click(*w.hole_top(w.HOLE2))
 
 
-c_hole2.wait_ms = 1500
-
-
 def c_corner():
     w.click(40.0, -25.0)
-
-
-c_corner.wait_ms = 1500
 
 
 def c_made():
@@ -246,9 +213,6 @@ def c_made():
 # -- D ------------------------------------------------------------------------------------------
 def d_command():
     w.menu("DIMENSIONS", "Arc Length Dimension")
-
-
-d_command.wait_ms = 1200
 
 
 def d_circle():
@@ -272,9 +236,6 @@ def d_place():
     w.click(46.0, 31.0)
 
 
-d_place.wait_ms = 1200
-
-
 def d_made():
     found = w.annotations("arc")
     if h.check("an arc length", len(found) == 1, found):
@@ -296,9 +257,6 @@ def e_move():
     doc.recompute()
 
 
-e_move.wait_ms = 3500
-
-
 def e_followed():
     h.check("hole 2's ordinate reads 65", ("x", 65.0) in values(), values())
     h.check("hole 1's still 20", ("x", 20.0) in values(), values())
@@ -316,4 +274,5 @@ h.run(
     + [c_command, c_pick, c_hole2, c_corner, c_made]
     + [d_command, d_circle, d_refused, d_place, d_made, d_done]
     + [e_move, e_followed],
+    paced_by="state",
 )

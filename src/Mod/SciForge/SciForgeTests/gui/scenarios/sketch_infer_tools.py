@@ -250,9 +250,6 @@ def r_undo():
     h.press("z", CTRL)
 
 
-r_undo.wait_ms = 1200
-
-
 def r_undone():
     sk = s["sk"]
     left = [
@@ -272,9 +269,6 @@ def r_undone():
         (len(sk.Geometry), App.ActiveDocument.RedoNames[:4]),
     )
     h.press("y", CTRL)
-
-
-r_undone.wait_ms = 1200
 
 
 def r_redone():
@@ -642,9 +636,6 @@ def s_undo():
     h.press("z", CTRL)
 
 
-s_undo.wait_ms = 1200
-
-
 def s_undone():
     # SciForge's slot and the constraints it adds are one undo step (Fusion)
     left = [c for c in cons() if c[0] == "Perpendicular" and c[1] in s["s_lines"]]
@@ -762,4 +753,5 @@ h.run(
             finish,
         ]
     ),
+    paced_by="state",
 )

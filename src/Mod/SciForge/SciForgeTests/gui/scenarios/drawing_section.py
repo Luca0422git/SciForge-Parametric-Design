@@ -88,18 +88,12 @@ def b_place():
     d.move_to(x + 95, y + 12)
 
 
-b_place.wait_ms = 1500
-
-
 def b_preview():
     found = sections()
     if not h.check("a section view follows the mouse", len(found) == 1, found):
         return
     x, y = base_pos()
     d.click_at(x + 95, y + 12)
-
-
-b_preview.wait_ms = 800
 
 
 def b_placed():
@@ -137,9 +131,6 @@ def b_placed():
         d.type_into(p.label, "B")
 
 
-b_placed.wait_ms = 1500
-
-
 def c_label():
     sec = sections()[0]
     h.check(
@@ -148,9 +139,6 @@ def c_label():
         (sec.SectionSymbol, sec.Label),
     )
     d.ok()
-
-
-c_label.wait_ms = 1200
 
 
 def c_done():
@@ -169,9 +157,6 @@ def d_undone():
 
 def d_redo():
     d.redo()
-
-
-d_redo.wait_ms = 1500
 
 
 def d_redone():
@@ -209,18 +194,12 @@ def f_double():
     d.double_click_at(x + half_w - 2.0, y)
 
 
-f_double.wait_ms = 1200
-
-
 def f_dialog():
     p = d.panel_of("SectionPanel")
     if not h.check("the section's dialog", p is not None, d.panel()):
         return
     h.check("editing: its label", p.label.text() == "B", p.label.text())
     s.toggle(p.hatch)
-
-
-f_dialog.wait_ms = 1200
 
 
 def f_ok():
@@ -262,4 +241,5 @@ h.run(
         f_ok,
         f_done,
     ],
+    paced_by="state",
 )

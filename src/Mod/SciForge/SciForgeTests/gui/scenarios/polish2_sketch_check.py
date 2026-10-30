@@ -313,4 +313,4 @@ STEPS = [
 ]
 
 
-h.run("polish2_sketch_check", si.watched(STEPS))
+h.run("polish2_sketch_check", si.watched(STEPS), paced_by="state")

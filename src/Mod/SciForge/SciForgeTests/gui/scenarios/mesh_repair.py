@@ -77,9 +77,6 @@ def b_click():
     m.click_body(broken())
 
 
-b_click.wait_ms = 1500
-
-
 def b_picked():
     p = m.panel()
     steps = m.steps("MeshRepair")
@@ -107,9 +104,6 @@ def c_close_holes():
     m.tick(p.preview, True)
 
 
-c_close_holes.wait_ms = 1500
-
-
 def c_check():
     p = m.panel()
     step = m.steps("MeshRepair")[0]
@@ -128,9 +122,6 @@ def d_stitch():
     m.choose(p.repair_type, "Stitch and Remove")
 
 
-d_stitch.wait_ms = 1500
-
-
 def d_check():
     p = m.panel()
     step = m.steps("MeshRepair")[0]
@@ -144,9 +135,6 @@ def d_check():
 # -- E ----------------------------------------------------------------------------------------
 def e_ok():
     h.task_button("OK")
-
-
-e_ok.wait_ms = 1200
 
 
 def e_check():
@@ -186,9 +174,6 @@ def f_undo():
     i.undo()
 
 
-f_undo.wait_ms = 1200
-
-
 def f_check_undo():
     h.check("Ctrl+Z: no Repair step", not m.steps("MeshRepair"))
     insert = m.doc().getObject(state.get("insert", ""))
@@ -203,9 +188,6 @@ def f_check_undo():
 
 def f_redo():
     i.redo()
-
-
-f_redo.wait_ms = 1200
 
 
 def f_check_redo():
@@ -229,16 +211,10 @@ def g_click():
     m.click_body(broken())
 
 
-g_click.wait_ms = 1500
-
-
 def g_ok():
     p = m.panel()
     h.check("Convert Mesh dialog", p is not None and p.title == "Convert Mesh", p)
     h.task_button("OK")
-
-
-g_ok.wait_ms = 1500
 
 
 def g_check():
@@ -267,17 +243,11 @@ def h_insert_ok():
     i.no_file()
 
 
-h_insert_ok.wait_ms = 1000
-
-
 def h_repair():
     sheet = m.body("sheet")
     h.check("the sheet is a mesh body", sheet is not None, m.browser_labels())
     s.click_browser_row("sheet")
     h.ribbon("Repair")
-
-
-h_repair.wait_ms = 1200
 
 
 def h_rebuild():
@@ -291,17 +261,11 @@ def h_rebuild():
     m.tick(p.preview, True)
 
 
-h_rebuild.wait_ms = 2500
-
-
 def h_refused():
     p = m.panel()
     text = p.message.text() if p else ""
     h.check("the dialog says it cannot be repaired", "no volume" in text or "cannot" in text, text)
     h.task_button("OK")
-
-
-h_refused.wait_ms = 1500
 
 
 def h_stays_open():
@@ -311,9 +275,6 @@ def h_stays_open():
         "still says why", p is not None and "no volume" in p.message.text(), p and p.message.text()
     )
     h.task_button("Cancel")
-
-
-h_stays_open.wait_ms = 1200
 
 
 def h_check():
@@ -335,9 +296,6 @@ def i_open():
     s.menu("MODIFY", "Make Closed Mesh")
 
 
-i_open.wait_ms = 1500
-
-
 def i_dialog():
     p = m.panel()
     h.check("the Repair dialog", p is not None and p.title == "Repair", p)
@@ -352,9 +310,6 @@ def i_dialog():
     m.tick(p.preview, True)
 
 
-i_dialog.wait_ms = 6000
-
-
 def i_check():
     step = m.steps("MeshRepair")[-1]
     h.check("a new closed surface", m.closed(step), m.analysis(step))
@@ -365,9 +320,6 @@ def i_check():
         m.panel().info.text(),
     )
     h.task_button("Cancel")
-
-
-i_check.wait_ms = 1500
 
 
 def i_done():
@@ -418,4 +370,5 @@ h.run(
         i_check,
         i_done,
     ],
+    paced_by="state",
 )

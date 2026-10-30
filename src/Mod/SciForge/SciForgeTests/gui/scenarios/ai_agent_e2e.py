@@ -127,9 +127,6 @@ def start():
     h.check("prompts/list has the workflow templates", len(prompts) >= 3, prompts[:1])
 
 
-start.wait_ms = 1000
-
-
 # -- Path 2 -------------------------------------------------------------------------------------
 def agent_builds_and_checks():
     from SciForgeTests.headless import agent_e2e
@@ -155,9 +152,6 @@ def agent_builds_and_checks():
         names[:8],
     )
     s["agent"] = agent
-
-
-agent_builds_and_checks.wait_ms = 1500
 
 
 # -- Path 3 -------------------------------------------------------------------------------------
@@ -225,9 +219,6 @@ def selection_and_window_render():
     h.shot("agent-part")
 
 
-selection_and_window_render.wait_ms = 1500
-
-
 # -- Path 4 -------------------------------------------------------------------------------------
 def stop():
     from sciforge import preferences_ui
@@ -240,4 +231,4 @@ def stop():
     h.check("no pop-up left", not h.popups(), h.popups())
 
 
-h.run("ai_agent_e2e", [start, agent_builds_and_checks, selection_and_window_render, stop])
+h.run("ai_agent_e2e", [start, agent_builds_and_checks, selection_and_window_render, stop], paced_by="state")

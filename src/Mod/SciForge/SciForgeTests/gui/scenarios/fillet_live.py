@@ -216,9 +216,6 @@ def picked():
     h.check("but not shown yet", not overlay_in_scene())
 
 
-picked.wait_ms = 1500
-
-
 def drag_out():
     held_drag(4.0, "fillet drag")
 
@@ -231,9 +228,6 @@ def dragged_out():
     h.check("the radius grew", r > 1.5, r)
     exact_shown("fillet let go", one_edge(r))
     h.shot("1-fillet-after-drag")
-
-
-dragged_out.wait_ms = 1500
 
 
 def drag_far():
@@ -258,9 +252,6 @@ def dragged_far():
     exact_shown("held at the limit", one_edge(r))
 
 
-dragged_far.wait_ms = 2500
-
-
 def type_six():
     p = panel()
     if p is not None:
@@ -270,9 +261,6 @@ def type_six():
 
 def typed_six():
     exact_shown("typed 6", one_edge(6.0))
-
-
-typed_six.wait_ms = 1500
 
 
 def drag_far_again():
@@ -300,9 +288,6 @@ def dragged_far_again():
     exact_shown("held at the limit again", one_edge(r))
 
 
-dragged_far_again.wait_ms = 1500
-
-
 def type_three():
     p = panel()
     if p is None:
@@ -317,9 +302,6 @@ def typed_three():
     h.check("typed 3: the picture at once", s.get("typed_live") == 3.0, s.get("typed_live"))
     h.check("typed 3: its node in the view", s.get("typed_scene"))
     exact_shown("typed 3", one_edge(3.0))
-
-
-typed_three.wait_ms = 1500
 
 
 def type_then_cancel():
@@ -341,9 +323,6 @@ def cancelled():
     h.check("the box as it was", b.close(v, b.BOX), v)
 
 
-cancelled.wait_ms = 1000
-
-
 # -- Chamfer: Two Distances ----------------------------------------------------------------------
 def chamfer_start():
     Gui.Selection.clearSelection()
@@ -362,9 +341,6 @@ def two_distances():
         b.choose(p.ctype, "Two Distances")
 
 
-two_distances.wait_ms = 1500
-
-
 def chamfer_drag():
     p = panel()
     h.check("two arrows", p is not None and len(p.arrows) == 2, p and len(p.arrows))
@@ -381,9 +357,6 @@ def chamfer_dragged():
     exact_shown("chamfer let go", b.BOX - 30.0 * d1 * d2 / 2.0)
 
 
-chamfer_dragged.wait_ms = 1500
-
-
 def chamfer_ok():
     h.task_button("OK")
 
@@ -392,9 +365,6 @@ def chamfer_made():
     h.check("OK closed the dialog", b.blend_panel() is None and not Gui.Control.activeDialog())
     h.check("no picture left in the view", not overlay_in_scene())
     h.check("one chamfer", len(b.blends()) == 1, b.blends())
-
-
-chamfer_made.wait_ms = 1000
 
 
 # -- Undo while the picture shows ----------------------------------------------------------------
@@ -419,16 +389,10 @@ def type_then_undo():
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-type_then_undo.wait_ms = 1500
-
-
 def undone():
     h.check("typed 2: the picture showed", s.get("undo_live") == 2.0, s.get("undo_live"))
     h.check("Ctrl+Z ended the dialog", b.blend_panel() is None and not Gui.Control.activeDialog())
     h.check("no picture left in the view", not overlay_in_scene())
-
-
-undone.wait_ms = 1500
 
 
 h.run(
@@ -462,4 +426,5 @@ h.run(
         type_then_undo,
         undone,
     ],
+    paced_by="state",
 )

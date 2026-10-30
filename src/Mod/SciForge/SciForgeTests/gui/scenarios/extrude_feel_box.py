@@ -217,9 +217,6 @@ def pp_heads():
     grab_head(p, "pp_drag")
 
 
-pp_heads.wait_ms = 20 * 20 + 200 + 1200
-
-
 def pp_grabbed():
     p = ppanel()
     grabbed("pp_drag", p)
@@ -248,9 +245,6 @@ def pp_box_esc():
     h.check("the box has the keyboard", boxes[0].hasFocus(), a.focus_name())
     h.check("7 is typed in it", boxes[0].text() == "7", boxes[0].text())
     QtTest.QTest.keyClick(boxes[0], QtCore.Qt.Key_Escape)
-
-
-pp_box_esc.wait_ms = 1200
 
 
 def pp_cancelled():
@@ -299,9 +293,6 @@ def e_heads():
     grab_head(p, "e_drag")
 
 
-e_heads.wait_ms = 20 * 20 + 200 + 1200
-
-
 def e_grabbed():
     p = xpanel()
     grabbed("e_drag", p)
@@ -322,9 +313,6 @@ def e_box_zero_enter():
     a.type_in_box(boxes[0], "0", enter=True)
 
 
-e_box_zero_enter.wait_ms = 1000
-
-
 def e_box_esc():
     p = xpanel()
     h.check("0 + Enter in the box keeps Extrude open", p is not None)
@@ -335,9 +323,6 @@ def e_box_esc():
         return
     h.check("the box still has the keyboard", boxes[0].hasFocus(), a.focus_name())
     QtTest.QTest.keyClick(boxes[0], QtCore.Qt.Key_Escape)
-
-
-e_box_esc.wait_ms = 1200
 
 
 def e_cancelled():
@@ -585,4 +570,5 @@ h.run(
         reopened_pocket_red,
         reopened_pocket_closed,
     ],
+    paced_by="state",
 )

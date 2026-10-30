@@ -454,9 +454,6 @@ def h_check():
     s.close_popup("SciForgeSimJobStatus")
 
 
-h_check.wait_ms = 1500
-
-
 h.run(
     "sim_setup_kinds",
     [
@@ -510,4 +507,5 @@ h.run(
         s.wait_solved("wait_cancelled", 30),
         h_check,
     ],
+    paced_by="state",
 )

@@ -347,9 +347,6 @@ def p4_dragged_in():
     h.check("P4 nothing in the Report view", not sd.report_errors(), sd.report_errors())
 
 
-p4_dragged_in.wait_ms = 1500
-
-
 def p4_esc():
     h.shot("p4-too-thick")
     h.press(QtCore.Qt.Key_Escape)
@@ -772,4 +769,5 @@ h.run(
             p8_redo,
         ]
     ),
+    paced_by="state",
 )

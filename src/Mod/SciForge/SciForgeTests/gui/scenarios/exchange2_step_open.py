@@ -61,9 +61,6 @@ def p1_open():
     ctrl_o()
 
 
-p1_open.wait_ms = 2500
-
-
 def p1_check():
     doc = App.ActiveDocument
     new = set(App.listDocuments()) - s["docs"]
@@ -108,9 +105,6 @@ def p2_thicker():
     App.ActiveDocument.recompute()
 
 
-p2_thicker.wait_ms = 1500
-
-
 def p2_check():
     import math
 
@@ -150,9 +144,6 @@ def p3_save_reopen():
             area.setActiveSubWindow(sub)
 
 
-p3_save_reopen.wait_ms = 1500
-
-
 def p3_ctrl_o():
     h.check(
         "P3 the design is closed",
@@ -160,9 +151,6 @@ def p3_ctrl_o():
     )
     x.use_open_file(s["saved"])  # File > Open (Ctrl+O) of the saved design
     ctrl_o()
-
-
-p3_ctrl_o.wait_ms = 2500
 
 
 def p3_check():
@@ -183,9 +171,6 @@ def p4_open_menu():
 
     x.use_open_file(i.fixture("two_parts.step"))
     s["menu"] = m.app_menu_item(["File", "Open"])
-
-
-p4_open_menu.wait_ms = 2500
 
 
 def p4_check():
@@ -228,9 +213,6 @@ def p5_iges():
     ctrl_o()
 
 
-p5_iges.wait_ms = 2500
-
-
 def p5_check():
     import math
 
@@ -263,7 +245,6 @@ def p6_check():
     ctrl_o()
 
 
-p6_check.wait_ms = 2000
 p6_check.known = True  # OpenCASCADE prints its own reader messages for the broken file
 
 
@@ -294,9 +275,6 @@ def p8_upload():
     versions_ui.UPLOAD_PICKER = lambda: s["robot"]
 
 
-p8_upload.wait_ms = 1500
-
-
 def p8_click_upload():
     from SciForgeTests.gui import versions_input as vi
 
@@ -305,9 +283,6 @@ def p8_click_upload():
     if panel is not None:
         h.check("P8 on the project folder", panel.folder == s["project"], panel.folder)
     h.check("P8 the Upload button", vi.panel_button("Upload"))
-
-
-p8_click_upload.wait_ms = 1500
 
 
 def p8_open():
@@ -322,9 +297,6 @@ def p8_open():
     )
     s["docs"] = set(App.listDocuments())
     vi.panel_double_click("robot.step")
-
-
-p8_open.wait_ms = 2500
 
 
 def p8_opened():
@@ -344,9 +316,6 @@ def p8_opened():
             h.check("P8 Data Panel menu > Insert into Current Design", ok)
 
 
-p8_opened.wait_ms = 2500
-
-
 def p8_check():
     robot = x.comp("robot")
     h.check("P8 the robot came in as one component", robot is not None, x.labels())
@@ -357,9 +326,6 @@ def p8_check():
         [(c.Label, x.parent_label(c)) for c in drives],
     )
     h.press(QtCore.Qt.Key_Escape)
-
-
-p8_check.wait_ms = 1000
 
 
 def p8_done():
@@ -410,4 +376,5 @@ h.run(
         p8_done,
         cleanup,
     ],
+    paced_by="state",
 )

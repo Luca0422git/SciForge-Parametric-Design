@@ -133,4 +133,5 @@ h.run(
         sum_applied,
         finished,
     ],
+    paced_by="state",
 )

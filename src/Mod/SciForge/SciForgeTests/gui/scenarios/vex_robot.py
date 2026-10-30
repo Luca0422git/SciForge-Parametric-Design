@@ -140,9 +140,6 @@ def a_build():
     h.check("a shaft's revolute joint", len(facts["joints"]) == 1, facts["joints"])
 
 
-a_build.wait_ms = 2000
-
-
 def a_save():
     path = os.path.join(out_dir(), "VexRobot.FCStd")
     if os.path.exists(path):
@@ -176,9 +173,6 @@ def b_open():
     seconds = time.perf_counter() - t0
     S["open"] = seconds
     note("open the robot", seconds)
-
-
-b_open.wait_ms = 2500
 
 
 def b_opened():
@@ -418,4 +412,5 @@ h.run(
         g_recompute,
         h_twenty,
     ],
+    paced_by="state",
 )

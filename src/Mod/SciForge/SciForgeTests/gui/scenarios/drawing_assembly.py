@@ -104,9 +104,6 @@ def b_design():
     d.workspace("Design")
 
 
-b_design.wait_ms = 1200
-
-
 # -- C ------------------------------------------------------------------------------------------
 def c_balloon():
     h.check("both components on the view", len(base().Source) == 2, base().Source)
@@ -136,9 +133,6 @@ def d_place():
     d.click_at(*TABLE_AT)
 
 
-d_place.wait_ms = 1500
-
-
 def d_made():
     t = table()
     if not h.check("a parts list", t is not None):
@@ -166,9 +160,6 @@ def d_made():
         outside.append(abs(u) > half_w or abs(v) > half_h)
     h.check("outside the view", all(outside), outside)
     d.ok()
-
-
-d_made.wait_ms = 1500
 
 
 def d_done():
@@ -203,9 +194,6 @@ def e_place_post():
     d.click_at(*at(4, 34))
 
 
-e_place_post.wait_ms = 1000
-
-
 def e_plate():
     d.click_at(*at(-30, -19))  # the Plate's bottom edge
 
@@ -215,14 +203,8 @@ def e_place_plate():
     d.click_at(*at(-36, -36))
 
 
-e_place_plate.wait_ms = 1000
-
-
 def e_enter():
     d.key(QtCore.Qt.Key_Return)
-
-
-e_enter.wait_ms = 1200
 
 
 def e_made():
@@ -239,15 +221,9 @@ def e_made():
     d.undo()
 
 
-e_made.wait_ms = 1200
-
-
 def e_undone():
     h.check("Ctrl+Z: both gone", len(balloons()) == state["count"], len(balloons()))
     d.redo()
-
-
-e_undone.wait_ms = 1200
 
 
 def e_redone():
@@ -258,9 +234,6 @@ def e_redone():
 def f_rename():
     state["post"].Label = "Pillar"
     App.ActiveDocument.recompute()
-
-
-f_rename.wait_ms = 1500
 
 
 def f_followed():
@@ -278,9 +251,6 @@ def f_followed():
     doc.commitTransaction()
     doc.recompute()
     state["pin_body"] = body
-
-
-f_followed.wait_ms = 3000
 
 
 def f_added():
@@ -336,9 +306,6 @@ def h_menu():
     t.row_menu("Asm Drawing", "Delete")
 
 
-h_menu.wait_ms = 1500
-
-
 def h_gone():
     h.check("the drawing is gone", drawing_names() == ["Asm Drawing 2"], drawing_names())
     from sciforge import drawing_ui
@@ -358,9 +325,6 @@ def h_gone():
     from SciForgeTests.gui import timeline_input as t
 
     t.undo()
-
-
-h_gone.wait_ms = 2000
 
 
 def h_back():
@@ -385,4 +349,5 @@ h.run(
     + [e_start, e_paper, e_said, e_place_post, e_plate, e_place_plate, e_enter]
     + [e_made, e_undone, e_redone, f_rename, f_followed, f_added, g_table, g_refused]
     + [h_menu, h_gone, h_back],
+    paced_by="state",
 )

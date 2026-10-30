@@ -561,4 +561,5 @@ h.run(
         m5_refused,
         m5_done,
     ],
+    paced_by="state",
 )

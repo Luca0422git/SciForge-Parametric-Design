@@ -252,9 +252,6 @@ def pp_drag_up():
     )
 
 
-pp_drag_up.wait_ms = 2000
-
-
 def pp_up_done():
     p = pp_panel()
     if not h.check("Press Pull still open", p is not None):
@@ -272,9 +269,6 @@ def pp_up_done():
         h.screen_point(head - p.dragger.direction * 14.0),
         "Press Pull down",
     )
-
-
-pp_up_done.wait_ms = 2000
 
 
 def pp_down_done():
@@ -319,9 +313,6 @@ def hole_drag():
         h.screen_point(head + p.dragger.direction * 2.5),
         "the hole's wall",
     )
-
-
-hole_drag.wait_ms = 2000
 
 
 def hole_done():
@@ -373,9 +364,6 @@ def shell_drag(label="Shell inside"):
     held(p, p.arrows[0][0], start, end, label)
 
 
-shell_drag.wait_ms = 2000
-
-
 def shell_done():
     from sciforge import shelling
 
@@ -393,9 +381,6 @@ def shell_done():
 
 def shell_outside():
     shell_drag("Shell outside")
-
-
-shell_outside.wait_ms = 2000
 
 
 def shell_outside_done():
@@ -442,9 +427,6 @@ def x_type():
     p.distance.set_value(10.0)  # a first exact extrusion to drag from
 
 
-x_type.wait_ms = 1500
-
-
 def x_drag():
     p = x_panel()
     arrow = p.draggers.get("distance") if p is not None else None
@@ -452,9 +434,6 @@ def x_drag():
         return
     head = a.head_point(arrow)
     held(p, arrow, h.screen_point(head), h.screen_point(head + arrow.direction * 8.0), "Extrude")
-
-
-x_drag.wait_ms = 2000
 
 
 def extrusion_volume(d, taper=0.0):
@@ -480,9 +459,6 @@ def x_done():
     p.taper.set_value(4.0)  # the taper disc shows from here
 
 
-x_done.wait_ms = 1500
-
-
 def x_taper_drag():
     p = x_panel()
     disc = p.draggers.get("taper") if p is not None else None
@@ -490,9 +466,6 @@ def x_taper_drag():
         return
     here, there = disc.screen_points(9.0)
     held(p, disc, h.screen_point(here), h.screen_point(there), "Extrude taper")
-
-
-x_taper_drag.wait_ms = 2000
 
 
 def x_taper_done():
@@ -506,9 +479,6 @@ def x_taper_done():
     sd.choose(p.direction, "Symmetric")
 
 
-x_taper_done.wait_ms = 1500
-
-
 def x_sym_drag():
     p = x_panel()
     arrow = p.draggers.get("distance") if p is not None else None
@@ -516,9 +486,6 @@ def x_sym_drag():
         return
     head = a.head_point(arrow)
     held(p, arrow, h.screen_point(head), h.screen_point(head + arrow.direction * 5.0), "Symmetric")
-
-
-x_sym_drag.wait_ms = 2000
 
 
 def x_sym_done():
@@ -570,4 +537,5 @@ h.run(
         x_sym_done,
         x_ok,
     ],
+    paced_by="state",
 )

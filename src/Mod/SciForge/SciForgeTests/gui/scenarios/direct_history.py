@@ -320,4 +320,5 @@ h.run(
             g_step,
         ]
     ),
+    paced_by="state",
 )

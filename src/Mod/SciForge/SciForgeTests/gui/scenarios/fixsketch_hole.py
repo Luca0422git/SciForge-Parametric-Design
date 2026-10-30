@@ -162,4 +162,4 @@ steps += fs.undo_redo("C", "B", s)
 steps += [suppress_hole, h.idle_step(), suppressed, h.idle_step("wait_unsuppress"), unsuppressed]
 steps += fs.edit_later("E", "B", s)
 
-h.run("fixsketch_hole", steps)
+h.run("fixsketch_hole", steps, paced_by="state")

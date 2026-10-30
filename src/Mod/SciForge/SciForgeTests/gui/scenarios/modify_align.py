@@ -340,4 +340,5 @@ h.run(
             f_deleted,
         ]
     ),
+    paced_by="state",
 )

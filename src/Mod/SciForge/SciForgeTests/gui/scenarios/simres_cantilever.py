@@ -384,4 +384,5 @@ h.run(
         e_design,
         e_design_check,
     ],
+    paced_by="state",
 )

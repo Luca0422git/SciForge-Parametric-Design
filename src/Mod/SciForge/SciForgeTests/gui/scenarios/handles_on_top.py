@@ -87,9 +87,6 @@ def look_from_below():
     QtWidgets.QApplication.processEvents()
 
 
-look_from_below.wait_ms = 900
-
-
 def a_arrow_visible():
     p = panel()
     head = a.head_point(p.dragger)
@@ -119,9 +116,6 @@ def b_drag_through():
     s["before"] = p.dragger.distance()
     h.drag(QtCore.QPoint(start), end, steps=20)
     s["gl"] = gl
-
-
-b_drag_through.wait_ms = 1500
 
 
 def b_moved():
@@ -166,4 +160,5 @@ h.run(
         c_esc,
         c_closed,
     ],
+    paced_by="state",
 )

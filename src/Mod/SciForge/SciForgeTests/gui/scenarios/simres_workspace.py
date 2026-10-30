@@ -133,9 +133,6 @@ def a2_hide():
     _click_eye("Alu")
 
 
-a2_hide.wait_ms = 900
-
-
 def a2_hide_check():
     sess = s.session()
     xs = sess.data.points[sess.display.nodes][:, 0]
@@ -156,9 +153,6 @@ def a2_hide_check():
         [(t["kind"], float(sess.data.points[t["node"]][0])) for t in ends],
     )
     _click_eye("Alu")
-
-
-a2_hide_check.wait_ms = 900
 
 
 def a2_show_check():
@@ -360,9 +354,6 @@ def f_switch():
         w.click(tabs, tabs.tabRect(i).center())
 
 
-f_switch.wait_ms = 1200
-
-
 def f_switch_check():
     h.check(
         "the other design in front",
@@ -396,9 +387,6 @@ def f_back():
         w.click(tabs, tabs.tabRect(i).center())
 
 
-f_back.wait_ms = 1200
-
-
 def f_back_results():
     other = App.getDocument(state["other"])
     beam = [o for o in other.Objects if o.TypeId == "PartDesign::Body"][0]
@@ -421,9 +409,6 @@ def f_back_check():
 def g_empty():
     App.newDocument("SimResEmpty")
     s.workspace("Simulation")
-
-
-g_empty.wait_ms = 1200
 
 
 def g_check():
@@ -473,4 +458,5 @@ h.run(
         g_empty,
         g_check,
     ],
+    paced_by="state",
 )

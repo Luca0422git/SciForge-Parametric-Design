@@ -186,9 +186,6 @@ def b_pick_corner():
     h.click(V(39, 29, 10))
 
 
-b_pick_corner.wait_ms = 900
-
-
 def b_joined():
     joints = j.joint_list()
     h.check("one joint", len(joints) == 1, joints)
@@ -486,9 +483,6 @@ def e_pick_corner():
     h.click(V(39, 29, 10))
 
 
-e_pick_corner.wait_ms = 900
-
-
 def e_refused():
     p = j.panel()
     h.check(
@@ -604,4 +598,4 @@ steps += [d_suppress, d_suppressed, d_unsuppress, d_unsuppressed]
 steps += [e_press_j, e_pick_origin, e_pick_corner, e_refused, e_ok, e_still_open, e_cancel, e_back]
 steps += [f_delete, f_deleted, f_undo, f_back]
 
-h.run("joints_asbuilt_group", steps)
+h.run("joints_asbuilt_group", steps, paced_by="state")

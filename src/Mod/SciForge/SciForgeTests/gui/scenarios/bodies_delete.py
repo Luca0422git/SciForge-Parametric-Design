@@ -292,4 +292,5 @@ h.run(
         g_cancel,
         g_cancelled,
     ],
+    paced_by="state",
 )

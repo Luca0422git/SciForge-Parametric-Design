@@ -86,9 +86,6 @@ def setup():
     h.check("ten STEP files made", len(S["files"]) == 10, list(S["files"]))
 
 
-setup.wait_ms = 1500
-
-
 # -- P1 --------------------------------------------------------------------------------------------
 def p1_insert():
     use_files([S["files"][n] for n in TEN])
@@ -97,7 +94,6 @@ def p1_insert():
     S["insert10"] = time.perf_counter() - S["t0"]
 
 
-p1_insert.wait_ms = 2500
 # ten VEX parts inserted, then what the app does after (browser, timeline, joints): about 10 s
 # here, three times that under --stress; a hang is far longer
 p1_insert.timeout_s = 120
@@ -124,9 +120,6 @@ def p1_check():
     h.press(QtCore.Qt.Key_Escape)
 
 
-p1_check.wait_ms = 1000
-
-
 def p1_after_esc():
     h.check("P1 Esc: the dialog closed", move_panel() is None)
     h.check("P1 the ten stay", len([c for c in comps() if c.Label in TEN]) == 10)
@@ -137,15 +130,9 @@ def p2_undo():
     vx.undo()
 
 
-p2_undo.wait_ms = 1500
-
-
 def p2_undone():
     h.check("P2 one Ctrl+Z takes all ten away", not comps(), [c.Label for c in comps()])
     vx.redo()
-
-
-p2_undone.wait_ms = 1500
 
 
 def p2_redone():
@@ -157,9 +144,6 @@ def p2_redone():
 def p3_again():
     use_files([S["files"]["screw_8_32_x_0_5"]])
     vx.menu("INSERT", "Insert STEP")
-
-
-p3_again.wait_ms = 2000
 
 
 def p3_occurrence():
@@ -185,14 +169,8 @@ def p3_occurrence():
     h.press(QtCore.Qt.Key_Escape)
 
 
-p3_occurrence.wait_ms = 800
-
-
 def p3_undo():
     vx.undo()
-
-
-p3_undo.wait_ms = 1200
 
 
 def p3_undone():
@@ -218,7 +196,6 @@ def p4_twenty():
     S["insert20"] = time.perf_counter() - t0
 
 
-p4_twenty.wait_ms = 2500
 p4_twenty.timeout_s = 120  # (twenty parts: about 17 s with what follows, as p1_insert)
 
 
@@ -261,9 +238,6 @@ def p5_panel():
     ui().show_panel()
 
 
-p5_panel.wait_ms = 1000
-
-
 def p5_upload():
     files = [S["files"][n] for n in ("shaft_3in", "keps_nut", "bearing_flat")]
     ui().UPLOAD_PICKER = lambda f=files: f
@@ -274,9 +248,6 @@ def p5_upload():
             wi.click(p.upload)
     finally:
         ui().UPLOAD_PICKER = None
-
-
-p5_upload.wait_ms = 1500
 
 
 def p5_cards_names():
@@ -307,9 +278,6 @@ def p5_insert():
     h.check("P5 right-click > Insert into Current Design", ok)
 
 
-p5_insert.wait_ms = 2500
-
-
 def p5_inserted():
     labels = sorted(c.Label for c in comps())
     # (copies uploaded into the project: other files than the ones inserted in P1, so they
@@ -320,9 +288,6 @@ def p5_inserted():
         labels,
     )
     h.press(QtCore.Qt.Key_Escape)
-
-
-p5_inserted.wait_ms = 800
 
 
 def p5_undo():
@@ -340,9 +305,6 @@ def p5_undo():
     )
     vx.undo()
     print("[SciForge] vex: undo list after %s" % (doc.UndoNames[:4],), flush=True)
-
-
-p5_undo.wait_ms = 1200
 
 
 def p5_undone():
@@ -406,9 +368,6 @@ def p6_drag_card():
     h.check("P6 an insert is asked for", pending is not None and pending[0] == "view", pending)
 
 
-p6_drag_card.wait_ms = 3000
-
-
 def p6_inserted():
     labels = sorted(c.Label for c in comps())
     h.check(
@@ -418,9 +377,6 @@ def p6_inserted():
     )
     h.press(QtCore.Qt.Key_Escape)
     h.shot("P6-dropped")
-
-
-p6_inserted.wait_ms = 800
 
 
 h.run(
@@ -450,4 +406,5 @@ h.run(
         p6_drag_card,
         p6_inserted,
     ],
+    paced_by="state",
 )

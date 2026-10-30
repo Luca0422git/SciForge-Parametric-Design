@@ -114,9 +114,6 @@ def p1_open():
     si.menu_item("INSERT", "Decal")
 
 
-p1_open.wait_ms = 1500
-
-
 def p1_waits():
     p = panel()
     h.check(
@@ -130,9 +127,6 @@ def p1_waits():
 # -- P2 ----------------------------------------------------------------------------------------
 def p2_click():
     h.click(TOP)
-
-
-p2_click.wait_ms = 1500
 
 
 def p2_check():
@@ -169,9 +163,6 @@ def p3_values():
     i.type_value(p.dx, "5")
     m.set_check(p.flip_h, True)
     i.set_spin(p.scale_xy, 1.5)
-
-
-p3_values.wait_ms = 1200
 
 
 def p3_check():
@@ -219,9 +210,6 @@ def p4_drag_x():
     h.drag(h.screen_point(start), h.screen_point(end))
 
 
-p4_drag_x.wait_ms = 1200
-
-
 def p4_drag_turn():
     obj = first_flat()
     h.check("P4 the X arrow moved it", obj.XDistance > s["dx"] + 1.0, (s["dx"], obj.XDistance))
@@ -231,9 +219,6 @@ def p4_drag_turn():
     turn = p.handle_by["angle"]
     now, target = turn.screen_points(30.0)
     h.drag(h.screen_point(now), h.screen_point(target), steps=16)
-
-
-p4_drag_turn.wait_ms = 1200
 
 
 def p4_drag_scale():
@@ -249,18 +234,12 @@ def p4_drag_scale():
     h.drag(h.screen_point(start), h.screen_point(end))
 
 
-p4_drag_scale.wait_ms = 1200
-
-
 def p4_scaled():
     obj = first_flat()
     h.check("P4 the edge arrow scaled it", size(obj)[0] > s["width"] + 1.0, (s["width"], size(obj)))
     h.check("P4 in proportion", m.near(size(obj)[0] / size(obj)[1], 2.0, 0.01), size(obj))
     h.shot("4-handles")
     h.task_button("OK")
-
-
-p4_scaled.wait_ms = 1200
 
 
 # -- P5 ----------------------------------------------------------------------------------------
@@ -270,15 +249,9 @@ def p5_undo():
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
 
 
-p5_undo.wait_ms = 1200
-
-
 def p5_redo():
     h.check("P5 Ctrl+Z: no decal", decals() == [])
     h.press(QtCore.Qt.Key_Y, QtCore.Qt.ControlModifier)
-
-
-p5_redo.wait_ms = 1500
 
 
 def p5_back():
@@ -292,9 +265,6 @@ def p6_edit():
     t.double_click(m.timeline_title(first_flat()))
 
 
-p6_edit.wait_ms = 1500
-
-
 def p6_cancel():
     p = panel()
     h.check("P6 Edit Decal", p is not None and p.title == "Edit Decal", p)
@@ -306,9 +276,6 @@ def p6_cancel():
     h.task_button("Cancel")
 
 
-p6_cancel.wait_ms = 1200
-
-
 def p6_check():
     h.check("P6 Cancel: still 60", first_flat().Opacity == 60, first_flat().Opacity)
 
@@ -318,14 +285,8 @@ def p7_open():
     si.menu_item("INSERT", "Decal")
 
 
-p7_open.wait_ms = 1500
-
-
 def p7_click():
     h.click(V(100, -10, 20))
-
-
-p7_click.wait_ms = 1500
 
 
 def p7_check():
@@ -363,9 +324,6 @@ def p8_taller():
     h.press(QtCore.Qt.Key_B, QtCore.Qt.ControlModifier)  # Compute All
 
 
-p8_taller.wait_ms = 1500
-
-
 def p8_check():
     obj = first_flat()
     h.check(
@@ -383,9 +341,6 @@ def p9_reopen():
     s["path"] = path
     m.close_all()
     App.openDocument(path)
-
-
-p9_reopen.wait_ms = 2500
 
 
 def p9_check():
@@ -408,22 +363,13 @@ def p10_escape():
     si.menu_item("INSERT", "Decal")
 
 
-p10_escape.wait_ms = 1500
-
-
 def p10_click():
     h.click(V(20, 15, 20))
-
-
-p10_click.wait_ms = 1500
 
 
 def p10_esc():
     h.check("P10 a third decal while the dialog is open", len(decals()) == 3)
     h.press(QtCore.Qt.Key_Escape)
-
-
-p10_esc.wait_ms = 1200
 
 
 def p10_no_body():
@@ -432,9 +378,6 @@ def p10_no_body():
     App.newDocument("Empty")
     h.fit()
     si.menu_item("INSERT", "Decal")
-
-
-p10_no_body.wait_ms = 1500
 
 
 def p10_refused():
@@ -451,15 +394,9 @@ def p11_delete():
     t.row_menu(obj.Label, "Delete")
 
 
-p11_delete.wait_ms = 1200
-
-
 def p11_undo():
     h.check("P11 deleted", first_flat() is None and len(decals()) == 1)
     h.press(QtCore.Qt.Key_Z, QtCore.Qt.ControlModifier)
-
-
-p11_undo.wait_ms = 1200
 
 
 def p11_back():
@@ -511,4 +448,5 @@ h.run(
         p11_back,
         cleanup,
     ],
+    paced_by="state",
 )

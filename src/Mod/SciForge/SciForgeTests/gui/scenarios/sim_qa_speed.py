@@ -121,9 +121,6 @@ def b_preview():
     h.check("B OK: %.2f s" % took, took < 10.0)
 
 
-b_preview.wait_ms = 300
-
-
 def b_load():
     took = timed("Structural Loads opens", lambda: h.ribbon("Structural Loads"))
     h.check("B Structural Loads opens: %.2f s" % took, took < 5.0)
@@ -151,9 +148,6 @@ def b_top_value():
     state["times"]["Pressure pick and preview"] = took
     h.check("B the top face (100 holes in it) previews: %.2f s" % took, s.preview_count() > 0)
     s.type_in("SciForgeSim_magnitude", "0.1 MPa")
-
-
-b_top_value.wait_ms = 300
 
 
 def b_ok():
@@ -252,9 +246,6 @@ def d_animate():
     h.check("D Animate starts: %.2f s" % took, took < 10.0)
 
 
-d_animate.wait_ms = 2000
-
-
 def d_animate_off():
     worst = state["beat"].stop()
     state["times"]["longest pause while animating"] = worst
@@ -280,9 +271,6 @@ def d_report_save():
         lambda: rs.click_widget(dialog.findChild(QtWidgets.QPushButton, "SciForgeSimReportSave")),
     )
     h.check("D Report saved: %.2f s" % took, os.path.isfile(path), path)
-
-
-d_report_save.wait_ms = 500
 
 
 def summary():
@@ -324,4 +312,5 @@ h.run(
         d_report_save,
         summary,
     ],
+    paced_by="state",
 )

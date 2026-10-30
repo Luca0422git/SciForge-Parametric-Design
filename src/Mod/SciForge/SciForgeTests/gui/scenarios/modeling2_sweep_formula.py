@@ -249,11 +249,6 @@ def reopened():
     )
 
 
-type_share.wait_ms = 800
-share_taken.wait_ms = 1200
-taper_taken.wait_ms = 1200
-plain_number.wait_ms = 1200
-
 h.run(
     "modeling2_sweep_formula",
     [
@@ -284,4 +279,5 @@ h.run(
         reopen,
         reopened,
     ],
+    paced_by="state",
 )

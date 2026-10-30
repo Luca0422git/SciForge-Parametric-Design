@@ -282,9 +282,6 @@ def p19_front():
     h.drag(start, end, steps=12)
 
 
-p19_front.wait_ms = 1500
-
-
 def p19_dragged():
     p = panel()
     if p is None:
@@ -554,4 +551,4 @@ STEPS = [
     p22_done,
 ]
 
-h.run("revolve_qa_bodies", ti.watched(STEPS))
+h.run("revolve_qa_bodies", ti.watched(STEPS), paced_by="state")

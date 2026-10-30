@@ -151,9 +151,6 @@ def cut_shown():
         a.type_in_box(boxes[0], "0", enter=True)
 
 
-cut_shown.wait_ms = 1200
-
-
 def zero_refused():
     p = xpanel()
     h.check("0 + Enter keeps Extrude open", p is not None)
@@ -232,9 +229,6 @@ def type_8():
     h.click(BESIDE)
 
 
-type_8.wait_ms = 1200
-
-
 def click_was_not_a_pick():
     p = xpanel()
     h.check("leaving the box took 8", p is not None and near(abs(p.distance.value()), 8.0), p and p.distance.value())
@@ -249,9 +243,6 @@ def click_was_not_a_pick():
     if h.check("the value box is there", len(boxes) == 1, len(boxes)):
         a.type_in_box(boxes[0], "6", enter=False)
     h.click(SQUARE)  # this time on the picked area itself
-
-
-click_was_not_a_pick.wait_ms = 1200
 
 
 def area_click_was_not_a_pick():
@@ -381,4 +372,5 @@ h.run(
         q2_undo_steps,
         q2_undone,
     ],
+    paced_by="state",
 )

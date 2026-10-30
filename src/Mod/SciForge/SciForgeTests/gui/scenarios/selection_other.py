@@ -47,8 +47,7 @@ def pretty(short):
     return selection_core.pretty_element(short)
 
 
-def step(fn, wait_ms):
-    fn.wait_ms = wait_ms
+def step(fn, wait_ms=None):
     return fn
 
 
@@ -242,25 +241,25 @@ def f_dialog_got_it():
 
 steps = b.box_steps("SelOther") + [
     remember_names,
-    step(a_hold_top, 1500),
+    step(a_hold_top),
     a_list_open,
     a_release_selects_nothing,
     a_hover_highlights,
     a_row_selected,
-    step(b_hold_edge, 1500),
+    step(b_hold_edge),
     b_list_check,
     b_escape_check,
-    step(c_press_and_move, 1500),
+    step(c_press_and_move),
     c_no_list,
     c_box_done,
-    step(d_hold_empty, 1500),
+    step(d_hold_empty),
     d_no_list,
     e_command,
     e_list_check,
     f_open_fillet,
-    step(f_hold_edge, 1500),
+    step(f_hold_edge),
     f_pick_row,
     f_dialog_got_it,
 ]
 
-h.run("selection_other", steps)
+h.run("selection_other", steps, paced_by="state")

@@ -107,4 +107,5 @@ def long_done():
 h.run(
     "navigation_orbit",
     b.box_steps("Orbit") + [start, diagonal, diagonal_done, loop_done, long_done],
+    paced_by="state",
 )

@@ -179,4 +179,5 @@ h.run(
         freecad_cube,
         back_in_sciforge,
     ],
+    paced_by="state",
 )

@@ -53,15 +53,9 @@ def setup():
     h.fit()
 
 
-setup.wait_ms = 1500
-
-
 # -- A ------------------------------------------------------------------------------------------
 def a_compare():
     r.utilities_menu("Compare with Reference")
-
-
-a_compare.wait_ms = 2000
 
 
 def a_numbers():
@@ -130,17 +124,11 @@ def b_ai_compare():
     s["holes_group"] = holes
 
 
-b_ai_compare.wait_ms = 1500
-
-
 def b_done():
     answer, data = r.tool_json("compare_to_reference")
     h.check("the comparison says done", data is not None and data["done"], answer["text"][:400])
     h.check("... nothing drawn", r.overlay_count(s["ref"]) == 0, r.overlay_count(s["ref"]))
     r.utilities_menu("Compare with Reference")
-
-
-b_done.wait_ms = 2000
 
 
 def b_dialog_done():
@@ -153,9 +141,6 @@ def b_dialog_done():
     h.check("... 14 of 14 faces", box is not None and "14 of 14" in box.numbers.text())
     if box is not None:
         r.click_button(box, "SciForgeRebuildCompareFinish")
-
-
-b_dialog_done.wait_ms = 1200
 
 
 def b_finish_esc():
@@ -182,17 +167,11 @@ def c_finish():
     r.utilities_menu("Finish Rebuild")
 
 
-c_finish.wait_ms = 1500
-
-
 def c_press():
     box = r.dialog("SciForgeRebuildFinish")
     h.check("UTILITIES > AI > Finish Rebuild opened Finish", box is not None, h.popups())
     if box is not None:
         r.click_button(box, "SciForgeRebuildFinishOK")
-
-
-c_press.wait_ms = 1500
 
 
 def c_finished():
@@ -226,9 +205,6 @@ def c_finished():
     t.undo()
 
 
-c_finished.wait_ms = 1500
-
-
 def c_undone():
     from sciforge import rebuild
 
@@ -250,9 +226,6 @@ def c_undone():
     t.redo()
 
 
-c_undone.wait_ms = 1500
-
-
 def c_redone():
     doc = App.ActiveDocument
     target = doc.getObject(s["target_name"])
@@ -264,16 +237,10 @@ def c_redone():
     t.undo()
 
 
-c_redone.wait_ms = 1500
-
-
 # -- D ------------------------------------------------------------------------------------------
 def d_keep():
     h.check("back to the rebuild", len(r.references()) == 1)
     r.utilities_menu("Finish Rebuild")
-
-
-d_keep.wait_ms = 1500
 
 
 def d_choose():
@@ -289,9 +256,6 @@ def d_choose():
     h.check("Keep the original chosen", box.keep_original.isChecked())
     h.check("Keep the reference ticked", box.keep_reference.isChecked())
     r.click_button(box, "SciForgeRebuildFinishOK")
-
-
-d_choose.wait_ms = 1500
 
 
 def d_kept():
@@ -344,4 +308,5 @@ h.run(
         d_kept,
         finish,
     ],
+    paced_by="state",
 )

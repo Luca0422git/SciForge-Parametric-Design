@@ -366,4 +366,4 @@ steps += [
     d6_exploded,
     d6_undone,
 ]
-h.run("sketch_text_edit", steps)
+h.run("sketch_text_edit", steps, paced_by="state")

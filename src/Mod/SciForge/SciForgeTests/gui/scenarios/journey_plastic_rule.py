@@ -15,4 +15,5 @@ from SciForgeTests.gui import journey_plastic_steps as j
 h.run(
     "journey_plastic_rule",
     j.build_steps() + j.rule_steps() + j.reopen_steps(),
+    paced_by="state",
 )

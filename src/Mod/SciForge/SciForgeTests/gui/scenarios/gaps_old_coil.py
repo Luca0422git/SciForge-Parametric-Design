@@ -95,9 +95,6 @@ def o1_open():
     h.fit()
 
 
-o1_open.wait_ms = 2500
-
-
 def o1_rebuilt():
     h.check("rebuilt on opening: 571.39", close(h.solid_volume(), RIGHT), h.solid_volume())
     box = h.body().Shape.BoundBox
@@ -131,9 +128,6 @@ def o2_open():
     h.fit()
 
 
-o2_open.wait_ms = 2500
-
-
 def o2_same():
     h.check("still 571.39", close(h.solid_volume(), RIGHT), h.solid_volume())
     h.check("no rebuild this time", lines()[st["lines"] :] == [], lines()[st["lines"] :])
@@ -141,4 +135,4 @@ def o2_same():
     t.no_popups("the end")
 
 
-h.run("gaps_old_coil", [setup, o1_open, o1_rebuilt, o2_describe, o2_close, o2_open, o2_same])
+h.run("gaps_old_coil", [setup, o1_open, o1_rebuilt, o2_describe, o2_close, o2_open, o2_same], paced_by="state")

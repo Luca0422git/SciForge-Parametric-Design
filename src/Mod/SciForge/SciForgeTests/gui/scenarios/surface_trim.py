@@ -456,4 +456,5 @@ h.run(
         unsuppress_extrude1,
         extrude1_on,
     ],
+    paced_by="state",
 )

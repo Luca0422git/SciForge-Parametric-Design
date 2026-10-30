@@ -428,4 +428,5 @@ h.run(
         esc_press,
         escaped,
     ],
+    paced_by="state",
 )

@@ -136,9 +136,6 @@ def k1_tab():
     keys_to_focus("20", enter=True)
 
 
-k1_tab.wait_ms = 1500
-
-
 def k1_placed():
     p = pi.panel("BoxPanel")
     h.check(
@@ -158,9 +155,6 @@ def k1_placed():
     h.press("-")
 
 
-k1_placed.wait_ms = 1500
-
-
 def k1_height():
     keys_to_focus("5")
 
@@ -173,9 +167,6 @@ def k1_height_typed():
         box_text(p, "height"),
     )
     keys_to_focus("", enter=True)  # Enter takes the box's value and is OK (Fusion)
-
-
-k1_height_typed.wait_ms = 1500
 
 
 def k1_done():
@@ -212,9 +203,6 @@ def k2_more():
     keys_to_focus("2", enter=True)
 
 
-k2_more.wait_ms = 1500
-
-
 def k2_placed():
     p = pi.panel("CylinderPanel")
     cyl = p.target if p is not None else None
@@ -235,9 +223,6 @@ def k2_placed():
     h.press("8")
 
 
-k2_placed.wait_ms = 1500
-
-
 def k2_height():
     p = pi.panel("CylinderPanel")
     h.check(
@@ -246,9 +231,6 @@ def k2_height():
         box_text(p, "height"),
     )
     keys_to_focus("", enter=True)  # Enter takes the box's value and is OK (Fusion)
-
-
-k2_height.wait_ms = 1500
 
 
 def k2_done():
@@ -278,9 +260,6 @@ def k3_centre():
     pl.click_on_plane(V(50, -20, 0))
 
 
-k3_centre.wait_ms = 1200
-
-
 def k3_placed():
     p = pi.panel("SpherePanel")
     sph = p.target if p is not None else None
@@ -290,9 +269,6 @@ def k3_placed():
         sph and sph.Radius.Value,
     )
     h.press(QtCore.Qt.Key_Return)
-
-
-k3_placed.wait_ms = 1500
 
 
 def k3_done():
@@ -317,9 +293,6 @@ def k4_extrude_key():
     h.press("e")
 
 
-k4_extrude_key.wait_ms = 1500
-
-
 def k4_extrude_open():
     from sciforge import taskui
 
@@ -334,9 +307,6 @@ def k4_extrude_open():
     h.check("K4 the part unchanged", near(vol(), s["vol"]), vol())
     h.check("K4 no pop-up", not h.popups(), h.popups())
     h.press(QtCore.Qt.Key_Escape)
-
-
-k4_extrude_open.wait_ms = 1500
 
 
 def k4_box():
@@ -356,9 +326,6 @@ def k4_box_c2():
     pl.click_on_plane(V(-20, 10, 0))
 
 
-k4_box_c2.wait_ms = 1500
-
-
 def k4_presspull_key():
     p = pi.panel("BoxPanel")
     h.check(
@@ -367,9 +334,6 @@ def k4_presspull_key():
         p and p.target,
     )
     h.press("q")
-
-
-k4_presspull_key.wait_ms = 1500
 
 
 def k4_presspull_open():
@@ -388,24 +352,15 @@ def k4_presspull_open():
     h.press(QtCore.Qt.Key_Escape)
 
 
-k4_presspull_open.wait_ms = 1500
-
-
 def k4_undo():
     h.check("K4 Esc closed Press Pull", pi.no_dialog())
     h.check("K4 still kept", near(vol(), s["vol"] + 1000.0), vol())
     h.press("z", QtCore.Qt.ControlModifier)
 
 
-k4_undo.wait_ms = 1200
-
-
 def k4_redo():
     h.check("K4 Ctrl+Z took the box away", near(vol(), s["vol"]), vol())
     h.press("y", QtCore.Qt.ControlModifier)
-
-
-k4_redo.wait_ms = 1200
 
 
 def k4_done():
@@ -426,9 +381,6 @@ def k5_centre():
 def k5_esc():
     pi.hover(V(-27, -30, 0))
     h.press(QtCore.Qt.Key_Escape)
-
-
-k5_esc.wait_ms = 1200
 
 
 def k5_done():
@@ -483,4 +435,5 @@ h.run(
         k5_esc,
         k5_done,
     ],
+    paced_by="state",
 )

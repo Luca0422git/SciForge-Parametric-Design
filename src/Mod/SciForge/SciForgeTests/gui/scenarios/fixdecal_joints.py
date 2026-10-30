@@ -76,14 +76,8 @@ def j2_motion():
     j.choose_type(p, "Revolute")
 
 
-j2_motion.wait_ms = 2600
-
-
 def j2_ok():
     j.ok()
-
-
-j2_ok.wait_ms = 1500
 
 
 def j2_check():
@@ -101,14 +95,8 @@ def j3_command():
     j.menu("Drive Joints")
 
 
-j3_command.wait_ms = 1200
-
-
 def j3_row():
     t.click_row(joint().Label)
-
-
-j3_row.wait_ms = 1200
 
 
 def j3_type():
@@ -117,17 +105,11 @@ def j3_type():
         s.type_value(p.angle.widget, "90")
 
 
-j3_type.wait_ms = 1500
-
-
 def j3_live():
     h.check("J3 the joint is at 90", abs((angle_now() or 0) - 90) < 1e-4, angle_now())
     f.follows("J3 while driving", f.flat(), st["j3_decal"], moved_since("j3"))
     h.shot("J3-driven")
     j.ok()
-
-
-j3_live.wait_ms = 1500
 
 
 def j3_check():
@@ -140,17 +122,11 @@ def j4_undo():
     s.undo()
 
 
-j4_undo.wait_ms = 1500
-
-
 def j4_undone():
     h.check("J4 Ctrl+Z: back at 0", abs(angle_now() or 0) < 1e-4, angle_now())
     f.follows("J4 Ctrl+Z", f.flat(), st["j3_decal"], moved_since("j3"))
     h.check("J4 the block is where it was", moved_since("j3").isSame(App.Placement(), 1e-7))
     s.redo()
-
-
-j4_undone.wait_ms = 1500
 
 
 def j4_redone():
@@ -170,9 +146,6 @@ def j5_drag():
     h.settle("the drag to be applied")
 
 
-j5_drag.wait_ms = 1500
-
-
 def j5_check():
     from sciforge import joints_drag
 
@@ -185,9 +158,6 @@ def j5_check():
     )
     h.shot("J5-dragged")
     s.undo()
-
-
-j5_check.wait_ms = 1500
 
 
 def j5_undone():
@@ -226,4 +196,5 @@ h.run(
         j5_undone,
         cleanup,
     ],
+    paced_by="state",
 )

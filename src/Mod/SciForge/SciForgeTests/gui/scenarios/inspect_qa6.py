@@ -209,9 +209,6 @@ def b_dragged_up():
     h.drag(s.screen(grab), s.screen(end), steps=20)
 
 
-b_dragged_up.wait_ms = 1000
-
-
 def b_dragged_down():
     p = s.construct_panel()
     if p is None or p.handle is None:
@@ -223,9 +220,6 @@ def b_dragged_down():
     h.check("B the arrow is let go again", not p.handle.dragging())
     h.check("B the plane follows", s.close(base_of(p.datum).z, 10.0 + value), base_of(p.datum))
     s.click_box(p, 0)
-
-
-b_dragged_down.wait_ms = 1000
 
 
 def b_front():
@@ -264,9 +258,6 @@ def b_edit_drag():
         return
     grab = grab_point(p.handle)
     h.drag(s.screen(grab), s.screen(grab + V(0, -15, 0)), steps=16)
-
-
-b_edit_drag.wait_ms = 1000
 
 
 def b_edit_cancel():
@@ -637,4 +628,4 @@ STEPS = (
     + [f_section, f_section_top, f_section_gap, f_section_cut, f_end]
 )
 
-h.run("inspect_qa6", ti.watched(STEPS))
+h.run("inspect_qa6", ti.watched(STEPS), paced_by="state")

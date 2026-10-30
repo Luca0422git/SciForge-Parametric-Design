@@ -460,4 +460,4 @@ STEPS = b.box_steps("TimelineQA3") + [
     p17_group_back,
 ]
 
-h.run("timeline_browser_qa3", t.watched(STEPS))
+h.run("timeline_browser_qa3", t.watched(STEPS), paced_by="state")

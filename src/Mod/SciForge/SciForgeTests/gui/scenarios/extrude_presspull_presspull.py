@@ -543,4 +543,5 @@ h.run(
         became_extrude,
         profile_extruded,
     ],
+    paced_by="state",
 )

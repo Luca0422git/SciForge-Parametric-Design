@@ -561,4 +561,4 @@ steps = bs.box_steps("AreasOnFace") + [
     side_to_object_click,
     side_to_top_face,
 ]
-h.run("sketch_areas_face", steps)
+h.run("sketch_areas_face", steps, paced_by="state")

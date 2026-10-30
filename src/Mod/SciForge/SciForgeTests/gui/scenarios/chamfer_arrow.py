@@ -185,4 +185,5 @@ h.run(
     + [chamfer_big, click_big_edge, big_arrow_visible]
     + b.box_steps("ChamferTiny", height=1, profile=lambda sk: h.draw_rectangle(sk, 0, 0, 4, 3))
     + [chamfer_tiny, click_tiny_edge, tiny_arrow_on_the_part, done],
+    paced_by="state",
 )

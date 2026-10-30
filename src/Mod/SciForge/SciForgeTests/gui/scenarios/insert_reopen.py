@@ -71,9 +71,6 @@ def a_click_mesh():
     h.click(i.mesh_click_point(mesh()))
 
 
-a_click_mesh.wait_ms = 1500
-
-
 def a_convert_ok():
     h.check(
         "converted body 1000", len(s.bodies()) == 1 and i.close(s.volume(s.bodies()[0]), 1000.0)
@@ -91,9 +88,6 @@ def a_canvas():
 
 def a_click_xy():
     pl.click_on_plane(i.XY_CLICK)
-
-
-a_click_xy.wait_ms = 1200
 
 
 def a_canvas_ok():
@@ -120,9 +114,6 @@ def b_close_and_reopen():
     App.closeDocument(App.ActiveDocument.Name)
     App.openDocument(state["file"])
     h.fit()
-
-
-b_close_and_reopen.wait_ms = 2500
 
 
 def b_check():
@@ -157,9 +148,6 @@ def c_edit():
     si.browser_double_click("canvas")
 
 
-c_edit.wait_ms = 1200
-
-
 def c_check():
     p = i.panel()
     h.check("Edit Canvas after reopen", p is not None and p.title == "Edit Canvas", p and p.title)
@@ -173,9 +161,6 @@ def d_edit_mesh():
     s.timeline_double_click(mesh())
 
 
-d_edit_mesh.wait_ms = 1200
-
-
 def d_move():
     p = i.panel()
     h.check(
@@ -187,9 +172,6 @@ def d_move():
 
 def d_ok():
     h.task_button("OK")
-
-
-d_ok.wait_ms = 1500
 
 
 def d_check():
@@ -242,4 +224,5 @@ h.run(
         e_undo,
         e_check,
     ],
+    paced_by="state",
 )

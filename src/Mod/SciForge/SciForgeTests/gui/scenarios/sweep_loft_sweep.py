@@ -184,9 +184,6 @@ def drag_ball():
         st.drag_path_handle(handle, 1.0)
 
 
-drag_ball.wait_ms = 1200
-
-
 def dragged():
     p = panel()
     d = p.distance.value()
@@ -369,4 +366,5 @@ h.run(
         delete_key,
         sweep_deleted,
     ],
+    paced_by="state",
 )

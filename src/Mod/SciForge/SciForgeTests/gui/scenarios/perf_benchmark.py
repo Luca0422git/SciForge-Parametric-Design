@@ -600,4 +600,5 @@ h.run(
         m_save_open,
         report,
     ],
+    paced_by="state",
 )

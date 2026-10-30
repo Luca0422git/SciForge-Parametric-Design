@@ -92,9 +92,6 @@ def taper50():
         ui.type_into(p.taper.widget, "-50")
 
 
-taper50.wait_ms = 3000
-
-
 def drag_distance():
     p = panel()
     h.check("-50 fits at 10 mm", p is not None and msg(p) == "" and p.options["taper"] == -50.0)
@@ -109,9 +106,6 @@ def drag_distance():
         h.screen_point(head), h.screen_point(head + App.Vector(0, 0, 20)), moves=30, every_ms=40
     )
     s["drag"].run()
-
-
-drag_distance.wait_ms = 15000
 
 
 def dragged():
@@ -129,17 +123,11 @@ def dragged():
         ui.type_into(p.distance.widget, "20")
 
 
-dragged.wait_ms = 5000
-
-
 def typed20():
     p = panel()
     h.check("distance 20", p is not None and abs(p.options["distance"] - 20.0) < 1e-9)
     taper_kept(p, "distance 20")
     h.task_button("OK")
-
-
-typed20.wait_ms = 3000
 
 
 def ok_waits():
@@ -150,17 +138,11 @@ def ok_waits():
         ui.type_into(p.taper.widget, "-30")
 
 
-ok_waits.wait_ms = 3000
-
-
 def taper30():
     p = panel()
     h.check("-30 fits at 20 mm", p is not None and msg(p) == "", msg(p))
     h.check("the feature has -30", p is not None and abs((feature_taper(p) or 0) + 30.0) < 1e-9)
     h.task_button("OK")
-
-
-taper30.wait_ms = 3000
 
 
 def made():
@@ -191,4 +173,5 @@ h.run(
         taper30,
         made,
     ],
+    paced_by="state",
 )
