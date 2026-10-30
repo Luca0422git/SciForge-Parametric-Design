@@ -380,7 +380,25 @@ def click_tab(label_start):
     def shown():
         tabs = h.document_tabs()
         current = tabs.currentIndex()
-        return current >= 0 and tabs.tabText(current).startswith(label_start)
+        if current >= 0 and tabs.tabText(current).startswith(label_start):
+            return True
+        # (what a timeout shows: SciForge's tabs, FreeCAD's own, the active window and design)
+        from sciforge import doc_tabs
+
+        own = doc_tabs.mdi_tabs()
+        area = doc_tabs._area()
+        sub = area.activeSubWindow() if area is not None else None
+        raise LookupError(
+            "tabs %s current %d; FreeCAD's %s current %s; active window %r; design %s"
+            % (
+                [tabs.tabText(i) for i in range(tabs.count())],
+                current,
+                [own.tabText(i) for i in range(own.count())] if own is not None else None,
+                own.currentIndex() if own is not None else None,
+                sub.windowTitle() if sub is not None else None,
+                Gui.ActiveDocument.Document.Name if Gui.ActiveDocument else None,
+            )
+        )
 
     h.wait_for(shown, "the design of the tab %r to show" % label_start)
     return True
