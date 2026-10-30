@@ -648,6 +648,16 @@ def _panels_behind():
     except Exception:
         pass
     try:
+        # Home's tiles get their pictures from a worker thread, taken in on a timer: the tiles
+        # shown are still waiting a moment after Home opens (readme_shots, CI #320).
+        from sciforge import home_ui
+
+        page = home_ui.view()
+        if page is not None and _alive(page) and page.isVisible() and page.loading():
+            found.append("Home's tile pictures")
+    except Exception:
+        pass
+    try:
         # Compare's panes turn together on its 70 ms tick: one pane turned, the others follow
         # at the next tick (simres_compare A, CI #319).
         from sciforge import simulation_results_ui as results
