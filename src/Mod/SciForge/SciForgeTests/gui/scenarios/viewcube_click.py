@@ -129,6 +129,11 @@ def animate():
     st["left_to_go"] = vc.turned(vc.orientation(), App.Rotation(0.70710678, 0, 0, 0.70710678))
 
 
+# FreeCAD animates the turn on its own (C++) timers, which settling cannot see
+animate.done = lambda: vc.looks_along((0, 1, 0)) and vc.z_up()
+animate.done_what = "the animated turn to arrive at FRONT"
+
+
 def animate_done():
     h.check(
         "with animations on, the view does not jump at once",

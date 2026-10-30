@@ -125,9 +125,9 @@ def menu_options(title, label, option):
             return False
         path = si._find(menu, label)
         if not path:
-            done["missing"] = label
+            done["error"] = "no %s in the menu" % label  # (ends the chain at once)
             close_popups()
-            return False
+            return True
         rect = menu.actionGeometry(path[0][1])
         for x in (rect.left() + 10, rect.center().x(), rect.right() - 30):
             h.pointer_to(menu, QtCore.QPoint(x, rect.center().y()))

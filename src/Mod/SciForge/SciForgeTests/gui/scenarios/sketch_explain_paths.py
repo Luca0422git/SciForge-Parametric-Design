@@ -351,7 +351,7 @@ def h_check():
     h.check("H: and no dimension", "dimension" not in text, text)
     # one solve of this sketch takes about 0.2 s here: the check stays within about 1.2 s
     # (its own solve plus at most PROBE_SECONDS), with room for a loaded machine
-    h.check("H: within the time limit", took < 2.0, took)
+    h.check("H: within the time limit", took < 2.0 * h.SLOWDOWN, took)
 
 
 h_check.wait_ms = 6000

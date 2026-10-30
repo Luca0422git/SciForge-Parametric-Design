@@ -461,11 +461,24 @@ def _warp(target, widget):
     # is down; inside a menu that opened on a press, before that press's release, it sends
     # the widget a made-up move instead and the pointer stays where it was.)
     QtGui.QCursor.setPos(target)
+    name = describe(widget)
+
+    def gone():  # (a window closed under the pointer: Qt is told of no move on it any more)
+        try:
+            return not _alive(widget) or not widget.isVisible()
+        except RuntimeError:
+            return True
+
     try:
         wait_for(
-            lambda: _pointer.last == target,
-            "Qt to see the pointer at %d, %d (%s)" % (target.x(), target.y(), describe(widget)),
+            lambda: _pointer.last == target or gone(),
+            "Qt to see the pointer at %d, %d (%s)" % (target.x(), target.y(), name),
         )
+        if _pointer.last != target and gone():
+            check("%s still open when the pointer came to it" % name, False, seen_now())
+            close_modals()
+            state["stop"] = state.get("stop") or "%s closed under the pointer" % name
+            raise WaitTimeout(name)
     finally:
         _pointer.expected = None
 
@@ -1204,6 +1217,43 @@ def fit(iso=True):
         view().viewIsometric()
     view().fitAll()
     QtWidgets.QApplication.processEvents()
+    try:
+        shown = gl_widget().isVisible()
+    except Exception:  # (no 3D view on top: Home, a drawing sheet)
+        shown = False
+    if shown:
+        view_still("the 3D view to stop changing after the fit")
+
+
+def view_key():
+    """The 3D view's size and camera (what a 3D point's pixel depends on)."""
+    gl = gl_widget()
+    cam = view().getCameraNode()
+    key = [gl.width(), gl.height()]
+    key += [round(v, 6) for v in cam.position.getValue().getValue()]
+    key += [round(v, 9) for v in cam.orientation.getValue().getValue()]
+    for name in ("height", "heightAngle"):
+        field = getattr(cam, name, None)
+        if field is not None:
+            key.append(round(field.getValue(), 6))
+    return tuple(key)
+
+
+def view_still(what="the 3D view to stop changing"):
+    """Until two frames drawn in a row show the same view (size and camera): a layout still
+    settling or a camera move run by FreeCAD's own timers is not seen by settling, and a pixel
+    computed meanwhile is pressed where the target was (exchange2_manip: the press 13 px off
+    the X arrow took the Y arrow)."""
+    box = {"last": None}
+
+    def same():
+        view_drawn(what)
+        key = view_key()
+        same_as_last = key == box["last"]
+        box["last"] = key
+        return same_as_last
+
+    wait_for(same, what)
 
 
 # -- ribbon and dialogs -----------------------------------------------------------

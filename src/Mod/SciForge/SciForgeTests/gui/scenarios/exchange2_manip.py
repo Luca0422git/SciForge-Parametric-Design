@@ -88,6 +88,8 @@ def _settled_arrow(key, timeout_ms=None):
     #148: the press went where the arrow had been): the app settled, every live handle
     polled since."""
     h.settle("the handles to follow the view")
+    h.view_still()
+    h.settle("the handles to follow the view")
     p = panel()
     return p.handle_by.get(key) if p is not None else None
 

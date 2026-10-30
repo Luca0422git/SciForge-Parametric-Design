@@ -174,10 +174,15 @@ def b_check():
 def c_save():
     App.ActiveDocument.saveAs(os.path.join(OUT, "MeshOnly.FCStd"))
     del i.opened_folders[:]
+
+
+def c_export():
+    # (a step of its own: what the save sets going, the version note and the tab's new name,
+    # closed the menu under the pointer when it opened in the same step)
     i.menu("MAKE", "Export Everything")
 
 
-c_save.wait_ms = 2500
+c_export.wait_ms = 2500
 
 
 def c_check():
@@ -211,5 +216,6 @@ h.run(
     "mesh_print",
     [i.new_design("MeshPrint")]
     + m.insert_file(part_file())
-    + [a_open, a_dialog, a_low, a_check, b_open, b_step, b_refused, b_check, c_save, c_check],
+    + [a_open, a_dialog, a_low, a_check, b_open, b_step, b_refused, b_check, c_save,
+        c_export, c_check],
 )

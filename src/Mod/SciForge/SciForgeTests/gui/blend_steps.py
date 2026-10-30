@@ -190,6 +190,9 @@ def choose(combo, label):
     labels = [combo.itemText(i) for i in range(combo.count())]
     if not h.check("drop-down has %r" % label, label in labels, labels):
         return False
+    if not combo.isEnabled():
+        h.check("the drop-down takes a choice (%s)" % label, False, "greyed out")
+        return False
     combo.setFocus()
     QtTest.QTest.mouseClick(combo, QtCore.Qt.LeftButton)
     view = combo.view()
