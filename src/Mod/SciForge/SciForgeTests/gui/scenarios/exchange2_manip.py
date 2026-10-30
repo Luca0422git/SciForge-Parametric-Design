@@ -113,7 +113,11 @@ def drag_arrow(key, mm):
     # press a pixel off its middle line missed it, CI #145-#151)
     value = _handle_value(p, key)
     tries = []
-    for part in (0.6, 0.75, 0.45, 0.9, 0.3):
+    parts = _clear_parts(p, key, arrow)
+    if not parts:
+        h.check("a part of the %s arrow clear of the other arrows" % key, False, _layout(p))
+        return
+    for part in parts[:5]:
         point = ai.arrow_point(arrow, part)
         px = h.screen_point(point)
         h.move(px)
@@ -121,20 +125,6 @@ def drag_arrow(key, mm):
         under = h.covered(px)
         if under is not None:
             tries.append((part, (px.x(), px.y()), under.metaObject().className()))
-            continue
-        # pressed only where no other arrow lights up under the pointer, as a hand sees it
-        # (the arrows start at one point: a press where X and Y were both lit took the Y
-        # arrow, counted as a miss for X, and both drags stayed: CI #321 and #324, X 7.96 and
-        # Y 3.99, the 8 mm along X as Y sees it). The turning ring around them lights up
-        # there too and is left out (counting it, no point qualified: CI #322).
-        h.settle("the handles to see the pointer")
-        lit = [
-            k
-            for k, other in p.handle_by.items()
-            if k != "angle" and getattr(other, "_hover", False)
-        ]
-        if lit and lit != [key]:
-            tries.append((part, (px.x(), px.y()), "lit: %s" % lit))
             continue
         others = {k: _handle_value(p, k) for k in p.handle_by if k != key}
         end = point + arrow.direction * mm
@@ -160,6 +150,44 @@ def drag_arrow(key, mm):
         ],
     }
     print("[SciForge] exchange2_manip: grab %s" % s["grab"], flush=True)
+
+
+def _segments(p, skip):
+    """{key: (foot, tip)} of the dialog's arrows on the screen (the turning ring left out)."""
+    found = {}
+    for k, other in p.handle_by.items():
+        if k in skip or k == "angle":
+            continue
+        foot, tip = ai.arrow_ends(other)
+        a, b = h.screen_point(foot), h.screen_point(tip)
+        found[k] = ((a.x(), a.y()), (b.x(), b.y()))
+    return found
+
+
+def _clear_parts(p, key, arrow):
+    """Shares along the arrow `key` where a press takes it and no other arrow, farthest from
+    the others first, as a hand aims at the part of an arrow that stands clear. The arrows
+    start at one point and the scale arrow lies along X from the canvas' middle: a press
+    where two met took the other one (CI #321, #324: X 7.96 and Y 3.99), and whether a part
+    of X stands clear depends on the canvas' size on the screen."""
+    from sciforge import handle_look_core as hc
+
+    others = _segments(p, (key,)).values()
+    reach = hc.grab_px("arrow")
+    found = []
+    for i in range(3, 20):
+        share = i / 20.0
+        q = h.screen_point(ai.arrow_point(arrow, share))
+        clear = min((hc.segment_distance((q.x(), q.y()), a, b) for a, b in others), default=1e9)
+        if clear > reach:
+            found.append((clear, share))
+    return [share for _clear, share in sorted(found, reverse=True)]
+
+
+def _layout(p):
+    return {
+        k: [tuple(round(c) for c in end) for end in ends] for k, ends in _segments(p, ()).items()
+    }
 
 
 def _handle_value(p, key):

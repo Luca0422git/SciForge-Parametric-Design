@@ -62,6 +62,25 @@ def width():
     return box.XLength, box.YLength
 
 
+def square(where):
+    """The shaft's sides along the channel's (3.2 mm across), with what turned it when not:
+    its turn about Z and the joint's own angle (CI #307, #324: 0.02-0.03 degrees after OK)."""
+    w = width()
+    turn = shaft().Placement.Rotation.toEuler()[0]
+    joint = revolute() or (vx.joints_list() or [None])[-1]
+    try:
+        from sciforge import joints
+
+        value = joints.value(joint) if joint is not None else None
+    except Exception as exc:
+        value = repr(exc)
+    return h.check(
+        "%s: the shaft square to the channel (3.2 mm across)" % where,
+        all(abs(x - SIDE) < 1e-4 for x in w),
+        {"across": w, "turned (deg)": turn, "joint value": value},
+    )
+
+
 def through(where, low):
     """The shaft's axis on the hole's centre, from `low` up one shaft length."""
     box = vx.bbox(shaft())
@@ -138,6 +157,7 @@ def a_hole_lit():
 
 def a_on_web():
     through("joined", vx.T)
+    square("joined")
     h.shot("A-on-web")
     p = vx.joint_panel()
     if h.check("the Joint dialog stays open", p is not None, p):
@@ -146,6 +166,7 @@ def a_on_web():
 
 def a_through():
     through("Offset Z -1.5 in", vx.T + DOWN)
+    square("Offset Z -1.5 in")
     h.shot("A-through")
 
 
@@ -164,12 +185,7 @@ def b_made():
     h.check("OK closed the dialog", vx.joint_panel() is None)
     h.check("Revolute 1 made", revolute() is not None, [o.Label for o in vx.joints_list()])
     through("after OK", vx.T + DOWN)
-    S["width"] = width()
-    h.check(
-        "the shaft square to the channel (3.2 mm across)",
-        all(abs(w - SIDE) < 1e-4 for w in S["width"]),
-        S["width"],
-    )
+    square("after OK")
 
 
 # -- C: drive it -----------------------------------------------------------------------------------
@@ -217,8 +233,7 @@ def c_undo():
 
 
 def c_undone():
-    w = width()
-    h.check("Undo: the shaft square again", all(abs(x - SIDE) < 1e-4 for x in w), w)
+    square("Undo")
     through("undone", vx.T + DOWN)
     vx.no_popups("Drive Joints")
 
