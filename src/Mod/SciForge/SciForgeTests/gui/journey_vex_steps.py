@@ -568,7 +568,7 @@ def look(kind):
         v.viewBottom()
     else:
         v.setViewDirection(tuple(kind))
-    vx.wait(120)
+    h.view_drawn("the 3D view to draw the new view")
 
 
 UNDER_FRONT = (-1.0, 1.0, 1.0)  # looking up from below, front right (into the rails' gap)
@@ -594,7 +594,7 @@ def keys_to_window():
         print("[SciForge] journey_vex: the main window takes the keyboard back", flush=True)
         mw.raise_()
         mw.activateWindow()
-        vx.wait(150)
+        h.wait_for(lambda: QtWidgets.QApplication.activeWindow() is mw, "the main window to take the keyboard")
 
 
 def aim(where, point_fn, dot_fn, kinds, view="iso", size=40.0, label=""):

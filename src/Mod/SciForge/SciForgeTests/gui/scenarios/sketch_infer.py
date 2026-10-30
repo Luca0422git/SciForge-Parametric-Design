@@ -107,9 +107,7 @@ def move(point):
 
 def shot(name):
     """A screenshot once the 3D view has redrawn the guides."""
-    from PySide6 import QtTest
-
-    QtTest.QTest.qWait(300)
+    h.view_drawn("the 3D view to draw the guides")
     h.shot(name)
 
 
@@ -117,9 +115,7 @@ def hover(point):
     """Rest the mouse on a sketch point, coming from the side (acquires it)."""
     for f in (2.0, 1.0, 0.0):
         move(g(point + V(1.0, 0.6, 0) * f))
-    from PySide6 import QtTest
-
-    QtTest.QTest.qWait(80)
+    h.view_drawn()  # (the sketch looks under the pointer when it redraws)
 
 
 # -- setup ------------------------------------------------------------------------
@@ -494,16 +490,14 @@ def preview_start(towards):
     read that first point."""
     from sciforge import sketch_mode
 
-    from PySide6 import QtTest
-
     for attempt in range(5):
         move(g(towards + V(0.3 * attempt, 0, 0)))
+        h.view_drawn("the line tool to draw its line")
         coords, _ = sketch_mode.find_node(h.view().getSceneGraph(), "EditCurvesCoordinate")
         points = coords.point.getValues(0) if coords is not None else []
         if len(points) == 2:
             p = points[0].getValue()
             return V(p[0], p[1], 0)
-        QtTest.QTest.qWait(150)
     h.check("the line tool shows the line from its first point", False, len(points))
     return V(0, 0, 0)
 

@@ -150,7 +150,7 @@ def dragged():
 
 def type_in_value_box():
     h.fit()  # the arrow went up past the top of the view: zoom out to see its box
-    st.wait(300)
+    h.view_drawn("the 3D view to draw the fitted view")
     box = ai.value_box("distance")
     h.check("a value box beside the arrow", box is not None)
     if box is not None:

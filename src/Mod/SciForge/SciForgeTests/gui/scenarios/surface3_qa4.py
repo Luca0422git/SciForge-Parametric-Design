@@ -135,7 +135,7 @@ def envmap_box():
 
 
 def envmap_ok():
-    st.wait(600)
+    h.settle("the analysis made by the click")
     found = a.analyses("EnvironmentMapAnalysis")
     h.check("an analysis on the box", len(found) == 1, found)
     h.task_button("OK")

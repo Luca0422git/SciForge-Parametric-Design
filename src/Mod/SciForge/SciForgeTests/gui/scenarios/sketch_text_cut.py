@@ -25,7 +25,6 @@ import zipfile
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
-from PySide6 import QtTest
 
 from SciForgeTests.gui import arrow_input as arrows
 from SciForgeTests.gui import harness as h
@@ -271,7 +270,7 @@ def c4_open():
     s["recent"] = len(RECENT)
     App.openDocument(s["path"])
     h.fit()
-    QtTest.QTest.qWait(500)
+    h.settle("the reopened design to settle")
 
 
 def c4_told():

@@ -227,7 +227,7 @@ def _vp():
 
 
 def envmap_drawn():
-    st.wait(600)
+    h.settle("the Environmental Map to be made")
     obj, vp = _vp()
     h.check("an Environmental Map analysis", obj is not None)
     if obj is None:
@@ -247,7 +247,7 @@ def envmap_drawn():
 
 
 def envmap_changed():
-    st.wait(600)
+    h.settle("the Environmental Map to follow the dialog")
     obj, vp = _vp()
     h.check(
         "Horizon at 40 %",
@@ -291,7 +291,7 @@ def envmap_escaped():
 
 
 def reopened():
-    st.wait(800)
+    h.settle("the reopened design to show its analysis")
     obj, vp = _vp()
     h.check("the analysis is back", obj is not None)
     if obj is None:

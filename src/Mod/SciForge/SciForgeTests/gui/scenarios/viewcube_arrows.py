@@ -95,7 +95,7 @@ def spaced_clicks():
         st["arrow_there"] = "turn-right" in vc.cube().targets()
         st["second"] = vc.click("turn-right")
 
-    QtCore.QTimer.singleShot(150, second)
+    QtCore.QTimer.singleShot(150, second)  # on purpose: a person's double-click (150 ms)
 
 
 spaced_clicks.wait_ms = 1800
@@ -117,7 +117,7 @@ def stopped_turn():
     stops its turning animation). The view stays tilted: no arrows there."""
     vc.animations(True)
     vc.click("turn-right")
-    QtCore.QTimer.singleShot(120, lambda: h.view().zoomIn())
+    QtCore.QTimer.singleShot(120, lambda: h.view().zoomIn())  # on purpose: mid-turn (120 ms)
 
 
 stopped_turn.wait_ms = 1800

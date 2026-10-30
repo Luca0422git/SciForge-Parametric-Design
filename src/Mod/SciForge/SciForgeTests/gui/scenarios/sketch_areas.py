@@ -292,7 +292,8 @@ def in_sketch_hover():
     for f in (3.0, 1.5, 0.5):
         h.move(h.screen_point(A + V(1.0, 0.6, 0) * f))
     h.move(h.screen_point(A))
-    QtCore.QTimer.singleShot(120, hover_seen)
+    h.settle("the sketch to light up the area under the pointer")
+    hover_seen()
 
 
 def hover_seen():

@@ -88,7 +88,7 @@ class _Fake(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or 0)
         s["requests"].append(json.loads(self.rfile.read(length) or b"{}"))
         if s["loop"]:
-            time.sleep(0.3)  # a real model takes seconds per answer: time to press Stop
+            time.sleep(0.3)  # on purpose: a real model takes seconds per answer (time to press Stop)
             self._json(_call("get_design", {}, len(s["requests"])))
         elif s["script"]:
             self._json(s["script"].pop(0))

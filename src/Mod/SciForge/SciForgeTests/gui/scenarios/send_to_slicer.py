@@ -32,7 +32,6 @@ E  Preferences > 3D Print: Send to shows Other with the program, the page names 
 import glob
 import os
 import re
-import time
 import zipfile
 
 import FreeCAD as App
@@ -74,14 +73,20 @@ def fake_slicer(path, log):
     os.chmod(path, 0o755)
 
 
-def read_log(log, wait_s=5.0):
-    """The lines the fake slicer wrote (it runs on its own, so it may need a moment)."""
-    end = time.time() + wait_s
-    while time.time() < end:
-        if os.path.isfile(log) and open(log).read().strip():
-            break
-        time.sleep(0.1)
+def log_lines(log):
     return open(log).read().split("\n")[:-1] if os.path.isfile(log) else []
+
+
+def read_log(log):
+    """The lines the fake slicer wrote (it runs on its own, a separate program: waited for
+    until it has written them)."""
+    h.wait_for(lambda: bool(log_lines(log)), "the fake slicer to write what it was given")
+    return log_lines(log)
+
+
+def starts(name):
+    """The times SciForge started the program `name` (insert_steps.real_program_start)."""
+    return [c for c in i.started_programs if os.path.basename(c[0]) == name]
 
 
 def print_folder_files():
@@ -364,7 +369,8 @@ def c_check():
         os.path.isfile(os.path.join(OUT, first + ".stl")),
         out_files(),
     )
-    h.check("C PrusaSlicer not started again", len(read_log(PRUSA_LOG, 0.5)) == 1)
+    h.check("C PrusaSlicer not started again", len(starts("prusa-slicer")) == 1, i.started_programs)
+    h.check("C its log unchanged", len(log_lines(PRUSA_LOG)) == 1, log_lines(PRUSA_LOG))
     h.check("C Other remembered", export.print_send_to() == "other", export.print_send_to())
     h.check("C its program remembered", export.slicer_program() == OTHER, export.slicer_program())
     h.check("C STL remembered", export.print_format() == "STL (Binary)", export.print_format())
@@ -372,6 +378,7 @@ def c_check():
 
 # -- D: Save file only, Cancel ----------------------------------------------------------------
 def d_open():
+    state["starts"] = len(i.started_programs)
     state["out_before"] = out_files()
     state["print_before"] = print_folder_files()
     open_print()
@@ -407,7 +414,8 @@ def d_check():
     h.check("D Cancel closes", dialog() is None)
     h.check("D nothing written beside the design", out_files() == state["out_before"], out_files())
     h.check("D nothing in the print folder", print_folder_files() == state["print_before"])
-    h.check("D no slicer started", len(read_log(OTHER_LOG, 0.5)) == 1)
+    h.check("D no slicer started", len(i.started_programs) == state["starts"], i.started_programs)
+    h.check("D the other slicer's log unchanged", len(log_lines(OTHER_LOG)) == 1, log_lines(OTHER_LOG))
     h.check("D Cancel kept the choice", export.print_send_to() == "other")
 
 

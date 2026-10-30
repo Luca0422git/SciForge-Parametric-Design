@@ -61,11 +61,21 @@ def corner_right_click():
                 seen.append(w)
                 w.close()
 
-    QtCore.QTimer.singleShot(400, close_cube_menu)
+    def cube_menu_open():
+        return any(
+            w.objectName() == "SciForgeViewCubeMenu" and w.isVisible()
+            for w in QtWidgets.QApplication.topLevelWidgets()
+        )
+
+    # set up before the right click (a menu that opens runs its own loop), dropped after it
+    watch = h.when(cube_menu_open, close_cube_menu, "the right click to be handled")
     corner = QtCore.QPoint(cube.width() - 3, cube.height() - 3)
     h.check("nothing of the cube is drawn in that corner", cube.hit(corner.x(), corner.y()) is None)
-    vc._open_menu(cube, corner)
-    QtWidgets.QApplication.processEvents()
+    try:
+        vc._open_menu(cube, corner)
+        h.settle("the right click to be handled")
+    finally:
+        watch["cancelled"] = True
     st["marking"] = marking_menu._last_menu["widget"]
     st["marking_shown"] = st["marking"] is not None and st["marking"].isVisible()
     st["cube_menu"] = seen

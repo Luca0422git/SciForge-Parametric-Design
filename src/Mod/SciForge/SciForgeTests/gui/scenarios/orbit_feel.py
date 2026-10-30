@@ -235,14 +235,6 @@ def nav_orbit_button():
     return None
 
 
-def _click_action(menu, action):
-    rect = menu.actionGeometry(action)
-    for i in range(6):
-        QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 10 + 8 * i, rect.center().y()))
-    QtTest.QTest.mouseMove(menu, rect.center())
-    QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, NONE, rect.center())
-
-
 def choose_orbit(text):
     """Click the Orbit button of the navigation bar, read its drop-down and click `text`
     (None: only read, then Esc). {'ok', 'texts': [(entry, enabled)], 'checked': [entries]}."""
@@ -252,12 +244,7 @@ def choose_orbit(text):
         h.check("the navigation bar has an Orbit button", False)
         return result
 
-    def pick(tries=0):
-        menu = QtWidgets.QApplication.activePopupWidget()
-        if not isinstance(menu, QtWidgets.QMenu):
-            if tries < 40:
-                QtCore.QTimer.singleShot(50, lambda: pick(tries + 1))
-            return
+    def read(menu):
         result["texts"] = [
             (a.text().replace("&", "").strip(), a.isEnabled())
             for a in menu.actions()
@@ -266,18 +253,11 @@ def choose_orbit(text):
         result["checked"] = [
             a.text().replace("&", "").strip() for a in menu.actions() if a.isChecked()
         ]
-        action = None
-        for a in menu.actions():
-            if a.text().replace("&", "").strip() == text:
-                action = a
-        if action is None or not action.isEnabled():
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-            return
-        _click_action(menu, action)
-        result["ok"] = True
 
-    QtCore.QTimer.singleShot(50, pick)
-    w.click(button)  # the drop-down opens its own event loop; pick() runs inside it
+    # the drop-down opens its own event loop: h.choose_from reads it and clicks inside it
+    result["ok"] = h.choose_from(
+        lambda: w.click(button), [text] if text else [], "the Orbit drop-down", report=False, read=read
+    )
     process()
     return result
 

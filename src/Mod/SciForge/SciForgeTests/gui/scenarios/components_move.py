@@ -137,59 +137,9 @@ def c_move():
 
 
 def _submenu_pick(widget, pos, submenu_text, entry_text):
-    """Right-click, open a submenu and click one of its entries, like a person."""
-    from PySide import QtWidgets
-    from PySide6 import QtTest
-
-    result = {"ok": False}
-
-    def pick():
-        menu = QtWidgets.QApplication.activePopupWidget()
-        if not isinstance(menu, QtWidgets.QMenu):
-            if result.get("tries", 0) < 20:
-                result["tries"] = result.get("tries", 0) + 1
-                QtCore.QTimer.singleShot(50, pick)
-            return
-        action = None
-        for a in menu.actions():
-            if a.text().replace("&", "").strip() == submenu_text:
-                action = a
-        if action is None or action.menu() is None:
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-            return
-        rect = menu.actionGeometry(action)
-        for i in range(6):
-            QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 10 + 8 * i, rect.center().y()))
-        # A click on the entry opens its submenu (Qt does, as for a person's click).
-        QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center())
-        QtCore.QTimer.singleShot(150, lambda: pick_entry(menu, action.menu()))
-
-    def pick_entry(menu, sub):
-        if sub is None or not sub.isVisible():
-            result["detail"] = "submenu not shown"
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-            return
-        target = None
-        for a in sub.actions():
-            if a.text().replace("&", "").strip() == entry_text:
-                target = a
-        if target is None:
-            result["detail"] = [a.text() for a in sub.actions()]
-            QtTest.QTest.keyClick(sub, QtCore.Qt.Key_Escape)
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-            return
-        srect = sub.actionGeometry(target)
-        for i in range(6):
-            QtTest.QTest.mouseMove(
-                sub, QtCore.QPoint(srect.left() + 10 + 6 * i, srect.center().y())
-            )
-        QtTest.QTest.mouseClick(sub, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, srect.center())
-        result["ok"] = True
-
-    QtCore.QTimer.singleShot(50, pick)
-    w._open_menu(widget, pos, result)
-    QtWidgets.QApplication.processEvents()
-    return result["ok"]
+    """Right-click, open a submenu and click one of its entries, like a person
+    (widget_input.right_click_sub: each entry lit under the pointer before its click)."""
+    return w.right_click_sub(widget, pos, submenu_text, entry_text)["ok"]
 
 
 def c_moved():

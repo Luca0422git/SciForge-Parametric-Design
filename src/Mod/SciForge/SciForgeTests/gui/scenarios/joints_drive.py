@@ -293,6 +293,11 @@ def d6_escape():
     b.press_guarded(QtCore.Qt.Key_Escape)
 
 
+# Animate Joint plays until Esc: the design changes on every frame, so the app never
+# settles while it plays; these steps act and look while it plays
+d6_animate.while_busy = d6_watched.while_busy = d6_escape.while_busy = True
+
+
 def d6_stopped():
     from sciforge import joints_ui
 

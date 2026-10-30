@@ -22,7 +22,6 @@ what they need, no dialog.
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide6 import QtTest
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import plastic2_steps as ps
@@ -449,13 +448,13 @@ def empty_design():
 
 
 def no_snap_dialog():
-    QtTest.QTest.qWait(300)
+    h.settle("the command to answer")
     h.check("an empty design: no Snap Fit dialog", not Gui.Control.activeDialog())
     h.ribbon("Lip")
 
 
 def no_lip_dialog():
-    QtTest.QTest.qWait(300)
+    h.settle("the command to answer")
     h.check("an empty design: no Lip dialog", not Gui.Control.activeDialog())
 
 

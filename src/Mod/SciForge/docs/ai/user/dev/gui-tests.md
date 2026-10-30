@@ -75,7 +75,11 @@ h.run("my_scenario", [new_design, open_offset, solve, ...], paced_by="state")
   (no waiting for a quiet app around it, only its `ready` / `done`).
 - The browser and the timeline read the design on a poll (0.5 / 0.4 s) once it changed:
   settling includes them having read the last change (an active component's see-through look
-  comes with the browser's read).
+  comes with the browser's read). The RESULTS view follows the bodies' eyes on its own tick:
+  settling includes it having followed them.
+- A menu entry the browser runs a moment after its menu closed (Rename opens its field then):
+  the menu helpers (`widget_input.right_click`, `click_menu`) process the events the click
+  posted before they return; a check that needs more waits for it by state.
 - Steps that re-insert themselves into the queue to poll (`h.state["queue"].insert(0, step)`)
   become a `done`.
 
@@ -116,13 +120,15 @@ A green run proves little: the flaky scenarios also passed on most runs.
   does nothing) and check that the scenario fails fast, naming the step and the state. Do not push
   that change.
 
+The journey (`journey_gui.py`, part of the base tests) runs on the harness too, paced by state.
+
 ## Tools
 
 | What | Where |
 |---|---|
 | The harness (waits, input, pacing, watchdog) | `SciForgeTests/gui/harness.py` |
 | Input helpers on it | `widget_input.py`, `sketch_input.py` (ribbon menus), `selection_input.py`, `dialog_input.py`, `nav_input.py`, `viewcube_input.py`, `drawing_input.py`, `arrow_input.py` |
-| One scenario run per fresh profile, `--stress`, `--repeat`, FLAKY/FAILED label | `tools/sciforge/run_tests.sh` |
+| One scenario run per fresh profile, `--stress`, `--repeat`, FLAKY/FAILED label | `tools/sciforge/run_tests.sh` (`--only gui-base`: the smoke test, the journey and the restart only) |
 | Failures on the run page (`::error::` lines and the job summary) | `tools/sciforge/scenario_result.py` |
 | The GUI environment (Xvfb 1920x1200 at 96 DPI, Qt scale 1, software GL, DejaVu fonts only) | `tools/sciforge/gui_env.sh` (`--install` on CI) |
 | Fixed waits left, and the allowance that only goes down | `tools/sciforge/check_waits.py`, `check_waits.json` (a step of the tests workflow) |

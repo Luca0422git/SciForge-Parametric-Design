@@ -73,6 +73,8 @@ IGNORED_ERRORS = (
     # cannot)
     re.compile(r"<WireJoiner>"),
     re.compile(r"Failed to make face for sketch"),
+    # the harness's own progress line (a step called g1_error is not an error)
+    re.compile(r"\[SciForge\] [\w.-]+ step: \w+ \([\d.]+ s\)"),
 )
 
 
@@ -565,6 +567,18 @@ def _panels_behind():
                 continue
             if gate.key != key:
                 found.append(name)
+    except Exception:
+        pass
+    try:
+        # The RESULTS view follows the bodies' eyes on its own tick (every 6th of 70 ms):
+        # hiding a body shows the results inside it only then (simres_workspace).
+        from sciforge import simulation_results_ui
+
+        session = simulation_results_ui.current()
+        timer = getattr(session, "_timer", None)
+        if session is not None and timer is not None and timer.isActive():
+            if session._shown_key != session._visibility_key():
+                found.append("simulation results view")
     except Exception:
         pass
     return found

@@ -272,7 +272,7 @@ def e_collapse():
     h.check("E1 the profiles are unchanged", areas(copy) == s["areas"], areas(copy))
     App.closeDocument(d.Name)
     _back_to_doc()
-    QtTest.QTest.qWait(300)
+    h.settle("FreeCAD to report the squeezed try")
     h.check("E1 FreeCAD reported the squeezed try (expected)", True, h.new_errors())
 
 
@@ -561,8 +561,7 @@ def p_type():
     QtTest.QTest.keyClick(editors[0], QtCore.Qt.Key_A, QtCore.Qt.ControlModifier)
     QtTest.QTest.keyClicks(editors[0], "-60")
     QtTest.QTest.keyClick(editors[0], QtCore.Qt.Key_Return)
-    QtWidgets.QApplication.processEvents()
-    QtTest.QTest.qWait(500)
+    h.settle("FreeCAD to report the trial's failure")
     h.check("P: FreeCAD reported the trial's failure (expected)", True, h.new_errors())
 
 

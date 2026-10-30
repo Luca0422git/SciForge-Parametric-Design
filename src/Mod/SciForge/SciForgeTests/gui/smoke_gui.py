@@ -9,18 +9,18 @@ screen via xvfb-run):
 It switches to SciForge, checks the ribbon, theme, shortcuts and timeline,
 builds a small part, opens a sketch (the SKETCH tab must appear and the ribbon
 must stay), leaves SciForge (FreeCAD must be restored), saves screenshots and
-writes result.json into SCIFORGE_SMOKE_OUT. FreeCAD's own exit code is not
-reliable for this, so the runner script reads result.json to decide pass/fail.
+writes smoke-result.json into SCIFORGE_SMOKE_OUT (the harness's result). FreeCAD's own exit
+code is not reliable for this, so the runner script reads that file to decide pass/fail.
 """
 
-import json
 import os
-import traceback
 
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui, QtWidgets
 from PySide6 import QtTest
+
+from SciForgeTests.gui import harness as h
 
 OUT_DIR = os.environ.get("SCIFORGE_SMOKE_OUT") or App.getUserAppDataDir()
 EXPECTED_SHORTCUTS = {
@@ -29,7 +29,6 @@ EXPECTED_SHORTCUTS = {
     "SciForge_SketchLine": "L",  # Fusion's chained line (FreeCAD's polyline tool)
 }
 
-checks = []  # (name, ok, detail)
 errors = []  # every [SciForge] error printed to the console
 state = {}
 
@@ -46,19 +45,7 @@ class _ErrorCatcher:
         self._real(msg)
 
 
-def check(name, ok, detail=""):
-    checks.append({"name": name, "ok": bool(ok), "detail": str(detail)})
-
-
-def later(ms, fn):
-    def guarded():
-        try:
-            fn()
-        except Exception:
-            check("No exception in %s" % fn.__name__, False, traceback.format_exc())
-            finish()
-
-    QtCore.QTimer.singleShot(ms, guarded)
+check = h.check
 
 
 def shot(name):
@@ -114,7 +101,6 @@ def step_activate():
     state["qss_before"] = QtWidgets.QApplication.instance().styleSheet()
     state["toolbars_before"] = visible_toolbars()
     Gui.activateWorkbench("SciForgeWorkbench")
-    later(800, step_ribbon)
 
 
 def step_ribbon():
@@ -157,7 +143,6 @@ def step_ribbon():
     )
     _build_part()
     Gui.SendMsgToActiveView("ViewFit")
-    later(1200, step_timeline)
 
 
 def step_timeline():
@@ -169,7 +154,6 @@ def step_timeline():
     _check_browser()
     shot("screenshot.png")
     press("S")
-    later(400, step_search_open)
 
 
 def _browser_labels():
@@ -235,7 +219,6 @@ def step_search_open():
     check("Pressing S opens command search", bool(popups))
     for w in popups:
         w.close()
-    later(200, step_open_menu)
 
 
 def step_open_menu():
@@ -249,14 +232,12 @@ def step_open_menu():
     ][0]
     group.menu.popup(group.label.mapToGlobal(QtCore.QPoint(0, group.label.height())))
     state["menu"] = group.menu
-    later(500, step_menu_shot)
 
 
 def step_menu_shot():
     shot("screenshot-menu.png")
     state["menu"].hide()
     Gui.ActiveDocument.setEdit(state["sketch"].Name)
-    later(1200, step_sketch)
 
 
 def step_sketch():
@@ -276,7 +257,6 @@ def step_sketch():
     )
     shot("screenshot-sketch.png")
     Gui.ActiveDocument.resetEdit()
-    later(1000, step_after_sketch)
 
 
 def step_after_sketch():
@@ -292,7 +272,6 @@ def step_after_sketch():
         visible_toolbars() == ["SciForgeRibbonBar"],
         visible_toolbars(),
     )
-    later(300, step_presspull)
 
 
 def _top_face_name(obj):
@@ -316,7 +295,6 @@ def step_presspull():
     check("Press Pull arrow shown in the 3D view", panel is not None and panel.dragger is not None)
     panel.field.widget.setProperty("rawValue", 5.0)
     state["panel"] = panel
-    later(600, step_presspull_ok)
 
 
 def _active_panel():
@@ -345,7 +323,6 @@ def step_presspull_ok():
     panel = _active_panel()
     panel.field.widget.setProperty("rawValue", -3.0)
     state["panel"] = panel
-    later(600, step_presspull_cancel)
 
 
 def step_presspull_cancel():
@@ -362,7 +339,6 @@ def step_presspull_cancel():
         "Cancel removes the unfinished feature",
         len([o for o in body.Group if getattr(o, "SciForgeType", "") == "PressPull"]) == 1,
     )
-    later(300, step_extrude)
 
 
 def step_extrude():
@@ -392,7 +368,6 @@ def step_extrude():
     )
     panel.distance.widget.setProperty("rawValue", -5.0)
     state["panel"] = panel
-    later(600, step_extrude_ok)
 
 
 def step_extrude_ok():
@@ -427,7 +402,6 @@ def step_extrude_ok():
     QtTest.QTest.mouseClick(
         gl, QtCore.Qt.RightButton, QtCore.Qt.NoModifier, QtCore.QPoint(300, 300)
     )
-    later(400, step_marking_menu)
 
 
 def step_marking_menu():
@@ -451,7 +425,6 @@ def step_marking_menu():
         if isinstance(w, QtWidgets.QMenu) and w.isVisible()
     ]
     check("FreeCAD's own context menu did not open", not menus)
-    later(200, step_parameters)
 
 
 def step_parameters():
@@ -474,7 +447,6 @@ def step_parameters():
     check("Press Pull follows the parameter", abs(pp.Distance.Value - 10.0) < 1e-9, pp.Distance)
     shot("screenshot-parameters.png")
     dialog.accept()
-    later(300, step_construct)
 
 
 def step_construct():
@@ -499,7 +471,6 @@ def step_construct():
         abs(plane.Placement.Base.z - (top + 10)) < 1e-6,
         plane.Placement.Base.z,
     )
-    later(300, step_marker)
 
 
 def step_marker():
@@ -529,7 +500,6 @@ def step_marker():
         body.Tip is not None and body.Tip.Name != "Pad",
         body.Tip and body.Tip.Name,
     )
-    later(300, step_print)
 
 
 def step_print():
@@ -551,7 +521,6 @@ def step_print():
         error = abs(mesh.Volume - body.Shape.Volume) / body.Shape.Volume
         check("3MF volume within 1% of the body", error < 0.01, (mesh.Volume, body.Shape.Volume))
     Gui.activateWorkbench("PartDesignWorkbench")
-    later(800, step_left)
 
 
 def step_left():
@@ -583,25 +552,10 @@ def step_left():
     check("Keys released after leaving", shortcuts.bound_keys() == {}, shortcuts.bound_keys())
     distx = Gui.Command.get("Sketcher_ConstrainDistanceX")
     check("FreeCAD's own L key given back", distx.getShortcut() == "L", distx.getShortcut())
-    finish()
 
 
-def finish():
-    if state.get("finished"):
-        return
-    state["finished"] = True
+def step_console_clean():
     check("No [SciForge] errors on the console", not errors, errors)
-    result = {"passed": all(c["ok"] for c in checks), "checks": checks}
-    with open(os.path.join(OUT_DIR, "result.json"), "w", encoding="utf-8") as handle:
-        json.dump(result, handle, indent=2)
-    for c in checks:
-        App.Console.PrintMessage(
-            "[SciForge] smoke %s: %s %s\n"
-            % ("PASS" if c["ok"] else "FAIL", c["name"], "" if c["ok"] else c["detail"])
-        )
-    for doc in list(App.listDocuments()):
-        App.closeDocument(doc)
-    QtCore.QTimer.singleShot(200, QtWidgets.QApplication.instance().quit)
 
 
 def step_started():
@@ -635,9 +589,33 @@ def step_started():
     check("Option on again: opens in SciForge", start_in.is_set())
     # the rest of this test starts from FreeCAD's own interface, as before
     Gui.activateWorkbench("PartDesignWorkbench")
-    later(1000, step_activate)
 
 
 App.Console.PrintError = _ErrorCatcher()
-# Wait for the main window and start-up modules to settle first.
-later(2000, step_started)
+# The harness runs the steps (since 2026-10-30, the GUI test rework): each starts once the app has
+# settled after the one before (FreeCAD started first), no fixed delays; the result is
+# smoke-result.json.
+STEPS = [
+    step_started,
+    step_activate,
+    step_ribbon,
+    step_timeline,
+    step_search_open,
+    step_open_menu,
+    step_menu_shot,
+    step_sketch,
+    step_after_sketch,
+    step_presspull,
+    step_presspull_ok,
+    step_presspull_cancel,
+    step_extrude,
+    step_extrude_ok,
+    step_marking_menu,
+    step_parameters,
+    step_construct,
+    step_marker,
+    step_print,
+    step_left,
+    step_console_clean,
+]
+h.run("smoke", STEPS, paced_by="state", check_errors_each_step=False)

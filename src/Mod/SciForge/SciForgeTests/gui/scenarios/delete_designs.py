@@ -81,16 +81,17 @@ def trashed(name):
     return os.path.join(s["project"], TRASH, name)
 
 
-def answer(yes, seen):
-    """A person answering the Delete question once it shows (it is a modal box)."""
+def question():
+    box = QtWidgets.QApplication.activeModalWidget()
+    return box if box is not None and box.objectName() == "SciForgeDeleteQuestion" else None
 
-    def look():
-        box = QtWidgets.QApplication.activeModalWidget()
-        if box is None or box.objectName() != "SciForgeDeleteQuestion":
-            seen["tries"] = seen.get("tries", 0) + 1
-            if seen["tries"] < 80:
-                QtCore.QTimer.singleShot(50, look)
-            return
+
+def answer(yes, seen):
+    """A person answering the Delete question once it shows (a modal box: set up before the
+    click that asks it, h.when)."""
+
+    def act():
+        box = question()
         seen["text"] = box.text()
         seen["title"] = box.windowTitle()
         name = "SciForgeDeleteYes" if yes else "SciForgeDeleteCancel"
@@ -101,7 +102,7 @@ def answer(yes, seen):
         wi.click(button)
         seen["answered"] = True
 
-    QtCore.QTimer.singleShot(50, look)
+    h.when(lambda: question() is not None, act, "the Delete question to show")
 
 
 def setup():
@@ -171,8 +172,9 @@ def p2_more():
     s["p2"] = {}
     s["p2_menu"] = {"ok": False}
     answer(False, s["p2"])
-    QtCore.QTimer.singleShot(50, wi._picker(s["p2_menu"], "Delete"))
-    wi.click(tiles.viewport(), tiles.more_point(item))
+    s["p2_menu"]["ok"] = h.choose_from(
+        lambda: wi.click(tiles.viewport(), tiles.more_point(item)), ["Delete"], "the ... menu of Base"
+    )
 
 
 p2_more.wait_ms = 2000

@@ -96,7 +96,7 @@ def first_look():
 
 
 def issue_clicked():
-    QtTest.QTest.qWait(300)
+    h.settle("Design Advice to follow the last input")
     sel = Gui.Selection.getSelectionEx()
     names = [n for x in sel for n in x.SubElementNames]
     name, element = s["first"]
@@ -200,13 +200,13 @@ def kept():
 
 
 def undone():
-    QtTest.QTest.qWait(300)
+    h.settle("Design Advice to follow the last input")
     h.check("Undo takes the analysis away", ps.by_label("Design Advice1") is None)
     ps.redo()
 
 
 def redone():
-    QtTest.QTest.qWait(500)
+    h.settle("Design Advice to follow the last input")
     obj = ps.by_label("Design Advice1")
     if not h.check("Redo brings it back", obj is not None):
         return
@@ -217,14 +217,14 @@ def redone():
 
 
 def hidden():
-    QtTest.QTest.qWait(300)
+    h.settle("Design Advice to follow the last input")
     h.check("the eye hides it", not s["analysis"].ViewObject.Visibility)
     h.check("nothing drawn", not s["analysis"].ViewObject.Proxy.drawn)
     ps.click_eye("Design Advice1")
 
 
 def shown_again():
-    QtTest.QTest.qWait(300)
+    h.settle("Design Advice to follow the last input")
     h.check("the eye shows it again", s["analysis"].ViewObject.Visibility)
     h.check("drawn again", len(s["analysis"].ViewObject.Proxy.drawn) == 2)
     ps.tl.double_click_row("Design Advice1")
@@ -252,7 +252,7 @@ def follows_the_design():
 
 
 def changed_while_hidden():
-    QtTest.QTest.qWait(300)
+    h.settle("Design Advice to follow the last input")
     h.check("hidden", not s["analysis"].ViewObject.Visibility)
     box = ps.doc().getObject("BlockBox")
     box.Height = 20.0  # back to a 20 mm block while the analysis is hidden
@@ -263,7 +263,7 @@ def changed_while_hidden():
 
 
 def shown_checks_again():
-    QtTest.QTest.qWait(600)
+    h.settle("Design Advice to follow the last input")
     h.check("shown again", s["analysis"].ViewObject.Visibility)
     h.check("checked now", not s["analysis"].Stale)
     c = counts()
@@ -295,7 +295,7 @@ def reopened():
     s["analysis"] = obj
     ps.doc().recompute()
     h.check("with its results", obj.Summary == s["summary"], (obj.Summary, s["summary"]))
-    QtTest.QTest.qWait(300)
+    h.settle("Design Advice to follow the last input")
     h.check(
         "drawn after reopening", len(obj.ViewObject.Proxy.drawn) == 2, obj.ViewObject.Proxy.drawn
     )
@@ -339,7 +339,7 @@ def one_left():
 
 
 def empty_design():
-    QtTest.QTest.qWait(300)
+    h.settle("Design Advice to follow the last input")
     h.check(
         "an empty design: no dialog", ps.advice_panel() is None and not Gui.Control.activeDialog()
     )

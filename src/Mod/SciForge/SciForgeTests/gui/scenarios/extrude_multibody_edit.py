@@ -509,14 +509,10 @@ def e_setup():
     h.fit()
 
 
-def _settled(p, limit=20.0):
-    """Wait (processing events) until the dialog's preview is rebuilt; the seconds it took."""
+def _settled(p):
+    """Wait until the dialog's preview is rebuilt; the seconds it took."""
     started = time.monotonic()
-    while time.monotonic() - started < limit:
-        QtWidgets.QApplication.processEvents()
-        if p._closed or (not p.dirty and not p._timer.isActive()):
-            break
-        time.sleep(0.005)
+    h.wait_for(lambda: p._closed or (not p.dirty and not p._timer.isActive()), "the Extrude preview to be rebuilt")
     return time.monotonic() - started
 
 

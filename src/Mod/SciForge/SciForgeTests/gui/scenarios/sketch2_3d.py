@@ -69,7 +69,7 @@ def click_global(point):
     """Hover, then click the global point (the sketch lies on XY: sketch = global)."""
     for f in (3.0, 1.5, 0.5, 0.0):
         h.move(h.screen_point(point + V(1.0, 0.6, 0) * f))
-    QtTest.QTest.qWait(60)
+    h.view_drawn()
     pos = h.screen_point(point)
     QtTest.QTest.mouseClick(h.gl_widget(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
     QtWidgets.QApplication.processEvents()

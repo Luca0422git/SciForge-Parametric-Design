@@ -10,7 +10,6 @@ on an origin plane, Document Settings > Units, Named Views. Hand-worked numbers:
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtWidgets
-from PySide6 import QtTest
 
 from SciForgeTests.gui import arrow_input as arrows
 from SciForgeTests.gui import harness as h
@@ -476,28 +475,8 @@ def check_rolled():
 def roll_to_end():
     gear = tl().findChild(QtWidgets.QToolButton, "SciForgeTimeline_settings")
     pos = w.center(gear)
-    state = {}
-
-    def pick():
-        menu = QtWidgets.QApplication.activePopupWidget()
-        if isinstance(menu, QtWidgets.QMenu):
-            for a in menu.actions():
-                if a.text() == "Roll History Marker to End":
-                    r = menu.actionGeometry(a)
-                    for i in range(8):
-                        QtTest.QTest.mouseMove(
-                            menu, QtCore.QPoint(r.left() + 10 + 8 * i, r.center().y())
-                        )
-                    QtTest.QTest.mouseClick(
-                        menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, r.center()
-                    )
-                    state["ok"] = True
-        elif state.get("n", 0) < 20:
-            state["n"] = state.get("n", 0) + 1
-            QtCore.QTimer.singleShot(50, pick)
-
-    QtCore.QTimer.singleShot(50, pick)
-    w.click(gear, pos)
+    ok = h.choose_from(lambda: w.click(gear, pos), ["Roll History Marker to End"], "the timeline settings menu")
+    state = {"ok": ok}
     h.check("timeline settings > Roll History Marker to End", state.get("ok"))
 
 

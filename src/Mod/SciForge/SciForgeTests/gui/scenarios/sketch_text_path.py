@@ -36,8 +36,7 @@ def doc():
 
 
 def wait_preview():
-    QtTest.QTest.qWait(120)
-    QtWidgets.QApplication.processEvents()
+    h.settle("the text's preview to follow")
 
 
 def ring(points, center=C):
@@ -277,7 +276,7 @@ def p6_followed():
         circles and si.near(circles[0][1].Radius, 25.0, 1e-6),
         circles,
     )
-    QtTest.QTest.qWait(150)
+    h.settle("the text to follow the circle")
     obj = s["text"]
     layer = ti.layer()
     shown = layer.shown.get(obj.Name) if layer is not None else None

@@ -99,8 +99,12 @@ def a_gear():
         except Exception as exc:
             state["gear_error"] = str(exc)
 
-    QtCore.QTimer.singleShot(400, fill)
-    s.click_widget(dialog.gear)
+    # the gear's dialog runs its own loop: filled from inside it once it shows
+    watch = h.when(lambda: s.popup_named("SciForgeSimSettingsDialog") is not None, fill, "the gear's settings dialog")
+    try:
+        s.click_widget(dialog.gear)
+    finally:
+        watch["cancelled"] = True
 
 
 def a_create():
@@ -342,7 +346,7 @@ def f_normal_ok():
 
     p = simulation_panels.GravityPanel.last
     if p is not None and not p._closed:
-        QtTest.QTest.qWait(120)  # (a pick is handled a moment after the click)
+        h.settle("the pick to be handled")
         h.check("the face gives the direction", p.pick is not None, s.message())
     s.ok()
 
@@ -380,7 +384,7 @@ def f_edge_ok():
 
     p = simulation_panels.GravityPanel.last
     if p is not None and not p._closed:
-        QtTest.QTest.qWait(120)  # (a pick is handled a moment after the click)
+        h.settle("the pick to be handled")
         pick = p.pick
         h.check(
             "the edge gives the direction",
@@ -460,7 +464,7 @@ def i_pick():
     )
     s.click_face(s.body(), s.plate_top(s.body()))
     if opened:
-        QtTest.QTest.qWait(120)  # (a pick is handled a moment after the click)
+        h.settle("the pick to be handled")
         h.check("the plate's top face picked", len(s.item_panel().picks) == 1, s.message())
     s.ok()
 

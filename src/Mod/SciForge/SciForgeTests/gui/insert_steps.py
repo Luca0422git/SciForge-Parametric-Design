@@ -77,9 +77,19 @@ def record_exports(save_path=None, folder=None, program=None):
 
 
 def real_program_start():
+    """The slicer starter really starts the program (and records it in started_programs:
+    what was started, known when the dialog's OK returns, with no wait for the program)."""
     from sciforge import export_ui
 
-    export_ui.START_PROGRAM = None
+    def start(command):
+        started_programs.append(list(command))
+        export_ui.START_PROGRAM = None
+        try:
+            return export_ui.start_program(command)
+        finally:
+            export_ui.START_PROGRAM = start
+
+    export_ui.START_PROGRAM = start
 
 
 def fake_slicer():

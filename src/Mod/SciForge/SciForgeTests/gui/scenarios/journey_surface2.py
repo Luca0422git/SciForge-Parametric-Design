@@ -329,7 +329,7 @@ def envmap_click():
 
 
 def envmap_ok():
-    st.wait(600)
+    h.settle("the analysis made by the click")
     found = a.analyses("EnvironmentMapAnalysis")
     h.check("an Environmental Map analysis", len(found) == 1, found)
     if found:

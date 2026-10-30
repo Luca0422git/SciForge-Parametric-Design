@@ -101,19 +101,12 @@ def app_menu_has_it():
     button = wi.quick_access("Menu") or wi.quick_access("File")
     found = {}
     if button is not None:
-        from PySide import QtCore
 
-        def read():
-            popup = QtWidgets.QApplication.activePopupWidget()
-            if popup is not None:
-                found["texts"] = [a.text() for a in popup.actions()]
-                popup.close()
-            elif found.get("tries", 0) < 20:
-                found["tries"] = found.get("tries", 0) + 1
-                QtCore.QTimer.singleShot(50, read)
+        def read(menu):
+            found["texts"] = [a.text() for a in menu.actions()]
 
-        QtCore.QTimer.singleShot(50, read)
-        wi.click(button)
+        # (read, then closed with Esc: an empty path)
+        h.choose_from(lambda: wi.click(button), [], "the Menu button's menu", read=read)
     h.check(
         "the app menu has FreeCAD Tools",
         "FreeCAD Tools" in found.get("texts", []),

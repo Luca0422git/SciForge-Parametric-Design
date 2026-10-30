@@ -30,7 +30,6 @@ H  Solve, then Cancel in the progress window: the solve stops (cancelled), the s
 
 import FreeCAD as App
 from PySide import QtWidgets
-from PySide6 import QtTest
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import simsetup_steps as s
@@ -269,7 +268,7 @@ def e2_pick():
     point = s.aim(bracket, s.plate_top(bracket))
     if point is not None:
         h.click(point)
-    QtTest.QTest.qWait(120)  # (a pick is handled a moment after the click)
+    h.settle("the pick to be handled")
     state["bearing_after_flat"] = list(p.picks)
     s.click_face(bracket, s.hole_faces(bracket)[1])
     s.type_in("SciForgeSim_magnitude", "200")

@@ -71,7 +71,7 @@ def setup():
     big = App.newDocument("WheelBig")
     p2.make_box(big, "Body", 20, 20, 20)
     s["big"] = os.path.join(tempfile.mkdtemp(prefix="sciforge-other-"), "Wheel.FCStd")
-    time.sleep(1.1)  # its saved date differs from Wheel's (FreeCAD keeps whole seconds)
+    time.sleep(1.1)  # on purpose: its saved date differs from Wheel's (FreeCAD keeps whole seconds)
     big.saveAs(s["big"])
     App.closeDocument(big.Name)
     cart = App.newDocument("Cart")

@@ -92,10 +92,6 @@ def fit():
     h.view_drawn("the 3D view to draw the fitted view")
 
 
-def wait(ms):
-    QtTest.QTest.qWait(ms)
-    QtWidgets.QApplication.processEvents()
-
 
 def look_at(point, size):
     """Zoom the view onto `point` so about `size` mm show across its height (a person

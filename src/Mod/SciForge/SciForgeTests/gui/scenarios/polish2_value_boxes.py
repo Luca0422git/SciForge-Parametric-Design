@@ -70,7 +70,7 @@ def hover(point):
     h.uncover(point)  # the dialog floats over the right of the view: pan, as a person does
     pos = h.screen_point(point)
     h.move(pos)
-    QtTest.QTest.qWait(60)
+    h.view_drawn()  # (the view looks under the pointer when it redraws)
     h.move(QtCore.QPoint(pos.x() + 1, pos.y()))
 
 
@@ -97,9 +97,7 @@ def type_and_leave(box, text):
 
 
 def wait_preview():
-    QtTest.QTest.qWait(400)
-    while getattr(App.ActiveDocument, "Recomputing", False):
-        QtTest.QTest.qWait(50)
+    h.settle("the preview to follow the typed value")
 
 
 # -- A: Move's X arrow ----
@@ -202,7 +200,10 @@ def b_z_box():
     # The first digit arrives at the 3D view and goes into the box, which takes the
     # keyboard; a person's next keys then reach the box itself.
     QtTest.QTest.keyClick(h.gl_widget(), QtCore.Qt.Key_1)
-    QtTest.QTest.qWait(80)
+    h.wait_for(
+        lambda: QtWidgets.QApplication.focusWidget() not in (None, h.gl_widget()),
+        "the value box to take the keyboard",
+    )
     focus = QtWidgets.QApplication.focusWidget() or h.gl_widget()
     QtTest.QTest.keyClick(focus, QtCore.Qt.Key_2)
     QtWidgets.QApplication.processEvents()

@@ -90,37 +90,20 @@ def open_from_the_menu():
     if button is None:
         return
     path = ["Help", "Report a Problem..."]
-    s["menu_result"] = {"tries": 0, "seen": []}
+    s["menu_result"] = {"levels": []}
 
-    def pick():
-        state = s["menu_result"]
-        menu = QtWidgets.QApplication.activePopupWidget()
-        wanted = path[len(state["seen"])] if len(state["seen"]) < len(path) else None
-        if not isinstance(menu, QtWidgets.QMenu) or wanted is None:
-            if state["tries"] < 40:
-                state["tries"] += 1
-                QtCore.QTimer.singleShot(60, pick)
-            return
-        texts = [a.text().replace("&", "").strip() for a in menu.actions()]
-        state.setdefault("levels", []).append(texts)
-        action = next(
-            (a for a in menu.actions() if a.text().replace("&", "").strip() == wanted), None
-        )
-        if action is None or not action.isEnabled():
-            QtTest.QTest.keyClick(menu, QtCore.Qt.Key_Escape)
-            return
-        rect = menu.actionGeometry(action)
-        for i in range(6):
-            QtTest.QTest.mouseMove(menu, QtCore.QPoint(rect.left() + 10 + 6 * i, rect.center().y()))
-        QtTest.QTest.mouseMove(menu, rect.center())
-        QtTest.QTest.mouseClick(menu, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, rect.center())
-        state["seen"].append(wanted)
-        state["tries"] = 0
-        if len(state["seen"]) < len(path):
-            QtCore.QTimer.singleShot(150, pick)  # the submenu opens
+    def texts(menu):
+        return [a.text().replace("&", "").strip() for a in menu.actions()]
 
-    QtCore.QTimer.singleShot(80, pick)
-    wi.click(button)
+    def read(menu):
+        levels = s["menu_result"]["levels"]
+        levels.append(texts(menu))
+        help_entry = h.find_entry(menu, path[0])
+        sub = h.submenu(menu, help_entry) if help_entry is not None else None
+        if sub is not None:
+            levels.append(texts(sub))
+
+    s["menu_result"]["ok"] = h.choose_from(lambda: wi.click(button), path, "the Menu button's menu", read=read)
 
 
 open_from_the_menu.wait_ms = 1200

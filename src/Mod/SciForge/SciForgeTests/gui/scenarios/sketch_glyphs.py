@@ -22,7 +22,6 @@ import math
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui
-from PySide6 import QtTest
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import plane_input as pl
@@ -74,7 +73,7 @@ def mark_middle(stroke):
 
 def on_screen(point):
     """The guide colour is drawn around the 3D point."""
-    QtTest.QTest.qWait(250)
+    h.view_drawn("the 3D view to draw the guides")
     return si.colour_near(GUIDE, si.screen_colours(point, 3))
 
 

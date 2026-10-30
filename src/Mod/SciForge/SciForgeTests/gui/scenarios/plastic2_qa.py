@@ -36,7 +36,6 @@ more; Esc.
 import FreeCAD as App
 import Part
 
-from PySide6 import QtTest
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import plastic2_steps as ps
@@ -584,7 +583,7 @@ def hide_advice():
 
 
 def edit_while_hidden():
-    QtTest.QTest.qWait(300)
+    h.settle("Design Advice to check the bodies again")
     h.check("the analysis is hidden", not s["advice"].ViewObject.Visibility)
     h.check("double-click opens the Lip edit", ps.double_click_timeline("Lip 1"))
 
@@ -607,8 +606,7 @@ def show_advice():
 def shown_checked():
     from sciforge import plastic_advice
 
-    QtTest.QTest.qWait(600)
-    h.idle_step()
+    h.settle("Design Advice to check the bodies again")
     adv = s["advice"]
     h.check("shown: checked again", not adv.Stale and not plastic_advice.out_of_date(adv))
     h.check("the 2 mm lip changed the results", adv.Results != s["adv_before"])
@@ -618,8 +616,7 @@ def shown_checked():
 def undone_checked():
     from sciforge import plastic_advice
 
-    QtTest.QTest.qWait(600)
-    h.idle_step()
+    h.settle("Design Advice to check the bodies again")
     adv = s["advice"]
     h.check("Undo: the lip back to 1.5 mm", ps.near(ps.lip_steps()[0].LipHeight.Value, 1.5))
     h.check("Undo: the analysis checked the bodies again", not plastic_advice.out_of_date(adv))
@@ -630,8 +627,7 @@ def undone_checked():
 def redone_checked():
     from sciforge import plastic_advice
 
-    QtTest.QTest.qWait(600)
-    h.idle_step()
+    h.settle("Design Advice to check the bodies again")
     adv = s["advice"]
     h.check("Redo: the 2 mm lip", ps.near(ps.lip_steps()[0].LipHeight.Value, 2.0))
     h.check("Redo: the analysis checked the bodies again", not plastic_advice.out_of_date(adv))

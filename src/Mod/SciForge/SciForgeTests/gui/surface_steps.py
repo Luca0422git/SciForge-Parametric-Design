@@ -238,6 +238,3 @@ def message():
         return ""
     return (p.message.text() or "") + " | " + (p.info.text() or "")
 
-
-def wait(ms):
-    QtTest.QTest.qWait(ms)

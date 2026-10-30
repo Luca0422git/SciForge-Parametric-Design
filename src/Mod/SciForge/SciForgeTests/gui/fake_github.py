@@ -56,7 +56,7 @@ class FakeGitHub:
                 outer.hits.append(self.path)
                 outer.agents.append(self.headers.get("User-Agent", ""))
                 if outer.delay:
-                    time.sleep(outer.delay)
+                    time.sleep(outer.delay)  # on purpose: a slow GitHub, for the app to wait on
                 if self.path.startswith("/repos/%s/releases" % REPO):
                     body, status = json.dumps(outer.releases).encode(), 200
                 elif self.path in outer.files:
@@ -71,7 +71,7 @@ class FakeGitHub:
                         for start in range(0, len(body), 32 * 1024):
                             self.wfile.write(body[start : start + 32 * 1024])
                             self.wfile.flush()
-                            time.sleep(0.12)
+                            time.sleep(0.12)  # on purpose: a slow download (the server's thread)
                     else:
                         self.wfile.write(body)
                 except (BrokenPipeError, ConnectionResetError):

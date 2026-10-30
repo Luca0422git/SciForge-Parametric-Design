@@ -17,7 +17,6 @@ E  3D Print with nothing ticked: the dialog says so and stays; Cancel.
 """
 
 import os
-import time
 
 import FreeCAD as App
 from PySide import QtCore
@@ -234,10 +233,11 @@ d_send.wait_ms = 2500
 
 def d_check():
     log = state["log"]
-    for _ in range(20):
-        if os.path.isfile(log):
-            break
-        time.sleep(0.1)
+    # (the fake slicer is a program of its own: what it was given is in its log once it ran)
+    h.wait_for(
+        lambda: os.path.isfile(log) and bool(open(log).read().strip()),
+        "the fake slicer to write the file it was given",
+    )
     text = open(log).read() if os.path.isfile(log) else ""
     h.check("the slicer got a 3MF file", text.strip().endswith(".3mf"), text)
     h.check("that file exists", os.path.isfile(text.strip()), text)

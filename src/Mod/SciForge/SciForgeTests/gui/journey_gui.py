@@ -2,7 +2,7 @@
 """GUI journey test: SciForge used the way a person uses Fusion, with real mouse input.
 
 Run like smoke_gui.py (CI: under xvfb-run); writes journey-result.json into
-SCIFORGE_SMOKE_OUT. Unlike the smoke test, nothing here calls SciForge code to do
+SCIFORGE_SMOKE_OUT (the harness's result of the scenario "journey"; paced by the app's state). Unlike the smoke test, nothing here calls SciForge code to do
 the work: every pick is a mouse click on the 3D view, every distance a drag of the
 arrow, every command a key or a ribbon command. It exists because the smoke test
 passed while the real thing could not be used (Create Sketch opened pop-ups,
@@ -20,115 +20,34 @@ The journey:
   7. E, click the right side face, 3, OK    -> face extruded outward
   8. E then Q without closing the first     -> the first is finished, Q opens
 """
-import json
 import math
-import os
-import traceback
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtGui, QtWidgets
-from PySide6 import QtTest
+from PySide import QtCore
 
-OUT_DIR = os.environ.get("SCIFORGE_SMOKE_OUT") or App.getUserAppDataDir()
-checks = []
+from SciForgeTests.gui import harness as h
+
+# The harness drives it (since 2026-10-30, the GUI test rework): every click waits until Qt has
+# seen the pointer on its target and keeps the app's click pace, and each step starts once the
+# app has settled after the one before (no fixed 700 ms per step). journey-result.json is the
+# harness's result file for the scenario named "journey".
 state = {}
-STEP_MS = 700
-
-
-def check(name, ok, detail=""):
-    if not ok and state.get("last_click"):
-        detail = "%s [last click: %s]" % (detail, state["last_click"])
-    checks.append({"name": name, "ok": bool(ok), "detail": str(detail)})
-
-
-def shot(name):
-    QtWidgets.QApplication.primaryScreen().grabWindow(0).save(os.path.join(OUT_DIR, name))
-
-
-# -- real input on the 3D view ---------------------------------------------------
-def gl_widget():
-    area = Gui.getMainWindow().findChild(QtWidgets.QMdiArea)
-    sub = area.activeSubWindow() or area.subWindowList()[-1]
-    return [
-        w
-        for w in sub.findChildren(QtWidgets.QWidget)
-        if w.metaObject().className() == "QOpenGLWidget"
-    ][0]
-
-
-def screen_point(point):
-    """Widget pixel of a 3D point (Qt's y axis points down, Coin's up)."""
-    view = Gui.ActiveDocument.ActiveView
-    widget = gl_widget()
-    x, y = view.getPointOnViewport(point)
-    ratio = widget.devicePixelRatioF()
-    return QtCore.QPoint(int(x / ratio), int(widget.height() - y / ratio))
-
-
-def move(pos):
-    QtTest.QTest.mouseMove(gl_widget(), pos)
-    QtWidgets.QApplication.processEvents()
-
-
-def click(point):
-    """Left click on the 3D point; remembers what was under the mouse and what got selected."""
-    view = Gui.ActiveDocument.ActiveView
-    pos = screen_point(point)
-    move(pos)
-    info = view.getObjectInfo(view.getPointOnViewport(point))
-    QtTest.QTest.mouseClick(gl_widget(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
-    QtWidgets.QApplication.processEvents()
-    selected = [(s.ObjectName, s.SubElementNames) for s in Gui.Selection.getSelectionEx()]
-    state["last_click"] = "under mouse: %s; selected: %s" % (
-        info and (info.get("Object"), info.get("Component")),
-        selected,
-    )
-
-
-def drag(start, end, steps=12):
-    widget = gl_widget()
-    move(start)
-    QtTest.QTest.mousePress(widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, start)
-    for i in range(1, steps + 1):
-        pos = QtCore.QPointF(
-            start.x() + (end.x() - start.x()) * i / steps,
-            start.y() + (end.y() - start.y()) * i / steps,
-        )
-        event = QtGui.QMouseEvent(
-            QtCore.QEvent.MouseMove,
-            pos,
-            QtCore.QPointF(widget.mapToGlobal(pos.toPoint())),
-            QtCore.Qt.NoButton,
-            QtCore.Qt.LeftButton,
-            QtCore.Qt.NoModifier,
-        )
-        QtWidgets.QApplication.sendEvent(widget, event)
-        QtWidgets.QApplication.processEvents()
-    QtTest.QTest.mouseRelease(widget, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, end)
-    QtWidgets.QApplication.processEvents()
-
-
-def press(key):
-    widget = gl_widget()
-    widget.setFocus()
-    QtTest.QTest.keyClick(widget, key)
-    QtWidgets.QApplication.processEvents()
-
-
-def popups():
-    return [
-        w.windowTitle()
-        for w in QtWidgets.QApplication.topLevelWidgets()
-        if w.isVisible() and isinstance(w, QtWidgets.QDialog)
-    ]
+check = h.check
+click = h.click
+drag = h.drag
+press = h.press
+popups = h.popups
+screen_point = h.screen_point
 
 
 def fit():
-    view = Gui.ActiveDocument.ActiveView
-    view.viewIsometric()
-    view.fitAll()
-    QtWidgets.QApplication.processEvents()
+    h.fit()
+
+
+def shot(name):
+    """journey-<n>-<what>.png as before (the harness puts the scenario's name in front)."""
+    h.shot(name[len("journey-") :].rsplit(".png", 1)[0])
 
 
 def body():
@@ -143,10 +62,7 @@ def volume():
 
 # -- the journey -------------------------------------------------------------------
 def step_start():
-    # FreeCAD animates camera moves: a click computed mid-animation lands on empty space.
-    # A person clicks what they see once it has stopped; the test turns animation off.
-    view_params = App.ParamGet("User parameter:BaseApp/Preferences/View")
-    view_params.SetBool("UseNavigationAnimations", False)
+    # (FreeCAD's camera animations are off: the harness turns them off before the first step)
     Gui.activateWorkbench("SciForgeWorkbench")
     App.newDocument("Journey")
     Gui.runCommand("SciForge_NewSketch")
@@ -280,11 +196,11 @@ def step_presspull_ok():
     check(
         "Q then clicking the top face starts Press Pull",
         panel and panel.target is not None,
-        "%s; dialog says: %s" % (state.get("last_click"), panel and panel.message.text()),
+        "%s; dialog says: %s" % (h.state.get("last_click"), panel and panel.message.text()),
     )
     if panel and panel.target is not None:
         panel.field.widget.setProperty("rawValue", 5.0)
-        QtWidgets.QApplication.processEvents()
+        h.caught_up(panel)
         panel.accept()
     check("Press Pull +5 gives 40 x 30 x 15", abs(volume() - 18000) < 1e-6, volume())
 
@@ -341,13 +257,9 @@ def step_cut_ok():
     if not panel.profiles:
         return
     panel.distance.widget.setProperty("rawValue", -5.0)
-    QtWidgets.QApplication.processEvents()
     # The automatic Cut / Join is decided with the preview (rebuilt 60 ms after a change), so
     # typing stays quick on a big part: wait for it, as a person sees it.
-    for _ in range(60):
-        if not panel._timer.isActive() and not getattr(App.ActiveDocument, "Recomputing", False):
-            break
-        QtTest.QTest.qWait(50)
+    h.caught_up(panel, "the Extrude preview to decide Cut or Join")
     check("Extruding into the part picks Cut", panel.operation.currentData() == "cut")
     panel.accept()
     expected = state["before_cut"] - math.pi * 16 * 5
@@ -377,7 +289,7 @@ def step_face_extrude_ok():
     if not panel.profiles:
         return
     panel.distance.widget.setProperty("rawValue", 3.0)
-    QtWidgets.QApplication.processEvents()
+    h.caught_up(panel)
     panel.accept()
     grown = volume() - state["before_face"]
     check("Side face extruded 3 mm (30 x 15 x 3)", abs(grown - 1350) < 1e-6, grown)
@@ -433,30 +345,4 @@ STEPS = [
 ]
 
 
-def run_next():
-    if not STEPS:
-        finish()
-        return
-    step = STEPS.pop(0)
-    try:
-        step()
-    except Exception:
-        check("No exception in %s" % step.__name__, False, traceback.format_exc())
-    QtCore.QTimer.singleShot(STEP_MS, run_next)
-
-
-def finish():
-    result = {"passed": all(c["ok"] for c in checks), "checks": checks}
-    with open(os.path.join(OUT_DIR, "journey-result.json"), "w", encoding="utf-8") as handle:
-        json.dump(result, handle, indent=2)
-    for c in checks:
-        App.Console.PrintMessage(
-            "[SciForge] journey %s: %s %s\n"
-            % ("PASS" if c["ok"] else "FAIL", c["name"], "" if c["ok"] else c["detail"])
-        )
-    for doc in list(App.listDocuments()):
-        App.closeDocument(doc)
-    QtCore.QTimer.singleShot(200, QtWidgets.QApplication.instance().quit)
-
-
-QtCore.QTimer.singleShot(2500, run_next)
+h.run("journey", STEPS, paced_by="state")

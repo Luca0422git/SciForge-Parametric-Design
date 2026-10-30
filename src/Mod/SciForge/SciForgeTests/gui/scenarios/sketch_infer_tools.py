@@ -88,28 +88,17 @@ def acquired_point(point):
 
 
 def hover(point):
-    """Rest the mouse on a sketch point, coming from the side (acquires it). A hand sends
-    many moves while it comes to rest; a few are sent here, and the acquire is checked:
-    GitHub's slower machine once dropped a single move onto the point (CI #104) while the
-    tool was still starting, and no guide followed."""
-    from PySide6 import QtTest
-
+    """Rest the mouse on a sketch point, coming from the side: the inference acquires it on
+    the move onto it. (GitHub's slower machine once dropped a move while the tool was still
+    starting, CI #104: each move is now seen by Qt before the next, and the tool started
+    before this step.)"""
     for f in (2.0, 1.0, 0.5, 0.2, 0.0):
         move(g(point + V(1.0, 0.6, 0) * f))
-    QtTest.QTest.qWait(80)
-    for _ in range(4):
-        if acquired_point(point):
-            return
-        QtTest.QTest.qWait(150)
-        for f in (0.3, 0.1, 0.0):
-            move(g(point + V(1.0, 0.6, 0) * f))
-        QtTest.QTest.qWait(80)
+    h.wait_for(lambda: acquired_point(point), "the sketch to acquire the point under the pointer")
 
 
 def shot(name):
-    from PySide6 import QtTest
-
-    QtTest.QTest.qWait(300)
+    h.view_drawn("the 3D view to draw the guides")
     h.shot(name)
 
 

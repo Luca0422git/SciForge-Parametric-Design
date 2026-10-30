@@ -176,7 +176,7 @@ def after_drag(label, p, hidden=(), unghosted=()):
     moving = moving[first:]
     shown = [x for x in moving if x["shown"]]
     h.check("%s: the value changed during the moves" % label, len(moving) >= 6, len(moving))
-    h.check(
+    h.speed_check(  # (a frame rate at a hand's pace: real time)
         "%s: the picture showed while moving" % label,
         len(shown) >= 0.6 * max(1, len(moving)),
         "%d of %d: %s" % (len(shown), len(moving), [int(x["shown"]) for x in moving]),
@@ -188,7 +188,7 @@ def after_drag(label, p, hidden=(), unghosted=()):
     )
     last = max([x["i"] for x in moving], default=0)
     early = [i for i in rec.get("builds", []) if i < last - 1]
-    h.check("%s: no exact rebuild between the moves" % label, not early, early)
+    h.speed_check("%s: no exact rebuild between the moves" % label, not early, early)
     live = live_of(p)
     h.check("%s: let go, the picture is gone" % label, live is None or not live.shown)
     h.check("%s: nothing hidden for it any more" % label, live is None or not live.hid)

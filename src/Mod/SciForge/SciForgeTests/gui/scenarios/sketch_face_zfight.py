@@ -19,7 +19,6 @@ time, so this guards the drawing; the stripes themselves showed on Luca's graphi
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui, QtWidgets
-from PySide6 import QtTest
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import sketch_input as si
@@ -79,7 +78,7 @@ def finish():
 def spread(points):
     """The largest difference per channel between the screen colours of patches round
     the 3D points (one flat area of the screen)."""
-    QtTest.QTest.qWait(300)
+    h.view_drawn("the 3D view to draw the latest picture")
     colours = []
     for p in points:
         if h.covered(h.screen_point(p)):

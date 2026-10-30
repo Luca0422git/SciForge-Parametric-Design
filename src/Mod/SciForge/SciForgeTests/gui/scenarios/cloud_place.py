@@ -247,7 +247,7 @@ def changed_elsewhere():
     temp = os.path.join(s["tmp"], "theirs.FCStd")
     other.saveAs(temp)
     App.closeDocument(other.Name)
-    time.sleep(1.1)  # (a newer file date, as a sync app gives it)
+    time.sleep(1.1)  # on purpose: a newer file date, as a sync app gives it (whole seconds)
     shutil.copy(temp, s["file"])
     with open(s["file"], "rb") as handle:
         s["theirs"] = handle.read()

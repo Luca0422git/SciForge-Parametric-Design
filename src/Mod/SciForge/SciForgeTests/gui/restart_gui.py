@@ -13,10 +13,13 @@ it; the second start's Home lists it first in Recent.
 
 import json
 import os
+import time
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtWidgets
+from PySide import QtWidgets
+
+from SciForgeTests.gui import harness as h
 
 OUT_DIR = os.environ.get("SCIFORGE_SMOKE_OUT") or App.getUserAppDataDir()
 PHASE = os.environ.get("SCIFORGE_RESTART_PHASE", "1")
@@ -26,6 +29,26 @@ checks = []
 def check(name, ok, detail=""):
     checks.append({"name": name, "ok": bool(ok), "detail": str(detail)})
     print("[SciForge] restart %s %s: %s %s" % (PHASE, "PASS" if ok else "FAIL", name, detail))
+
+
+def when_settled(fn, what, limit_s):
+    """fn() once FreeCAD's window is up and the app has settled (the harness's settling: no
+    recompute, no posted work, start-up done); after limit_s (a hang): a failed check naming
+    what kept it busy, then fn() all the same."""
+    calm = h._calm()
+    end = time.monotonic() + limit_s
+
+    def look():
+        main = Gui.getMainWindow()
+        if main is not None and main.isVisible() and calm():
+            fn()
+        elif time.monotonic() > end:
+            check("%s within %d s" % (what, limit_s), False, h.busy())
+            fn()
+        else:
+            h._later(h.POLL_MS, look)
+
+    h._later(0, look)
 
 
 def run():
@@ -85,7 +108,8 @@ def run():
         check("no exception", False, exc)
     with open(os.path.join(OUT_DIR, "restart-%s.json" % PHASE), "w") as handle:
         json.dump({"passed": all(c["ok"] for c in checks), "checks": checks}, handle, indent=2)
-    QtCore.QTimer.singleShot(300, main.close)  # (FreeCAD saves the window layout here)
+    # (FreeCAD saves the window layout when the window closes)
+    when_settled(main.close, "the app to settle before closing", h.WAIT_S)
 
 
-QtCore.QTimer.singleShot(8000, run)
+when_settled(run, "FreeCAD to start", 120)

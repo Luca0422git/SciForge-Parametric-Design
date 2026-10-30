@@ -76,7 +76,7 @@ def approach(raw, towards=V(-1.0, 1.5, 0)):
 def press_at(point):
     pos = h.screen_point(point)
     move(point)
-    QtTest.QTest.qWait(80)
+    h.view_drawn()  # (the sketch looks under the pointer when it redraws)
     QtTest.QTest.mousePress(h.gl_widget(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
     QtWidgets.QApplication.processEvents()
     return pos

@@ -323,6 +323,11 @@ def c_escape():
     b.press_guarded(QtCore.Qt.Key_Escape)
 
 
+# Animate Joint plays until Esc: the design changes on every frame, so the app never
+# settles while it plays; these steps act and look while it plays
+c_animate.while_busy = c_watched.while_busy = c_escape.while_busy = True
+
+
 def c_stopped():
     from sciforge import joints_ui
 

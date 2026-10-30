@@ -11,7 +11,6 @@ click elsewhere (FreeCAD repaints then). Fixed with Fix/Unfix through the ribbon
 import FreeCAD as App
 import FreeCADGui as Gui
 from PySide import QtCore, QtGui
-from PySide6 import QtTest
 
 from SciForgeTests.gui import harness as h
 from SciForgeTests.gui import plane_input as pl
@@ -53,8 +52,8 @@ def move(point):
     h.move(pos)
 
 
-def seen(point, wait=300):
-    QtTest.QTest.qWait(wait)
+def seen(point):
+    h.view_drawn("the 3D view to draw the latest colours")
     return si.screen_colours(g(point), 2)
 
 

@@ -589,7 +589,6 @@ def i_collapse():
     import Part
     import Sketcher
 
-    from PySide6 import QtTest
     from sciforge import sketch_explain
 
     d = App.newDocument("InferCollapse")
@@ -618,7 +617,7 @@ def i_collapse():
         g,
     )
     App.closeDocument(d.Name)
-    QtTest.QTest.qWait(500)
+    h.settle("FreeCAD to report the failed try")
     h.check("I: FreeCAD reported the failed try (expected)", True, h.new_errors())
 
 

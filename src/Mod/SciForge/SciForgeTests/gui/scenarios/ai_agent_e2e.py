@@ -19,11 +19,9 @@ Path 4, AI control off again.
 
 import base64
 import json
-import time
 
 import FreeCAD as App
 import FreeCADGui as Gui
-from PySide import QtCore, QtWidgets
 from SciForgeTests.gui import harness as h
 
 s = {}
@@ -73,10 +71,8 @@ class Mcp:
             self.proc.stdin.flush()
         except OSError as exc:
             return {"error": {"code": -1, "message": "the server is gone: %s" % exc}}
-        end = time.time() + timeout
-        while ident not in self.answers and time.time() < end:
-            QtWidgets.QApplication.processEvents(QtCore.QEventLoop.AllEvents, 50)
-            time.sleep(0.005)
+        # (the event loop runs meanwhile: SciForge answers on this same GUI thread)
+        h.wait_for(lambda: ident in self.answers, "the AI connector's answer to %s" % method, timeout_s=timeout)
         return self.answers.pop(ident, {"error": {"code": -1, "message": "no answer"}})
 
     def notify(self, method):

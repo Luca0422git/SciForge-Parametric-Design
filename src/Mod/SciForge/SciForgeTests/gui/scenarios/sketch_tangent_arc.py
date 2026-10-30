@@ -64,7 +64,7 @@ def approach(raw, towards=V(-1.0, 1.5, 0)):
 
 
 def shot(name):
-    QtTest.QTest.qWait(300)
+    h.view_drawn("the 3D view to draw the latest picture")
     h.shot(name)
 
 
@@ -78,7 +78,7 @@ def press_at(point):
     """Press the left button on the 3D point (the real pointer rests there first)."""
     pos = h.screen_point(point)
     move(point)
-    QtTest.QTest.qWait(80)
+    h.view_drawn()  # (the sketch looks under the pointer when it redraws)
     QtTest.QTest.mousePress(h.gl_widget(), QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
     QtWidgets.QApplication.processEvents()
     return pos

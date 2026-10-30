@@ -138,7 +138,7 @@ def busy(fn, wait=0.3):
     end = time.perf_counter() + wait
     while time.perf_counter() < end:
         QtWidgets.QApplication.processEvents()
-        time.sleep(0.01)
+        time.sleep(0.01)  # on purpose: the measured window (its sleeps are taken off again)
     pr.disable()
     stats = pstats.Stats(pr)
     idle = sum(row[2] for key, row in stats.stats.items() if "time.sleep" in key[2])

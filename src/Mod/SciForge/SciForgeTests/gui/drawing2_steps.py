@@ -12,7 +12,6 @@ import math
 
 import FreeCAD as App
 from PySide import QtCore, QtWidgets
-from PySide6 import QtTest
 
 from SciForgeTests.gui import bodies_steps as s
 from SciForgeTests.gui import drawing_fixtures as fx
@@ -194,9 +193,6 @@ def describe(obj):
 def process():
     QtWidgets.QApplication.processEvents()
 
-
-def wait(ms):
-    QtTest.QTest.qWait(ms)
 
 
 def _near_circle(c, r):

@@ -361,7 +361,8 @@ def plate_open():
     for f in (3.0, 1.5, 0.5):
         h.move(h.screen_point(s["hole"] + V(0.4, 0.2, 0) * f))
     h.move(h.screen_point(s["hole"]))
-    QtCore.QTimer.singleShot(120, hover_timed)
+    h.settle("the sketch to look under the pointer")
+    hover_timed()
 
 
 def zoom_on(point, height):

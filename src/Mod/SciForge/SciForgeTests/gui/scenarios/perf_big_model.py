@@ -269,7 +269,7 @@ def once(label, fn, wait=0.3, **extra):
     end = time.perf_counter() + wait
     while time.perf_counter() < end:
         QtWidgets.QApplication.processEvents()
-        time.sleep(0.01)
+        time.sleep(0.01)  # on purpose: the measured window (what fn() leaves to timers)
     pr.disable()
     values = dict(change=wall, python=_python_time(pr), profile=_profile_top(pr))
     values["profile_self"] = _profile_top(pr, sort="tottime")
@@ -303,7 +303,7 @@ def m_idle():
     end = time.perf_counter() + seconds
     while time.perf_counter() < end:
         QtWidgets.QApplication.processEvents()
-        time.sleep(0.005)
+        time.sleep(0.005)  # on purpose: the measured idle window (its sleeps are taken off)
     pr.disable()
     stats = pstats.Stats(pr)
     idle = sum(row[2] for key, row in stats.stats.items() if "time.sleep" in key[2])
@@ -480,19 +480,17 @@ def m_panels():
 
 
 def _settle(seconds=1.0):
-    """Events until the document has stopped recomputing, then `seconds` more (the panels'
-    polls run every 400-500 ms; the timeline's after-undo work is deferred)."""
-    end = time.perf_counter() + 600
-    while time.perf_counter() < end:
-        QtWidgets.QApplication.processEvents()
+    """Until the document has stopped recomputing (a big model: up to 10 minutes); with
+    seconds > 0 also until the app has settled after it (the panels' reads every 400-500 ms,
+    the timeline's deferred after-undo work: what a change leaves to timers)."""
+
+    def recomputing():
         doc = App.ActiveDocument
-        if doc is None or not doc.Recomputing:
-            break
-        time.sleep(0.01)
-    end = time.perf_counter() + seconds
-    while time.perf_counter() < end:
-        QtWidgets.QApplication.processEvents()
-        time.sleep(0.01)
+        return doc is not None and doc.Recomputing
+
+    h.wait_for(lambda: not recomputing(), "the big model to finish recomputing", timeout_s=600)
+    if seconds:
+        h.settle("the app to finish what the change left to its timers", timeout_s=600)
 
 
 def _measured(label, fn, settle=1.0):

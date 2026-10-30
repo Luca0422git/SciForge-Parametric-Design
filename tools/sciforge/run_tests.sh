@@ -12,7 +12,7 @@
 #                           own cases, SciForgeTests/headless/sim_accuracy_qa.py)
 #
 #   tools/sciforge/run_tests.sh [--freecad DIR] [--out DIR]
-#                               [--only unit|golden|headless|sim|recognize|gui|scenarios|base]
+#                               [--only unit|golden|headless|sim|recognize|gui|gui-base|scenarios|base]
 #                               [--scenario NAME[,NAME...]]   (files of SciForgeTests/gui/
 #                                                   scenarios, each in a fresh profile)
 #                               [--shard K/N]       (every N-th scenario, from the K-th)
@@ -23,7 +23,8 @@
 #            an unpacked SciForge AppImage, or a SciForge install prefix containing
 #            bin/SciForgeCmd (bin/FreeCADCmd for a build before the branding pass)
 # --out      where reports and the screenshot go (default .sciforge-cache/test-output)
-# --only     base = everything but the scenarios (unit, golden, headless, sim, smoke, journey)
+# --only     base = everything but the scenarios (unit, golden, headless, sim, smoke, journey);
+#            gui-base = the smoke test, the journey and the restart only
 # --shard    splits the scenarios over N runs (CI runs them side by side): 1/4 runs the
 #            1st, 5th, 9th... scenario in name order, 2/4 the 2nd, 6th... (N runs cover all)
 # --repeat   runs each scenario N times in a row (a fresh profile each time) and prints how
@@ -317,7 +318,7 @@ run_gui_base() {
         FAILED+=("gui (no xvfb-run)")
         return 1
     fi
-    run_gui_script smoke smoke_gui.py gui.log result.json
+    run_gui_script smoke smoke_gui.py gui.log smoke-result.json
     # The journey uses SciForge like a person: real clicks and drags on the 3D view.
     run_gui_script journey journey_gui.py journey.log journey-result.json
     # FreeCAD opened twice with one profile: the second start restores the window layout the
@@ -484,10 +485,11 @@ case "${ONLY}" in
     sim) run_sim ;;
     recognize) run_recognize ;;
     gui) run_gui ;;
+    gui-base) run_gui_base ;;
     scenarios) run_scenarios ;;
     base) run_unit; run_golden; run_headless; run_sim; run_gui_base ;;
     "") run_unit; run_golden; run_headless; run_sim; run_gui ;;
-    *) echo "--only must be unit, golden, headless, sim, recognize, gui, scenarios or base" >&2; exit 2 ;;
+    *) echo "--only must be unit, golden, headless, sim, recognize, gui, gui-base, scenarios or base" >&2; exit 2 ;;
 esac
 
 echo "== [SciForge] reports in ${OUT}"
