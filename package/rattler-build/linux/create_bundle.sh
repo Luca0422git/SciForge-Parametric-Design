@@ -34,6 +34,10 @@ echo -e "\nCopying Icon and Desktop file"
 cp ${conda_env}/share/applications/org.sciforge.SciForge.desktop AppDir/
 sed -i 's/Exec=sciforge/Exec=AppRun/g' AppDir/org.sciforge.SciForge.desktop
 cp ${conda_env}/share/icons/hicolor/scalable/apps/org.sciforge.SciForge.svg AppDir/
+# SCIFORGE: appimagetool's continuous build (333, 2026-10-29) takes the AppImage's icon only as a
+# PNG or XPM next to the desktop file, and wants a .DirIcon (docs/sciforge/core-patches.md #20).
+cp ${conda_env}/share/icons/hicolor/256x256/apps/org.sciforge.SciForge.png AppDir/
+cp AppDir/org.sciforge.SciForge.png AppDir/.DirIcon
 
 # Remove __pycache__ folders and .pyc files
 find . -path "*/__pycache__/*" -delete
@@ -84,6 +88,10 @@ fi
 echo -e "\nCreate the appimage"
 # export GPG_TTY=$(tty)
 chmod a+x ./AppDir/AppRun
+# SCIFORGE: appimagetool's continuous build refuses an AppDir with files other users cannot read
+# (the conda environment brings 0700 folders: usr/ssl, usr/var/cache/fontconfig ...): every
+# file readable, every folder enterable (docs/sciforge/core-patches.md #20).
+chmod -R a+rX AppDir
 ./appimagetool-$(uname -m).AppImage \
   --comp zstd \
   --mksquashfs-opt -Xcompression-level \
