@@ -222,4 +222,9 @@ compiled again (an artifact of attempt 1 is there for attempt 2: the scenario de
   applied to every `QTest` press on the 3D view, the scenarios' own included): the pace of a
   hand, not a wait for the app. Without the fixed waits two clicks came 0.4 s apart and the
   second was lost (inspect_qa4: the face after the Center of Mass dot; bodies_qa: a Move arrow
-  dragged right after the body was picked moved nothing).
+  dragged right after the body was picked moved nothing). A press anywhere else comes at least
+  `h.click_gap()` after the last press in the 3D view (`h.after_view_pace`, also on every
+  `QTest` press): a hand that comes from the view. On CI's faster machines a timeline click
+  right after an axis pick was dropped (patterns_qa_paths P2), and a design tab clicked within
+  0.15 s of a click in another design's view showed its design, then lost it again (that view
+  takes the keyboard a moment after the click: revolve_qa_more P12).

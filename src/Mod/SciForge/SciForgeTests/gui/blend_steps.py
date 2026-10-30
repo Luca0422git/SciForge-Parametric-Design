@@ -370,6 +370,7 @@ def click_tab(label_start):
         pos = bar.tabRect(index).center()
         h.pointer_to(bar, pos)
         if bar.tabAt(pos) == index and wanted() == index:
+            # (the press keeps a hand's pace after a click in a 3D view: h.after_view_pace)
             before = bar.currentIndex()
             QtTest.QTest.mouseClick(bar, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, pos)
             pressed = (index, before, bar.currentIndex(), bar.isEnabled())

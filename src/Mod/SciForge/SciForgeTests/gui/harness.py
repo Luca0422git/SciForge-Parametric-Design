@@ -315,6 +315,7 @@ class _PointerTap(QtCore.QObject):
         self.expected = None
         self.menus_shown = 0  # menus that appeared (a right-click's may come and go at once)
         self.last_press = 0.0  # when the last mouse button went down (time.monotonic)
+        self.last_view_press = 0.0  # the same for the last press in a 3D view
 
     def eventFilter(self, obj, event):
         try:
@@ -325,6 +326,8 @@ class _PointerTap(QtCore.QObject):
                 self.menus_shown += 1
             elif kind == QtCore.QEvent.MouseButtonPress and isinstance(obj, QtWidgets.QWidget):
                 self.last_press = time.monotonic()
+                if _in_3d_view(obj):
+                    self.last_view_press = self.last_press
         except Exception:
             pass
         return False
@@ -361,6 +364,19 @@ def press_pace():
         QtTest.QTest.qWait(int(left * 1000) + 10)  # input pace: the app times the gap between clicks
 
 
+def after_view_pace():
+    """Before a click anywhere else: once click_gap() has passed since the last click in the 3D
+    view, as a hand that comes from the view does. The app's click windows after a pick hold
+    for a click on a tree row, the timeline or a tab too: a timeline click right after an axis
+    pick was dropped (patterns_qa_paths P2), a design tab clicked within 0.15 s of a click in
+    another design's view showed its design and lost it again (revolve_qa_more P12; both on CI
+    only, where nothing else slows the test)."""
+    _install_pointer_tap()
+    left = _pointer.last_view_press + click_gap() - time.monotonic()
+    if left > 0:
+        QtTest.QTest.qWait(int(left * 1000) + 10)  # input pace: the app times the gap after a pick
+
+
 def _in_3d_view(target):
     """True for a 3D view's GL widget (where a press in the 3D view goes)."""
     try:
@@ -372,7 +388,8 @@ def _in_3d_view(target):
         return False
 
 
-# Every press in the 3D view comes at press_pace(), whoever sends it: the input helpers and
+# Every press in the 3D view comes at press_pace(), and every other press at after_view_pace(),
+# whoever sends it: the input helpers and
 # the scenarios' own QTest.mousePress for a drag alike (92 files press there themselves).
 _QTEST = getattr(QtTest.QTest, "_sciforge_original", None)
 if _QTEST is None:  # (imported a second time: do not wrap the wrappers)
@@ -385,6 +402,8 @@ def _paced(original):
     def press(target, *args, **kwargs):
         if _in_3d_view(target):
             press_pace()
+        else:
+            after_view_pace()
         return original(target, *args, **kwargs)
 
     return staticmethod(press)
@@ -626,6 +645,23 @@ def _panels_behind():
                 top = max(0, min(parent.height() - size, centre.y() - size // 2))
                 if button.pos() != QtCore.QPoint(left, top):
                     found.append("sketch's finish check")
+    except Exception:
+        pass
+    try:
+        # Compare's panes turn together on its 70 ms tick: one pane turned, the others follow
+        # at the next tick (simres_compare A, CI #319).
+        from sciforge import simulation_results_ui as results
+
+        compare = results.COMPARE.get("session") if results.compare_on() else None
+        timer = getattr(compare, "_timer", None) if compare is not None else None
+        if timer is not None and timer.isActive() and compare.split and compare.active:
+            from sciforge import simulation_results_view as view_mod
+
+            for pane in compare.panes:
+                key = view_mod.camera_key(pane["view"], pane["gl"])
+                if key is not None and key[:5] != pane.get("camera"):
+                    found.append("Compare's panes")
+                    break
     except Exception:
         pass
     try:
