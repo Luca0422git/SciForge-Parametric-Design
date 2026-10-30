@@ -122,18 +122,29 @@ def drag_arrow(key, mm):
         if under is not None:
             tries.append((part, (px.x(), px.y()), under.metaObject().className()))
             continue
-        # not pressed where another handle lights up under the pointer and this one does not,
-        # as a hand sees it (the handles start at one point: a press there took the Y arrow,
-        # counted as a miss, and both drags stayed: CI #321's P2, X 7.96 and Y 3.99). (Only
-        # this one lit was too strict: on CI #322 no point qualified and nothing was dragged.)
+        # pressed only where no other arrow lights up under the pointer, as a hand sees it
+        # (the arrows start at one point: a press where X and Y were both lit took the Y
+        # arrow, counted as a miss for X, and both drags stayed: CI #321 and #324, X 7.96 and
+        # Y 3.99, the 8 mm along X as Y sees it). The turning ring around them lights up
+        # there too and is left out (counting it, no point qualified: CI #322).
         h.settle("the handles to see the pointer")
-        lit = [k for k, other in p.handle_by.items() if getattr(other, "_hover", False)]
-        if lit and key not in lit:
+        lit = [
+            k
+            for k, other in p.handle_by.items()
+            if k != "angle" and getattr(other, "_hover", False)
+        ]
+        if lit and lit != [key]:
             tries.append((part, (px.x(), px.y()), "lit: %s" % lit))
             continue
+        others = {k: _handle_value(p, k) for k in p.handle_by if k != key}
         end = point + arrow.direction * mm
         h.drag(px, h.screen_point(end), steps=16)
         h.settle("the drag to be applied")
+        moved = [k for k, before in others.items() if _handle_value(p, k) != before]
+        if moved:  # another handle took the press: said, not dragged again on top of it
+            tries.append((part, (px.x(), px.y()), "took %s" % moved))
+            h.check("the press on the %s arrow moved only it" % key, False, tries)
+            break
         tries.append(
             (part, (px.x(), px.y()), "moved" if _handle_value(p, key) != value else "missed")
         )
